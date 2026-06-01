@@ -541,7 +541,7 @@
     }
     .playlist-card:hover .playlist-overlay { opacity: 1; }
     .playlist-play-btn {
-      width: 52px; height: 52px; border-radius: 50%;
+      width: 56px; height: 56px; border-radius: 50%;
       background: #1db954;
       display: flex; align-items: center; justify-content: center;
       color: #fff; text-decoration: none;
@@ -893,118 +893,14 @@
       </a>
     </div>
 
-    <!-- 4-card grid -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-
-      <!-- Playlist card 1 -->
-      <div class="playlist-card reveal" style="transition-delay:0.05s">
-        <div class="playlist-cover">
-          <img src="./assets/playlist1.jpg" alt="Horizon Essentials cover" loading="lazy"
-               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
-          <div class="playlist-cover-fallback">
-            <i class="fa-brands fa-spotify" style="font-size:2rem;color:var(--accent-color);"></i>
-          </div>
-          <div class="playlist-overlay">
-            <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
-               target="_blank" rel="noopener noreferrer"
-               class="playlist-play-btn" aria-label="Play on Spotify">
-              <i class="fa-brands fa-spotify" style="font-size:1.1rem;"></i>
-            </a>
-          </div>
-        </div>
-        <div class="playlist-body">
-          <p class="playlist-name">Horizon Essentials</p>
-          <p class="playlist-meta">The label's signature sound</p>
-          <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
-             target="_blank" rel="noopener noreferrer"
-             class="btn-playlist">
-            <i class="fa-brands fa-spotify"></i> Listen on Spotify
-          </a>
-        </div>
-      </div>
-
-      <!-- Playlist card 2 -->
-      <div class="playlist-card reveal" style="transition-delay:0.1s">
-        <div class="playlist-cover">
-          <img src="./assets/playlist2.jpg" alt="Festival Season cover" loading="lazy"
-               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
-          <div class="playlist-cover-fallback">
-            <i class="fa-solid fa-music" style="font-size:2rem;color:var(--accent-color);"></i>
-          </div>
-          <div class="playlist-overlay">
-            <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
-               target="_blank" rel="noopener noreferrer"
-               class="playlist-play-btn" aria-label="Play on Spotify">
-              <i class="fa-brands fa-spotify" style="font-size:1.1rem;"></i>
-            </a>
-          </div>
-        </div>
-        <div class="playlist-body">
-          <p class="playlist-name">Festival Season</p>
-          <p class="playlist-meta">Main stage energy</p>
-          <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
-             target="_blank" rel="noopener noreferrer"
-             class="btn-playlist">
-            <i class="fa-brands fa-spotify"></i> Listen on Spotify
-          </a>
-        </div>
-      </div>
-
-      <!-- Playlist card 3 -->
-      <div class="playlist-card reveal" style="transition-delay:0.15s">
-        <div class="playlist-cover">
-          <img src="./assets/playlist3.jpg" alt="Late Night Club cover" loading="lazy"
-               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
-          <div class="playlist-cover-fallback">
-            <i class="fa-solid fa-moon" style="font-size:2rem;color:var(--accent-color);"></i>
-          </div>
-          <div class="playlist-overlay">
-            <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
-               target="_blank" rel="noopener noreferrer"
-               class="playlist-play-btn" aria-label="Play on Spotify">
-              <i class="fa-brands fa-spotify" style="font-size:1.1rem;"></i>
-            </a>
-          </div>
-        </div>
-        <div class="playlist-body">
-          <p class="playlist-name">Late Night Club</p>
-          <p class="playlist-meta">For the peak-hour crowd</p>
-          <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
-             target="_blank" rel="noopener noreferrer"
-             class="btn-playlist">
-            <i class="fa-brands fa-spotify"></i> Listen on Spotify
-          </a>
-        </div>
-      </div>
-
-      <!-- Playlist card 4 -->
-      <div class="playlist-card reveal" style="transition-delay:0.2s">
-        <div class="playlist-cover">
-          <img src="./assets/playlist4.jpg" alt="Emotional Drive cover" loading="lazy"
-               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
-          <div class="playlist-cover-fallback">
-            <i class="fa-solid fa-heart" style="font-size:2rem;color:var(--accent-color);"></i>
-          </div>
-          <div class="playlist-overlay">
-            <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
-               target="_blank" rel="noopener noreferrer"
-               class="playlist-play-btn" aria-label="Play on Spotify">
-              <i class="fa-brands fa-spotify" style="font-size:1.1rem;"></i>
-            </a>
-          </div>
-        </div>
-        <div class="playlist-body">
-          <p class="playlist-name">Emotional Drive</p>
-          <p class="playlist-meta">Feeling every drop</p>
-          <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
-             target="_blank" rel="noopener noreferrer"
-             class="btn-playlist">
-            <i class="fa-brands fa-spotify"></i> Listen on Spotify
-          </a>
-        </div>
-      </div>
-
-    </div><!-- /grid -->
+    <!-- Grid — filled by loadPlaylists() -->
+    <div id="playlists-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+      <!-- Skeleton placeholders shown while fetch is in-flight -->
+      <div class="skeleton" style="aspect-ratio:3/4;border-radius:10px;"></div>
+      <div class="skeleton" style="aspect-ratio:3/4;border-radius:10px;"></div>
+      <div class="skeleton" style="aspect-ratio:3/4;border-radius:10px;"></div>
+      <div class="skeleton" style="aspect-ratio:3/4;border-radius:10px;"></div>
+    </div>
   </div>
 </section>
 
@@ -1048,8 +944,7 @@
         <div>
           <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:var(--accent-color);margin-bottom:14px;">Contact</div>
           <div class="flex flex-col gap-3">
-            <a href="mailto:info@horizonrcrds.com" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">info@horizonrcrds.com</a>
-            <a href="mailto:booking@horizonrcrds.com" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">booking@horizonrcrds.com</a>
+            <a href="mailto:contacthorizonids@gmail.com" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">contacthorizonids@gmail.com</a>
           </div>
         </div>
       </div>
@@ -1424,11 +1319,126 @@ async function loadReleases() {
 }
 
 /* ════════════════════════════════════════════════
+   BUILD A PLAYLIST CARD
+   ─────────────────────────────────────────────
+   Expected playlists.json shape (array):
+   [
+     {
+       "name":         "Horizon Essentials",
+       "description":  "The label's signature sound",
+       "image":        "playlist1.jpg",   ← filename in ./assets/
+       "spotify_url":  "https://open.spotify.com/playlist/..."
+     },
+     ...
+   ]
+════════════════════════════════════════════════ */
+function buildPlaylistCard(p, delay) {
+  const card = document.createElement('div');
+  card.className = 'playlist-card reveal';
+  card.style.transitionDelay = delay + 's';
+
+  const imgSrc   = p.image ? imgPath(p.image) : '';
+  const href     = (p.spotify_url || '#').replace(/"/g, '&quot;');
+  const altText  = (p.name || 'Playlist').replace(/"/g, '&quot;');
+
+  card.innerHTML = `
+    <div class="playlist-cover">
+      ${imgSrc
+        ? `<img src="${imgSrc}" alt="${altText} cover" loading="lazy"
+                onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />`
+        : ''}
+      <div class="playlist-cover-fallback"${imgSrc ? '' : ' style="display:flex"'}>
+        <i class="fa-brands fa-spotify" style="font-size:2.5rem;color:var(--accent-color);"></i>
+      </div>
+      <div class="playlist-overlay">
+        <!-- Large Spotify play button — 56 × 56 px tap area -->
+        <a href="${href}"
+           target="_blank" rel="noopener noreferrer"
+           class="playlist-play-btn"
+           aria-label="Listen to ${altText} on Spotify">
+          <i class="fa-brands fa-spotify" style="font-size:1.4rem;"></i>
+        </a>
+      </div>
+    </div>
+    <div class="playlist-body">
+      <p class="playlist-name">${p.name || 'Untitled Playlist'}</p>
+      ${p.description ? `<p class="playlist-meta">${p.description}</p>` : ''}
+      <a href="${href}"
+         target="_blank" rel="noopener noreferrer"
+         class="btn-playlist">
+        <i class="fa-brands fa-spotify"></i> Listen on Spotify
+      </a>
+    </div>
+  `;
+
+  /* Image error: ensure fallback is shown */
+  const img = card.querySelector('img');
+  if (img) {
+    const fb = card.querySelector('.playlist-cover-fallback');
+    img.onload  = () => { img.style.opacity = '1'; };
+    img.onerror = () => {
+      img.style.display = 'none';
+      if (fb) fb.style.display = 'flex';
+    };
+    img.style.opacity = '0';
+    img.style.transition = 'opacity 0.4s';
+  }
+
+  /* Whole card is clickable */
+  if (p.spotify_url) {
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('a')) return;
+      window.open(p.spotify_url, '_blank', 'noopener,noreferrer');
+    });
+  }
+
+  return card;
+}
+
+/* ════════════════════════════════════════════════
+   FETCH playlists.json  →  populate #playlists-grid
+════════════════════════════════════════════════ */
+async function loadPlaylists() {
+  const grid = document.getElementById('playlists-grid');
+  try {
+    const res = await fetch('./playlists.json');
+    if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
+    const data = await res.json();
+
+    if (!Array.isArray(data) || data.length === 0) {
+      throw new Error('playlists.json must be a non-empty array');
+    }
+
+    grid.innerHTML = '';
+    data.forEach((p, i) => {
+      const delay = parseFloat((0.05 * (i % 4)).toFixed(2));
+      grid.appendChild(buildPlaylistCard(p, delay));
+    });
+
+    /* Observe new cards for scroll-reveal */
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.08, rootMargin: '0px 0px -30px 0px' });
+    grid.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+
+  } catch (err) {
+    console.warn('[HORIZON RCRDS] playlists.json not loaded:', err.message);
+    /* Fail silently — section stays hidden rather than showing an error */
+    grid.innerHTML =
+      '<p class="error-state" style="grid-column:1/-1;">' +
+      'Could not load playlists — check browser console.' +
+      '</p>';
+  }
+}
+
+/* ════════════════════════════════════════════════
    BOOT
 ════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
   initReveal();
   loadReleases();
+  loadPlaylists();
 });
 </script>
 

@@ -451,43 +451,84 @@
 <body>
 
 <!-- ═══════════════════════════════════════
-     NAVBAR
+     NAVBAR — three-column layout
+     Col 1 (left)  : HORIZON / RCRDS wordmark
+     Col 2 (center): logo.png with dynamic glow
+     Col 3 (right) : nav links  |  mobile hamburger
 ═══════════════════════════════════════ -->
-<nav id="navbar" class="fixed top-0 left-0 right-0 z-50 px-6 md:px-12 py-5">
-  <div class="max-w-7xl mx-auto flex items-center justify-between">
+<nav id="navbar" class="fixed top-0 left-0 right-0 z-50 px-6 md:px-10 py-4">
 
-    <a href="#" class="flex flex-col leading-none group" style="text-decoration:none;">
-      <span style="font-family:'Bebas Neue',sans-serif;font-size:1.55rem;letter-spacing:0.12em;color:#fff;transition:color 0.25s;" class="group-hover:text-elec">HORIZON</span>
-      <span id="logo-sub" style="font-family:'Bebas Neue',sans-serif;font-size:0.82rem;letter-spacing:0.38em;color:var(--hero-color);">RCRDS</span>
+  <!--
+    Three-column grid on md+.
+    On mobile we collapse to two columns:
+      [logo-center]  [hamburger]
+    and hide the wordmark to avoid cramping.
+  -->
+  <div class="max-w-7xl mx-auto grid items-center"
+       style="grid-template-columns: 1fr auto 1fr;">
+
+    <!-- ── COL 1 : Wordmark (hidden on xs, visible sm+) ── -->
+    <a href="#home"
+       class="hidden sm:flex flex-col leading-none group justify-self-start"
+       style="text-decoration:none;">
+      <span style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:0.12em;color:#fff;transition:color 0.25s;">HORIZON</span>
+      <span id="logo-sub"
+            style="font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:0.4em;color:var(--hero-color);margin-top:-2px;transition:color 0.4s;">RCRDS</span>
+    </a>
+    <!-- xs spacer so grid stays balanced when wordmark is hidden -->
+    <span class="sm:hidden justify-self-start"></span>
+
+    <!-- ── COL 2 : Center logo ── -->
+    <a href="#home" class="justify-self-center" style="text-decoration:none;line-height:0;" aria-label="HORIZON RCRDS home">
+      <img id="nav-logo"
+           src="./assets/logo.png"
+           alt="HORIZON RCRDS"
+           style="height:45px;width:auto;object-fit:contain;
+                  filter: drop-shadow(0 0 0px transparent);
+                  transition: filter 0.5s ease, opacity 0.3s;"
+           onerror="this.style.display='none'" />
     </a>
 
-    <div class="hidden md:flex items-center gap-10">
-      <a href="#releases" class="nav-link">Releases</a>
-      <a href="#demos"    class="nav-link">Demos</a>
-      <a href="#contact"  class="nav-link">Contact</a>
+    <!-- ── COL 3 : Desktop nav links / Mobile hamburger ── -->
+    <div class="justify-self-end flex items-center">
+      <!-- Desktop links -->
+      <div class="hidden md:flex items-center gap-8">
+        <a href="#home"     class="nav-link">Home</a>
+        <a href="#releases" class="nav-link">Releases</a>
+        <a href="#demos"    class="nav-link">Demos</a>
+        <a href="#contact"  class="nav-link">Contact</a>
+      </div>
+      <!-- Mobile hamburger -->
+      <button id="nav-toggle"
+              class="md:hidden flex flex-col gap-[5px] cursor-pointer bg-transparent border-none p-1"
+              aria-label="Open menu">
+        <span class="block w-6 h-px bg-gray-400 transition-all"></span>
+        <span class="block w-4 h-px accent-line transition-all"></span>
+        <span class="block w-6 h-px bg-gray-400 transition-all"></span>
+      </button>
     </div>
 
-    <button id="nav-toggle" class="md:hidden flex flex-col gap-1.5 cursor-pointer bg-transparent border-none p-0" aria-label="Menu">
-      <span class="block w-6 h-px bg-gray-400 transition-all"></span>
-      <span class="block w-4 h-px accent-line transition-all"></span>
-      <span class="block w-6 h-px bg-gray-400 transition-all"></span>
-    </button>
-  </div>
+  </div><!-- /grid -->
 
-  <div id="nav-menu" class="md:hidden mt-4 px-2 pb-4 border-t border-border">
-    <div class="flex flex-col gap-5 pt-5">
+  <!-- Mobile dropdown -->
+  <div id="nav-menu"
+       class="md:hidden mt-3 pb-4 border-t border-border"
+       style="max-height:0;overflow:hidden;opacity:0;transition:max-height 0.4s ease,opacity 0.4s;">
+    <div class="flex flex-col gap-5 pt-5 px-2">
+      <a href="#home"     class="nav-link" onclick="closeMenu()">Home</a>
       <a href="#releases" class="nav-link" onclick="closeMenu()">Releases</a>
       <a href="#demos"    class="nav-link" onclick="closeMenu()">Demos</a>
       <a href="#contact"  class="nav-link" onclick="closeMenu()">Contact</a>
     </div>
   </div>
+
 </nav>
 
 
 <!-- ═══════════════════════════════════════
      HERO — populated dynamically from releases[0]
 ═══════════════════════════════════════ -->
-<section id="hero-section" class="hero-bg min-h-screen flex flex-col justify-center pt-28 pb-20 px-6 md:px-12 relative overflow-hidden">
+<section id="home" class="hero-bg min-h-screen flex flex-col justify-center pt-28 pb-20 px-6 md:px-12 relative overflow-hidden">
   <div style="position:absolute;top:0;left:0;width:1px;height:100%;background:linear-gradient(to bottom,transparent,rgba(var(--hero-color-rgb),0.18),transparent);pointer-events:none;"></div>
 
   <div class="max-w-7xl mx-auto w-full">
@@ -766,6 +807,14 @@ function applyHeroColor(color) {
   const root = document.documentElement;
   root.style.setProperty('--hero-color',     safe);
   root.style.setProperty('--hero-color-rgb', rgbStr(safe));
+
+  /* Push dynamic glow to the center logo in the navbar */
+  const logo = document.getElementById('nav-logo');
+  if (logo) {
+    const rgb = rgbStr(safe);
+    logo.style.filter =
+      `drop-shadow(0 0 7px rgba(${rgb}, 0.75)) drop-shadow(0 0 18px rgba(${rgb}, 0.35))`;
+  }
 }
 
 /* Re-applies the gradient on the hero title element
@@ -794,9 +843,14 @@ const navMenu = document.getElementById('nav-menu');
 let menuOpen  = false;
 toggle.addEventListener('click', () => {
   menuOpen = !menuOpen;
-  navMenu.classList.toggle('open', menuOpen);
+  navMenu.style.maxHeight = menuOpen ? '320px' : '0';
+  navMenu.style.opacity   = menuOpen ? '1'     : '0';
 });
-function closeMenu() { menuOpen = false; navMenu.classList.remove('open'); }
+function closeMenu() {
+  menuOpen = false;
+  navMenu.style.maxHeight = '0';
+  navMenu.style.opacity   = '0';
+}
 
 /* ════════════════════════════════════════════════
    SCROLL REVEAL

@@ -1337,32 +1337,32 @@ function buildPlaylistCard(p, delay) {
   card.className = 'playlist-card reveal';
   card.style.transitionDelay = delay + 's';
 
-  const imgSrc   = p.image ? imgPath(p.image) : '';
-  const href     = (p.spotify_url || '#').replace(/"/g, '&quot;');
-  const altText  = (p.name || 'Playlist').replace(/"/g, '&quot;');
+  const imgSrc  = p.image ? `./assets/${p.image}` : '';
+  const href    = (p.link || '#').replace(/"/g, '&quot;');
+  const title   = (p.title || 'Untitled Playlist').replace(/</g, '&lt;');
+  const desc    = (p.description || '').replace(/</g, '&lt;');
 
   card.innerHTML = `
     <div class="playlist-cover">
       ${imgSrc
-        ? `<img src="${imgSrc}" alt="${altText} cover" loading="lazy"
+        ? `<img src="${imgSrc}" alt="${title} cover" loading="lazy"
                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />`
         : ''}
       <div class="playlist-cover-fallback"${imgSrc ? '' : ' style="display:flex"'}>
         <i class="fa-brands fa-spotify" style="font-size:2.5rem;color:var(--accent-color);"></i>
       </div>
       <div class="playlist-overlay">
-        <!-- Large Spotify play button — 56 × 56 px tap area -->
         <a href="${href}"
            target="_blank" rel="noopener noreferrer"
            class="playlist-play-btn"
-           aria-label="Listen to ${altText} on Spotify">
+           aria-label="Listen to ${title} on Spotify">
           <i class="fa-brands fa-spotify" style="font-size:1.4rem;"></i>
         </a>
       </div>
     </div>
     <div class="playlist-body">
-      <p class="playlist-name">${p.name || 'Untitled Playlist'}</p>
-      ${p.description ? `<p class="playlist-meta">${p.description}</p>` : ''}
+      <p class="playlist-name">${title}</p>
+      ${desc ? `<p class="playlist-meta">${desc}</p>` : ''}
       <a href="${href}"
          target="_blank" rel="noopener noreferrer"
          class="btn-playlist">
@@ -1371,25 +1371,20 @@ function buildPlaylistCard(p, delay) {
     </div>
   `;
 
-  /* Image error: ensure fallback is shown */
   const img = card.querySelector('img');
   if (img) {
     const fb = card.querySelector('.playlist-cover-fallback');
-    img.onload  = () => { img.style.opacity = '1'; };
-    img.onerror = () => {
-      img.style.display = 'none';
-      if (fb) fb.style.display = 'flex';
-    };
-    img.style.opacity = '0';
+    img.style.opacity  = '0';
     img.style.transition = 'opacity 0.4s';
+    img.onload  = () => { img.style.opacity = '1'; };
+    img.onerror = () => { img.style.display = 'none'; if (fb) fb.style.display = 'flex'; };
   }
 
-  /* Whole card is clickable */
-  if (p.spotify_url) {
+  if (p.link) {
     card.style.cursor = 'pointer';
     card.addEventListener('click', (e) => {
       if (e.target.closest('a')) return;
-      window.open(p.spotify_url, '_blank', 'noopener,noreferrer');
+      window.open(p.link, '_blank', 'noopener,noreferrer');
     });
   }
 

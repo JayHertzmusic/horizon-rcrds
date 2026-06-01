@@ -5,6 +5,7 @@
     "artist": "Jaxxinator & Zen Clair",
     "title": "World Was Ending",
     "image": "hrz064.jpg",
+    "color": "#f97316",
     "stream_link": "#",
     "spotify_link": "#",
     "soundcloud_link": "#"
@@ -15,6 +16,7 @@
     "artist": "Orexo & pulse!",
     "title": "dw!",
     "image": "hrz063.jpg",
+    "color": "#d946ef",
     "stream_link": "#",
     "spotify_link": "#",
     "soundcloud_link": "#"
@@ -25,6 +27,7 @@
     "artist": "Rautus & Vezenance",
     "title": "Don't Say Goodbye",
     "image": "hrz062.jpg",
+    "color": "#8b5cf6",
     "stream_link": "#",
     "spotify_link": "#",
     "soundcloud_link": "#"
@@ -35,6 +38,7 @@
     "artist": "King Drac",
     "title": "Be Here Daily",
     "image": "hrz061.jpg",
+    "color": "#f43f5e",
     "stream_link": "#",
     "spotify_link": "#",
     "soundcloud_link": "#"
@@ -45,6 +49,7 @@
     "artist": "ZestyTysonYork & Camilla",
     "title": "Wasted Love",
     "image": "hrz060.jpg",
+    "color": "#60a5fa",
     "stream_link": "#",
     "spotify_link": "#",
     "soundcloud_link": "#"
@@ -55,6 +60,7 @@
     "artist": "PlextroVision",
     "title": "What You Took",
     "image": "hrz059.jpg",
+    "color": "#0ea5e9",
     "stream_link": "#",
     "spotify_link": "#",
     "soundcloud_link": "#"
@@ -65,6 +71,7 @@
     "artist": "Lexder & Klaus exe",
     "title": "Dealing Curses",
     "image": "hrz058.jpg",
+    "color": "#f43f5e",
     "stream_link": "#",
     "spotify_link": "#",
     "soundcloud_link": "#"
@@ -75,6 +82,7 @@
     "artist": "CEKONG & ZestyTysonYork",
     "title": "Till The End",
     "image": "hrz057.jpg",
+    "color": "#38bdf8",
     "stream_link": "#",
     "spotify_link": "#",
     "soundcloud_link": "#"
@@ -85,6 +93,7 @@
     "artist": "Lexder",
     "title": "Hold Me (DERREL Remix)",
     "image": "hrz056.jpg",
+    "color": "#22c55e",
     "stream_link": "#",
     "spotify_link": "#",
     "soundcloud_link": "#"
@@ -95,6 +104,7 @@
     "artist": "Stefi",
     "title": "Click Bang",
     "image": "hrz055.jpg",
+    "color": "#ef4444",
     "stream_link": "#",
     "spotify_link": "#",
     "soundcloud_link": "#"
@@ -105,6 +115,7 @@
     "artist": "ONE MTRX",
     "title": "Out Of Reach",
     "image": "hrz054.jpg",
+    "color": "#2563eb",
     "stream_link": "#",
     "spotify_link": "#",
     "soundcloud_link": "#"
@@ -115,6 +126,7 @@
     "artist": "N1LL & Xuan K17",
     "title": "Carry You Again",
     "image": "hrz053.jpg",
+    "color": "#22d3ee",
     "stream_link": "#",
     "spotify_link": "#",
     "soundcloud_link": "#"
@@ -125,6 +137,7 @@
     "artist": "PGX",
     "title": "Be With You",
     "image": "hrz052.jpg",
+    "color": "#06b6d4",
     "stream_link": "#",
     "spotify_link": "#",
     "soundcloud_link": "#"
@@ -135,6 +148,7 @@
     "artist": "Jay Hertz & King Drac",
     "title": "All The Time",
     "image": "hrz051.jpg",
+    "color": "#ec4899",
     "stream_link": "#",
     "spotify_link": "#",
     "soundcloud_link": "#"
@@ -145,6 +159,7 @@
     "artist": "AVØIID",
     "title": "Blind",
     "image": "hrz050.jpg",
+    "color": "#6366f1",
     "stream_link": "#",
     "spotify_link": "#",
     "soundcloud_link": "#"
@@ -155,6 +170,7 @@
     "artist": "Jaxxinator",
     "title": "Feel The Energy",
     "image": "hrz049.jpg",
+    "color": "#eab308",
     "stream_link": "https://ffm.to/lights_hrz",
     "spotify_link": "https://open.spotify.com/intl-es/track/3EjtXao4cjO9lsEtcVgQqu?si=10849b227bcd42ed",
     "soundcloud_link": "https://on.soundcloud.com/BZxz0iwtbWwTWMs2zo"
@@ -165,6 +181,7 @@
     "artist": "Kensei",
     "title": "Higher",
     "image": "hrz048.jpg",
+    "color": "#3b82f6",
     "stream_link": "https://ffm.to/blind__hrz",
     "spotify_link": "https://open.spotify.com/intl-es/track/26pS356RbBxVcuIOlgvVkC?si=ef026710662b4c88",
     "soundcloud_link": "https://on.soundcloud.com/BYpZ77vZoVw8Dr8diV"
@@ -175,6 +192,7 @@
     "artist": "Kris m",
     "title": "Lights",
     "image": "hrz047.jpg",
+    "color": "#a855f7",
     "stream_link": "https://ffm.to/lights_hrz",
     "spotify_link": "https://open.spotify.com/intl-es/track/4rrxExpuWPQXDrSb5lCKuj?si=5f0cb3cc26804ae9",
     "soundcloud_link": "https://on.soundcloud.com/YmJZ9dYnOmHCcEKDUb"

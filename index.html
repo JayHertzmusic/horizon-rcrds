@@ -34,6 +34,18 @@
   </script>
 
   <style>
+    /* ─────────────────────────────────────────
+       ROOT THEME TOKEN
+       JS writes --hero-color on <html> once
+       releases[0].color is known. Every accent
+       that should match the latest release reads
+       this variable.
+    ───────────────────────────────────────── */
+    :root {
+      --hero-color: #1a8cff;          /* fallback = electric blue */
+      --hero-color-rgb: 26, 140, 255;
+    }
+
     *, *::before, *::after { box-sizing: border-box; }
     html { scroll-behavior: smooth; }
 
@@ -47,18 +59,15 @@
     /* Grain overlay */
     body::before {
       content: '';
-      position: fixed;
-      inset: 0;
+      position: fixed; inset: 0;
       background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
-      opacity: 0.028;
-      pointer-events: none;
-      z-index: 9999;
+      opacity: 0.028; pointer-events: none; z-index: 9999;
     }
 
-    /* Scrollbar */
+    /* Scrollbar — uses hero color */
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: #0a0a0a; }
-    ::-webkit-scrollbar-thumb { background: #1a8cff; border-radius: 2px; }
+    ::-webkit-scrollbar-thumb { background: var(--hero-color); border-radius: 2px; }
 
     /* ── NAVBAR ── */
     #navbar { transition: background 0.4s, backdrop-filter 0.4s; }
@@ -69,21 +78,14 @@
     }
     .nav-link {
       position: relative;
-      font-family: 'Barlow', sans-serif;
-      font-weight: 600;
-      font-size: 0.7rem;
-      letter-spacing: 0.25em;
-      text-transform: uppercase;
-      color: #9ca3af;
-      transition: color 0.25s;
-      text-decoration: none;
+      font-family: 'Barlow', sans-serif; font-weight: 600;
+      font-size: 0.7rem; letter-spacing: 0.25em; text-transform: uppercase;
+      color: #9ca3af; transition: color 0.25s; text-decoration: none;
     }
     .nav-link::after {
       content: '';
-      position: absolute;
-      bottom: -3px; left: 0; right: 100%;
-      height: 1px;
-      background: #1a8cff;
+      position: absolute; bottom: -3px; left: 0; right: 100%;
+      height: 1px; background: var(--hero-color);
       transition: right 0.3s ease;
     }
     .nav-link:hover { color: #e5e7eb; }
@@ -96,82 +98,76 @@
     /* ── HERO ── */
     .hero-bg {
       background:
-        radial-gradient(ellipse 70% 55% at 60% 50%, rgba(26,140,255,0.07) 0%, transparent 70%),
-        radial-gradient(ellipse 40% 30% at 20% 80%, rgba(0,87,204,0.05) 0%, transparent 60%),
+        radial-gradient(ellipse 70% 55% at 60% 50%, rgba(var(--hero-color-rgb), 0.08) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 30% at 20% 80%, rgba(var(--hero-color-rgb), 0.04) 0%, transparent 60%),
         #0a0a0a;
+      transition: background 0.8s ease;
     }
+
+    /*
+      .hero-title gradient uses --hero-color.
+      We rebuild it via JS after color is known,
+      so we define it here only as the base.
+    */
     .hero-title {
       font-family: 'Bebas Neue', sans-serif;
       font-size: clamp(3.5rem, 11vw, 9rem);
-      line-height: 0.9;
-      letter-spacing: 0.04em;
-      background: linear-gradient(160deg, #ffffff 0%, #a0b4cc 55%, #1a8cff 100%);
+      line-height: 0.9; letter-spacing: 0.04em;
+      background: linear-gradient(160deg, #ffffff 0%, #a0b4cc 55%, var(--hero-color) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
       word-break: break-word;
     }
+
+    /* Dynamic accent elements — all read --hero-color */
     .label-tag {
       font-family: 'Barlow', sans-serif;
-      font-size: 0.65rem;
-      font-weight: 700;
-      letter-spacing: 0.3em;
-      text-transform: uppercase;
-      color: #1a8cff;
+      font-size: 0.65rem; font-weight: 700;
+      letter-spacing: 0.3em; text-transform: uppercase;
+      color: var(--hero-color);
     }
+    .accent-line { background: var(--hero-color); }
 
-    /* Player */
+    /* ── PLAYER CARD ── */
     .player-card {
-      background: #111;
-      border: 1px solid #1f1f1f;
-      border-radius: 14px;
-      overflow: hidden;
-      position: relative;
+      background: #111; border: 1px solid #1f1f1f;
+      border-radius: 14px; overflow: hidden; position: relative;
+      transition: border-color 0.6s;
     }
     .player-card::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(135deg, rgba(26,140,255,0.04) 0%, transparent 60%);
-      pointer-events: none;
+      content: ''; position: absolute; inset: 0;
+      background: linear-gradient(135deg, rgba(var(--hero-color-rgb), 0.05) 0%, transparent 60%);
+      pointer-events: none; transition: background 0.6s;
     }
     #hero-cover-wrap {
-      width: 100%;
-      aspect-ratio: 1/1;
-      position: relative;
-      overflow: hidden;
-      background: #0d1220;
+      width: 100%; aspect-ratio: 1/1;
+      position: relative; overflow: hidden; background: #0d1220;
     }
     #hero-cover-img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-      opacity: 0;
-      transition: opacity 0.5s;
+      width: 100%; height: 100%; object-fit: cover;
+      display: block; opacity: 0; transition: opacity 0.5s;
     }
     #hero-cover-fallback {
-      position: absolute;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
       text-align: center;
       background: linear-gradient(135deg, #0d1f3a 0%, #050e1a 100%);
     }
     #hero-cover-fallback::before {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background-image: linear-gradient(rgba(26,140,255,0.06) 1px, transparent 1px),
-                        linear-gradient(90deg, rgba(26,140,255,0.06) 1px, transparent 1px);
+      content: ''; position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(var(--hero-color-rgb), 0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(var(--hero-color-rgb), 0.07) 1px, transparent 1px);
       background-size: 32px 32px;
     }
+
+    /* Waveform */
     .waveform { display: flex; align-items: center; gap: 3px; height: 36px; }
     .waveform span {
       display: block; width: 3px; border-radius: 2px;
-      background: #1a8cff;
+      background: var(--hero-color);
       animation: wave 1.2s ease-in-out infinite alternate;
     }
     .waveform span:nth-child(odd)  { animation-delay: 0.1s; }
@@ -181,20 +177,39 @@
       from { height: 6px;  opacity: 0.35; }
       to   { height: 34px; opacity: 1;    }
     }
+
+    /* Progress bar */
     .progress-track { height: 2px; background: #1f1f1f; border-radius: 1px; margin-bottom: 10px; overflow: hidden; }
-    .progress-fill  { width: 37%; height: 100%; background: linear-gradient(90deg,#1a8cff,#0057cc); border-radius: 1px; position: relative; }
+    .progress-fill  {
+      width: 37%; height: 100%;
+      background: linear-gradient(90deg, var(--hero-color), rgba(var(--hero-color-rgb), 0.5));
+      border-radius: 1px; position: relative;
+    }
     .progress-fill::after {
-      content: '';
-      position: absolute; right: -4px; top: -3px;
-      width: 8px; height: 8px;
-      border-radius: 50%; background: #1a8cff;
-      box-shadow: 0 0 8px rgba(26,140,255,0.8);
+      content: ''; position: absolute; right: -4px; top: -3px;
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--hero-color);
+      box-shadow: 0 0 8px rgba(var(--hero-color-rgb), 0.8);
     }
 
-    /* Buttons */
+    /* Play button in player */
+    #player-play-btn {
+      width: 42px; height: 42px; border-radius: 50%;
+      background: var(--hero-color); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 20px rgba(var(--hero-color-rgb), 0.45);
+      transition: transform 0.2s, box-shadow 0.3s;
+      text-decoration: none;
+    }
+    #player-play-btn:hover {
+      transform: scale(1.08);
+      box-shadow: 0 0 32px rgba(var(--hero-color-rgb), 0.65);
+    }
+
+    /* ── BUTTONS — dynamic via --hero-color ── */
     .btn-primary {
       display: inline-flex; align-items: center; gap: 10px;
-      background: #1a8cff; color: #fff;
+      background: var(--hero-color); color: #fff;
       font-family: 'Barlow', sans-serif; font-weight: 700;
       font-size: 0.7rem; letter-spacing: 0.25em; text-transform: uppercase;
       padding: 14px 34px; border-radius: 3px; border: none;
@@ -204,68 +219,90 @@
     }
     .btn-primary::before {
       content: ''; position: absolute; inset: 0;
-      background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.12) 50%, transparent 100%);
+      background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.13) 50%, transparent 100%);
       transform: translateX(-100%); transition: transform 0.5s ease;
     }
-    .btn-primary:hover { box-shadow: 0 0 28px rgba(26,140,255,0.55); transform: translateY(-1px); }
+    .btn-primary:hover {
+      box-shadow: 0 0 28px rgba(var(--hero-color-rgb), 0.55);
+      transform: translateY(-1px);
+    }
     .btn-primary:hover::before { transform: translateX(100%); }
 
     .btn-outline {
       display: inline-flex; align-items: center; gap: 10px;
-      background: transparent; color: #1a8cff;
+      background: transparent; color: var(--hero-color);
       font-family: 'Barlow', sans-serif; font-weight: 700;
       font-size: 0.7rem; letter-spacing: 0.25em; text-transform: uppercase;
-      padding: 13px 32px; border-radius: 3px; border: 1px solid #1a8cff;
+      padding: 13px 32px; border-radius: 3px;
+      border: 1px solid var(--hero-color);
       cursor: pointer; transition: background 0.25s, box-shadow 0.25s, transform 0.2s;
       text-decoration: none;
     }
-    .btn-outline:hover { background: rgba(26,140,255,0.1); box-shadow: 0 0 20px rgba(26,140,255,0.3); transform: translateY(-1px); }
+    .btn-outline:hover {
+      background: rgba(var(--hero-color-rgb), 0.1);
+      box-shadow: 0 0 20px rgba(var(--hero-color-rgb), 0.3);
+      transform: translateY(-1px);
+    }
 
     /* ── RELEASE CARDS ── */
+    /*
+      Each card receives --track-color (and --track-color-rgb)
+      as inline CSS custom properties via JS.
+      All hover effects below read those card-level vars,
+      so every card glows with its own track color.
+    */
     .release-card {
+      --track-color:     #1a8cff;       /* per-card override set by JS */
+      --track-color-rgb: 26, 140, 255;
       background: #111;
-      border: 1px solid #1a1a1a;
-      border-radius: 8px;
-      overflow: hidden;
-      transition: transform 0.35s cubic-bezier(.16,1,.3,1), box-shadow 0.35s, border-color 0.35s;
-      display: flex;
-      flex-direction: column;
+      border: 1px solid #1e1e1e;
+      border-radius: 8px; overflow: hidden;
+      display: flex; flex-direction: column;
+      transition:
+        transform      0.38s cubic-bezier(.16,1,.3,1),
+        box-shadow     0.38s ease,
+        border-color   0.38s ease;
     }
     .release-card:hover {
-      transform: scale(1.035) translateY(-4px);
-      box-shadow: 0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(26,140,255,0.25);
-      border-color: rgba(26,140,255,0.3);
+      transform: scale(1.03) translateY(-5px);
+      box-shadow:
+        0 20px 56px rgba(0,0,0,0.75),
+        0 0 0 1px rgba(var(--track-color-rgb), 0.45),
+        0 0 28px -4px rgba(var(--track-color-rgb), 0.3);
+      border-color: rgba(var(--track-color-rgb), 0.5);
     }
 
-    /* Cover area */
+    /* Cover */
     .card-cover {
-      width: 100%;
-      aspect-ratio: 1/1;
-      position: relative;
-      overflow: hidden;
-      background: #0d1220;
+      width: 100%; aspect-ratio: 1/1;
+      position: relative; overflow: hidden; background: #0d1220;
     }
     .card-cover img {
-      width: 100%; height: 100%;
-      object-fit: cover; display: block;
-      opacity: 0;
+      width: 100%; height: 100%; object-fit: cover;
+      display: block; opacity: 0;
       transition: transform 0.5s ease, opacity 0.4s;
     }
-    .release-card:hover .card-cover img { transform: scale(1.06); }
+    .release-card:hover .card-cover img { transform: scale(1.07); }
     .cover-fallback {
       position: absolute; inset: 0;
       display: flex; align-items: center; justify-content: center;
       font-family: 'Bebas Neue', sans-serif;
-      font-size: clamp(1.3rem, 3vw, 2rem);
-      letter-spacing: 0.08em;
-      color: #1a8cff;
+      font-size: clamp(1.3rem, 3vw, 2rem); letter-spacing: 0.08em;
+      color: var(--track-color);
       background: linear-gradient(135deg, #0d1f3a, #050e1a);
       text-align: center; padding: 8px;
+      transition: color 0.4s;
     }
+    /* Colour-tinted gradient overlay on hover */
     .card-play-overlay {
       position: absolute; inset: 0;
-      background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 55%);
-      opacity: 0; transition: opacity 0.3s;
+      background: linear-gradient(
+        to top,
+        rgba(var(--track-color-rgb), 0.35) 0%,
+        rgba(0,0,0,0.6) 40%,
+        transparent 70%
+      );
+      opacity: 0; transition: opacity 0.35s;
       display: flex; align-items: center; justify-content: center;
       pointer-events: none;
     }
@@ -274,43 +311,70 @@
     /* Card body */
     .card-body { padding: 14px 14px 10px; flex: 1; }
 
-    /* Card footer — stream icons */
-    .card-footer {
-      padding: 10px 14px 13px;
-      border-top: 1px solid #1a1a1a;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-    .stream-icon {
-      font-size: 0.95rem;
-      color: #4b5563;
-      transition: color 0.2s, transform 0.2s;
-      text-decoration: none;
-      line-height: 1;
-    }
-    .stream-icon:hover           { color: #e5e7eb; transform: translateY(-1px); }
-    .stream-icon.spotify:hover   { color: #1db954; }
-    .stream-icon.soundcloud:hover{ color: #ff5500; }
-
-    /* Catalog badge */
+    /* Catalog badge — per card color */
     .num-badge {
       font-family: 'Bebas Neue', sans-serif;
       font-size: 0.82rem; letter-spacing: 0.1em;
-      color: #1a8cff;
-      background: rgba(26,140,255,0.08);
-      border: 1px solid rgba(26,140,255,0.2);
-      border-radius: 2px;
-      padding: 1px 7px;
-      white-space: nowrap;
+      color: var(--track-color);
+      background: rgba(var(--track-color-rgb), 0.1);
+      border: 1px solid rgba(var(--track-color-rgb), 0.25);
+      border-radius: 2px; padding: 1px 7px; white-space: nowrap;
+      transition: color 0.4s, background 0.4s, border-color 0.4s;
+    }
+
+    /* ── CARD FOOTER — stream icons ── */
+    .card-footer {
+      padding: 12px 14px 15px;
+      border-top: 1px solid #1e1e1e;
+      display: flex; align-items: center; gap: 4px;
+      /* small visual separator between icons */
+    }
+
+    /*
+      Icons are significantly larger than before, with generous
+      tap-target padding (min 44×44 px touch area per WCAG 2.5.5).
+    */
+    .stream-icon {
+      /* visible icon size */
+      font-size: 1.15rem;
+      /* generous tap area */
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 44px; height: 44px;
+      border-radius: 6px;
+      color: #4b5563;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid transparent;
+      text-decoration: none;
+      transition: color 0.25s, background 0.25s, border-color 0.25s, transform 0.2s, box-shadow 0.25s;
+    }
+    /* Generic stream icon hover → track color */
+    .stream-icon:hover {
+      color: var(--track-color);
+      background: rgba(var(--track-color-rgb), 0.1);
+      border-color: rgba(var(--track-color-rgb), 0.3);
+      box-shadow: 0 0 12px rgba(var(--track-color-rgb), 0.2);
+      transform: translateY(-2px);
+    }
+    /* Spotify keeps brand green on hover */
+    .stream-icon.spotify:hover  {
+      color: #1db954;
+      background: rgba(29,185,84,0.1);
+      border-color: rgba(29,185,84,0.3);
+      box-shadow: 0 0 12px rgba(29,185,84,0.2);
+    }
+    /* SoundCloud keeps brand orange on hover */
+    .stream-icon.soundcloud:hover {
+      color: #ff5500;
+      background: rgba(255,85,0,0.1);
+      border-color: rgba(255,85,0,0.3);
+      box-shadow: 0 0 12px rgba(255,85,0,0.2);
     }
 
     /* Section labels */
     .section-label {
-      font-family: 'Barlow', sans-serif;
-      font-size: 0.62rem; font-weight: 700;
-      letter-spacing: 0.32em; text-transform: uppercase;
-      color: #1a8cff;
+      font-family: 'Barlow', sans-serif; font-size: 0.62rem;
+      font-weight: 700; letter-spacing: 0.32em; text-transform: uppercase;
+      color: var(--hero-color);
     }
     .section-title {
       font-family: 'Bebas Neue', sans-serif;
@@ -318,25 +382,29 @@
       letter-spacing: 0.04em; color: #fff; line-height: 1;
     }
 
-    /* Electric divider */
-    .h-px-elec { height: 1px; background: linear-gradient(90deg, transparent, #1a8cff 40%, #0057cc 70%, transparent); }
+    /* Electric divider — uses hero color */
+    .h-px-elec {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--hero-color) 40%, rgba(var(--hero-color-rgb),0.5) 70%, transparent);
+      transition: background 0.6s;
+    }
 
-    /* ── DEMO SECTION ── */
+    /* Demo section */
     .demo-bg {
       background:
-        radial-gradient(ellipse 80% 60% at 50% 50%, rgba(0,57,153,0.18) 0%, transparent 70%),
+        radial-gradient(ellipse 80% 60% at 50% 50%, rgba(var(--hero-color-rgb), 0.12) 0%, transparent 70%),
         linear-gradient(180deg, #0a0a0a 0%, #0d1220 50%, #0a0a0a 100%);
-      border-top: 1px solid #1f1f1f;
-      border-bottom: 1px solid #1f1f1f;
+      border-top: 1px solid #1f1f1f; border-bottom: 1px solid #1f1f1f;
+      transition: background 0.6s;
     }
     .demo-title {
       font-family: 'Bebas Neue', sans-serif;
       font-size: clamp(3.5rem, 12vw, 9rem);
       line-height: 0.88; letter-spacing: 0.03em; color: #fff;
     }
-    .demo-title .highlight { color: #1a8cff; }
+    .demo-title .highlight { color: var(--hero-color); transition: color 0.6s; }
 
-    /* Social icons */
+    /* Social icons (footer) */
     .social-icon {
       width: 44px; height: 44px;
       display: flex; align-items: center; justify-content: center;
@@ -345,8 +413,8 @@
       transition: color 0.25s, border-color 0.25s, box-shadow 0.25s, transform 0.2s;
     }
     .social-icon:hover {
-      color: #1a8cff; border-color: #1a8cff;
-      box-shadow: 0 0 16px rgba(26,140,255,0.35);
+      color: var(--hero-color); border-color: var(--hero-color);
+      box-shadow: 0 0 16px rgba(var(--hero-color-rgb), 0.35);
       transform: translateY(-2px);
     }
 
@@ -354,7 +422,7 @@
     .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
     .reveal.visible { opacity: 1; transform: translateY(0); }
 
-    /* Loading skeleton */
+    /* Skeleton loader */
     .skeleton {
       background: linear-gradient(90deg, #111 25%, #1a1a1a 50%, #111 75%);
       background-size: 200% 100%;
@@ -364,16 +432,19 @@
     @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 
     /* Error state */
-    .error-state {
-      font-size: 0.75rem; font-weight: 600; letter-spacing: 0.15em;
-      text-transform: uppercase; color: #ef4444;
-      padding: 24px 0;
-    }
+    .error-state { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; color: #ef4444; padding: 24px 0; }
 
     /* Pulse dot */
     @keyframes pulse-dot {
-      0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(26,140,255,0.7); }
-      50%       { opacity: 0.4; box-shadow: 0 0 4px rgba(26,140,255,0.3); }
+      0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(var(--hero-color-rgb), 0.7); }
+      50%       { opacity: 0.4; box-shadow: 0 0 4px rgba(var(--hero-color-rgb), 0.3); }
+    }
+    .pulse-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--hero-color);
+      box-shadow: 0 0 8px rgba(var(--hero-color-rgb), 0.7);
+      animation: pulse-dot 2s ease-in-out infinite;
+      display: inline-block; flex-shrink: 0;
     }
   </style>
 </head>
@@ -387,7 +458,7 @@
 
     <a href="#" class="flex flex-col leading-none group" style="text-decoration:none;">
       <span style="font-family:'Bebas Neue',sans-serif;font-size:1.55rem;letter-spacing:0.12em;color:#fff;transition:color 0.25s;" class="group-hover:text-elec">HORIZON</span>
-      <span style="font-family:'Bebas Neue',sans-serif;font-size:0.82rem;letter-spacing:0.38em;color:#1a8cff;">RCRDS</span>
+      <span id="logo-sub" style="font-family:'Bebas Neue',sans-serif;font-size:0.82rem;letter-spacing:0.38em;color:var(--hero-color);">RCRDS</span>
     </a>
 
     <div class="hidden md:flex items-center gap-10">
@@ -398,7 +469,7 @@
 
     <button id="nav-toggle" class="md:hidden flex flex-col gap-1.5 cursor-pointer bg-transparent border-none p-0" aria-label="Menu">
       <span class="block w-6 h-px bg-gray-400 transition-all"></span>
-      <span class="block w-4 h-px" style="background:#1a8cff;"></span>
+      <span class="block w-4 h-px accent-line transition-all"></span>
       <span class="block w-6 h-px bg-gray-400 transition-all"></span>
     </button>
   </div>
@@ -416,71 +487,75 @@
 <!-- ═══════════════════════════════════════
      HERO — populated dynamically from releases[0]
 ═══════════════════════════════════════ -->
-<section class="hero-bg min-h-screen flex flex-col justify-center pt-28 pb-20 px-6 md:px-12 relative overflow-hidden">
-  <div style="position:absolute;top:0;left:0;width:1px;height:100%;background:linear-gradient(to bottom,transparent,rgba(26,140,255,0.15),transparent);pointer-events:none;"></div>
+<section id="hero-section" class="hero-bg min-h-screen flex flex-col justify-center pt-28 pb-20 px-6 md:px-12 relative overflow-hidden">
+  <div style="position:absolute;top:0;left:0;width:1px;height:100%;background:linear-gradient(to bottom,transparent,rgba(var(--hero-color-rgb),0.18),transparent);pointer-events:none;"></div>
 
   <div class="max-w-7xl mx-auto w-full">
     <div class="grid md:grid-cols-2 gap-16 items-center">
 
-      <!-- Text side -->
+      <!-- Text column -->
       <div class="reveal" style="transition-delay:0.1s">
         <div class="label-tag mb-5 flex items-center gap-3">
-          <span class="inline-block w-8 h-px" style="background:#1a8cff;"></span>
+          <span class="inline-block w-8 h-px accent-line"></span>
           Latest Release
         </div>
 
-        <!-- Title injected by JS -->
+        <!-- Title — injected + gradient re-applied by JS -->
         <div id="hero-title-wrap">
           <div class="skeleton mb-3" style="height:clamp(3.5rem,11vw,9rem);width:80%;border-radius:6px;"></div>
         </div>
 
-        <!-- Artist + catalog injected by JS -->
+        <!-- Artist + catalog -->
         <div id="hero-artist-wrap">
           <div class="skeleton mb-6" style="height:1rem;width:40%;"></div>
         </div>
 
-        <!-- Description injected by JS -->
+        <!-- Description -->
         <div id="hero-desc-wrap">
           <div class="skeleton mb-2" style="height:0.8rem;width:90%;"></div>
           <div class="skeleton mb-10" style="height:0.8rem;width:70%;"></div>
         </div>
 
-        <!-- Buttons injected by JS -->
+        <!-- Buttons -->
         <div id="hero-buttons" class="flex flex-wrap gap-4">
           <div class="skeleton" style="height:48px;width:160px;border-radius:3px;"></div>
           <div class="skeleton" style="height:48px;width:160px;border-radius:3px;"></div>
         </div>
       </div>
 
-      <!-- Player / cover side -->
+      <!-- Player / cover column -->
       <div class="reveal" style="transition-delay:0.25s">
         <div class="player-card p-6">
 
-          <!-- Cover image -->
+          <!-- Cover -->
           <div id="hero-cover-wrap" class="rounded-lg mb-6">
             <img id="hero-cover-img" src="" alt="" />
             <div id="hero-cover-fallback">
               <div style="position:relative;text-align:center;padding:16px;">
-                <div id="hero-cover-text" style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2rem,6vw,4rem);letter-spacing:0.06em;color:#fff;line-height:1;"></div>
-                <div id="hero-cover-sub" style="font-size:0.6rem;letter-spacing:0.3em;color:#1a8cff;margin-top:8px;font-weight:700;"></div>
+                <div id="hero-cover-text"
+                     style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2rem,6vw,4rem);letter-spacing:0.06em;color:#fff;line-height:1;"></div>
+                <div id="hero-cover-sub"
+                     style="font-size:0.6rem;letter-spacing:0.3em;color:var(--hero-color);margin-top:8px;font-weight:700;"></div>
               </div>
             </div>
           </div>
 
-          <!-- Track info -->
+          <!-- Track info row -->
           <div class="flex items-center justify-between mb-5">
             <div>
-              <div id="player-title" style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:0.08em;color:#fff;">—</div>
+              <div id="player-title"  style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:0.08em;color:#fff;">—</div>
               <div id="player-artist" style="font-size:0.68rem;letter-spacing:0.18em;color:#6b7280;font-weight:600;margin-top:2px;">—</div>
             </div>
             <div class="flex items-center gap-4">
-              <button style="color:#6b7280;font-size:0.9rem;cursor:pointer;background:none;border:none;" onmouseover="this.style.color='#1a8cff'" onmouseout="this.style.color='#6b7280'"><i class="fa-solid fa-backward-step"></i></button>
-              <a id="player-play-btn" href="#" target="_blank" rel="noopener noreferrer"
-                 style="width:42px;height:42px;border-radius:50%;background:#1a8cff;color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 0 20px rgba(26,140,255,0.45);transition:transform 0.2s;"
-                 onmouseover="this.style.transform='scale(1.08)'" onmouseout="this.style.transform='scale(1)'">
+              <button style="color:#6b7280;font-size:0.9rem;cursor:pointer;background:none;border:none;" onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--hero-color')" onmouseout="this.style.color='#6b7280'">
+                <i class="fa-solid fa-backward-step"></i>
+              </button>
+              <a id="player-play-btn" href="#" target="_blank" rel="noopener noreferrer">
                 <i class="fa-solid fa-play" style="font-size:0.75rem;margin-left:2px;"></i>
               </a>
-              <button style="color:#6b7280;font-size:0.9rem;cursor:pointer;background:none;border:none;" onmouseover="this.style.color='#1a8cff'" onmouseout="this.style.color='#6b7280'"><i class="fa-solid fa-forward-step"></i></button>
+              <button style="color:#6b7280;font-size:0.9rem;cursor:pointer;background:none;border:none;" onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--hero-color')" onmouseout="this.style.color='#6b7280'">
+                <i class="fa-solid fa-forward-step"></i>
+              </button>
             </div>
           </div>
 
@@ -489,16 +564,18 @@
             <span style="height:12px"></span><span style="height:22px"></span><span style="height:18px"></span><span style="height:30px"></span><span style="height:15px"></span><span style="height:34px"></span><span style="height:20px"></span><span style="height:28px"></span><span style="height:10px"></span><span style="height:26px"></span><span style="height:34px"></span><span style="height:18px"></span><span style="height:30px"></span><span style="height:14px"></span><span style="height:24px"></span><span style="height:32px"></span><span style="height:16px"></span><span style="height:28px"></span><span style="height:34px"></span><span style="height:20px"></span><span style="height:12px"></span><span style="height:30px"></span><span style="height:24px"></span><span style="height:18px"></span><span style="height:28px"></span><span style="height:34px"></span><span style="height:14px"></span><span style="height:22px"></span><span style="height:32px"></span><span style="height:16px"></span><span style="height:26px"></span><span style="height:20px"></span>
           </div>
 
-          <!-- Progress -->
+          <!-- Progress bar -->
           <div class="progress-track"><div class="progress-fill"></div></div>
           <div style="display:flex;justify-content:space-between;font-size:0.62rem;color:#6b7280;font-weight:600;letter-spacing:0.1em;">
             <span>0:00</span><span>—:——</span>
           </div>
 
           <!-- Platform row -->
-          <div id="hero-platform-row" style="margin-top:20px;padding-top:16px;border-top:1px solid #1f1f1f;display:flex;align-items:center;gap:8px;">
-            <div style="width:8px;height:8px;border-radius:50%;background:#1a8cff;box-shadow:0 0 8px rgba(26,140,255,0.7);animation:pulse-dot 2s ease-in-out infinite;"></div>
-            <span style="font-size:0.62rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;">Available on Spotify · SoundCloud · Beatport</span>
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid #1f1f1f;display:flex;align-items:center;gap:8px;">
+            <span class="pulse-dot"></span>
+            <span style="font-size:0.62rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;">
+              Available on Spotify · SoundCloud · Beatport
+            </span>
           </div>
 
         </div>
@@ -512,7 +589,7 @@
 
 
 <!-- ═══════════════════════════════════════
-     RELEASES GALLERY — populated by JS (slice from index 1)
+     RELEASES GALLERY
 ═══════════════════════════════════════ -->
 <section id="releases" class="py-24 px-6 md:px-12" style="background:#0a0a0a;">
   <div class="max-w-7xl mx-auto">
@@ -523,13 +600,14 @@
         <h2 class="section-title">RELEASES</h2>
       </div>
       <a href="#" style="font-family:'Barlow',sans-serif;font-size:0.68rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #1f1f1f;padding-bottom:2px;transition:color 0.2s,border-color 0.2s;text-decoration:none;"
-         onmouseover="this.style.color='#1a8cff';this.style.borderColor='#1a8cff'" onmouseout="this.style.color='#6b7280';this.style.borderColor='#1f1f1f'">
+         onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--hero-color');this.style.borderColor=getComputedStyle(document.documentElement).getPropertyValue('--hero-color')"
+         onmouseout="this.style.color='#6b7280';this.style.borderColor='#1f1f1f'">
         View Full Catalogue →
       </a>
     </div>
 
+    <!-- Grid — filled by JS -->
     <div id="releases-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
-      <!-- Skeleton placeholders shown while loading -->
       <div class="skeleton" style="aspect-ratio:3/4;border-radius:8px;"></div>
       <div class="skeleton" style="aspect-ratio:3/4;border-radius:8px;"></div>
       <div class="skeleton" style="aspect-ratio:3/4;border-radius:8px;"></div>
@@ -546,13 +624,13 @@
      DEMO DROP
 ═══════════════════════════════════════ -->
 <section id="demos" class="demo-bg py-32 px-6 md:px-12 relative overflow-hidden">
-  <div style="position:absolute;top:-200px;left:-200px;width:600px;height:600px;border-radius:50%;border:1px solid rgba(26,140,255,0.06);pointer-events:none;"></div>
-  <div style="position:absolute;bottom:-150px;right:-150px;width:500px;height:500px;border-radius:50%;border:1px solid rgba(26,140,255,0.04);pointer-events:none;"></div>
+  <div style="position:absolute;top:-200px;left:-200px;width:600px;height:600px;border-radius:50%;border:1px solid rgba(var(--hero-color-rgb),0.06);pointer-events:none;"></div>
+  <div style="position:absolute;bottom:-150px;right:-150px;width:500px;height:500px;border-radius:50%;border:1px solid rgba(var(--hero-color-rgb),0.04);pointer-events:none;"></div>
 
   <div class="max-w-7xl mx-auto">
     <div class="max-w-3xl reveal">
       <div class="section-label mb-6 flex items-center gap-3">
-        <span class="inline-block w-8 h-px" style="background:#1a8cff;"></span>
+        <span class="inline-block w-8 h-px accent-line"></span>
         Open Submissions
       </div>
 
@@ -578,15 +656,15 @@
 
       <div class="grid sm:grid-cols-3 gap-6 mt-16 pt-12" style="border-top:1px solid #1f1f1f;">
         <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:#1a8cff;margin-bottom:6px;">Format</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:var(--hero-color);margin-bottom:6px;">Format</div>
           <p style="font-size:0.75rem;color:#6b7280;font-weight:400;line-height:1.6;">MP3 / WAV · 320kbps or lossless preferred. Include a short bio.</p>
         </div>
         <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:#1a8cff;margin-bottom:6px;">Platform</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:var(--hero-color);margin-bottom:6px;">Platform</div>
           <p style="font-size:0.75rem;color:#6b7280;font-weight:400;line-height:1.6;">Submissions via LabelRadar only. Direct emails will not be reviewed.</p>
         </div>
         <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:#1a8cff;margin-bottom:6px;">Policy</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:var(--hero-color);margin-bottom:6px;">Policy</div>
           <p style="font-size:0.75rem;color:#6b7280;font-weight:400;line-height:1.6;">Unreleased material only. We sign worldwide licensing deals.</p>
         </div>
       </div>
@@ -607,7 +685,7 @@
       <div class="max-w-xs">
         <div class="mb-4">
           <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:0.14em;color:#fff;">HORIZON</div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.85rem;letter-spacing:0.4em;color:#1a8cff;margin-top:-4px;">RCRDS</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.85rem;letter-spacing:0.4em;color:var(--hero-color);margin-top:-4px;">RCRDS</div>
         </div>
         <p style="font-size:0.75rem;color:#4b5563;font-weight:400;line-height:1.7;">
           Independent electronic music label. Pushing boundaries since day one. Based everywhere.
@@ -616,25 +694,25 @@
 
       <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-16 gap-y-4">
         <div>
-          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:#1a8cff;margin-bottom:14px;">Label</div>
+          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:var(--hero-color);margin-bottom:14px;">Label</div>
           <div class="flex flex-col gap-3">
-            <a href="#releases" style="font-size:0.75rem;color:#6b7280;font-weight:400;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Releases</a>
-            <a href="#demos"    style="font-size:0.75rem;color:#6b7280;font-weight:400;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Submit Demo</a>
+            <a href="#releases" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Releases</a>
+            <a href="#demos"    style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Submit Demo</a>
           </div>
         </div>
         <div>
-          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:#1a8cff;margin-bottom:14px;">Music</div>
+          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:var(--hero-color);margin-bottom:14px;">Music</div>
           <div class="flex flex-col gap-3">
-            <a href="#" style="font-size:0.75rem;color:#6b7280;font-weight:400;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Spotify</a>
-            <a href="#" style="font-size:0.75rem;color:#6b7280;font-weight:400;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Beatport</a>
-            <a href="#" style="font-size:0.75rem;color:#6b7280;font-weight:400;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">SoundCloud</a>
+            <a href="#" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Spotify</a>
+            <a href="#" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Beatport</a>
+            <a href="#" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">SoundCloud</a>
           </div>
         </div>
         <div>
-          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:#1a8cff;margin-bottom:14px;">Contact</div>
+          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:var(--hero-color);margin-bottom:14px;">Contact</div>
           <div class="flex flex-col gap-3">
-            <a href="mailto:info@horizonrcrds.com" style="font-size:0.75rem;color:#6b7280;font-weight:400;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">info@horizonrcrds.com</a>
-            <a href="mailto:booking@horizonrcrds.com" style="font-size:0.75rem;color:#6b7280;font-weight:400;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">booking@horizonrcrds.com</a>
+            <a href="mailto:info@horizonrcrds.com" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">info@horizonrcrds.com</a>
+            <a href="mailto:booking@horizonrcrds.com" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">booking@horizonrcrds.com</a>
           </div>
         </div>
       </div>
@@ -662,41 +740,90 @@
      JAVASCRIPT
 ═══════════════════════════════════════ -->
 <script>
-/* ─── Navbar scroll ─── */
+/* ════════════════════════════════════════════════
+   COLOR UTILITIES
+   hex → { r, g, b }  and  rgb string "r, g, b"
+════════════════════════════════════════════════ */
+function hexToRgb(hex) {
+  hex = hex.trim().replace(/^#/, '');
+  if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+  const n = parseInt(hex, 16);
+  if (isNaN(n)) return null;
+  return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+}
+function rgbStr(hex) {
+  const c = hexToRgb(hex);
+  return c ? `${c.r}, ${c.g}, ${c.b}` : '26, 140, 255';
+}
+
+/* ════════════════════════════════════════════════
+   APPLY HERO COLOR to :root CSS variables.
+   Every element using var(--hero-color) or
+   var(--hero-color-rgb) updates automatically.
+════════════════════════════════════════════════ */
+function applyHeroColor(color) {
+  const safe = (color && /^#[0-9a-fA-F]{3,6}$/.test(color.trim())) ? color.trim() : '#1a8cff';
+  const root = document.documentElement;
+  root.style.setProperty('--hero-color',     safe);
+  root.style.setProperty('--hero-color-rgb', rgbStr(safe));
+}
+
+/* Re-applies the gradient on the hero title element
+   after its innerHTML is set, because the CSS
+   `background` shorthand needs to be re-evaluated. */
+function applyTitleGradient(color) {
+  const el = document.querySelector('.hero-title');
+  if (!el) return;
+  const safe = (color && /^#[0-9a-fA-F]{3,6}$/.test(color.trim())) ? color.trim() : '#1a8cff';
+  el.style.backgroundImage = `linear-gradient(160deg, #ffffff 0%, #a0b4cc 55%, ${safe} 100%)`;
+}
+
+/* ════════════════════════════════════════════════
+   NAVBAR — scroll glass effect
+════════════════════════════════════════════════ */
 const navbar = document.getElementById('navbar');
 window.addEventListener('scroll', () => {
   navbar.classList.toggle('scrolled', window.scrollY > 40);
 });
 
-/* ─── Mobile nav ─── */
-const toggle = document.getElementById('nav-toggle');
-const menu   = document.getElementById('nav-menu');
-let menuOpen = false;
+/* ════════════════════════════════════════════════
+   MOBILE NAV
+════════════════════════════════════════════════ */
+const toggle  = document.getElementById('nav-toggle');
+const navMenu = document.getElementById('nav-menu');
+let menuOpen  = false;
 toggle.addEventListener('click', () => {
   menuOpen = !menuOpen;
-  menu.classList.toggle('open', menuOpen);
+  navMenu.classList.toggle('open', menuOpen);
 });
-function closeMenu() { menuOpen = false; menu.classList.remove('open'); }
+function closeMenu() { menuOpen = false; navMenu.classList.remove('open'); }
 
-/* ─── Scroll reveal ─── */
+/* ════════════════════════════════════════════════
+   SCROLL REVEAL
+════════════════════════════════════════════════ */
 function initReveal() {
-  const observer = new IntersectionObserver((entries) => {
+  const obs = new IntersectionObserver((entries) => {
     entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
   }, { threshold: 0.08, rootMargin: '0px 0px -30px 0px' });
-  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
 }
 
-/* ─── Image path helper ───
-   Images live in ./assets/ relative to index.html
-   The field in JSON should be just the filename, e.g. "hr001.jpg"
-   but we also handle full relative paths like "./assets/hr001.jpg" ─── */
+/* ════════════════════════════════════════════════
+   IMAGE PATH HELPER
+   Accepts bare filename → prepends ./assets/
+   Accepts full/relative URL → passes through
+════════════════════════════════════════════════ */
 function imgPath(filename) {
   if (!filename) return '';
   if (filename.startsWith('http') || filename.startsWith('./') || filename.startsWith('/')) return filename;
   return './assets/' + filename;
 }
 
-/* ─── Stream icon helper ─── */
+/* ════════════════════════════════════════════════
+   STREAM ICON HELPER — used for card footer icons
+   Returns an <a> with the correct class so CSS
+   applies brand-color hovers for Spotify & SoundCloud.
+════════════════════════════════════════════════ */
 function streamIcon(url, iconClass, extraClass, label) {
   if (!url) return '';
   const safe = url.replace(/"/g, '&quot;');
@@ -707,28 +834,35 @@ function streamIcon(url, iconClass, extraClass, label) {
           </a>`;
 }
 
-/* ─── Populate HERO (releases[0]) ─── */
+/* ════════════════════════════════════════════════
+   POPULATE HERO  (releases[0])
+════════════════════════════════════════════════ */
 function populateHero(r) {
-  /* Title */
+  const color = (r.color && /^#[0-9a-fA-F]{3,6}$/.test(r.color.trim())) ? r.color.trim() : '#1a8cff';
+
+  /* 1. Apply dynamic color to entire page */
+  applyHeroColor(color);
+
+  /* 2. Title */
   document.getElementById('hero-title-wrap').innerHTML =
     `<h1 class="hero-title mb-3">${r.title || 'UNTITLED'}</h1>`;
+  /* Re-apply gradient NOW that the element exists in the DOM */
+  applyTitleGradient(color);
 
-  /* Artist + catalog badge */
+  /* 3. Artist + catalog badge */
   const cat = r.catalog_number
-    ? `<span class="num-badge" style="margin-left:12px;">${r.catalog_number}</span>` : '';
+    ? `<span class="num-badge" style="margin-left:12px;color:${color};background:rgba(${rgbStr(color)},0.1);border-color:rgba(${rgbStr(color)},0.25);">${r.catalog_number}</span>` : '';
   document.getElementById('hero-artist-wrap').innerHTML =
-    `<p style="font-family:'Barlow',sans-serif;font-size:0.8rem;font-weight:600;
-               letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;
-               display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:24px;">
+    `<p style="font-family:'Barlow',sans-serif;font-size:0.8rem;font-weight:600;letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:24px;">
        ${r.artist || ''}${cat}
      </p>`;
 
-  /* Description */
+  /* 4. Description */
   document.getElementById('hero-desc-wrap').innerHTML = r.description
     ? `<p class="text-gray-500 text-sm font-light leading-relaxed max-w-sm mb-10">${r.description}</p>`
     : '';
 
-  /* Buttons */
+  /* 5. Buttons */
   const streamBtn = r.stream_link
     ? `<a href="${r.stream_link}" target="_blank" rel="noopener noreferrer" class="btn-primary">
          <i class="fa-solid fa-play" style="font-size:0.65rem;"></i> Stream Now
@@ -739,12 +873,12 @@ function populateHero(r) {
        </a>` : '';
   document.getElementById('hero-buttons').innerHTML = streamBtn + spotifyBtn;
 
-  /* Player mini panel */
+  /* 6. Mini player labels */
   document.getElementById('player-title').textContent  = r.title  || '—';
   document.getElementById('player-artist').textContent = r.artist || '—';
   if (r.stream_link) document.getElementById('player-play-btn').href = r.stream_link;
 
-  /* Cover image */
+  /* 7. Cover image */
   const img      = document.getElementById('hero-cover-img');
   const fallback = document.getElementById('hero-cover-fallback');
 
@@ -765,29 +899,46 @@ function populateHero(r) {
   }
 }
 
-/* ─── Build a release CARD (releases[1+]) ─── */
+/* ════════════════════════════════════════════════
+   BUILD RELEASE CARD  (releases[1+])
+
+   Each card receives:
+     --track-color     → the JSON "color" field
+     --track-color-rgb → computed RGB triplet
+
+   All hover glow, border flash, icon tint and
+   cover-fallback accent are driven by these
+   two per-card CSS variables — no JS on mouseover.
+════════════════════════════════════════════════ */
 function buildCard(r, delay) {
-  const card = document.createElement('div');
+  const card  = document.createElement('div');
   card.className = 'release-card reveal';
   card.style.transitionDelay = delay + 's';
 
+  /* Resolve color — fallback to electric blue */
+  const color    = (r.color && /^#[0-9a-fA-F]{3,6}$/.test(r.color.trim())) ? r.color.trim() : '#1a8cff';
+  const colorRgb = rgbStr(color);
+
+  /* Inject CSS variables at card level */
+  card.style.setProperty('--track-color',     color);
+  card.style.setProperty('--track-color-rgb', colorRgb);
+
+  /* Catalog badge */
   const catBadge = r.catalog_number
     ? `<span class="num-badge">${r.catalog_number}</span>` : '';
 
-  /* The three stream icons */
+  /* Three stream icons: generic link · Spotify · SoundCloud */
   const icons =
-    streamIcon(r.stream_link,     'fa-solid fa-arrow-up-right-from-square', '',            'Stream') +
-    streamIcon(r.spotify_link,    'fa-brands fa-spotify',                   'spotify',     'Spotify') +
-    streamIcon(r.soundcloud_link, 'fa-brands fa-soundcloud',                'soundcloud',  'SoundCloud');
-
-  const fallbackId = 'fb-' + (r.catalog_number || Math.random().toString(36).slice(2));
+    streamIcon(r.stream_link,     'fa-solid fa-arrow-up-right-from-square', '',           'Stream') +
+    streamIcon(r.spotify_link,    'fa-brands fa-spotify',                   'spotify',    'Spotify') +
+    streamIcon(r.soundcloud_link, 'fa-brands fa-soundcloud',                'soundcloud', 'SoundCloud');
 
   card.innerHTML = `
     <div class="card-cover">
-      <div class="cover-fallback" id="${fallbackId}">${r.artist || r.title || '?'}</div>
-      ${r.image ? `<img src="${imgPath(r.image)}" alt="${(r.title || '').replace(/"/g,'&quot;')} cover" loading="lazy" />` : ''}
+      <div class="cover-fallback">${r.artist || r.title || '?'}</div>
+      ${r.image ? `<img src="${imgPath(r.image)}" alt="${(r.title||'').replace(/"/g,'&quot;')} cover" loading="lazy" />` : ''}
       <div class="card-play-overlay">
-        <i class="fa-solid fa-play" style="color:#fff;font-size:1.5rem;opacity:0.9;pointer-events:none;"></i>
+        <i class="fa-solid fa-play" style="color:#fff;font-size:1.6rem;opacity:0.95;filter:drop-shadow(0 0 8px rgba(${colorRgb},0.7));pointer-events:none;"></i>
       </div>
     </div>
     <div class="card-body">
@@ -806,7 +957,7 @@ function buildCard(r, delay) {
     ${icons ? `<div class="card-footer">${icons}</div>` : ''}
   `;
 
-  /* Image load/error handling */
+  /* Image load / error */
   const imgEl = card.querySelector('img');
   if (imgEl) {
     const fb = card.querySelector('.cover-fallback');
@@ -814,7 +965,7 @@ function buildCard(r, delay) {
     imgEl.onerror = () => { imgEl.style.display = 'none'; if (fb) fb.style.display = 'flex'; };
   }
 
-  /* Click whole card → stream link (but let icon anchors propagate normally) */
+  /* Click card body → open stream link; let icon <a>s propagate normally */
   if (r.stream_link) {
     card.style.cursor = 'pointer';
     card.addEventListener('click', (e) => {
@@ -826,47 +977,49 @@ function buildCard(r, delay) {
   return card;
 }
 
-/* ─── Populate the grid (releases[1+]) ─── */
+/* ════════════════════════════════════════════════
+   POPULATE RELEASES GRID  (releases[1+])
+════════════════════════════════════════════════ */
 function populateGrid(releases) {
   const grid = document.getElementById('releases-grid');
   grid.innerHTML = '';
 
-  const gallery = releases.slice(1); // hero already shows index 0
-
+  const gallery = releases.slice(1);
   if (!gallery.length) {
     grid.innerHTML = '<p class="error-state" style="grid-column:1/-1;">Only one release — see the hero section above.</p>';
     return;
   }
 
   gallery.forEach((r, i) => {
-    const delay = parseFloat((0.05 * (i % 4)).toFixed(2));
-    grid.appendChild(buildCard(r, delay));
+    grid.appendChild(buildCard(r, parseFloat((0.05 * (i % 4)).toFixed(2))));
   });
 
-  /* Observe new cards */
+  /* Observe new cards for scroll-reveal */
   const obs = new IntersectionObserver((entries) => {
     entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
   }, { threshold: 0.08, rootMargin: '0px 0px -30px 0px' });
   grid.querySelectorAll('.reveal').forEach(el => obs.observe(el));
 }
 
-/* ─────────────────────────────────────────────────
+/* ════════════════════════════════════════════════
    FETCH releases.json
+   ─────────────────────────────────────────────
    Expected JSON shape (array, most recent first):
    [
      {
        "title":            "Eclipse Protocol",
        "artist":           "Vayne",
-       "catalog_number":   "HR001",         // optional
-       "image":            "hr001.jpg",     // filename in ./assets/
-       "description":      "...",           // optional, shown in hero only
-       "stream_link":      "https://...",   // generic stream / link icon
+       "catalog_number":   "HR001",
+       "color":            "#1a8cff",      ← NEW: hex accent color
+       "image":            "hr001.jpg",    ← filename in ./assets/
+       "description":      "Optional blurb",
+       "stream_link":      "https://...",
        "spotify_link":     "https://open.spotify.com/...",
        "soundcloud_link":  "https://soundcloud.com/..."
      },
      ...
    ]
-───────────────────────────────────────────────── */
+════════════════════════════════════════════════ */
 async function loadReleases() {
   try {
     const res = await fetch('./releases.json');
@@ -888,9 +1041,9 @@ async function loadReleases() {
     document.getElementById('hero-artist-wrap').innerHTML = '';
     document.getElementById('hero-desc-wrap').innerHTML =
       `<p style="font-size:0.8rem;color:#4b5563;line-height:1.7;margin-bottom:40px;">
-         Place <code style="color:#1a8cff;font-size:0.85em;">releases.json</code> next to
-         <code style="color:#1a8cff;font-size:0.85em;">index.html</code> and artwork in
-         <code style="color:#1a8cff;font-size:0.85em;">./assets/</code>.<br/>
+         Place <code style="color:#1a8cff;">releases.json</code> next to
+         <code style="color:#1a8cff;">index.html</code> and artwork inside
+         <code style="color:#1a8cff;">./assets/</code>.<br/>
          Check the browser console for details.
        </p>`;
     document.getElementById('hero-buttons').innerHTML = '';
@@ -899,7 +1052,9 @@ async function loadReleases() {
   }
 }
 
-/* ─── Boot ─── */
+/* ════════════════════════════════════════════════
+   BOOT
+════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
   initReveal();
   loadReleases();

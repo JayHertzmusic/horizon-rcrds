@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>HORIZON RCRDS — Official</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:ital,wght@0,300;0,400;0,600;0,700;1,300&display=swap" rel="stylesheet"/>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            void:    '#0a0a0a',
+            ink:     '#111111',
+            panel:   '#161616',
+            border:  '#1f1f1f',
+            elec:    '#1a8cff',
+            elec2:   '#0057cc',
+            smoke:   '#6b7280',
+            ghost:   '#9ca3af',
+            'elec-glow': 'rgba(26,140,255,0.18)',
+          },
+          fontFamily: {
+            display: ['"Bebas Neue"', 'sans-serif'],
+            body:    ['Barlow', 'sans-serif'],
+          },
+          letterSpacing: {
+            widest2: '0.35em',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background-color: #0a0a0a;
+      color: #e5e7eb;
+      font-family: 'Barlow', sans-serif;
+      cursor: default;
+      overflow-x: hidden;
+    }
+
+    /* ── Grain overlay ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
+      opacity: 0.028;
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* ── Electric accent line ── */
+    .elec-bar { background: linear-gradient(90deg, transparent, #1a8cff 40%, #0057cc 70%, transparent); }
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: #0a0a0a; }
+    ::-webkit-scrollbar-thumb { background: #1a8cff; border-radius: 2px; }
+
+    /* ── Nav ── */
+    #navbar {
+      transition: background 0.4s, backdrop-filter 0.4s;
+    }
+    #navbar.scrolled {
+      background: rgba(10,10,10,0.92);
+      backdrop-filter: blur(18px);
+      border-bottom: 1px solid #1f1f1f;
+    }
+    .nav-link {
+      position: relative;
+      font-family: 'Barlow', sans-serif;
+      font-weight: 600;
+      font-size: 0.7rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: #9ca3af;
+      transition: color 0.25s;
+    }
+    .nav-link::after {
+      content: '';
+      position: absolute;
+      bottom: -3px;
+      left: 0; right: 100%;
+      height: 1px;
+      background: #1a8cff;
+      transition: right 0.3s ease;
+    }
+    .nav-link:hover { color: #e5e7eb; }
+    .nav-link:hover::after { right: 0; }
+
+    /* ── Hero ── */
+    .hero-bg {
+      background:
+        radial-gradient(ellipse 70% 55% at 60% 50%, rgba(26,140,255,0.07) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 30% at 20% 80%, rgba(0,87,204,0.05) 0%, transparent 60%),
+        #0a0a0a;
+    }
+
+    .hero-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(4rem, 14vw, 11rem);
+      line-height: 0.9;
+      letter-spacing: 0.04em;
+      background: linear-gradient(160deg, #ffffff 0%, #a0b4cc 55%, #1a8cff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .label-tag {
+      font-family: 'Barlow', sans-serif;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: #1a8cff;
+    }
+
+    /* ── Spotify placeholder ── */
+    .player-placeholder {
+      background: #111111;
+      border: 1px solid #1f1f1f;
+      border-radius: 14px;
+      overflow: hidden;
+      position: relative;
+    }
+    .player-placeholder::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(26,140,255,0.04) 0%, transparent 60%);
+      pointer-events: none;
+    }
+    .player-waveform {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      height: 36px;
+    }
+    .player-waveform span {
+      display: block;
+      width: 3px;
+      border-radius: 2px;
+      background: #1a8cff;
+      animation: wave 1.2s ease-in-out infinite alternate;
+    }
+    .player-waveform span:nth-child(odd)  { animation-delay: 0.1s; }
+    .player-waveform span:nth-child(3n)   { animation-delay: 0.3s; }
+    .player-waveform span:nth-child(4n)   { animation-delay: 0.5s; }
+    @keyframes wave {
+      from { height: 6px;  opacity: 0.35; }
+      to   { height: 34px; opacity: 1; }
+    }
+
+    /* ── Btn primary ── */
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: #1a8cff;
+      color: #fff;
+      font-family: 'Barlow', sans-serif;
+      font-weight: 700;
+      font-size: 0.7rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      padding: 14px 34px;
+      border-radius: 3px;
+      border: none;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: box-shadow 0.3s, transform 0.2s;
+    }
+    .btn-primary::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg, transparent 0%, rgba(255,255,255,0.12) 50%, transparent 100%);
+      transform: translateX(-100%);
+      transition: transform 0.5s ease;
+    }
+    .btn-primary:hover { box-shadow: 0 0 28px rgba(26,140,255,0.55); transform: translateY(-1px); }
+    .btn-primary:hover::before { transform: translateX(100%); }
+
+    .btn-outline {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: transparent;
+      color: #1a8cff;
+      font-family: 'Barlow', sans-serif;
+      font-weight: 700;
+      font-size: 0.7rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      padding: 13px 32px;
+      border-radius: 3px;
+      border: 1px solid #1a8cff;
+      cursor: pointer;
+      transition: background 0.25s, box-shadow 0.25s, transform 0.2s;
+    }
+    .btn-outline:hover {
+      background: rgba(26,140,255,0.1);
+      box-shadow: 0 0 20px rgba(26,140,255,0.3);
+      transform: translateY(-1px);
+    }
+
+    /* ── Release cards ── */
+    .release-card {
+      background: #111111;
+      border: 1px solid #1a1a1a;
+      border-radius: 8px;
+      overflow: hidden;
+      transition: transform 0.35s cubic-bezier(.16,1,.3,1), box-shadow 0.35s, border-color 0.35s;
+      cursor: pointer;
+    }
+    .release-card:hover {
+      transform: scale(1.035) translateY(-4px);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.7), 0 0 0 1px rgba(26,140,255,0.25);
+      border-color: rgba(26,140,255,0.3);
+    }
+    .card-cover {
+      width: 100%;
+      aspect-ratio: 1/1;
+      position: relative;
+      overflow: hidden;
+    }
+    .card-cover-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.5s ease;
+    }
+    .release-card:hover .card-cover-img { transform: scale(1.06); }
+    .card-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 55%);
+      opacity: 0;
+      transition: opacity 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .release-card:hover .card-overlay { opacity: 1; }
+
+    /* ── Placeholder cover art ── */
+    .cover-placeholder {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(1.4rem, 3vw, 2.2rem);
+      letter-spacing: 0.08em;
+    }
+
+    /* ── Demo section ── */
+    .demo-bg {
+      background:
+        radial-gradient(ellipse 80% 60% at 50% 50%, rgba(0,57,153,0.18) 0%, transparent 70%),
+        linear-gradient(180deg, #0a0a0a 0%, #0d1220 50%, #0a0a0a 100%);
+      border-top: 1px solid #1f1f1f;
+      border-bottom: 1px solid #1f1f1f;
+    }
+    .demo-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(3.5rem, 12vw, 9rem);
+      line-height: 0.88;
+      letter-spacing: 0.03em;
+      color: #fff;
+    }
+    .demo-title .highlight { color: #1a8cff; }
+
+    /* ── Footer ── */
+    .social-icon {
+      width: 44px; height: 44px;
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid #1f1f1f;
+      border-radius: 50%;
+      color: #6b7280;
+      font-size: 1rem;
+      transition: color 0.25s, border-color 0.25s, box-shadow 0.25s, transform 0.2s;
+    }
+    .social-icon:hover {
+      color: #1a8cff;
+      border-color: #1a8cff;
+      box-shadow: 0 0 16px rgba(26,140,255,0.35);
+      transform: translateY(-2px);
+    }
+
+    /* ── Section labels ── */
+    .section-label {
+      font-family: 'Barlow', sans-serif;
+      font-size: 0.62rem;
+      font-weight: 700;
+      letter-spacing: 0.32em;
+      text-transform: uppercase;
+      color: #1a8cff;
+    }
+    .section-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(2.5rem, 7vw, 5rem);
+      letter-spacing: 0.04em;
+      color: #fff;
+      line-height: 1;
+    }
+
+    /* ── Fade-in on scroll ── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── Mobile nav toggle ── */
+    #nav-menu { transition: max-height 0.4s ease, opacity 0.4s; max-height: 0; overflow: hidden; opacity: 0; }
+    #nav-menu.open { max-height: 300px; opacity: 1; }
+
+    /* ── Divider ── */
+    .h-px-elec { height: 1px; background: linear-gradient(90deg, transparent, #1a8cff 40%, #0057cc 70%, transparent); }
+
+    /* ── Number badge ── */
+    .num-badge {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 0.85rem;
+      letter-spacing: 0.1em;
+      color: #1a8cff;
+      background: rgba(26,140,255,0.08);
+      border: 1px solid rgba(26,140,255,0.2);
+      border-radius: 2px;
+      padding: 1px 7px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════
+     NAVBAR
+════════════════════════════════════════ -->
+<nav id="navbar" class="fixed top-0 left-0 right-0 z-50 px-6 md:px-12 py-5">
+  <div class="max-w-7xl mx-auto flex items-center justify-between">
+    <!-- Logo -->
+    <a href="#" class="flex flex-col leading-none group">
+      <span style="font-family:'Bebas Neue',sans-serif; font-size:1.55rem; letter-spacing:0.12em; color:#fff; transition:color 0.25s;" class="group-hover:text-elec">HORIZON</span>
+      <span style="font-family:'Bebas Neue',sans-serif; font-size:0.82rem; letter-spacing:0.38em; color:#1a8cff;">RCRDS</span>
+    </a>
+
+    <!-- Desktop nav -->
+    <div class="hidden md:flex items-center gap-10">
+      <a href="#releases" class="nav-link">Releases</a>
+      <a href="#demos"    class="nav-link">Demos</a>
+      <a href="#contact"  class="nav-link">Contact</a>
+    </div>
+
+    <!-- Mobile toggle -->
+    <button id="nav-toggle" class="md:hidden flex flex-col gap-1.5 cursor-pointer" aria-label="Menu">
+      <span class="block w-6 h-px bg-gray-400 transition-all" id="tl1"></span>
+      <span class="block w-4 h-px bg-elec"                    id="tl2"></span>
+      <span class="block w-6 h-px bg-gray-400 transition-all" id="tl3"></span>
+    </button>
+  </div>
+
+  <!-- Mobile menu -->
+  <div id="nav-menu" class="md:hidden mt-4 px-2 pb-4 border-t border-border">
+    <div class="flex flex-col gap-5 pt-5">
+      <a href="#releases" class="nav-link" onclick="closeMenu()">Releases</a>
+      <a href="#demos"    class="nav-link" onclick="closeMenu()">Demos</a>
+      <a href="#contact"  class="nav-link" onclick="closeMenu()">Contact</a>
+    </div>
+  </div>
+</nav>
+
+
+<!-- ════════════════════════════════════════
+     HERO
+════════════════════════════════════════ -->
+<section class="hero-bg min-h-screen flex flex-col justify-center pt-28 pb-20 px-6 md:px-12 relative overflow-hidden">
+  <!-- Decorative lines -->
+  <div style="position:absolute;top:0;left:0;width:1px;height:100%;background:linear-gradient(to bottom,transparent,rgba(26,140,255,0.15),transparent);pointer-events:none;"></div>
+  <div style="position:absolute;top:0;right:80px;width:1px;height:100%;background:linear-gradient(to bottom,transparent,rgba(26,140,255,0.07),transparent);pointer-events:none;display:none;" class="md:block"></div>
+
+  <div class="max-w-7xl mx-auto w-full">
+    <div class="grid md:grid-cols-2 gap-16 items-center">
+
+      <!-- Left: text -->
+      <div class="reveal" style="transition-delay:0.1s">
+        <div class="label-tag mb-5 flex items-center gap-3">
+          <span class="inline-block w-8 h-px bg-elec"></span>
+          Latest Release
+        </div>
+
+        <h1 class="hero-title mb-3">ECLIPSE<br/>PROTOCOL</h1>
+
+        <p style="font-family:'Barlow',sans-serif;font-size:0.8rem;font-weight:600;letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;" class="mb-6">
+          VAYNE — HR001
+        </p>
+
+        <p class="text-gray-500 text-sm font-light leading-relaxed max-w-sm mb-10">
+          A relentless blend of modular synthesis and sub-bass pressure. Precision-engineered for peak hours and empty rooms alike.
+        </p>
+
+        <div class="flex flex-wrap gap-4">
+          <a href="#" class="btn-primary">
+            <i class="fa-solid fa-play" style="font-size:0.65rem;"></i>
+            Stream Now
+          </a>
+          <a href="#releases" class="btn-outline">
+            View All Releases
+          </a>
+        </div>
+      </div>
+
+      <!-- Right: player placeholder -->
+      <div class="reveal" style="transition-delay:0.25s">
+        <div class="player-placeholder p-6">
+          <!-- Cover art mock -->
+          <div class="rounded-lg mb-6 overflow-hidden" style="aspect-ratio:1/1;background:linear-gradient(135deg,#0d1f3a 0%,#050e1a 50%,#091428 100%);display:flex;align-items:center;justify-content:center;position:relative;">
+            <!-- Grid lines decorative -->
+            <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(26,140,255,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(26,140,255,0.06) 1px,transparent 1px);background-size:32px 32px;"></div>
+            <div style="position:relative;text-align:center;">
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2.5rem,8vw,4.5rem);letter-spacing:0.06em;color:#fff;line-height:1;">ECLIPSE<br/>PROTOCOL</div>
+              <div style="font-size:0.6rem;letter-spacing:0.3em;color:#1a8cff;margin-top:8px;font-weight:700;">VAYNE • HORIZON RCRDS</div>
+            </div>
+            <!-- Glow -->
+            <div style="position:absolute;bottom:-40px;left:50%;transform:translateX(-50%);width:60%;height:80px;background:radial-gradient(ellipse,rgba(26,140,255,0.25),transparent);pointer-events:none;"></div>
+          </div>
+
+          <!-- Player controls mock -->
+          <div class="flex items-center justify-between mb-5">
+            <div>
+              <div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:0.08em;color:#fff;">Eclipse Protocol</div>
+              <div style="font-size:0.68rem;letter-spacing:0.18em;color:#6b7280;font-weight:600;margin-top:2px;">VAYNE</div>
+            </div>
+            <div class="flex items-center gap-4">
+              <button style="color:#6b7280;font-size:0.9rem;cursor:pointer;transition:color 0.2s;" onmouseover="this.style.color='#1a8cff'" onmouseout="this.style.color='#6b7280'"><i class="fa-solid fa-backward-step"></i></button>
+              <button style="width:42px;height:42px;border-radius:50%;background:#1a8cff;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 0 20px rgba(26,140,255,0.45);transition:box-shadow 0.2s,transform 0.2s;" onmouseover="this.style.transform='scale(1.08)'" onmouseout="this.style.transform='scale(1)'"><i class="fa-solid fa-play" style="font-size:0.75rem;margin-left:2px;"></i></button>
+              <button style="color:#6b7280;font-size:0.9rem;cursor:pointer;transition:color 0.2s;" onmouseover="this.style.color='#1a8cff'" onmouseout="this.style.color='#6b7280'"><i class="fa-solid fa-forward-step"></i></button>
+            </div>
+          </div>
+
+          <!-- Waveform -->
+          <div class="player-waveform mb-4">
+            <!-- 32 bars -->
+            <span style="height:12px"></span><span style="height:22px"></span><span style="height:18px"></span><span style="height:30px"></span><span style="height:15px"></span><span style="height:34px"></span><span style="height:20px"></span><span style="height:28px"></span><span style="height:10px"></span><span style="height:26px"></span><span style="height:34px"></span><span style="height:18px"></span><span style="height:30px"></span><span style="height:14px"></span><span style="height:24px"></span><span style="height:32px"></span><span style="height:16px"></span><span style="height:28px"></span><span style="height:34px"></span><span style="height:20px"></span><span style="height:12px"></span><span style="height:30px"></span><span style="height:24px"></span><span style="height:18px"></span><span style="height:28px"></span><span style="height:34px"></span><span style="height:14px"></span><span style="height:22px"></span><span style="height:32px"></span><span style="height:16px"></span><span style="height:26px"></span><span style="height:20px"></span>
+          </div>
+
+          <!-- Progress bar -->
+          <div style="height:2px;background:#1f1f1f;border-radius:1px;margin-bottom:10px;overflow:hidden;">
+            <div style="width:37%;height:100%;background:linear-gradient(90deg,#1a8cff,#0057cc);border-radius:1px;position:relative;">
+              <div style="position:absolute;right:-4px;top:-3px;width:8px;height:8px;border-radius:50%;background:#1a8cff;box-shadow:0 0 8px rgba(26,140,255,0.8);"></div>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.62rem;color:#6b7280;font-weight:600;letter-spacing:0.1em;">
+            <span>2:18</span><span>6:04</span>
+          </div>
+
+          <!-- Streaming label -->
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid #1f1f1f;display:flex;align-items:center;gap:8px;">
+            <div style="width:8px;height:8px;border-radius:50%;background:#1a8cff;box-shadow:0 0 8px rgba(26,140,255,0.7);animation:pulse-dot 2s ease-in-out infinite;"></div>
+            <span style="font-size:0.62rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;">Available on Spotify · SoundCloud · Beatport</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="h-px-elec"></div>
+
+
+<!-- ════════════════════════════════════════
+     RELEASES GALLERY
+════════════════════════════════════════ -->
+<section id="releases" class="py-24 px-6 md:px-12" style="background:#0a0a0a;">
+  <div class="max-w-7xl mx-auto">
+
+    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-14 reveal">
+      <div>
+        <div class="section-label mb-3">Discography</div>
+        <h2 class="section-title">RELEASES</h2>
+      </div>
+      <a href="#" style="font-family:'Barlow',sans-serif;font-size:0.68rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #1f1f1f;padding-bottom:2px;transition:color 0.2s,border-color 0.2s;" onmouseover="this.style.color='#1a8cff';this.style.borderColor='#1a8cff'" onmouseout="this.style.color='#6b7280';this.style.borderColor='#1f1f1f'">
+        View Full Catalogue →
+      </a>
+    </div>
+
+    <!-- 8-card grid -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5">
+
+      <!-- Card 1 -->
+      <div class="release-card reveal" style="transition-delay:0.05s">
+        <div class="card-cover">
+          <div class="card-cover-img cover-placeholder" style="background:linear-gradient(135deg,#0d1f3a,#050e1a);color:#1a8cff;">VAYNE</div>
+          <div class="card-overlay"><i class="fa-solid fa-play" style="color:#fff;font-size:1.5rem;opacity:0.9;"></i></div>
+        </div>
+        <div class="p-4">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <p style="font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:0.06em;color:#fff;">Eclipse Protocol</p>
+              <p style="font-size:0.68rem;font-weight:600;letter-spacing:0.14em;color:#6b7280;text-transform:uppercase;margin-top:2px;">Vayne</p>
+            </div>
+            <span class="num-badge">HR001</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="release-card reveal" style="transition-delay:0.1s">
+        <div class="card-cover">
+          <div class="card-cover-img cover-placeholder" style="background:linear-gradient(135deg,#1a0a2e,#0d0616);color:#7c3aed;">ORCA</div>
+          <div class="card-overlay"><i class="fa-solid fa-play" style="color:#fff;font-size:1.5rem;opacity:0.9;"></i></div>
+        </div>
+        <div class="p-4">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <p style="font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:0.06em;color:#fff;">Depths</p>
+              <p style="font-size:0.68rem;font-weight:600;letter-spacing:0.14em;color:#6b7280;text-transform:uppercase;margin-top:2px;">Orca</p>
+            </div>
+            <span class="num-badge">HR002</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="release-card reveal" style="transition-delay:0.15s">
+        <div class="card-cover">
+          <div class="card-cover-img cover-placeholder" style="background:linear-gradient(135deg,#0a1f1a,#040e0b);color:#10b981;">KIRA</div>
+          <div class="card-overlay"><i class="fa-solid fa-play" style="color:#fff;font-size:1.5rem;opacity:0.9;"></i></div>
+        </div>
+        <div class="p-4">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <p style="font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:0.06em;color:#fff;">Synthetic Eden</p>
+              <p style="font-size:0.68rem;font-weight:600;letter-spacing:0.14em;color:#6b7280;text-transform:uppercase;margin-top:2px;">Kira</p>
+            </div>
+            <span class="num-badge">HR003</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 4 -->
+      <div class="release-card reveal" style="transition-delay:0.2s">
+        <div class="card-cover">
+          <div class="card-cover-img cover-placeholder" style="background:linear-gradient(135deg,#1f0a0a,#110404);color:#ef4444;">MIRA</div>
+          <div class="card-overlay"><i class="fa-solid fa-play" style="color:#fff;font-size:1.5rem;opacity:0.9;"></i></div>
+        </div>
+        <div class="p-4">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <p style="font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:0.06em;color:#fff;">Red Shift</p>
+              <p style="font-size:0.68rem;font-weight:600;letter-spacing:0.14em;color:#6b7280;text-transform:uppercase;margin-top:2px;">Mira</p>
+            </div>
+            <span class="num-badge">HR004</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 5 -->
+      <div class="release-card reveal" style="transition-delay:0.05s">
+        <div class="card-cover">
+          <div class="card-cover-img cover-placeholder" style="background:linear-gradient(135deg,#0a141f,#030810);color:#38bdf8;">CERO</div>
+          <div class="card-overlay"><i class="fa-solid fa-play" style="color:#fff;font-size:1.5rem;opacity:0.9;"></i></div>
+        </div>
+        <div class="p-4">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <p style="font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:0.06em;color:#fff;">Cold Altitude</p>
+              <p style="font-size:0.68rem;font-weight:600;letter-spacing:0.14em;color:#6b7280;text-transform:uppercase;margin-top:2px;">Cero</p>
+            </div>
+            <span class="num-badge">HR005</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 6 -->
+      <div class="release-card reveal" style="transition-delay:0.1s">
+        <div class="card-cover">
+          <div class="card-cover-img cover-placeholder" style="background:linear-gradient(135deg,#1a1500,#0d0b00);color:#eab308;">SATO</div>
+          <div class="card-overlay"><i class="fa-solid fa-play" style="color:#fff;font-size:1.5rem;opacity:0.9;"></i></div>
+        </div>
+        <div class="p-4">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <p style="font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:0.06em;color:#fff;">Reactor</p>
+              <p style="font-size:0.68rem;font-weight:600;letter-spacing:0.14em;color:#6b7280;text-transform:uppercase;margin-top:2px;">Sato</p>
+            </div>
+            <span class="num-badge">HR006</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 7 -->
+      <div class="release-card reveal" style="transition-delay:0.15s">
+        <div class="card-cover">
+          <div class="card-cover-img cover-placeholder" style="background:linear-gradient(135deg,#0f0a1f,#060410);color:#a855f7;">NOVA</div>
+          <div class="card-overlay"><i class="fa-solid fa-play" style="color:#fff;font-size:1.5rem;opacity:0.9;"></i></div>
+        </div>
+        <div class="p-4">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <p style="font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:0.06em;color:#fff;">Ultraviolet</p>
+              <p style="font-size:0.68rem;font-weight:600;letter-spacing:0.14em;color:#6b7280;text-transform:uppercase;margin-top:2px;">Nova</p>
+            </div>
+            <span class="num-badge">HR007</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 8 -->
+      <div class="release-card reveal" style="transition-delay:0.2s">
+        <div class="card-cover">
+          <div class="card-cover-img cover-placeholder" style="background:linear-gradient(135deg,#0a0f1f,#03060e);color:#6366f1;">AXEL</div>
+          <div class="card-overlay"><i class="fa-solid fa-play" style="color:#fff;font-size:1.5rem;opacity:0.9;"></i></div>
+        </div>
+        <div class="p-4">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <p style="font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:0.06em;color:#fff;">Phase Gate</p>
+              <p style="font-size:0.68rem;font-weight:600;letter-spacing:0.14em;color:#6b7280;text-transform:uppercase;margin-top:2px;">Axel</p>
+            </div>
+            <span class="num-badge">HR008</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="h-px-elec"></div>
+
+
+<!-- ════════════════════════════════════════
+     DEMO DROP
+════════════════════════════════════════ -->
+<section id="demos" class="demo-bg py-32 px-6 md:px-12 relative overflow-hidden">
+  <!-- Decorative circles -->
+  <div style="position:absolute;top:-200px;left:-200px;width:600px;height:600px;border-radius:50%;border:1px solid rgba(26,140,255,0.06);pointer-events:none;"></div>
+  <div style="position:absolute;bottom:-150px;right:-150px;width:500px;height:500px;border-radius:50%;border:1px solid rgba(26,140,255,0.04);pointer-events:none;"></div>
+
+  <div class="max-w-7xl mx-auto">
+    <div class="max-w-3xl reveal">
+      <div class="section-label mb-6 flex items-center gap-3">
+        <span class="inline-block w-8 h-px bg-elec"></span>
+        Open Submissions
+      </div>
+
+      <h2 class="demo-title mb-2">SEND YOUR</h2>
+      <h2 class="demo-title mb-8"><span class="highlight">DEMO.</span></h2>
+
+      <p class="text-gray-500 font-light leading-relaxed mb-3 max-w-xl" style="font-size:0.95rem;">
+        We listen to everything. If your music cuts through the noise — forward-thinking, uncompromising, built to move rooms — we want to hear it.
+      </p>
+      <p class="mb-12" style="font-size:0.75rem;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:#374151;">
+        Techno · Tech House · Industrial · Experimental Club
+      </p>
+
+      <div class="flex flex-wrap items-center gap-6">
+        <a href="https://labelradar.com" target="_blank" rel="noopener noreferrer" class="btn-primary" style="font-size:0.75rem;padding:16px 40px;">
+          <i class="fa-solid fa-paper-plane"></i>
+          Submit via LabelRadar
+        </a>
+        <p style="font-size:0.65rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#374151;">
+          Response within 4–6 weeks
+        </p>
+      </div>
+
+      <!-- Guidelines -->
+      <div class="mt-16 grid sm:grid-cols-3 gap-6 pt-12 border-t border-border">
+        <div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:#1a8cff;margin-bottom:6px;">Format</div>
+          <p style="font-size:0.75rem;color:#6b7280;font-weight:400;line-height:1.6;">MP3 / WAV · 320kbps or lossless preferred. Include a short bio.</p>
+        </div>
+        <div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:#1a8cff;margin-bottom:6px;">Platform</div>
+          <p style="font-size:0.75rem;color:#6b7280;font-weight:400;line-height:1.6;">Submissions via LabelRadar only. Direct emails will not be reviewed.</p>
+        </div>
+        <div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:#1a8cff;margin-bottom:6px;">Policy</div>
+          <p style="font-size:0.75rem;color:#6b7280;font-weight:400;line-height:1.6;">Unreleased material only. We sign worldwide licensing deals.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="h-px-elec"></div>
+
+
+<!-- ════════════════════════════════════════
+     FOOTER / CONTACT
+════════════════════════════════════════ -->
+<footer id="contact" style="background:#0a0a0a;padding:64px 24px 40px;">
+  <div class="max-w-7xl mx-auto">
+
+    <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-12 mb-16">
+      <!-- Brand -->
+      <div class="max-w-xs">
+        <div class="mb-4">
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:0.14em;color:#fff;">HORIZON</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.85rem;letter-spacing:0.4em;color:#1a8cff;margin-top:-4px;">RCRDS</div>
+        </div>
+        <p style="font-size:0.75rem;color:#4b5563;font-weight:400;line-height:1.7;">
+          Independent electronic music label. Pushing boundaries since day one. Based everywhere.
+        </p>
+      </div>
+
+      <!-- Nav links -->
+      <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-16 gap-y-4">
+        <div>
+          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:#1a8cff;margin-bottom:14px;">Label</div>
+          <div class="flex flex-col gap-3">
+            <a href="#releases" style="font-size:0.75rem;color:#6b7280;font-weight:400;transition:color 0.2s;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Releases</a>
+            <a href="#demos"    style="font-size:0.75rem;color:#6b7280;font-weight:400;transition:color 0.2s;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Submit Demo</a>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:#1a8cff;margin-bottom:14px;">Music</div>
+          <div class="flex flex-col gap-3">
+            <a href="#" style="font-size:0.75rem;color:#6b7280;font-weight:400;transition:color 0.2s;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Spotify</a>
+            <a href="#" style="font-size:0.75rem;color:#6b7280;font-weight:400;transition:color 0.2s;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Beatport</a>
+            <a href="#" style="font-size:0.75rem;color:#6b7280;font-weight:400;transition:color 0.2s;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">SoundCloud</a>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:#1a8cff;margin-bottom:14px;">Contact</div>
+          <div class="flex flex-col gap-3">
+            <a href="mailto:info@horizonrcrds.com" style="font-size:0.75rem;color:#6b7280;font-weight:400;transition:color 0.2s;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">info@horizonrcrds.com</a>
+            <a href="mailto:booking@horizonrcrds.com" style="font-size:0.75rem;color:#6b7280;font-weight:400;transition:color 0.2s;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">booking@horizonrcrds.com</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="h-px-elec mb-8"></div>
+
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-6">
+      <!-- Social icons -->
+      <div class="flex items-center gap-3">
+        <a href="#" class="social-icon" aria-label="Instagram">
+          <i class="fa-brands fa-instagram"></i>
+        </a>
+        <a href="#" class="social-icon" aria-label="YouTube">
+          <i class="fa-brands fa-youtube"></i>
+        </a>
+        <a href="#" class="social-icon" aria-label="SoundCloud">
+          <i class="fa-brands fa-soundcloud"></i>
+        </a>
+        <a href="#" class="social-icon" aria-label="Spotify">
+          <i class="fa-brands fa-spotify"></i>
+        </a>
+      </div>
+
+      <!-- Copyright -->
+      <p style="font-size:0.62rem;font-weight:600;letter-spacing:0.2em;text-transform:uppercase;color:#374151;text-align:center;">
+        © 2025 HORIZON RCRDS. ALL RIGHTS RESERVED.
+      </p>
+    </div>
+
+  </div>
+</footer>
+
+
+<!-- ════════════════════════════════════════
+     JS
+════════════════════════════════════════ -->
+<script>
+  /* ── Navbar scroll ── */
+  const navbar = document.getElementById('navbar');
+  window.addEventListener('scroll', () => {
+    navbar.classList.toggle('scrolled', window.scrollY > 40);
+  });
+
+  /* ── Mobile nav toggle ── */
+  const toggle = document.getElementById('nav-toggle');
+  const menu   = document.getElementById('nav-menu');
+  let open = false;
+
+  toggle.addEventListener('click', () => {
+    open = !open;
+    menu.classList.toggle('open', open);
+  });
+  function closeMenu() { open = false; menu.classList.remove('open'); }
+
+  /* ── Reveal on scroll ── */
+  const reveals = document.querySelectorAll('.reveal');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) { e.target.classList.add('visible'); }
+    });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+  reveals.forEach(el => observer.observe(el));
+
+  /* ── Pulse dot animation ── */
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(26,140,255,0.7); }
+      50%       { opacity: 0.4; box-shadow: 0 0 4px rgba(26,140,255,0.3); }
+    }
+  `;
+  document.head.appendChild(style);
+</script>
+
+</body>
+</html>

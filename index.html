@@ -19,8 +19,8 @@
             ink:   '#111111',
             panel: '#161616',
             border:'#1f1f1f',
-            elec:  '#1a8cff',
-            elec2: '#0057cc',
+            elec:  '#ffffff',
+            elec2: '#cccccc',
             smoke: '#6b7280',
             ghost: '#9ca3af',
           },
@@ -36,18 +36,47 @@
   <style>
     /* ─────────────────────────────────────────
        ROOT THEME TOKEN
-       JS writes --hero-color on <html> once
-       releases[0].color is known. Every accent
-       that should match the latest release reads
-       this variable.
+       Default: pure white (#ffffff) — NO blue at
+       load time, so there is zero colour flash.
+       JS writes --accent-color + --accent-color-rgb
+       the moment releases[0].color is read from
+       the JSON fetch. The 0.5 s transition on every
+       accent-bearing element turns the colour
+       change into a soft "warm-up" fade.
     ───────────────────────────────────────── */
     :root {
-      --hero-color: #1a8cff;          /* fallback = electric blue */
-      --hero-color-rgb: 26, 140, 255;
+      --accent-color:     #ffffff;
+      --accent-color-rgb: 255, 255, 255;
     }
 
-    *, *::before, *::after { box-sizing: border-box; }
+    /* Per-element transition for the accent warm-up.
+       Applied to specific properties so scroll-reveal
+       transforms are not slowed down. */
+    *,
+    *::before,
+    *::after {
+      transition-property: color, background-color, border-color, box-shadow, filter, outline-color;
+      transition-duration: 0.5s;
+      transition-timing-function: ease;
+    }
+    /* Override: restore fast transitions for layout / motion properties */
+    .reveal,
+    .release-card,
+    .playlist-card,
+    .nav-link,
+    .btn-primary,
+    .btn-outline,
+    .btn-playlist,
+    .stream-icon,
+    .social-icon {
+      transition-property:
+        color, background-color, border-color, box-shadow, filter,
+        opacity, transform;
+      transition-duration: 0.5s, 0.5s, 0.5s, 0.5s, 0.5s, 0.7s, 0.35s;
+      transition-timing-function: ease;
+    }
     html { scroll-behavior: smooth; }
+    *, *::before, *::after { box-sizing: border-box; }
 
     body {
       background-color: #0a0a0a;
@@ -67,7 +96,7 @@
     /* Scrollbar — uses hero color */
     ::-webkit-scrollbar { width: 4px; }
     ::-webkit-scrollbar-track { background: #0a0a0a; }
-    ::-webkit-scrollbar-thumb { background: var(--hero-color); border-radius: 2px; }
+    ::-webkit-scrollbar-thumb { background: var(--accent-color); border-radius: 2px; }
 
     /* ── NAVBAR ── */
     #navbar { transition: background 0.4s, backdrop-filter 0.4s; }
@@ -85,7 +114,7 @@
     .nav-link::after {
       content: '';
       position: absolute; bottom: -3px; left: 0; right: 100%;
-      height: 1px; background: var(--hero-color);
+      height: 1px; background: var(--accent-color);
       transition: right 0.3s ease;
     }
     .nav-link:hover { color: #e5e7eb; }
@@ -98,14 +127,14 @@
     /* ── HERO ── */
     .hero-bg {
       background:
-        radial-gradient(ellipse 70% 55% at 60% 50%, rgba(var(--hero-color-rgb), 0.08) 0%, transparent 70%),
-        radial-gradient(ellipse 40% 30% at 20% 80%, rgba(var(--hero-color-rgb), 0.04) 0%, transparent 60%),
+        radial-gradient(ellipse 70% 55% at 60% 50%, rgba(var(--accent-color-rgb), 0.08) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 30% at 20% 80%, rgba(var(--accent-color-rgb), 0.04) 0%, transparent 60%),
         #0a0a0a;
       transition: background 0.8s ease;
     }
 
     /*
-      .hero-title gradient uses --hero-color.
+      .hero-title gradient uses --accent-color.
       We rebuild it via JS after color is known,
       so we define it here only as the base.
     */
@@ -113,21 +142,21 @@
       font-family: 'Bebas Neue', sans-serif;
       font-size: clamp(3.5rem, 11vw, 9rem);
       line-height: 0.9; letter-spacing: 0.04em;
-      background: linear-gradient(160deg, #ffffff 0%, #a0b4cc 55%, var(--hero-color) 100%);
+      background: linear-gradient(160deg, #ffffff 0%, #a0b4cc 55%, var(--accent-color) 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
       word-break: break-word;
     }
 
-    /* Dynamic accent elements — all read --hero-color */
+    /* Dynamic accent elements — all read --accent-color */
     .label-tag {
       font-family: 'Barlow', sans-serif;
       font-size: 0.65rem; font-weight: 700;
       letter-spacing: 0.3em; text-transform: uppercase;
-      color: var(--hero-color);
+      color: var(--accent-color);
     }
-    .accent-line { background: var(--hero-color); }
+    .accent-line { background: var(--accent-color); }
 
     /* ── PLAYER CARD ── */
     .player-card {
@@ -137,12 +166,12 @@
     }
     .player-card::before {
       content: ''; position: absolute; inset: 0;
-      background: linear-gradient(135deg, rgba(var(--hero-color-rgb), 0.05) 0%, transparent 60%);
+      background: linear-gradient(135deg, rgba(var(--accent-color-rgb), 0.05) 0%, transparent 60%);
       pointer-events: none; transition: background 0.6s;
     }
     #hero-cover-wrap {
       width: 100%; aspect-ratio: 1/1;
-      position: relative; overflow: hidden; background: #0d1220;
+      position: relative; overflow: hidden; background: #0d0d0d;
     }
     #hero-cover-img {
       width: 100%; height: 100%; object-fit: cover;
@@ -153,13 +182,13 @@
       display: flex; flex-direction: column;
       align-items: center; justify-content: center;
       text-align: center;
-      background: linear-gradient(135deg, #0d1f3a 0%, #050e1a 100%);
+      background: linear-gradient(135deg, #141414 0%, #0a0a0a 100%);
     }
     #hero-cover-fallback::before {
       content: ''; position: absolute; inset: 0;
       background-image:
-        linear-gradient(rgba(var(--hero-color-rgb), 0.07) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(var(--hero-color-rgb), 0.07) 1px, transparent 1px);
+        linear-gradient(rgba(var(--accent-color-rgb), 0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(var(--accent-color-rgb), 0.07) 1px, transparent 1px);
       background-size: 32px 32px;
     }
 
@@ -167,7 +196,7 @@
     .waveform { display: flex; align-items: center; gap: 3px; height: 36px; }
     .waveform span {
       display: block; width: 3px; border-radius: 2px;
-      background: var(--hero-color);
+      background: var(--accent-color);
       animation: wave 1.2s ease-in-out infinite alternate;
     }
     .waveform span:nth-child(odd)  { animation-delay: 0.1s; }
@@ -182,34 +211,34 @@
     .progress-track { height: 2px; background: #1f1f1f; border-radius: 1px; margin-bottom: 10px; overflow: hidden; }
     .progress-fill  {
       width: 37%; height: 100%;
-      background: linear-gradient(90deg, var(--hero-color), rgba(var(--hero-color-rgb), 0.5));
+      background: linear-gradient(90deg, var(--accent-color), rgba(var(--accent-color-rgb), 0.5));
       border-radius: 1px; position: relative;
     }
     .progress-fill::after {
       content: ''; position: absolute; right: -4px; top: -3px;
       width: 8px; height: 8px; border-radius: 50%;
-      background: var(--hero-color);
-      box-shadow: 0 0 8px rgba(var(--hero-color-rgb), 0.8);
+      background: var(--accent-color);
+      box-shadow: 0 0 8px rgba(var(--accent-color-rgb), 0.8);
     }
 
     /* Play button in player */
     #player-play-btn {
       width: 42px; height: 42px; border-radius: 50%;
-      background: var(--hero-color); color: #fff;
+      background: var(--accent-color); color: #fff;
       display: flex; align-items: center; justify-content: center;
-      box-shadow: 0 0 20px rgba(var(--hero-color-rgb), 0.45);
+      box-shadow: 0 0 20px rgba(var(--accent-color-rgb), 0.45);
       transition: transform 0.2s, box-shadow 0.3s;
       text-decoration: none;
     }
     #player-play-btn:hover {
       transform: scale(1.08);
-      box-shadow: 0 0 32px rgba(var(--hero-color-rgb), 0.65);
+      box-shadow: 0 0 32px rgba(var(--accent-color-rgb), 0.65);
     }
 
-    /* ── BUTTONS — dynamic via --hero-color ── */
+    /* ── BUTTONS — dynamic via --accent-color ── */
     .btn-primary {
       display: inline-flex; align-items: center; gap: 10px;
-      background: var(--hero-color); color: #fff;
+      background: var(--accent-color); color: #fff;
       font-family: 'Barlow', sans-serif; font-weight: 700;
       font-size: 0.7rem; letter-spacing: 0.25em; text-transform: uppercase;
       padding: 14px 34px; border-radius: 3px; border: none;
@@ -223,24 +252,24 @@
       transform: translateX(-100%); transition: transform 0.5s ease;
     }
     .btn-primary:hover {
-      box-shadow: 0 0 28px rgba(var(--hero-color-rgb), 0.55);
+      box-shadow: 0 0 28px rgba(var(--accent-color-rgb), 0.55);
       transform: translateY(-1px);
     }
     .btn-primary:hover::before { transform: translateX(100%); }
 
     .btn-outline {
       display: inline-flex; align-items: center; gap: 10px;
-      background: transparent; color: var(--hero-color);
+      background: transparent; color: var(--accent-color);
       font-family: 'Barlow', sans-serif; font-weight: 700;
       font-size: 0.7rem; letter-spacing: 0.25em; text-transform: uppercase;
       padding: 13px 32px; border-radius: 3px;
-      border: 1px solid var(--hero-color);
+      border: 1px solid var(--accent-color);
       cursor: pointer; transition: background 0.25s, box-shadow 0.25s, transform 0.2s;
       text-decoration: none;
     }
     .btn-outline:hover {
-      background: rgba(var(--hero-color-rgb), 0.1);
-      box-shadow: 0 0 20px rgba(var(--hero-color-rgb), 0.3);
+      background: rgba(var(--accent-color-rgb), 0.1);
+      box-shadow: 0 0 20px rgba(var(--accent-color-rgb), 0.3);
       transform: translateY(-1px);
     }
 
@@ -252,8 +281,8 @@
       so every card glows with its own track color.
     */
     .release-card {
-      --track-color:     #1a8cff;       /* per-card override set by JS */
-      --track-color-rgb: 26, 140, 255;
+      --track-color:     #ffffff;       /* per-card override set by JS */
+      --track-color-rgb: 255, 255, 255;
       background: #111;
       border: 1px solid #1e1e1e;
       border-radius: 8px; overflow: hidden;
@@ -275,7 +304,7 @@
     /* Cover */
     .card-cover {
       width: 100%; aspect-ratio: 1/1;
-      position: relative; overflow: hidden; background: #0d1220;
+      position: relative; overflow: hidden; background: #0d0d0d;
     }
     .card-cover img {
       width: 100%; height: 100%; object-fit: cover;
@@ -289,7 +318,7 @@
       font-family: 'Bebas Neue', sans-serif;
       font-size: clamp(1.3rem, 3vw, 2rem); letter-spacing: 0.08em;
       color: var(--track-color);
-      background: linear-gradient(135deg, #0d1f3a, #050e1a);
+      background: linear-gradient(135deg, #141414, #0a0a0a);
       text-align: center; padding: 8px;
       transition: color 0.4s;
     }
@@ -374,7 +403,7 @@
     .section-label {
       font-family: 'Barlow', sans-serif; font-size: 0.62rem;
       font-weight: 700; letter-spacing: 0.32em; text-transform: uppercase;
-      color: var(--hero-color);
+      color: var(--accent-color);
     }
     .section-title {
       font-family: 'Bebas Neue', sans-serif;
@@ -385,15 +414,15 @@
     /* Electric divider — uses hero color */
     .h-px-elec {
       height: 1px;
-      background: linear-gradient(90deg, transparent, var(--hero-color) 40%, rgba(var(--hero-color-rgb),0.5) 70%, transparent);
+      background: linear-gradient(90deg, transparent, var(--accent-color) 40%, rgba(var(--accent-color-rgb),0.5) 70%, transparent);
       transition: background 0.6s;
     }
 
     /* Demo section */
     .demo-bg {
       background:
-        radial-gradient(ellipse 80% 60% at 50% 50%, rgba(var(--hero-color-rgb), 0.12) 0%, transparent 70%),
-        linear-gradient(180deg, #0a0a0a 0%, #0d1220 50%, #0a0a0a 100%);
+        radial-gradient(ellipse 80% 60% at 50% 50%, rgba(var(--accent-color-rgb), 0.12) 0%, transparent 70%),
+        linear-gradient(180deg, #0a0a0a 0%, #0d0d0d 50%, #0a0a0a 100%);
       border-top: 1px solid #1f1f1f; border-bottom: 1px solid #1f1f1f;
       transition: background 0.6s;
     }
@@ -402,7 +431,7 @@
       font-size: clamp(3.5rem, 12vw, 9rem);
       line-height: 0.88; letter-spacing: 0.03em; color: #fff;
     }
-    .demo-title .highlight { color: var(--hero-color); transition: color 0.6s; }
+    .demo-title .highlight { color: var(--accent-color); transition: color 0.6s; }
 
     /* Social icons (footer) */
     .social-icon {
@@ -413,8 +442,8 @@
       transition: color 0.25s, border-color 0.25s, box-shadow 0.25s, transform 0.2s;
     }
     .social-icon:hover {
-      color: var(--hero-color); border-color: var(--hero-color);
-      box-shadow: 0 0 16px rgba(var(--hero-color-rgb), 0.35);
+      color: var(--accent-color); border-color: var(--accent-color);
+      box-shadow: 0 0 16px rgba(var(--accent-color-rgb), 0.35);
       transform: translateY(-2px);
     }
 
@@ -436,13 +465,13 @@
 
     /* Pulse dot */
     @keyframes pulse-dot {
-      0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(var(--hero-color-rgb), 0.7); }
-      50%       { opacity: 0.4; box-shadow: 0 0 4px rgba(var(--hero-color-rgb), 0.3); }
+      0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(var(--accent-color-rgb), 0.7); }
+      50%       { opacity: 0.4; box-shadow: 0 0 4px rgba(var(--accent-color-rgb), 0.3); }
     }
     .pulse-dot {
       width: 8px; height: 8px; border-radius: 50%;
-      background: var(--hero-color);
-      box-shadow: 0 0 8px rgba(var(--hero-color-rgb), 0.7);
+      background: var(--accent-color);
+      box-shadow: 0 0 8px rgba(var(--accent-color-rgb), 0.7);
       animation: pulse-dot 2s ease-in-out infinite;
       display: inline-block; flex-shrink: 0;
     }
@@ -452,16 +481,16 @@
       font-family: 'Barlow', sans-serif;
       font-size: 0.65rem; font-weight: 700;
       letter-spacing: 0.18em; text-transform: uppercase;
-      color: var(--hero-color);
-      background: rgba(var(--hero-color-rgb), 0.08);
-      border: 1px solid rgba(var(--hero-color-rgb), 0.22);
+      color: var(--accent-color);
+      background: rgba(var(--accent-color-rgb), 0.08);
+      border: 1px solid rgba(var(--accent-color-rgb), 0.22);
       border-radius: 3px;
       padding: 5px 12px;
       transition: background 0.25s, border-color 0.25s, color 0.25s, transform 0.2s;
     }
     .genre-tag:hover {
-      background: rgba(var(--hero-color-rgb), 0.16);
-      border-color: rgba(var(--hero-color-rgb), 0.45);
+      background: rgba(var(--accent-color-rgb), 0.16);
+      border-color: rgba(var(--accent-color-rgb), 0.45);
       transform: translateY(-1px);
     }
 
@@ -478,16 +507,16 @@
     .playlist-card:hover {
       transform: translateY(-6px);
       box-shadow: 0 20px 50px rgba(0,0,0,0.7),
-                  0 0 0 1px rgba(var(--hero-color-rgb), 0.3),
-                  0 0 24px -4px rgba(var(--hero-color-rgb), 0.25);
-      border-color: rgba(var(--hero-color-rgb), 0.35);
+                  0 0 0 1px rgba(var(--accent-color-rgb), 0.3),
+                  0 0 24px -4px rgba(var(--accent-color-rgb), 0.25);
+      border-color: rgba(var(--accent-color-rgb), 0.35);
     }
 
     /* Cover square */
     .playlist-cover {
       width: 100%; aspect-ratio: 1/1;
       position: relative; overflow: hidden;
-      background: #0d1220;
+      background: #0d0d0d;
     }
     .playlist-cover img {
       width: 100%; height: 100%; object-fit: cover; display: block;
@@ -500,7 +529,7 @@
       position: absolute; inset: 0;
       display: none;             /* shown by JS onerror */
       align-items: center; justify-content: center;
-      background: linear-gradient(135deg, #0d1f3a 0%, #060d1a 100%);
+      background: linear-gradient(135deg, #141414 0%, #0a0a0a 100%);
     }
 
     /* Spotify play button that appears on cover hover */
@@ -535,22 +564,22 @@
       text-transform: uppercase; color: #6b7280; margin-bottom: 10px;
     }
 
-    /* Listen on Spotify button — uses --hero-color */
+    /* Listen on Spotify button — uses --accent-color */
     .btn-playlist {
       display: inline-flex; align-items: center; gap: 8px;
-      background: transparent; color: var(--hero-color);
+      background: transparent; color: var(--accent-color);
       font-family: 'Barlow', sans-serif; font-weight: 700;
       font-size: 0.65rem; letter-spacing: 0.2em; text-transform: uppercase;
       padding: 9px 18px; border-radius: 3px;
-      border: 1px solid rgba(var(--hero-color-rgb), 0.4);
+      border: 1px solid rgba(var(--accent-color-rgb), 0.4);
       text-decoration: none; margin-top: auto;
       transition: background 0.25s, border-color 0.25s, box-shadow 0.25s, transform 0.2s;
       width: fit-content;
     }
     .btn-playlist:hover {
-      background: rgba(var(--hero-color-rgb), 0.1);
-      border-color: rgba(var(--hero-color-rgb), 0.7);
-      box-shadow: 0 0 14px rgba(var(--hero-color-rgb), 0.25);
+      background: rgba(var(--accent-color-rgb), 0.1);
+      border-color: rgba(var(--accent-color-rgb), 0.7);
+      box-shadow: 0 0 14px rgba(var(--accent-color-rgb), 0.25);
       transform: translateY(-1px);
     }
   </style>
@@ -584,7 +613,7 @@
                    letter-spacing:0.12em;color:#fff;transition:color 0.25s;">HORIZON</span>
       <span id="logo-sub"
             style="font-family:'Bebas Neue',sans-serif;font-size:0.78rem;
-                   letter-spacing:0.4em;color:var(--hero-color);
+                   letter-spacing:0.4em;color:var(--accent-color);
                    margin-top:-2px;transition:color 0.5s;">RCRDS</span>
     </a>
     <!-- xs balance spacer (wordmark hidden → keep grid symmetric) -->
@@ -647,7 +676,7 @@
      HERO — populated dynamically from releases[0]
 ═══════════════════════════════════════ -->
 <section id="home" class="hero-bg min-h-screen flex flex-col justify-center pt-28 pb-20 px-6 md:px-12 relative overflow-hidden">
-  <div style="position:absolute;top:0;left:0;width:1px;height:100%;background:linear-gradient(to bottom,transparent,rgba(var(--hero-color-rgb),0.18),transparent);pointer-events:none;"></div>
+  <div style="position:absolute;top:0;left:0;width:1px;height:100%;background:linear-gradient(to bottom,transparent,rgba(var(--accent-color-rgb),0.18),transparent);pointer-events:none;"></div>
 
   <div class="max-w-7xl mx-auto w-full">
     <div class="grid md:grid-cols-2 gap-16 items-center">
@@ -694,7 +723,7 @@
                 <div id="hero-cover-text"
                      style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2rem,6vw,4rem);letter-spacing:0.06em;color:#fff;line-height:1;"></div>
                 <div id="hero-cover-sub"
-                     style="font-size:0.6rem;letter-spacing:0.3em;color:var(--hero-color);margin-top:8px;font-weight:700;"></div>
+                     style="font-size:0.6rem;letter-spacing:0.3em;color:var(--accent-color);margin-top:8px;font-weight:700;"></div>
               </div>
             </div>
           </div>
@@ -706,13 +735,13 @@
               <div id="player-artist" style="font-size:0.68rem;letter-spacing:0.18em;color:#6b7280;font-weight:600;margin-top:2px;">—</div>
             </div>
             <div class="flex items-center gap-4">
-              <button style="color:#6b7280;font-size:0.9rem;cursor:pointer;background:none;border:none;" onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--hero-color')" onmouseout="this.style.color='#6b7280'">
+              <button style="color:#6b7280;font-size:0.9rem;cursor:pointer;background:none;border:none;" onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent-color')" onmouseout="this.style.color='#6b7280'">
                 <i class="fa-solid fa-backward-step"></i>
               </button>
               <a id="player-play-btn" href="#" target="_blank" rel="noopener noreferrer">
                 <i class="fa-solid fa-play" style="font-size:0.75rem;margin-left:2px;"></i>
               </a>
-              <button style="color:#6b7280;font-size:0.9rem;cursor:pointer;background:none;border:none;" onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--hero-color')" onmouseout="this.style.color='#6b7280'">
+              <button style="color:#6b7280;font-size:0.9rem;cursor:pointer;background:none;border:none;" onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent-color')" onmouseout="this.style.color='#6b7280'">
                 <i class="fa-solid fa-forward-step"></i>
               </button>
             </div>
@@ -759,7 +788,7 @@
         <h2 class="section-title">RELEASES</h2>
       </div>
       <a href="#" style="font-family:'Barlow',sans-serif;font-size:0.68rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #1f1f1f;padding-bottom:2px;transition:color 0.2s,border-color 0.2s;text-decoration:none;"
-         onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--hero-color');this.style.borderColor=getComputedStyle(document.documentElement).getPropertyValue('--hero-color')"
+         onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent-color');this.style.borderColor=getComputedStyle(document.documentElement).getPropertyValue('--accent-color')"
          onmouseout="this.style.color='#6b7280';this.style.borderColor='#1f1f1f'">
         View Full Catalogue →
       </a>
@@ -783,8 +812,8 @@
      DEMO DROP
 ═══════════════════════════════════════ -->
 <section id="demos" class="demo-bg py-32 px-6 md:px-12 relative overflow-hidden">
-  <div style="position:absolute;top:-200px;left:-200px;width:600px;height:600px;border-radius:50%;border:1px solid rgba(var(--hero-color-rgb),0.06);pointer-events:none;"></div>
-  <div style="position:absolute;bottom:-150px;right:-150px;width:500px;height:500px;border-radius:50%;border:1px solid rgba(var(--hero-color-rgb),0.04);pointer-events:none;"></div>
+  <div style="position:absolute;top:-200px;left:-200px;width:600px;height:600px;border-radius:50%;border:1px solid rgba(var(--accent-color-rgb),0.06);pointer-events:none;"></div>
+  <div style="position:absolute;bottom:-150px;right:-150px;width:500px;height:500px;border-radius:50%;border:1px solid rgba(var(--accent-color-rgb),0.04);pointer-events:none;"></div>
 
   <div class="max-w-7xl mx-auto">
     <div class="max-w-3xl reveal">
@@ -824,15 +853,15 @@
 
       <div class="grid sm:grid-cols-3 gap-6 mt-16 pt-12" style="border-top:1px solid #1f1f1f;">
         <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:var(--hero-color);margin-bottom:6px;">Format</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:var(--accent-color);margin-bottom:6px;">Format</div>
           <p style="font-size:0.75rem;color:#6b7280;font-weight:400;line-height:1.6;">MP3 / WAV · 320 kbps or lossless preferred. Include a short artist bio.</p>
         </div>
         <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:var(--hero-color);margin-bottom:6px;">Platform</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:var(--accent-color);margin-bottom:6px;">Platform</div>
           <p style="font-size:0.75rem;color:#6b7280;font-weight:400;line-height:1.6;">Submissions via LabelRadar only. Direct emails will not be reviewed.</p>
         </div>
         <div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:var(--hero-color);margin-bottom:6px;">Policy</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:var(--accent-color);margin-bottom:6px;">Policy</div>
           <p style="font-size:0.75rem;color:#6b7280;font-weight:400;line-height:1.6;">Unreleased material only. We sign worldwide licensing deals.</p>
         </div>
       </div>
@@ -858,7 +887,7 @@
       <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
          target="_blank" rel="noopener noreferrer"
          style="font-family:'Barlow',sans-serif;font-size:0.68rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #1f1f1f;padding-bottom:2px;transition:color 0.2s,border-color 0.2s;text-decoration:none;"
-         onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--hero-color');this.style.borderColor=getComputedStyle(document.documentElement).getPropertyValue('--hero-color')"
+         onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent-color');this.style.borderColor=getComputedStyle(document.documentElement).getPropertyValue('--accent-color')"
          onmouseout="this.style.color='#6b7280';this.style.borderColor='#1f1f1f'">
         View All on Spotify →
       </a>
@@ -873,7 +902,7 @@
           <img src="./assets/playlist1.jpg" alt="Horizon Essentials cover" loading="lazy"
                onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
           <div class="playlist-cover-fallback">
-            <i class="fa-brands fa-spotify" style="font-size:2rem;color:var(--hero-color);"></i>
+            <i class="fa-brands fa-spotify" style="font-size:2rem;color:var(--accent-color);"></i>
           </div>
           <div class="playlist-overlay">
             <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
@@ -900,7 +929,7 @@
           <img src="./assets/playlist2.jpg" alt="Festival Season cover" loading="lazy"
                onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
           <div class="playlist-cover-fallback">
-            <i class="fa-solid fa-music" style="font-size:2rem;color:var(--hero-color);"></i>
+            <i class="fa-solid fa-music" style="font-size:2rem;color:var(--accent-color);"></i>
           </div>
           <div class="playlist-overlay">
             <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
@@ -927,7 +956,7 @@
           <img src="./assets/playlist3.jpg" alt="Late Night Club cover" loading="lazy"
                onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
           <div class="playlist-cover-fallback">
-            <i class="fa-solid fa-moon" style="font-size:2rem;color:var(--hero-color);"></i>
+            <i class="fa-solid fa-moon" style="font-size:2rem;color:var(--accent-color);"></i>
           </div>
           <div class="playlist-overlay">
             <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
@@ -954,7 +983,7 @@
           <img src="./assets/playlist4.jpg" alt="Emotional Drive cover" loading="lazy"
                onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
           <div class="playlist-cover-fallback">
-            <i class="fa-solid fa-heart" style="font-size:2rem;color:var(--hero-color);"></i>
+            <i class="fa-solid fa-heart" style="font-size:2rem;color:var(--accent-color);"></i>
           </div>
           <div class="playlist-overlay">
             <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
@@ -992,7 +1021,7 @@
       <div class="max-w-xs">
         <div class="mb-4">
           <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;letter-spacing:0.14em;color:#fff;">HORIZON</div>
-          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.85rem;letter-spacing:0.4em;color:var(--hero-color);margin-top:-4px;">RCRDS</div>
+          <div style="font-family:'Bebas Neue',sans-serif;font-size:0.85rem;letter-spacing:0.4em;color:var(--accent-color);margin-top:-4px;">RCRDS</div>
         </div>
         <p style="font-size:0.75rem;color:#4b5563;font-weight:400;line-height:1.7;">
           Independent electronic music label. Pushing boundaries since day one. Based everywhere.
@@ -1001,7 +1030,7 @@
 
       <div class="grid grid-cols-2 sm:grid-cols-3 gap-x-16 gap-y-4">
         <div>
-          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:var(--hero-color);margin-bottom:14px;">Label</div>
+          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:var(--accent-color);margin-bottom:14px;">Label</div>
           <div class="flex flex-col gap-3">
             <a href="#releases"  style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Releases</a>
             <a href="#playlists" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Playlists</a>
@@ -1009,7 +1038,7 @@
           </div>
         </div>
         <div>
-          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:var(--hero-color);margin-bottom:14px;">Music</div>
+          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:var(--accent-color);margin-bottom:14px;">Music</div>
           <div class="flex flex-col gap-3">
             <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2" target="_blank" rel="noopener noreferrer" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Spotify</a>
             <a href="https://soundcloud.com/horizonirecords/" target="_blank" rel="noopener noreferrer" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">SoundCloud</a>
@@ -1017,7 +1046,7 @@
           </div>
         </div>
         <div>
-          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:var(--hero-color);margin-bottom:14px;">Contact</div>
+          <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:var(--accent-color);margin-bottom:14px;">Contact</div>
           <div class="flex flex-col gap-3">
             <a href="mailto:info@horizonrcrds.com" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">info@horizonrcrds.com</a>
             <a href="mailto:booking@horizonrcrds.com" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">booking@horizonrcrds.com</a>
@@ -1077,19 +1106,24 @@ function hexToRgb(hex) {
 }
 function rgbStr(hex) {
   const c = hexToRgb(hex);
-  return c ? `${c.r}, ${c.g}, ${c.b}` : '26, 140, 255';
+  return c ? `${c.r}, ${c.g}, ${c.b}` : '255, 255, 255';
 }
 
 /* ════════════════════════════════════════════════
-   APPLY HERO COLOR to :root CSS variables.
-   Every element using var(--hero-color) or
-   var(--hero-color-rgb) updates automatically.
+   APPLY ACCENT COLOR
+   Called once by populateHero() after the JSON
+   fetch resolves.  Writes --accent-color and
+   --accent-color-rgb on :root so every element
+   that reads var(--accent-color) updates in one
+   step.  The 0.5 s CSS transition on all colour
+   properties turns this into a smooth "warm-up"
+   rather than a sudden flash.
 ════════════════════════════════════════════════ */
-function applyHeroColor(color) {
-  const safe = (color && /^#[0-9a-fA-F]{3,6}$/.test(color.trim())) ? color.trim() : '#1a8cff';
+function applyAccentColor(color) {
+  const safe = (color && /^#[0-9a-fA-F]{3,6}$/.test(color.trim())) ? color.trim() : '#ffffff';
   const root = document.documentElement;
-  root.style.setProperty('--hero-color',     safe);
-  root.style.setProperty('--hero-color-rgb', rgbStr(safe));
+  root.style.setProperty('--accent-color',     safe);
+  root.style.setProperty('--accent-color-rgb', rgbStr(safe));
 
   /* Push dynamic glow to the center logo in the navbar */
   const logo = document.getElementById('nav-logo');
@@ -1106,7 +1140,7 @@ function applyHeroColor(color) {
 function applyTitleGradient(color) {
   const el = document.querySelector('.hero-title');
   if (!el) return;
-  const safe = (color && /^#[0-9a-fA-F]{3,6}$/.test(color.trim())) ? color.trim() : '#1a8cff';
+  const safe = (color && /^#[0-9a-fA-F]{3,6}$/.test(color.trim())) ? color.trim() : '#ffffff';
   el.style.backgroundImage = `linear-gradient(160deg, #ffffff 0%, #a0b4cc 55%, ${safe} 100%)`;
 }
 
@@ -1175,10 +1209,10 @@ function streamIcon(url, iconClass, extraClass, label) {
    POPULATE HERO  (releases[0])
 ════════════════════════════════════════════════ */
 function populateHero(r) {
-  const color = (r.color && /^#[0-9a-fA-F]{3,6}$/.test(r.color.trim())) ? r.color.trim() : '#1a8cff';
+  const color = (r.color && /^#[0-9a-fA-F]{3,6}$/.test(r.color.trim())) ? r.color.trim() : '#ffffff';
 
   /* 1. Apply dynamic color to entire page */
-  applyHeroColor(color);
+  applyAccentColor(color);
 
   /* 2. Title */
   document.getElementById('hero-title-wrap').innerHTML =
@@ -1253,7 +1287,7 @@ function buildCard(r, delay) {
   card.style.transitionDelay = delay + 's';
 
   /* Resolve color — fallback to electric blue */
-  const color    = (r.color && /^#[0-9a-fA-F]{3,6}$/.test(r.color.trim())) ? r.color.trim() : '#1a8cff';
+  const color    = (r.color && /^#[0-9a-fA-F]{3,6}$/.test(r.color.trim())) ? r.color.trim() : '#ffffff';
   const colorRgb = rgbStr(color);
 
   /* Inject CSS variables at card level */
@@ -1347,7 +1381,7 @@ function populateGrid(releases) {
        "title":            "Eclipse Protocol",
        "artist":           "Vayne",
        "catalog_number":   "HR001",
-       "color":            "#1a8cff",      ← NEW: hex accent color
+       "color":            "#ff6600",          ← hex accent per track      ← NEW: hex accent color
        "image":            "hr001.jpg",    ← filename in ./assets/
        "description":      "Optional blurb",
        "stream_link":      "https://...",
@@ -1378,9 +1412,9 @@ async function loadReleases() {
     document.getElementById('hero-artist-wrap').innerHTML = '';
     document.getElementById('hero-desc-wrap').innerHTML =
       `<p style="font-size:0.8rem;color:#4b5563;line-height:1.7;margin-bottom:40px;">
-         Place <code style="color:#1a8cff;">releases.json</code> next to
-         <code style="color:#1a8cff;">index.html</code> and artwork inside
-         <code style="color:#1a8cff;">./assets/</code>.<br/>
+         Place <code style="color:var(--accent-color);">releases.json</code> next to
+         <code style="color:var(--accent-color);">index.html</code> and artwork inside
+         <code style="color:var(--accent-color);">./assets/</code>.<br/>
          Check the browser console for details.
        </p>`;
     document.getElementById('hero-buttons').innerHTML = '';

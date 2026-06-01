@@ -446,58 +446,174 @@
       animation: pulse-dot 2s ease-in-out infinite;
       display: inline-block; flex-shrink: 0;
     }
+    /* ── GENRE TAGS ── */
+    .genre-tag {
+      display: inline-block;
+      font-family: 'Barlow', sans-serif;
+      font-size: 0.65rem; font-weight: 700;
+      letter-spacing: 0.18em; text-transform: uppercase;
+      color: var(--hero-color);
+      background: rgba(var(--hero-color-rgb), 0.08);
+      border: 1px solid rgba(var(--hero-color-rgb), 0.22);
+      border-radius: 3px;
+      padding: 5px 12px;
+      transition: background 0.25s, border-color 0.25s, color 0.25s, transform 0.2s;
+    }
+    .genre-tag:hover {
+      background: rgba(var(--hero-color-rgb), 0.16);
+      border-color: rgba(var(--hero-color-rgb), 0.45);
+      transform: translateY(-1px);
+    }
+
+    /* ── PLAYLIST CARDS ── */
+    .playlist-card {
+      background: #111;
+      border: 1px solid #1a1a1a;
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex; flex-direction: column;
+      transition: transform 0.35s cubic-bezier(.16,1,.3,1),
+                  box-shadow 0.35s, border-color 0.35s;
+    }
+    .playlist-card:hover {
+      transform: translateY(-6px);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.7),
+                  0 0 0 1px rgba(var(--hero-color-rgb), 0.3),
+                  0 0 24px -4px rgba(var(--hero-color-rgb), 0.25);
+      border-color: rgba(var(--hero-color-rgb), 0.35);
+    }
+
+    /* Cover square */
+    .playlist-cover {
+      width: 100%; aspect-ratio: 1/1;
+      position: relative; overflow: hidden;
+      background: #0d1220;
+    }
+    .playlist-cover img {
+      width: 100%; height: 100%; object-fit: cover; display: block;
+      transition: transform 0.5s ease;
+    }
+    .playlist-card:hover .playlist-cover img { transform: scale(1.06); }
+
+    /* Fallback when image is missing */
+    .playlist-cover-fallback {
+      position: absolute; inset: 0;
+      display: none;             /* shown by JS onerror */
+      align-items: center; justify-content: center;
+      background: linear-gradient(135deg, #0d1f3a 0%, #060d1a 100%);
+    }
+
+    /* Spotify play button that appears on cover hover */
+    .playlist-overlay {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .playlist-card:hover .playlist-overlay { opacity: 1; }
+    .playlist-play-btn {
+      width: 52px; height: 52px; border-radius: 50%;
+      background: #1db954;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff; text-decoration: none;
+      box-shadow: 0 0 24px rgba(29,185,84,0.5);
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .playlist-play-btn:hover {
+      transform: scale(1.12);
+      box-shadow: 0 0 36px rgba(29,185,84,0.7);
+    }
+
+    /* Card body */
+    .playlist-body { padding: 16px 16px 18px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+    .playlist-name {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 1.1rem; letter-spacing: 0.06em; color: #fff; line-height: 1.1;
+    }
+    .playlist-meta {
+      font-size: 0.68rem; font-weight: 600; letter-spacing: 0.12em;
+      text-transform: uppercase; color: #6b7280; margin-bottom: 10px;
+    }
+
+    /* Listen on Spotify button — uses --hero-color */
+    .btn-playlist {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: transparent; color: var(--hero-color);
+      font-family: 'Barlow', sans-serif; font-weight: 700;
+      font-size: 0.65rem; letter-spacing: 0.2em; text-transform: uppercase;
+      padding: 9px 18px; border-radius: 3px;
+      border: 1px solid rgba(var(--hero-color-rgb), 0.4);
+      text-decoration: none; margin-top: auto;
+      transition: background 0.25s, border-color 0.25s, box-shadow 0.25s, transform 0.2s;
+      width: fit-content;
+    }
+    .btn-playlist:hover {
+      background: rgba(var(--hero-color-rgb), 0.1);
+      border-color: rgba(var(--hero-color-rgb), 0.7);
+      box-shadow: 0 0 14px rgba(var(--hero-color-rgb), 0.25);
+      transform: translateY(-1px);
+    }
   </style>
 </head>
 <body>
 
 <!-- ═══════════════════════════════════════
-     NAVBAR — three-column layout
-     Col 1 (left)  : HORIZON / RCRDS wordmark
-     Col 2 (center): logo.png with dynamic glow
-     Col 3 (right) : nav links  |  mobile hamburger
+     NAVBAR — symmetric 3-column layout
+     Col 1 (left)   : HORIZON RCRDS wordmark
+     Col 2 (center) : logo.png  50 px  + dynamic glow
+     Col 3 (right)  : nav links  |  mobile hamburger
 ═══════════════════════════════════════ -->
 <nav id="navbar" class="fixed top-0 left-0 right-0 z-50 px-6 md:px-10 py-4">
 
   <!--
-    Three-column grid on md+.
-    On mobile we collapse to two columns:
-      [logo-center]  [hamburger]
-    and hide the wordmark to avoid cramping.
+    True 3-column CSS grid: 1fr  auto  1fr
+    The centre column is sized to its content (logo),
+    the two outer columns are equal, which keeps the
+    logo perfectly centred regardless of text length.
+    On xs screens the wordmark is hidden so the grid
+    becomes  [spacer] [logo] [hamburger].
   -->
   <div class="max-w-7xl mx-auto grid items-center"
-       style="grid-template-columns: 1fr auto 1fr;">
+       style="grid-template-columns:1fr auto 1fr;">
 
-    <!-- ── COL 1 : Wordmark (hidden on xs, visible sm+) ── -->
+    <!-- ── COL 1 : Wordmark ── -->
     <a href="#home"
-       class="hidden sm:flex flex-col leading-none group justify-self-start"
+       class="hidden sm:flex flex-col leading-none justify-self-start"
        style="text-decoration:none;">
-      <span style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:0.12em;color:#fff;transition:color 0.25s;">HORIZON</span>
+      <span style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;
+                   letter-spacing:0.12em;color:#fff;transition:color 0.25s;">HORIZON</span>
       <span id="logo-sub"
-            style="font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:0.4em;color:var(--hero-color);margin-top:-2px;transition:color 0.4s;">RCRDS</span>
+            style="font-family:'Bebas Neue',sans-serif;font-size:0.78rem;
+                   letter-spacing:0.4em;color:var(--hero-color);
+                   margin-top:-2px;transition:color 0.5s;">RCRDS</span>
     </a>
-    <!-- xs spacer so grid stays balanced when wordmark is hidden -->
+    <!-- xs balance spacer (wordmark hidden → keep grid symmetric) -->
     <span class="sm:hidden justify-self-start"></span>
 
-    <!-- ── COL 2 : Center logo ── -->
-    <a href="#home" class="justify-self-center" style="text-decoration:none;line-height:0;" aria-label="HORIZON RCRDS home">
+    <!-- ── COL 2 : Centre logo ── -->
+    <a href="#home" class="justify-self-center" style="text-decoration:none;line-height:0;"
+       aria-label="HORIZON RCRDS — home">
       <img id="nav-logo"
            src="./assets/logo.png"
            alt="HORIZON RCRDS"
-           style="height:45px;width:auto;object-fit:contain;
-                  filter: drop-shadow(0 0 0px transparent);
-                  transition: filter 0.5s ease, opacity 0.3s;"
+           style="height:50px;width:auto;object-fit:contain;
+                  filter:drop-shadow(0 0 0px transparent);
+                  transition:filter 0.5s ease;"
            onerror="this.style.display='none'" />
     </a>
 
-    <!-- ── COL 3 : Desktop nav links / Mobile hamburger ── -->
+    <!-- ── COL 3 : Nav links / hamburger ── -->
     <div class="justify-self-end flex items-center">
-      <!-- Desktop links -->
-      <div class="hidden md:flex items-center gap-8">
-        <a href="#home"     class="nav-link">Home</a>
-        <a href="#releases" class="nav-link">Releases</a>
-        <a href="#demos"    class="nav-link">Demos</a>
-        <a href="#contact"  class="nav-link">Contact</a>
+
+      <!-- Desktop nav -->
+      <div class="hidden md:flex items-center gap-7">
+        <a href="#home"      class="nav-link">Home</a>
+        <a href="#releases"  class="nav-link">Releases</a>
+        <a href="#playlists" class="nav-link">Playlists</a>
+        <a href="#demos"     class="nav-link">Demos</a>
+        <a href="#contact"   class="nav-link">Contact</a>
       </div>
+
       <!-- Mobile hamburger -->
       <button id="nav-toggle"
               class="md:hidden flex flex-col gap-[5px] cursor-pointer bg-transparent border-none p-1"
@@ -508,17 +624,19 @@
       </button>
     </div>
 
-  </div><!-- /grid -->
+  </div><!-- /3-col grid -->
 
   <!-- Mobile dropdown -->
   <div id="nav-menu"
        class="md:hidden mt-3 pb-4 border-t border-border"
-       style="max-height:0;overflow:hidden;opacity:0;transition:max-height 0.4s ease,opacity 0.4s;">
+       style="max-height:0;overflow:hidden;opacity:0;
+              transition:max-height 0.4s ease,opacity 0.4s;">
     <div class="flex flex-col gap-5 pt-5 px-2">
-      <a href="#home"     class="nav-link" onclick="closeMenu()">Home</a>
-      <a href="#releases" class="nav-link" onclick="closeMenu()">Releases</a>
-      <a href="#demos"    class="nav-link" onclick="closeMenu()">Demos</a>
-      <a href="#contact"  class="nav-link" onclick="closeMenu()">Contact</a>
+      <a href="#home"      class="nav-link" onclick="closeMenu()">Home</a>
+      <a href="#releases"  class="nav-link" onclick="closeMenu()">Releases</a>
+      <a href="#playlists" class="nav-link" onclick="closeMenu()">Playlists</a>
+      <a href="#demos"     class="nav-link" onclick="closeMenu()">Demos</a>
+      <a href="#contact"   class="nav-link" onclick="closeMenu()">Contact</a>
     </div>
   </div>
 
@@ -678,15 +796,24 @@
       <h2 class="demo-title mb-2">SEND YOUR</h2>
       <h2 class="demo-title mb-8"><span class="highlight">DEMO.</span></h2>
 
-      <p style="color:#6b7280;font-weight:300;line-height:1.7;margin-bottom:12px;font-size:0.95rem;max-width:480px;">
-        We listen to everything. If your music cuts through the noise — forward-thinking, uncompromising, built to move rooms — we want to hear it.
-      </p>
-      <p style="font-size:0.75rem;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:#374151;margin-bottom:48px;">
-        Techno · Tech House · Industrial · Experimental Club
+      <p style="color:#9ca3af;font-weight:300;line-height:1.8;margin-bottom:14px;font-size:1rem;max-width:540px;">
+        We're looking for powerful club records with strong identity, clean production and real energy. If your track is built for festivals, clubs or emotional moments — send it.
       </p>
 
+      <!-- Genre tags -->
+      <div class="flex flex-wrap gap-2 mb-12">
+        <span class="genre-tag">Future House</span>
+        <span class="genre-tag">Future Bounce</span>
+        <span class="genre-tag">Progressive House</span>
+        <span class="genre-tag">Bass House</span>
+        <span class="genre-tag">Melodic Club</span>
+        <span class="genre-tag">Dance / EDM Crossovers</span>
+      </div>
+
       <div class="flex flex-wrap items-center gap-6">
-        <a href="https://labelradar.com" target="_blank" rel="noopener noreferrer" class="btn-primary" style="font-size:0.75rem;padding:16px 40px;">
+        <a href="https://www.labelradar.com/labels/horizonrcrds/portal"
+           target="_blank" rel="noopener noreferrer"
+           class="btn-primary" style="font-size:0.75rem;padding:16px 40px;">
           <i class="fa-solid fa-paper-plane"></i>
           Submit via LabelRadar
         </a>
@@ -698,7 +825,7 @@
       <div class="grid sm:grid-cols-3 gap-6 mt-16 pt-12" style="border-top:1px solid #1f1f1f;">
         <div>
           <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:var(--hero-color);margin-bottom:6px;">Format</div>
-          <p style="font-size:0.75rem;color:#6b7280;font-weight:400;line-height:1.6;">MP3 / WAV · 320kbps or lossless preferred. Include a short bio.</p>
+          <p style="font-size:0.75rem;color:#6b7280;font-weight:400;line-height:1.6;">MP3 / WAV · 320 kbps or lossless preferred. Include a short artist bio.</p>
         </div>
         <div>
           <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;letter-spacing:0.14em;color:var(--hero-color);margin-bottom:6px;">Platform</div>
@@ -710,6 +837,145 @@
         </div>
       </div>
     </div>
+  </div>
+</section>
+
+<div class="h-px-elec"></div>
+
+
+<!-- ═══════════════════════════════════════
+     PLAYLISTS — Curated by HORIZON
+═══════════════════════════════════════ -->
+<section id="playlists" class="py-24 px-6 md:px-12" style="background:#0a0a0a;">
+  <div class="max-w-7xl mx-auto">
+
+    <!-- Header row -->
+    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-14 reveal">
+      <div>
+        <div class="section-label mb-3">Curated by Horizon</div>
+        <h2 class="section-title">PLAYLISTS</h2>
+      </div>
+      <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
+         target="_blank" rel="noopener noreferrer"
+         style="font-family:'Barlow',sans-serif;font-size:0.68rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #1f1f1f;padding-bottom:2px;transition:color 0.2s,border-color 0.2s;text-decoration:none;"
+         onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--hero-color');this.style.borderColor=getComputedStyle(document.documentElement).getPropertyValue('--hero-color')"
+         onmouseout="this.style.color='#6b7280';this.style.borderColor='#1f1f1f'">
+        View All on Spotify →
+      </a>
+    </div>
+
+    <!-- 4-card grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+
+      <!-- Playlist card 1 -->
+      <div class="playlist-card reveal" style="transition-delay:0.05s">
+        <div class="playlist-cover">
+          <img src="./assets/playlist1.jpg" alt="Horizon Essentials cover" loading="lazy"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+          <div class="playlist-cover-fallback">
+            <i class="fa-brands fa-spotify" style="font-size:2rem;color:var(--hero-color);"></i>
+          </div>
+          <div class="playlist-overlay">
+            <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
+               target="_blank" rel="noopener noreferrer"
+               class="playlist-play-btn" aria-label="Play on Spotify">
+              <i class="fa-brands fa-spotify" style="font-size:1.1rem;"></i>
+            </a>
+          </div>
+        </div>
+        <div class="playlist-body">
+          <p class="playlist-name">Horizon Essentials</p>
+          <p class="playlist-meta">The label's signature sound</p>
+          <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
+             target="_blank" rel="noopener noreferrer"
+             class="btn-playlist">
+            <i class="fa-brands fa-spotify"></i> Listen on Spotify
+          </a>
+        </div>
+      </div>
+
+      <!-- Playlist card 2 -->
+      <div class="playlist-card reveal" style="transition-delay:0.1s">
+        <div class="playlist-cover">
+          <img src="./assets/playlist2.jpg" alt="Festival Season cover" loading="lazy"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+          <div class="playlist-cover-fallback">
+            <i class="fa-solid fa-music" style="font-size:2rem;color:var(--hero-color);"></i>
+          </div>
+          <div class="playlist-overlay">
+            <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
+               target="_blank" rel="noopener noreferrer"
+               class="playlist-play-btn" aria-label="Play on Spotify">
+              <i class="fa-brands fa-spotify" style="font-size:1.1rem;"></i>
+            </a>
+          </div>
+        </div>
+        <div class="playlist-body">
+          <p class="playlist-name">Festival Season</p>
+          <p class="playlist-meta">Main stage energy</p>
+          <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
+             target="_blank" rel="noopener noreferrer"
+             class="btn-playlist">
+            <i class="fa-brands fa-spotify"></i> Listen on Spotify
+          </a>
+        </div>
+      </div>
+
+      <!-- Playlist card 3 -->
+      <div class="playlist-card reveal" style="transition-delay:0.15s">
+        <div class="playlist-cover">
+          <img src="./assets/playlist3.jpg" alt="Late Night Club cover" loading="lazy"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+          <div class="playlist-cover-fallback">
+            <i class="fa-solid fa-moon" style="font-size:2rem;color:var(--hero-color);"></i>
+          </div>
+          <div class="playlist-overlay">
+            <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
+               target="_blank" rel="noopener noreferrer"
+               class="playlist-play-btn" aria-label="Play on Spotify">
+              <i class="fa-brands fa-spotify" style="font-size:1.1rem;"></i>
+            </a>
+          </div>
+        </div>
+        <div class="playlist-body">
+          <p class="playlist-name">Late Night Club</p>
+          <p class="playlist-meta">For the peak-hour crowd</p>
+          <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
+             target="_blank" rel="noopener noreferrer"
+             class="btn-playlist">
+            <i class="fa-brands fa-spotify"></i> Listen on Spotify
+          </a>
+        </div>
+      </div>
+
+      <!-- Playlist card 4 -->
+      <div class="playlist-card reveal" style="transition-delay:0.2s">
+        <div class="playlist-cover">
+          <img src="./assets/playlist4.jpg" alt="Emotional Drive cover" loading="lazy"
+               onerror="this.style.display='none';this.nextElementSibling.style.display='flex'"/>
+          <div class="playlist-cover-fallback">
+            <i class="fa-solid fa-heart" style="font-size:2rem;color:var(--hero-color);"></i>
+          </div>
+          <div class="playlist-overlay">
+            <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
+               target="_blank" rel="noopener noreferrer"
+               class="playlist-play-btn" aria-label="Play on Spotify">
+              <i class="fa-brands fa-spotify" style="font-size:1.1rem;"></i>
+            </a>
+          </div>
+        </div>
+        <div class="playlist-body">
+          <p class="playlist-name">Emotional Drive</p>
+          <p class="playlist-meta">Feeling every drop</p>
+          <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
+             target="_blank" rel="noopener noreferrer"
+             class="btn-playlist">
+            <i class="fa-brands fa-spotify"></i> Listen on Spotify
+          </a>
+        </div>
+      </div>
+
+    </div><!-- /grid -->
   </div>
 </section>
 
@@ -737,16 +1003,17 @@
         <div>
           <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:var(--hero-color);margin-bottom:14px;">Label</div>
           <div class="flex flex-col gap-3">
-            <a href="#releases" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Releases</a>
-            <a href="#demos"    style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Submit Demo</a>
+            <a href="#releases"  style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Releases</a>
+            <a href="#playlists" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Playlists</a>
+            <a href="#demos"     style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Submit Demo</a>
           </div>
         </div>
         <div>
           <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:var(--hero-color);margin-bottom:14px;">Music</div>
           <div class="flex flex-col gap-3">
-            <a href="#" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Spotify</a>
-            <a href="#" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Beatport</a>
-            <a href="#" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">SoundCloud</a>
+            <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2" target="_blank" rel="noopener noreferrer" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Spotify</a>
+            <a href="https://soundcloud.com/horizonirecords/" target="_blank" rel="noopener noreferrer" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">SoundCloud</a>
+            <a href="https://www.youtube.com/@HORIZONRCRDS" target="_blank" rel="noopener noreferrer" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">YouTube</a>
           </div>
         </div>
         <div>
@@ -763,10 +1030,26 @@
 
     <div class="flex flex-col sm:flex-row items-center justify-between gap-6">
       <div class="flex items-center gap-3">
-        <a href="#" class="social-icon" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
-        <a href="#" class="social-icon" aria-label="YouTube"><i class="fa-brands fa-youtube"></i></a>
-        <a href="#" class="social-icon" aria-label="SoundCloud"><i class="fa-brands fa-soundcloud"></i></a>
-        <a href="#" class="social-icon" aria-label="Spotify"><i class="fa-brands fa-spotify"></i></a>
+        <a href="https://www.instagram.com/horizon_rcrds/"
+           target="_blank" rel="noopener noreferrer"
+           class="social-icon" aria-label="Instagram">
+          <i class="fa-brands fa-instagram"></i>
+        </a>
+        <a href="https://www.youtube.com/@HORIZONRCRDS"
+           target="_blank" rel="noopener noreferrer"
+           class="social-icon" aria-label="YouTube">
+          <i class="fa-brands fa-youtube"></i>
+        </a>
+        <a href="https://soundcloud.com/horizonirecords/"
+           target="_blank" rel="noopener noreferrer"
+           class="social-icon" aria-label="SoundCloud">
+          <i class="fa-brands fa-soundcloud"></i>
+        </a>
+        <a href="https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse?si=d972844095da46a2"
+           target="_blank" rel="noopener noreferrer"
+           class="social-icon" aria-label="Spotify">
+          <i class="fa-brands fa-spotify"></i>
+        </a>
       </div>
       <p style="font-size:0.62rem;font-weight:600;letter-spacing:0.2em;text-transform:uppercase;color:#374151;text-align:center;">
         © 2025 HORIZON RCRDS. ALL RIGHTS RESERVED.

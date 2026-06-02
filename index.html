@@ -192,27 +192,46 @@
       background-size: 32px 32px;
     }
 
-    /* Waveform */
+    /* Waveform — base state */
     .waveform { display: flex; align-items: center; gap: 3px; height: 36px; }
     .waveform span {
       display: block; width: 3px; border-radius: 2px;
       background: var(--accent-color);
       animation: wave 1.2s ease-in-out infinite alternate;
+      transform-origin: bottom;
+      transition: background 0.5s;
     }
     .waveform span:nth-child(odd)  { animation-delay: 0.1s; }
     .waveform span:nth-child(3n)   { animation-delay: 0.3s; }
     .waveform span:nth-child(4n)   { animation-delay: 0.5s; }
+
+    /* Waveform — active (audio playing): faster, higher amplitude */
+    .waveform.is-playing span {
+      animation-name: wave-active;
+      animation-duration: 0.6s;
+    }
     @keyframes wave {
       from { height: 6px;  opacity: 0.35; }
       to   { height: 34px; opacity: 1;    }
     }
+    @keyframes wave-active {
+      from { height: 4px;  opacity: 0.5;  transform: scaleY(0.3); }
+      to   { height: 34px; opacity: 1;    transform: scaleY(1);   }
+    }
 
-    /* Progress bar */
-    .progress-track { height: 2px; background: #1f1f1f; border-radius: 1px; margin-bottom: 10px; overflow: hidden; }
+    .progress-track {
+      height: 2px; background: #1f1f1f;
+      border-radius: 1px; margin-bottom: 10px;
+      overflow: visible;
+      position: relative;
+    }
+
+    /* Progress fill — smooth width transition */
     .progress-fill  {
-      width: 37%; height: 100%;
+      height: 100%;
       background: linear-gradient(90deg, var(--accent-color), rgba(var(--accent-color-rgb), 0.5));
       border-radius: 1px; position: relative;
+      transition: width 0.25s linear;
     }
     .progress-fill::after {
       content: ''; position: absolute; right: -4px; top: -3px;
@@ -735,27 +754,52 @@
               <div id="player-artist" style="font-size:0.68rem;letter-spacing:0.18em;color:#6b7280;font-weight:600;margin-top:2px;">—</div>
             </div>
             <div class="flex items-center gap-4">
-              <button style="color:#6b7280;font-size:0.9rem;cursor:pointer;background:none;border:none;" onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent-color')" onmouseout="this.style.color='#6b7280'">
+              <!-- Rewind — jumps to 0:00 -->
+              <button id="player-rewind-btn"
+                      style="color:#6b7280;font-size:0.9rem;cursor:pointer;background:none;border:none;"
+                      onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent-color')"
+                      onmouseout="this.style.color='#6b7280'"
+                      aria-label="Restart preview">
                 <i class="fa-solid fa-backward-step"></i>
               </button>
-              <a id="player-play-btn" href="#" target="_blank" rel="noopener noreferrer">
-                <i class="fa-solid fa-play" style="font-size:0.75rem;margin-left:2px;"></i>
-              </a>
-              <button style="color:#6b7280;font-size:0.9rem;cursor:pointer;background:none;border:none;" onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent-color')" onmouseout="this.style.color='#6b7280'">
+
+              <!-- Play / Pause — functional -->
+              <button id="player-play-btn"
+                      style="width:42px;height:42px;border-radius:50%;
+                             background:var(--accent-color);color:#000;
+                             display:flex;align-items:center;justify-content:center;
+                             box-shadow:0 0 20px rgba(var(--accent-color-rgb),0.45);
+                             border:none;cursor:pointer;
+                             transition:transform 0.2s,box-shadow 0.3s;"
+                      onmouseover="this.style.transform='scale(1.08)';this.style.boxShadow='0 0 32px rgba(var(--accent-color-rgb),0.65)'"
+                      onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 0 20px rgba(var(--accent-color-rgb),0.45)'"
+                      aria-label="Play / Pause preview">
+                <i id="player-play-icon" class="fa-solid fa-play" style="font-size:0.75rem;margin-left:2px;"></i>
+              </button>
+
+              <!-- Forward — skips to end / stops -->
+              <button id="player-forward-btn"
+                      style="color:#6b7280;font-size:0.9rem;cursor:pointer;background:none;border:none;"
+                      onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent-color')"
+                      onmouseout="this.style.color='#6b7280'"
+                      aria-label="Skip to end">
                 <i class="fa-solid fa-forward-step"></i>
               </button>
             </div>
           </div>
 
           <!-- Waveform -->
-          <div class="waveform mb-4">
+          <div id="player-waveform" class="waveform mb-4">
             <span style="height:12px"></span><span style="height:22px"></span><span style="height:18px"></span><span style="height:30px"></span><span style="height:15px"></span><span style="height:34px"></span><span style="height:20px"></span><span style="height:28px"></span><span style="height:10px"></span><span style="height:26px"></span><span style="height:34px"></span><span style="height:18px"></span><span style="height:30px"></span><span style="height:14px"></span><span style="height:24px"></span><span style="height:32px"></span><span style="height:16px"></span><span style="height:28px"></span><span style="height:34px"></span><span style="height:20px"></span><span style="height:12px"></span><span style="height:30px"></span><span style="height:24px"></span><span style="height:18px"></span><span style="height:28px"></span><span style="height:34px"></span><span style="height:14px"></span><span style="height:22px"></span><span style="height:32px"></span><span style="height:16px"></span><span style="height:26px"></span><span style="height:20px"></span>
           </div>
 
-          <!-- Progress bar -->
-          <div class="progress-track"><div class="progress-fill"></div></div>
-          <div style="display:flex;justify-content:space-between;font-size:0.62rem;color:#6b7280;font-weight:600;letter-spacing:0.1em;">
-            <span>0:00</span><span>—:——</span>
+          <!-- Progress bar — clickable scrubber -->
+          <div id="player-progress-track" class="progress-track" style="cursor:pointer;">
+            <div id="player-progress-fill" class="progress-fill" style="width:0%;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.62rem;color:#6b7280;font-weight:600;letter-spacing:0.1em;margin-bottom:0;">
+            <span id="player-current-time">0:00</span>
+            <span id="player-duration">—:——</span>
           </div>
 
           <!-- Platform row -->
@@ -1426,6 +1470,159 @@ async function loadPlaylists() {
       '</p>';
   }
 }
+
+/* ════════════════════════════════════════════════
+   AUDIO PREVIEW PLAYER
+   Loads ./assets/release_preview.mp3 once the
+   page is ready.  Controls:
+     #player-play-btn     → play / pause toggle
+     #player-rewind-btn   → seek to 0:00
+     #player-forward-btn  → seek to end (triggers ended)
+     #player-progress-track → click to scrub
+   Updates:
+     #player-progress-fill  width %
+     #player-current-time   elapsed mm:ss
+     #player-duration        total  mm:ss
+     #player-waveform        .is-playing class
+     #player-play-icon       fa-play ↔ fa-pause
+════════════════════════════════════════════════ */
+(function initAudioPlayer() {
+  /* ── Helpers ── */
+  function fmtTime(sec) {
+    if (!isFinite(sec) || sec < 0) return '0:00';
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  /* ── DOM refs (grabbed lazily after DOMContentLoaded) ── */
+  let audio, playBtn, playIcon, waveform,
+      progressFill, progressTrack,
+      currentTimeEl, durationEl,
+      rewindBtn, forwardBtn;
+
+  function grabRefs() {
+    playBtn       = document.getElementById('player-play-btn');
+    playIcon      = document.getElementById('player-play-icon');
+    waveform      = document.getElementById('player-waveform');
+    progressFill  = document.getElementById('player-progress-fill');
+    progressTrack = document.getElementById('player-progress-track');
+    currentTimeEl = document.getElementById('player-current-time');
+    durationEl    = document.getElementById('player-duration');
+    rewindBtn     = document.getElementById('player-rewind-btn');
+    forwardBtn    = document.getElementById('player-forward-btn');
+  }
+
+  /* ── State helpers ── */
+  function setPlayingState(playing) {
+    if (!playIcon || !waveform) return;
+    if (playing) {
+      playIcon.classList.replace('fa-play', 'fa-pause');
+      playIcon.style.marginLeft = '0';          /* pause icon is symmetric */
+      waveform.classList.add('is-playing');
+    } else {
+      playIcon.classList.replace('fa-pause', 'fa-play');
+      playIcon.style.marginLeft = '2px';        /* nudge play icon visually */
+      waveform.classList.remove('is-playing');
+    }
+  }
+
+  function updateProgress() {
+    if (!audio || !isFinite(audio.duration)) return;
+    const pct = (audio.currentTime / audio.duration) * 100;
+    if (progressFill)  progressFill.style.width  = pct + '%';
+    if (currentTimeEl) currentTimeEl.textContent  = fmtTime(audio.currentTime);
+  }
+
+  /* ── Init — called from DOMContentLoaded ── */
+  function init() {
+    grabRefs();
+    if (!playBtn) return;   /* player not in DOM (shouldn't happen) */
+
+    /* Create Audio object — browser won't start downloading until play() */
+    audio = new Audio('./assets/release_preview.mp3');
+    audio.preload = 'metadata';  /* fetch duration only */
+
+    /* Show total duration once metadata is ready */
+    audio.addEventListener('loadedmetadata', () => {
+      if (durationEl) durationEl.textContent = fmtTime(audio.duration);
+    });
+
+    /* Live progress tick */
+    audio.addEventListener('timeupdate', updateProgress);
+
+    /* Reset at end */
+    audio.addEventListener('ended', () => {
+      audio.currentTime = 0;
+      setPlayingState(false);
+      if (progressFill)  progressFill.style.width = '0%';
+      if (currentTimeEl) currentTimeEl.textContent = '0:00';
+    });
+
+    /* Handle load errors gracefully — hide the play button */
+    audio.addEventListener('error', () => {
+      console.warn('[HORIZON RCRDS] release_preview.mp3 not found or could not load.');
+      if (playBtn) playBtn.style.opacity = '0.35';
+      if (playBtn) playBtn.title = 'Preview not available';
+    });
+
+    /* ── Play / Pause ── */
+    playBtn.addEventListener('click', () => {
+      if (audio.readyState === 0) {
+        /* Trigger actual load on first interaction */
+        audio.load();
+      }
+      if (audio.paused) {
+        audio.play().catch(err => {
+          /* Autoplay policy — let user try again */
+          console.warn('[HORIZON RCRDS] Playback blocked:', err.message);
+        });
+        setPlayingState(true);
+      } else {
+        audio.pause();
+        setPlayingState(false);
+      }
+    });
+
+    /* ── Rewind ── */
+    rewindBtn && rewindBtn.addEventListener('click', () => {
+      audio.currentTime = 0;
+      updateProgress();
+      if (!audio.paused) return; /* keep playing if it was */
+      setPlayingState(false);
+    });
+
+    /* ── Forward / skip to end ── */
+    forwardBtn && forwardBtn.addEventListener('click', () => {
+      if (isFinite(audio.duration)) {
+        audio.currentTime = audio.duration;
+      } else {
+        audio.pause();
+        setPlayingState(false);
+      }
+    });
+
+    /* ── Click-to-scrub on progress track ── */
+    progressTrack && progressTrack.addEventListener('click', (e) => {
+      if (!isFinite(audio.duration)) return;
+      const rect = progressTrack.getBoundingClientRect();
+      const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      audio.currentTime = pct * audio.duration;
+      updateProgress();
+    });
+
+    /* Pause audio when page becomes hidden (tab switch / minimize) */
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && !audio.paused) {
+        audio.pause();
+        setPlayingState(false);
+      }
+    });
+  }
+
+  /* Hook into DOMContentLoaded — runs alongside loadReleases / loadPlaylists */
+  document.addEventListener('DOMContentLoaded', init);
+})();
 
 /* ════════════════════════════════════════════════
    BOOT

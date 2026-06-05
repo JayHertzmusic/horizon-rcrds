@@ -1,5 +1,16 @@
 [
   {
+    "id": "hrz065",
+    "catalog": "HRZ#065",
+    "artist": "Tremelost",
+    "title": "Lonely Night",
+    "image": "hrz065.jpg",
+    "color": "#7e1919",
+    "stream_link": "https://too.fm/ngdgj1p",
+    "spotify_link": "https://open.spotify.com/intl-es/track/4dEoxIv7kIEUAsyTL4mIFy?si=ac926691a0114954",
+    "soundcloud_link": "https://on.soundcloud.com/qA5VcxhrlnzAy8dyEP"
+  },
+  {
     "id": "hrz064",
     "catalog": "HRZ#064",
     "artist": "Jaxxinator & Zen Clair",

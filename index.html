@@ -99,8 +99,20 @@
     ::-webkit-scrollbar-track { background: #0a0a0a; }
     ::-webkit-scrollbar-thumb { background: var(--accent-color); border-radius: 2px; }
 
+    /* ── EVENT BANNER offset ──
+       JS (updateNavbarTop) handles the navbar top
+       dynamically as the user scrolls — no static
+       top value needed here.                       */
+    @media (max-width: 639px) {
+      #banner-countdown { display: none !important; }
+    }
+    @media (min-width: 768px) {
+      .sm-show          { display: block !important; }
+      #banner-countdown { display: inline !important; }
+    }
+
     /* ── NAVBAR ── */
-    #navbar { transition: background 0.4s, backdrop-filter 0.4s; }
+    #navbar { transition: background 0.4s, backdrop-filter 0.4s, top 0.4s; }
     #navbar.scrolled {
       background: rgba(10,10,10,0.92);
       backdrop-filter: blur(18px);
@@ -607,6 +619,69 @@
 <body>
 
 <!-- ═══════════════════════════════════════
+     EVENT BANNER — HORIZON x STARIZED
+     Auto-hides when countdown expires.
+     Clicking scrolls to #special-event.
+═══════════════════════════════════════ -->
+<a id="event-banner" href="#special-event"
+   style="display:flex;align-items:center;justify-content:center;gap:10px;
+          width:100%;padding:9px 20px;
+          background:linear-gradient(90deg,#0d0d0d 0%,#131313 50%,#0d0d0d 100%);
+          border-bottom:1px solid rgba(var(--accent-color-rgb),0.2);
+          text-decoration:none;
+          position:relative;z-index:60;
+          transition:background 0.3s,border-color 0.5s;"
+   onmouseover="this.style.background='linear-gradient(90deg,#111 0%,#181818 50%,#111 100%)'"
+   onmouseout="this.style.background='linear-gradient(90deg,#0d0d0d 0%,#131313 50%,#0d0d0d 100%)'">
+
+  <!-- Animated dot -->
+  <span style="width:7px;height:7px;border-radius:50%;
+               background:var(--accent-color);flex-shrink:0;
+               box-shadow:0 0 8px rgba(var(--accent-color-rgb),0.8);
+               animation:pulse-dot 2s ease-in-out infinite;"></span>
+
+  <!-- Label -->
+  <span style="font-family:'Barlow',sans-serif;font-size:0.65rem;font-weight:700;
+               letter-spacing:0.22em;text-transform:uppercase;color:#9ca3af;">
+    Special Event
+  </span>
+
+  <!-- Separator -->
+  <span style="width:1px;height:12px;background:#2a2a2a;flex-shrink:0;"></span>
+
+  <!-- Collab name -->
+  <span style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;
+               letter-spacing:0.12em;color:#fff;">
+    HORIZON RCRDS
+    <span style="color:var(--accent-color);margin:0 4px;">×</span>
+    STARIZED RECORDS
+  </span>
+
+  <!-- Separator -->
+  <span style="width:1px;height:12px;background:#2a2a2a;flex-shrink:0;
+               display:none;" class="sm-show"></span>
+
+  <!-- Countdown inline (desktop) -->
+  <span id="banner-countdown"
+        style="font-family:'Barlow',sans-serif;font-size:0.62rem;font-weight:600;
+               letter-spacing:0.15em;text-transform:uppercase;color:#6b7280;
+               display:none;">
+    Closes in <span id="banner-time" style="color:var(--accent-color);"></span>
+  </span>
+
+  <!-- CTA chip -->
+  <span style="font-family:'Barlow',sans-serif;font-size:0.6rem;font-weight:700;
+               letter-spacing:0.2em;text-transform:uppercase;
+               color:var(--accent-color);
+               border:1px solid rgba(var(--accent-color-rgb),0.35);
+               border-radius:3px;padding:3px 10px;flex-shrink:0;
+               transition:background 0.2s,border-color 0.2s;">
+    Submit →
+  </span>
+
+</a>
+
+<!-- ═══════════════════════════════════════
      NAVBAR — symmetric 3-column layout
      Col 1 (left)   : HORIZON RCRDS wordmark
      Col 2 (center) : logo.png  50 px  + dynamic glow
@@ -897,9 +972,6 @@
           <i class="fa-solid fa-file-lines"></i>
           Submit via Form
         </a>
-        <p style="font-size:0.65rem;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:#374151;">
-          Response within 4–6 weeks
-        </p>
       </div>
 
       <div class="grid sm:grid-cols-3 gap-6 mt-16 pt-12" style="border-top:1px solid #1f1f1f;">
@@ -917,6 +989,134 @@
         </div>
       </div>
     </div>
+  </div>
+</section>
+
+<div class="h-px-elec"></div>
+
+
+<!-- ═══════════════════════════════════════
+     SPECIAL EVENT — HORIZON x STARIZED
+     Auto-hides after September 1 2026
+═══════════════════════════════════════ -->
+<section id="special-event" class="py-28 px-6 md:px-12 relative overflow-hidden"
+         style="background: radial-gradient(ellipse 90% 60% at 50% 50%, rgba(var(--accent-color-rgb),0.05) 0%, transparent 70%), #0a0a0a;">
+
+  <!-- Decorative corner accents -->
+  <div style="position:absolute;top:0;left:0;width:120px;height:120px;border-top:1px solid rgba(var(--accent-color-rgb),0.2);border-left:1px solid rgba(var(--accent-color-rgb),0.2);pointer-events:none;"></div>
+  <div style="position:absolute;bottom:0;right:0;width:120px;height:120px;border-bottom:1px solid rgba(var(--accent-color-rgb),0.2);border-right:1px solid rgba(var(--accent-color-rgb),0.2);pointer-events:none;"></div>
+
+  <div class="max-w-5xl mx-auto text-center">
+
+    <!-- Event badge -->
+    <div class="reveal mb-6 flex items-center justify-center gap-3">
+      <span style="display:inline-block;width:32px;height:1px;background:var(--accent-color);opacity:0.5;"></span>
+      <span style="font-family:'Barlow',sans-serif;font-size:0.6rem;font-weight:700;letter-spacing:0.35em;text-transform:uppercase;color:var(--accent-color);">Special Event · Limited Submissions</span>
+      <span style="display:inline-block;width:32px;height:1px;background:var(--accent-color);opacity:0.5;"></span>
+    </div>
+
+    <!-- Collab title -->
+    <div class="reveal mb-2" style="transition-delay:0.1s">
+      <h2 style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2rem,5vw,3.5rem);letter-spacing:0.08em;color:#fff;line-height:1;">
+        HORIZON RCRDS
+      </h2>
+      <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin:6px 0 10px;">
+        <span style="height:1px;width:40px;background:rgba(255,255,255,0.15);"></span>
+        <span style="font-family:'Barlow',sans-serif;font-size:0.7rem;font-weight:700;letter-spacing:0.3em;text-transform:uppercase;color:rgba(255,255,255,0.4);">×</span>
+        <span style="height:1px;width:40px;background:rgba(255,255,255,0.15);"></span>
+      </div>
+      <h2 style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2rem,5vw,3.5rem);letter-spacing:0.08em;color:var(--accent-color);line-height:1;">
+        STARIZED RECORDS
+      </h2>
+    </div>
+
+    <!-- Subtitle -->
+    <p class="reveal" style="transition-delay:0.15s;font-size:0.9rem;font-weight:300;color:#6b7280;line-height:1.7;max-width:520px;margin:0 auto 40px;">
+      Two labels. One open call. We're joining forces to find the next wave of talent — submit your demo before the window closes.
+    </p>
+
+    <!-- ── Countdown Timer ── -->
+    <div id="event-countdown" class="reveal mb-10" style="transition-delay:0.2s">
+      <p style="font-family:'Barlow',sans-serif;font-size:0.6rem;font-weight:700;letter-spacing:0.3em;text-transform:uppercase;color:#4b5563;margin-bottom:16px;">Submissions close in</p>
+      <div style="display:flex;align-items:flex-start;justify-content:center;gap:8px;" id="countdown-blocks">
+
+        <!-- Days -->
+        <div style="text-align:center;min-width:64px;">
+          <div id="cd-days"
+               style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2.5rem,7vw,4rem);
+                      letter-spacing:0.06em;color:#fff;line-height:1;
+                      background:#111;border:1px solid #1f1f1f;border-radius:6px;
+                      padding:10px 6px;min-width:64px;
+                      box-shadow:0 0 20px rgba(var(--accent-color-rgb),0.08);">
+            —
+          </div>
+          <span style="font-size:0.55rem;font-weight:700;letter-spacing:0.25em;text-transform:uppercase;color:#4b5563;margin-top:6px;display:block;">Days</span>
+        </div>
+
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2rem,6vw,3.5rem);color:#333;line-height:1;padding-top:10px;">:</span>
+
+        <!-- Hours -->
+        <div style="text-align:center;min-width:64px;">
+          <div id="cd-hours"
+               style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2.5rem,7vw,4rem);
+                      letter-spacing:0.06em;color:#fff;line-height:1;
+                      background:#111;border:1px solid #1f1f1f;border-radius:6px;
+                      padding:10px 6px;min-width:64px;
+                      box-shadow:0 0 20px rgba(var(--accent-color-rgb),0.08);">
+            —
+          </div>
+          <span style="font-size:0.55rem;font-weight:700;letter-spacing:0.25em;text-transform:uppercase;color:#4b5563;margin-top:6px;display:block;">Hours</span>
+        </div>
+
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2rem,6vw,3.5rem);color:#333;line-height:1;padding-top:10px;">:</span>
+
+        <!-- Minutes -->
+        <div style="text-align:center;min-width:64px;">
+          <div id="cd-minutes"
+               style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2.5rem,7vw,4rem);
+                      letter-spacing:0.06em;color:#fff;line-height:1;
+                      background:#111;border:1px solid #1f1f1f;border-radius:6px;
+                      padding:10px 6px;min-width:64px;
+                      box-shadow:0 0 20px rgba(var(--accent-color-rgb),0.08);">
+            —
+          </div>
+          <span style="font-size:0.55rem;font-weight:700;letter-spacing:0.25em;text-transform:uppercase;color:#4b5563;margin-top:6px;display:block;">Minutes</span>
+        </div>
+
+        <span style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2rem,6vw,3.5rem);color:#333;line-height:1;padding-top:10px;">:</span>
+
+        <!-- Seconds -->
+        <div style="text-align:center;min-width:64px;">
+          <div id="cd-seconds"
+               style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2.5rem,7vw,4rem);
+                      letter-spacing:0.06em;color:var(--accent-color);line-height:1;
+                      background:#111;border:1px solid rgba(var(--accent-color-rgb),0.25);border-radius:6px;
+                      padding:10px 6px;min-width:64px;
+                      box-shadow:0 0 20px rgba(var(--accent-color-rgb),0.15);">
+            —
+          </div>
+          <span style="font-size:0.55rem;font-weight:700;letter-spacing:0.25em;text-transform:uppercase;color:#4b5563;margin-top:6px;display:block;">Seconds</span>
+        </div>
+
+      </div><!-- /countdown-blocks -->
+    </div><!-- /event-countdown -->
+
+    <!-- CTA Button -->
+    <div class="reveal" style="transition-delay:0.25s">
+      <a href="https://forms.gle/sSWhVWaqLx97aAhr6"
+         target="_blank" rel="noopener noreferrer"
+         class="btn-primary"
+         style="font-size:0.78rem;padding:17px 48px;display:inline-flex;">
+        <i class="fa-solid fa-star"></i>
+        Submit to the Collab
+      </a>
+    </div>
+
+    <!-- Deadline note -->
+    <p id="event-deadline-note" class="reveal" style="transition-delay:0.3s;font-size:0.65rem;font-weight:600;letter-spacing:0.2em;text-transform:uppercase;color:#374151;margin-top:20px;">
+      Deadline: September 1, 2026
+    </p>
+
   </div>
 </section>
 
@@ -1027,7 +1227,7 @@
         </a>
       </div>
       <p style="font-size:0.62rem;font-weight:600;letter-spacing:0.2em;text-transform:uppercase;color:#374151;text-align:center;">
-        © 2025 HORIZON RCRDS. ALL RIGHTS RESERVED.
+        © 2027 HORIZON RCRDS. ALL RIGHTS RESERVED.
       </p>
     </div>
 
@@ -1094,9 +1294,18 @@ function applyTitleGradient(color) {
    NAVBAR — scroll glass effect
 ════════════════════════════════════════════════ */
 const navbar = document.getElementById('navbar');
-window.addEventListener('scroll', () => {
-  navbar.classList.toggle('scrolled', window.scrollY > 40);
-});
+const eventBanner = document.getElementById('event-banner');
+
+function updateNavbarTop() {
+  if (!navbar) return;
+  const bannerH = (eventBanner && eventBanner.offsetHeight > 0) ? eventBanner.offsetHeight : 0;
+  const offset  = Math.max(0, bannerH - window.scrollY);
+  navbar.style.top = offset + 'px';
+  navbar.classList.toggle('scrolled', window.scrollY > bannerH + 10);
+}
+
+window.addEventListener('scroll', updateNavbarTop, { passive: true });
+updateNavbarTop();
 
 /* ════════════════════════════════════════════════
    MOBILE NAV
@@ -1629,6 +1838,110 @@ async function loadPlaylists() {
 
   /* Hook into DOMContentLoaded — runs alongside loadReleases / loadPlaylists */
   document.addEventListener('DOMContentLoaded', init);
+})();
+
+/* ════════════════════════════════════════════════
+   SPECIAL EVENT COUNTDOWN
+   Target: September 1, 2026 00:00:00 UTC
+   • Ticks every second
+   • Updates both the section countdown and the
+     compact banner inline timer
+   • Hides the entire #special-event section +
+     its dividers + the banner once deadline passes
+════════════════════════════════════════════════ */
+(function initCountdown() {
+  const DEADLINE = new Date('2026-09-01T00:00:00Z').getTime();
+
+  const section = document.getElementById('special-event');
+  const banner  = document.getElementById('event-banner');
+
+  function getSiblingDividers() {
+    if (!section) return [];
+    const siblings = [];
+    let prev = section.previousElementSibling;
+    let next = section.nextElementSibling;
+    if (prev && prev.classList.contains('h-px-elec')) siblings.push(prev);
+    if (next && next.classList.contains('h-px-elec')) siblings.push(next);
+    return siblings;
+  }
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function hideAll() {
+    /* Fade and remove section */
+    if (section) {
+      section.style.transition = 'opacity 1s ease, max-height 1s ease';
+      section.style.opacity    = '0';
+      section.style.overflow   = 'hidden';
+      section.style.maxHeight  = section.offsetHeight + 'px';
+      setTimeout(() => { section.style.maxHeight = '0'; section.style.padding = '0'; }, 50);
+      setTimeout(() => {
+        section.remove();
+        getSiblingDividers().forEach(d => d.remove());
+      }, 1100);
+    }
+    /* Slide up and remove banner, reset navbar top */
+    if (banner) {
+      banner.style.transition  = 'max-height 0.5s ease, opacity 0.5s ease, padding 0.5s ease';
+      banner.style.overflow    = 'hidden';
+      banner.style.maxHeight   = banner.offsetHeight + 'px';
+      banner.style.opacity     = '0';
+      setTimeout(() => { banner.style.maxHeight = '0'; banner.style.padding = '0'; }, 20);
+      setTimeout(() => {
+        banner.remove();
+        const nav = document.getElementById('navbar');
+        if (nav) nav.style.top = '0';
+      }, 550);
+    }
+  }
+
+  function tick() {
+    const now  = Date.now();
+    const diff = DEADLINE - now;
+
+    if (diff <= 0) { hideAll(); return; }
+
+    const days    = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours   = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    /* ── Section countdown blocks ── */
+    const dEl = document.getElementById('cd-days');
+    const hEl = document.getElementById('cd-hours');
+    const mEl = document.getElementById('cd-minutes');
+    const sEl = document.getElementById('cd-seconds');
+    if (dEl) dEl.textContent = String(days);
+    if (hEl) hEl.textContent = pad(hours);
+    if (mEl) mEl.textContent = pad(minutes);
+    if (sEl) sEl.textContent = pad(seconds);
+
+    /* Pulse on seconds */
+    if (sEl) {
+      sEl.style.transform = 'scale(1.06)';
+      setTimeout(() => { if (sEl) sEl.style.transform = 'scale(1)'; }, 120);
+    }
+
+    /* ── Banner compact timer ── */
+    const bTime = document.getElementById('banner-time');
+    if (bTime) {
+      bTime.textContent = days > 0
+        ? `${days}d ${pad(hours)}h ${pad(minutes)}m`
+        : `${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
+    }
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    tick();
+    const interval = setInterval(() => {
+      if (DEADLINE - Date.now() <= 0) {
+        clearInterval(interval);
+        hideAll();
+      } else {
+        tick();
+      }
+    }, 1000);
+  });
 })();
 
 /* ════════════════════════════════════════════════

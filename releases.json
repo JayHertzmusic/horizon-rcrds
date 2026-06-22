@@ -1,5 +1,16 @@
 [
-  {
+ {
+    "id": "hrz067",
+    "catalog": "HRZ#067",
+    "artist": "Tenryu",
+    "title": "Say You're Sorry",
+    "image": "hrz067.jpg",
+    "color": "#189ce8",
+    "stream_link": "https://too.fm/v5wmvgp",
+    "spotify_link": "https://open.spotify.com/track/1HFR8qZcIzYsys5MmiliGl",
+    "soundcloud_link": "https://on.soundcloud.com/siLGf72ofQVyQ7qwGX"
+  },
+ {
     "id": "hrz066",
     "catalog": "HRZ#066",
     "artist": "ZM-Yong & The AREA 13",

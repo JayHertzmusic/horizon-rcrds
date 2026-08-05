@@ -1,4 +1,26 @@
 [
+{
+    "id": "hrz073",
+    "catalog": "HRZ#073",
+    "artist": "Savath",
+    "title": "Come Alive",
+    "image": "hrz073.jpg",
+    "color": "#FACE3C",
+    "stream_link": "https://too.fm/omwj921",
+    "spotify_link": "https://open.spotify.com/track/1kDVzPfXHR5bdhxwjJeLL8",
+    "soundcloud_link": "https://on.soundcloud.com/jaWu9oNvLuQnSp1IPA"
+  },
+{
+    "id": "hrz072",
+    "catalog": "HRZ#072",
+    "artist": "Larus_, Zesty Tyson York, LENG CHEK",
+    "title": "We’ll Be Ok",
+    "image": "hrz072.jpg",
+    "color": "#F2B6E8",
+    "stream_link": "https://too.fm/kx6kvrk",
+    "spotify_link": "https://open.spotify.com/track/3mz20SLqQ5QLNJNtzJ4TC6",
+    "soundcloud_link": "https://on.soundcloud.com/7FQaIVKQVMGoFOApYe"
+  },
    {
     "id": "hrz071",
     "catalog": "HRZ#071",

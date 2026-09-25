@@ -1,5 +1,71 @@
 [
 {
+    "id": "hrz080",
+    "catalog": "HRZ#080",
+    "artist": "Rhithum",
+    "title": "Mirror",
+    "image": "hrz080.jpg",
+    "color": "#f1f9f8",
+    "stream_link": "https://too.fm/gon1e6b",
+    "spotify_link": "https://open.spotify.com/track/4pExZIFyjtjIBs8EjR9cF0",
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/rhithum-mirror"
+  },
+{
+    "id": "hrz079",
+    "catalog": "HRZ#079",
+    "artist": "Fire_Sans, 浩林Hali, Starsky_Dream",
+    "title": "Press Rewind",
+    "image": "hrz079.jpg",
+    "color": "#aa131b",
+    "stream_link": "https://too.fm/lp05d4w",
+    "spotify_link": "https://open.spotify.com/track/72Iy64tQWgUAkWrvEAWp4O",
+    "soundcloud_link": "https://on.soundcloud.com/FioI56P3qp22LRg6rW"
+  },
+{
+    "id": "hrz078",
+    "catalog": "HRZ#078",
+    "artist": "Dizzy",
+    "title": "BACK!",
+    "image": "hrz078.jpg",
+    "color": "#ef2f39",
+    "stream_link": "https://too.fm/b12w8e2",
+    "spotify_link": "https://open.spotify.com/track/6FbKfy6EJwtiBr9fpFIlbi",
+    "soundcloud_link": "https://on.soundcloud.com/4F73UggsAT5mHyyP91"
+  },
+{
+    "id": "hrz077",
+    "catalog": "HRZ#077",
+    "artist": "Generate",
+    "title": "How Will I Know",
+    "image": "hrz077.jpg",
+    "color": "#affdff",
+    "stream_link": "https://too.fm/n0d3jqq",
+    "spotify_link": "https://open.spotify.com/track/73iVhVCqo3pEeWQJVFnkXr",
+    "soundcloud_link": "https://on.soundcloud.com/kb5pOmQdZOFZTXp8Fh"
+  },
+{
+    "id": "hrz076",
+    "catalog": "HRZ#076",
+    "artist": "SMWLAYY",
+    "title": "Don't Stop",
+    "image": "hrz076.jpg",
+    "color": "#72ff00",
+    "stream_link": "https://too.fm/krkk99d",
+    "spotify_link": "https://open.spotify.com/album/6nFWgwMwXrBKDpSbdKbqJQ?nd=1&dlsi=b9ee0892adba4155",
+    "soundcloud_link": "https://on.soundcloud.com/iF1lao73uY43WSsIOs"
+  },
+{
+    "id": "hrz075",
+    "catalog": "HRZ#075",
+    "artist": "FRKN",
+    "title": "Let Me Go",
+    "image": "hrz075.jpg",
+    "color": "#145bd7",
+    "stream_link": "https://too.fm/drol8m0",
+    "spotify_link": "https://open.spotify.com/track/6vN33z3DlFyx1OAaVNZYk7",
+    "soundcloud_link": "https://on.soundcloud.com/VqjChq8rxCg9NJVB7i"
+  },
+{
     "id": "hrz074",
     "catalog": "HRZ#074",
     "artist": "Toca",

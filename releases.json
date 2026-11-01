@@ -1,5 +1,16 @@
 [
   {
+    "id": "hrz089",
+    "catalog": "HRZ#089",
+    "artist": "Medys Delva",
+    "title": "In The Middle",
+    "image": "hrz089.jpg",
+    "color": "#599fd1",
+    "stream_link": "https://too.fm/jj795y8",
+    "spotify_link": "https://open.spotify.com/track/2mqxdSrEjqqUNg6VIJGxXj?si=65750b3404944153",
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/medys-delva-in-the-middle"
+  },
+  {
     "id": "hrz088",
     "catalog": "HRZ#088",
     "artist": "Stefi",

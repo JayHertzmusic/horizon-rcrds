@@ -10,7 +10,8 @@
 // as it appears in its SoundCloud description (it is only filled in, never replaced).
 // Whatever was deleted in the admin panel is listed in sync-ignore.json and never comes back.
 // Links come from the SoundCloud description: "Stream / Download: <smart link>" and, if present,
-// an open.spotify.com/track or /album link. Nothing is ever deleted or edited here: the admin panel
+// an open.spotify.com/track or /album link. Without one, the Spotify link is read from the smart link page
+// (too.fm / ffm.to by Feature.fm list every platform's destination). Nothing is ever deleted or edited here: the admin panel
 // (/admin/) is still the place to fix or remove things.
 //
 // Env (all optional): SITE_DIR (repo root, default .), FEED_URL / FEED_FILE, FFMPEG (binary),
@@ -89,6 +90,23 @@ function links(text) {
   if (!stream) stream = all.find(u => { try { return SMART.test(new URL(u).hostname); } catch { return false; } }) || '';
   const spotify = all.find(u => /^https:\/\/open\.spotify\.com\/(intl-[a-z-]+\/)?(track|album)\//i.test(u)) || '';
   return { stream, spotify };
+}
+
+/* Feature.fm smart links (too.fm, ffm.to): each platform button carries its destination, base64 in "cd". */
+async function spotifyFromSmartLink(url) {
+  try {
+    if (!/(^|\.)(too\.fm|ffm\.to)$/i.test(new URL(url).hostname)) return '';
+    const res = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; HorizonSiteSync/1.0)' }, signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return '';
+    const html = await res.text();
+    const block = html.match(/service:"spotify"[\s\S]{0,3000}?cta:\{[^}]*?url:"([^"]+)"/);
+    if (!block) return '';
+    const cd = block[1].replace(/\u002F/g, '/').match(/[?&]cd=([A-Za-z0-9_\-]+)/);
+    if (!cd) return '';
+    const dest = JSON.parse(Buffer.from(cd[1], 'base64url').toString('utf8')).destUrl || '';
+    const m = dest.match(/^https:\/\/open\.spotify\.com\/(intl-[a-z-]+\/)?(track|album)\/[A-Za-z0-9]+/);
+    return m ? m[0] : '';
+  } catch { return ''; }
 }
 
 /* ---------- Covers ---------- */
@@ -223,7 +241,8 @@ if (newRel.length) {
     n += 1;
     const num = String(n).padStart(3, '0'), id = `${prefix.replace(/\W/g, '').toLowerCase()}${num}`;
     const { image, color } = await saveCover(it.image, id);
-    const { stream, spotify } = links(it.text);
+    const { stream, spotify: fromText } = links(it.text);
+    const spotify = fromText || (stream && await spotifyFromSmartLink(stream));
     const entry = { id, catalog: `${prefix}${num}`, artist: it.c.artist, title: it.c.title, image, color };
     if (stream) entry.stream_link = stream;
     if (spotify) entry.spotify_link = spotify;
@@ -260,7 +279,8 @@ for (const it of feed) {
   if (c?.kind !== 'release') continue;
   const i = releases.findIndex(r => (r.soundcloud_link && scKey(r.soundcloud_link) === scKey(it.link)) || norm(`${r.artist}${r.title}`) === norm(`${c.artist}${c.title}`));
   if (i < 0 || releases[i].spotify_link) continue;
-  const { spotify } = links(it.text);
+  const found = links(it.text);
+  const spotify = found.spotify || await spotifyFromSmartLink(releases[i].stream_link || found.stream);
   if (!spotify) continue;
   const r = releases[i], out = {};
   for (const [k, v] of Object.entries(r)) { out[k] = v; if (k === 'stream_link') out.spotify_link = spotify; }

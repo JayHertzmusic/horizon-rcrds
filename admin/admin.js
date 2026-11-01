@@ -97,19 +97,27 @@
       try { const c = await gh('GET', `${R()}/contents/${encPath(path)}?ref=${head}`); return { sha: c.sha, size: c.size }; }
       catch (e) { if (e.status === 404) return null; throw e; }
     };
-    const json = async (name, required) => {
+    const json = async (name, required, lenient) => {
       const f = await fileInfo(P(name));
       if (!f) {
         if (required) throw new GhError(`No encuentro ${P(name)} en el repositorio. Revisa «root» en config.js.`);
         return [];
       }
       const blob = await gh('GET', `${R()}/git/blobs/${f.sha}`);
+      const raw = textOfB64(blob.content).trim();
+      if (!raw && !required) return [];                   // empty file (e.g. emptied by hand in GitHub) = nothing
       let data;
-      try { data = JSON.parse(textOfB64(blob.content)); } catch { throw new GhError(`${P(name)} tiene un error de formato. Corrígelo en GitHub antes de usar el panel.`); }
-      if (!Array.isArray(data)) throw new GhError(`${P(name)} debe ser una lista ([ … ]).`);
+      try { data = JSON.parse(raw); } catch {
+        if (lenient) return [];
+        throw new GhError(`${P(name)} tiene un error de formato. Corrígelo en GitHub antes de usar el panel.`);
+      }
+      if (!Array.isArray(data)) {
+        if (lenient) return [];
+        throw new GhError(`${P(name)} debe ser una lista ([ … ]).`);
+      }
       return data;
     };
-    const [releases, mixtapes, playlists, ignore] = await Promise.all([json('releases.json', true), json('mixtapes.json', false), json('playlists.json', false), json('sync-ignore.json', false)]);
+    const [releases, mixtapes, playlists, ignore] = await Promise.all([json('releases.json', true), json('mixtapes.json', false), json('playlists.json', false), json('sync-ignore.json', false, true)]);
     return { head, treeSha: commit.tree.sha, files, truncated: !!tree.truncated, releases, mixtapes, playlists, ignore };
   }
 
@@ -447,7 +455,8 @@
         <button type="button" class="btn primary" data-act="new-release">+ Nuevo lanzamiento</button>
       </div>
       <input class="search" type="search" id="rel-filter" placeholder="Buscar" aria-label="Buscar lanzamientos" value="${esc(filter)}">
-      <ol class="list" id="rel-list">${releaseRows()}</ol>`;
+      <ol class="list" id="rel-list">${releaseRows()}</ol>
+      ${excludedHtml('release')}`;
   }
 
   function releaseEditor() {
@@ -489,7 +498,7 @@
         <div class="ed-actions">
           <button type="submit" class="btn primary">${isNew ? 'Publicar' : 'Guardar cambios'}</button>
           <button type="button" class="btn ghost" data-act="back">Cancelar</button>
-          ${isNew ? '' : '<button type="button" class="btn danger push" data-act="delete-release">Eliminar</button>'}
+          ${isNew ? '' : `${r.soundcloud_link ? '<button type="button" class="btn ghost push" data-act="exclude-release">Excluir</button>' : ''}<button type="button" class="btn danger${r.soundcloud_link ? '' : ' push'}" data-act="delete-release">Eliminar</button>`}
         </div>
       </form>`;
   }
@@ -563,15 +572,48 @@
     afterPublish(res, isNew ? 'Lanzamiento publicado' : 'Cambios guardados', [jsonProbe('releases.json', res.out.releases), ...uploads.map(u => fileProbe(image, u.blob))]);
     go('releases');
   }
-  /* What is deleted here stays deleted: the SoundCloud sync (scripts/sync-soundcloud.mjs) skips it. */
-  const ignoreEntry = (fresh, item, name) => item?.soundcloud_link
-    ? [...fresh.ignore.filter(x => x.soundcloud_link !== item.soundcloud_link), { soundcloud_link: item.soundcloud_link, title: name, removed: new Date().toISOString().slice(0, 10) }]
+  /* «Eliminar» only takes it off the site: if it is still on SoundCloud, the sync adds it again.
+     «Excluir» also writes it to sync-ignore.json, so the SoundCloud sync (scripts/sync-soundcloud.mjs)
+     never adds it again; «Permitir de nuevo» in the Excluidos list undoes that. */
+  const ignoreEntry = (fresh, item, name, kind) => item?.soundcloud_link
+    ? [...fresh.ignore.filter(x => x.soundcloud_link !== item.soundcloud_link), { soundcloud_link: item.soundcloud_link, title: name, kind, removed: new Date().toISOString().slice(0, 10) }]
     : undefined;
-  async function deleteRelease() {
+  const ignoreKind = x => x.kind || (/mixtape/i.test(x.title || '') ? 'mixtape' : 'release');
+  function excludedHtml(kind) {
+    const list = (repo.ignore || []).filter(x => ignoreKind(x) === kind);
+    if (!list.length) return '';
+    return `
+      <section class="excluded">
+        <h2>Excluidos <span class="count">${list.length}</span></h2>
+        <ol class="list">${list.map(x => `
+          <li class="row ex">
+            <span class="meta"><b>${esc(x.title || x.soundcloud_link)}</b><span>${esc(x.removed ? 'Excluido el ' + x.removed : '')}</span></span>
+            <a class="link" href="${esc(x.soundcloud_link)}" target="_blank" rel="noopener">SoundCloud ↗</a>
+            <button type="button" class="btn ghost sm" data-act="unexclude" data-link="${esc(x.soundcloud_link)}">Permitir de nuevo</button>
+          </li>`).join('')}
+        </ol>
+      </section>`;
+  }
+  async function unexclude(link) {
+    const x = (repo.ignore || []).find(i => i.soundcloud_link === link);
+    if (!x) return;
+    if (!await confirmBox(`¿Permitir de nuevo «${x.title || link}»? Si sigue en SoundCloud, la sincronización lo volverá a añadir a la web.`, 'Permitir')) return;
+    const res = await publish(`Allow again from SoundCloud — ${x.title || link}`, [], fresh => {
+      const ignore = fresh.ignore.filter(i => i.soundcloud_link !== link);
+      if (ignore.length === fresh.ignore.length) throw new Error('Ya no estaba excluido.');
+      return { ignore };
+    });
+    if (res.unchanged) toast('No había nada que cambiar'); else toast('Permitido de nuevo');
+    render();
+  }
+  async function deleteRelease(exclude) {
     const r = editing.orig;
     if (repo.releases.length <= 1) throw new Error('La web necesita al menos un lanzamiento.');
-    if (!await confirmBox(`¿Eliminar «${r.title || catOf(r)}» de la web? También se borra su portada.`)) return false;
-    const res = await publish(`Remove release ${catOf(r)} — ${r.title || ''}`, [], fresh => {
+    const ask = exclude
+      ? `¿Excluir «${r.title || catOf(r)}»? Se quita de la web y la sincronización con SoundCloud no lo volverá a añadir (se puede deshacer en «Excluidos»).`
+      : `¿Eliminar «${r.title || catOf(r)}» de la web? También se borra su portada.${r.soundcloud_link ? ' Si sigue en SoundCloud, volverá en la próxima sincronización (para que no vuelva, usa «Excluir»).' : ''}`;
+    if (!await confirmBox(ask, exclude ? 'Excluir' : 'Eliminar')) return false;
+    const res = await publish(`${exclude ? 'Exclude' : 'Remove'} release ${catOf(r)} — ${r.title || ''}`, [], fresh => {
       const list = fresh.releases.filter(x => keyOf(x) !== editing.key);
       if (list.length === fresh.releases.length) throw new Error('Este lanzamiento ya no estaba en la web.');
       if (!list.length) throw new Error('La web necesita al menos un lanzamiento.');
@@ -579,10 +621,10 @@
       return {
         releases: list,
         remove: gone && safeFile(gone) && !list.some(x => x.image === gone) ? [P('assets/' + gone)] : [],
-        ignore: ignoreEntry(fresh, item, `${item?.artist || ''} - ${item?.title || ''}`),
+        ignore: exclude ? ignoreEntry(fresh, item, `${item?.artist || ''} - ${item?.title || ''}`, 'release') : undefined,
       };
     });
-    afterPublish(res, 'Lanzamiento eliminado', [jsonProbe('releases.json', res.out.releases)]);
+    afterPublish(res, exclude ? 'Lanzamiento excluido' : 'Lanzamiento eliminado', [jsonProbe('releases.json', res.out.releases)]);
     go('releases');
     return true;
   }
@@ -605,7 +647,8 @@
           ${i === 0 ? '<span class="tag">Portada</span>' : '<span></span>'}
           <button type="button" class="btn ghost sm" data-act="edit-mixtape" data-key="${esc(keyOf(m))}">Editar</button>
         </li>`).join('') : '<li class="empty">Todavía no hay mixtapes.</li>'}
-      </ol>`;
+      </ol>
+      ${excludedHtml('mixtape')}`;
   }
   function nextMixNumber() {
     let n = 0;
@@ -660,7 +703,7 @@
         <div class="ed-actions">
           <button type="submit" class="btn primary">${isNew ? 'Publicar' : 'Guardar cambios'}</button>
           <button type="button" class="btn ghost" data-act="back">Cancelar</button>
-          ${isNew ? '' : '<button type="button" class="btn danger push" data-act="delete-mixtape">Eliminar</button>'}
+          ${isNew ? '' : `${m.soundcloud_link ? '<button type="button" class="btn ghost push" data-act="exclude-mixtape">Excluir</button>' : ''}<button type="button" class="btn danger${m.soundcloud_link ? '' : ' push'}" data-act="delete-mixtape">Eliminar</button>`}
         </div>
       </form>`;
   }
@@ -776,10 +819,13 @@
     afterPublish(res, isNew ? 'Mixtape publicado' : 'Cambios guardados', [jsonProbe('mixtapes.json', res.out.mixtapes), ...uploads.map(u => fileProbe(u.path.split('/').pop(), u.blob))]);
     go('radio');
   }
-  async function deleteMixtape() {
+  async function deleteMixtape(exclude) {
     const m = editing.orig;
-    if (!await confirmBox(`¿Eliminar «Horizon Mixtape ${m.number || ''}» de la web? También se borran su portada y su audio.`)) return false;
-    const res = await publish(`Remove mixtape ${m.number || ''}`, [], fresh => {
+    const ask = exclude
+      ? `¿Excluir «Horizon Mixtape ${m.number || ''}»? Se quita de la web y la sincronización con SoundCloud no lo volverá a añadir (se puede deshacer en «Excluidos»).`
+      : `¿Eliminar «Horizon Mixtape ${m.number || ''}» de la web? También se borran su portada y su audio.${m.soundcloud_link ? ' Si sigue en SoundCloud, volverá en la próxima sincronización (para que no vuelva, usa «Excluir»).' : ''}`;
+    if (!await confirmBox(ask, exclude ? 'Excluir' : 'Eliminar')) return false;
+    const res = await publish(`${exclude ? 'Exclude' : 'Remove'} mixtape ${m.number || ''}`, [], fresh => {
       const list = fresh.mixtapes.filter(x => keyOf(x) !== editing.key);
       if (list.length === fresh.mixtapes.length) throw new Error('Este mixtape ya no estaba en la web.');
       const gone = fresh.mixtapes.find(x => keyOf(x) === editing.key);
@@ -787,10 +833,10 @@
       return {
         mixtapes: list,
         remove: [gone.image, gone.preview].filter(f => f && safeFile(f) && !used(f)).map(f => P('assets/' + f)),
-        ignore: ignoreEntry(fresh, gone, gone.title || `Mixtape ${gone.number || ''}`),
+        ignore: exclude ? ignoreEntry(fresh, gone, gone.title || `Mixtape ${gone.number || ''}`, 'mixtape') : undefined,
       };
     });
-    afterPublish(res, 'Mixtape eliminado', [jsonProbe('mixtapes.json', res.out.mixtapes)]);
+    afterPublish(res, exclude ? 'Mixtape excluido' : 'Mixtape eliminado', [jsonProbe('mixtapes.json', res.out.mixtapes)]);
     go('radio');
     return true;
   }
@@ -1111,13 +1157,21 @@
       }
       case 'delete-release':
       case 'delete-mixtape':
+      case 'exclude-release':
+      case 'exclude-mixtape':
       case 'delete-playlist': {
-        const form = $('#ed');
-        busyOn(form, t, 'Eliminando…');
+        const form = $('#ed'), act = t.dataset.act, exclude = act.startsWith('exclude');
+        busyOn(form, t, exclude ? 'Excluyendo…' : 'Eliminando…');
         try {
-          const done = await (t.dataset.act === 'delete-release' ? deleteRelease() : t.dataset.act === 'delete-mixtape' ? deleteMixtape() : deletePlaylist());
+          const done = await (/release$/.test(act) ? deleteRelease(exclude) : /mixtape$/.test(act) ? deleteMixtape(exclude) : deletePlaylist());
           if (!done) busyOff(form);
         } catch (err) { busyOff(form); showError(err); } finally { busy = false; }
+        break;
+      }
+      case 'unexclude': {
+        busy = true; t.disabled = true;
+        try { await unexclude(t.dataset.link); } catch (err) { toast(err.message); if (err.status === 401) logout(err.message); }
+        finally { busy = false; if (t.isConnected) t.disabled = false; }
         break;
       }
       case 'publish-file': publishFile(t.dataset.file, t); break;

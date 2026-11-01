@@ -1,0 +1,53 @@
+# Every 3 hours: looks at the label's SoundCloud and adds new releases and mixtapes to the website.
+# Script: scripts/sync-soundcloud.mjs. It can also be started by hand: Actions → Sync SoundCloud → Run workflow.
+name: Sync SoundCloud
+
+on:
+  schedule:
+    - cron: '17 */3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: soundcloud-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Tools (ffmpeg + sharp)
+        run: |
+          command -v ffmpeg || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+          mkdir -p /tmp/sync && cd /tmp/sync && npm init -y > /dev/null && npm install --silent --no-audit --no-fund sharp@0.33.5
+
+      - name: Check SoundCloud
+        id: sync
+        env:
+          SYNC_REQUIRE_FROM: /tmp/sync/package.json
+          SYNC_MESSAGE_FILE: /tmp/sync/message.txt
+        run: node scripts/sync-soundcloud.mjs
+
+      - name: Publish
+        if: steps.sync.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add releases.json mixtapes.json assets
+          git commit -F /tmp/sync/message.txt
+          git pull --rebase --quiet
+          git push
+          # make sure GitHub Pages rebuilds the site (commits made by Actions may not trigger it)
+          gh api -X POST "repos/${{ github.repository }}/pages/builds" > /dev/null || true

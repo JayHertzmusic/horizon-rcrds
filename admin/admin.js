@@ -109,8 +109,8 @@
       if (!Array.isArray(data)) throw new GhError(`${P(name)} debe ser una lista ([ … ]).`);
       return data;
     };
-    const [releases, mixtapes, playlists] = await Promise.all([json('releases.json', true), json('mixtapes.json', false), json('playlists.json', false)]);
-    return { head, treeSha: commit.tree.sha, files, truncated: !!tree.truncated, releases, mixtapes, playlists };
+    const [releases, mixtapes, playlists, ignore] = await Promise.all([json('releases.json', true), json('mixtapes.json', false), json('playlists.json', false), json('sync-ignore.json', false)]);
+    return { head, treeSha: commit.tree.sha, files, truncated: !!tree.truncated, releases, mixtapes, playlists, ignore };
   }
 
   /* Un «Publicar» = un commit. Los archivos se suben una vez; el JSON se recalcula sobre la versión más
@@ -126,6 +126,7 @@
       const out = build ? build(fresh) : {};
       const entries = made.map(m => ({ path: m.path, mode: '100644', type: 'blob', sha: m.sha }));
       if (out.releases) entries.push({ path: P('releases.json'), mode: '100644', type: 'blob', content: JSON.stringify(out.releases, null, 2) + '\n' });
+      if (out.ignore) entries.push({ path: P('sync-ignore.json'), mode: '100644', type: 'blob', content: JSON.stringify(out.ignore, null, 2) + '\n' });
       if (out.mixtapes) entries.push({ path: P('mixtapes.json'), mode: '100644', type: 'blob', content: JSON.stringify(out.mixtapes, null, 2) + '\n' });
       if (out.playlists) entries.push({ path: P('playlists.json'), mode: '100644', type: 'blob', content: JSON.stringify(out.playlists, null, 2) + '\n' });
       for (const p of new Set(out.remove || [])) {
@@ -562,6 +563,10 @@
     afterPublish(res, isNew ? 'Lanzamiento publicado' : 'Cambios guardados', [jsonProbe('releases.json', res.out.releases), ...uploads.map(u => fileProbe(image, u.blob))]);
     go('releases');
   }
+  /* What is deleted here stays deleted: the SoundCloud sync (scripts/sync-soundcloud.mjs) skips it. */
+  const ignoreEntry = (fresh, item, name) => item?.soundcloud_link
+    ? [...fresh.ignore.filter(x => x.soundcloud_link !== item.soundcloud_link), { soundcloud_link: item.soundcloud_link, title: name, removed: new Date().toISOString().slice(0, 10) }]
+    : undefined;
   async function deleteRelease() {
     const r = editing.orig;
     if (repo.releases.length <= 1) throw new Error('La web necesita al menos un lanzamiento.');
@@ -570,8 +575,12 @@
       const list = fresh.releases.filter(x => keyOf(x) !== editing.key);
       if (list.length === fresh.releases.length) throw new Error('Este lanzamiento ya no estaba en la web.');
       if (!list.length) throw new Error('La web necesita al menos un lanzamiento.');
-      const gone = fresh.releases.find(x => keyOf(x) === editing.key)?.image;
-      return { releases: list, remove: gone && safeFile(gone) && !list.some(x => x.image === gone) ? [P('assets/' + gone)] : [] };
+      const item = fresh.releases.find(x => keyOf(x) === editing.key), gone = item?.image;
+      return {
+        releases: list,
+        remove: gone && safeFile(gone) && !list.some(x => x.image === gone) ? [P('assets/' + gone)] : [],
+        ignore: ignoreEntry(fresh, item, `${item?.artist || ''} - ${item?.title || ''}`),
+      };
     });
     afterPublish(res, 'Lanzamiento eliminado', [jsonProbe('releases.json', res.out.releases)]);
     go('releases');
@@ -775,7 +784,11 @@
       if (list.length === fresh.mixtapes.length) throw new Error('Este mixtape ya no estaba en la web.');
       const gone = fresh.mixtapes.find(x => keyOf(x) === editing.key);
       const used = f => list.some(x => x.image === f || x.preview === f) || fresh.releases.some(r => r.image === f);
-      return { mixtapes: list, remove: [gone.image, gone.preview].filter(f => f && safeFile(f) && !used(f)).map(f => P('assets/' + f)) };
+      return {
+        mixtapes: list,
+        remove: [gone.image, gone.preview].filter(f => f && safeFile(f) && !used(f)).map(f => P('assets/' + f)),
+        ignore: ignoreEntry(fresh, gone, gone.title || `Mixtape ${gone.number || ''}`),
+      };
     });
     afterPublish(res, 'Mixtape eliminado', [jsonProbe('mixtapes.json', res.out.mixtapes)]);
     go('radio');

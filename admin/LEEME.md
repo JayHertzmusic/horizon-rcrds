@@ -13,13 +13,39 @@ No necesita servidor ni cuentas nuevas. El panel vive en la carpeta `admin/` de 
 - Si el título del release es largo, la letra se ajusta sola para que quepa en una línea.
 - Scroll suave con la rueda del ratón (Lenis) en la portada y el catálogo. En móvil y táctil, el scroll normal.
 
+## La web se actualiza sola desde SoundCloud
+
+Cada 3 horas, GitHub mira el SoundCloud de Horizon y añade a la web lo nuevo:
+
+- **«HORIZON RCRDS Mixtape #011 | Invitado»** va a **Radio**, con su número, el invitado, la portada, el color y un fragmento de 45 segundos del momento más intenso del mix, que suena en la portada.
+- **«Artista - Título»** va a **Releases**, con el siguiente HRZ#, la portada, el color y los enlaces, y pasa a ser el protagonista de la portada. Su drop (30 segundos) pasa a ser el audio del reproductor. Lo que vaya entre corchetes, como «[ADE Sampler 2026]», no aparece en el título.
+- Las versiones **«(Extended Mix)»** se ignoran siempre: en la web solo va el release normal.
+- Lo demás (IDs, etc.) se ignora.
+- **Nunca mira nada anterior a «Kris m - Lights» (HRZ#047, 28 de enero de 2026)**: la web empieza ahí y lo de antes no entra.
+
+**En la descripción de cada release en SoundCloud** poned los enlaces así, cada uno en su línea:
+
+```
+Stream / Download: https://too.fm/…
+Spotify: https://open.spotify.com/track/…
+```
+
+El de SoundCloud se pone solo. Si falta el de Spotify, la web simplemente no muestra ese botón, y en cuanto lo añadáis a la descripción (aunque sea días después) el botón aparece solo. Es lo único que el automático rellena en algo ya publicado, y solo si estaba vacío.
+
+La cuenta que se revisa es **https://soundcloud.com/horizonirecords** (a través de su feed público).
+
+**El automático y el panel conviven:**
+- El automático nunca borra ni cambia lo que ya está en la web, así que lo que corrijáis en el panel (título, nº de catálogo, color, enlaces, portada, fragmento, posición) se queda como lo dejéis.
+- Podéis seguir añadiendo a mano desde el panel lo que no esté en SoundCloud.
+- Lo que **eliminéis** desde el panel queda apuntado en `sync-ignore.json` y el automático **no lo vuelve a poner**, aunque siga en SoundCloud. Si un día queréis recuperarlo, añadidlo a mano desde el panel. También se puede lanzar a mano sin esperar: GitHub → pestaña **Actions** → **Sync SoundCloud** → **Run workflow**.
+
 ---
 
 ## 1. Publicar (una sola vez)
 
 Todo está listo en esta carpeta: `admin/`, `index.html` con la portada nueva, `mixtapes.json` y las portadas `assets/mix001.jpg` … `mix010.jpg`. `admin/config.js` ya apunta a `JayHertzmusic/horizon-rcrds` (rama `main`).
 
-Haz commit de todo y push. Si GitHub dice que tu copia está atrasada, haz antes `git pull`.
+Haz commit de todo y push, incluida la carpeta oculta `.github/`, que es la que hace la sincronización automática. Si GitHub dice que tu copia está atrasada, haz antes `git pull`.
 
 Después el panel queda en **https://horizonrcrds.com/admin/**.
 
@@ -76,4 +102,7 @@ Tras **Publicar**, el panel avisa con «✓ Ya está en la web» cuando la web y
 - Si se sustituye un archivo, el nuevo lleva otro nombre para evitar la caché, y el antiguo se borra si ya no lo usa nadie.
 - El panel no carga nada externo salvo las fuentes de Google (Bebas Neue y Barlow). Lleva su propia CSP y `noindex`.
 - Scroll suave: `assets/vendor/lenis.min.js` (Lenis 1.3.26, licencia MIT en `LENIS-LICENSE.txt`), `assets/smooth-scroll.js` y `assets/smooth-scroll.css`, cargados en `index.html` y `catalogue.html`. Solo con ratón o trackpad; los paneles internos, el teclado y los saltos del menú siguen siendo nativos.
+- Sincronización con SoundCloud: `.github/workflows/soundcloud-sync.yml` (cada 3 horas y a mano) ejecuta `scripts/sync-soundcloud.mjs`. Lee el feed RSS público `https://feeds.soundcloud.com/users/soundcloud:users:1309373238/sounds.rss` y solo añade lo que sea más nuevo que lo último ya publicado de cada tipo; si no encuentra nada conocido, no añade nada por seguridad, y nunca más de 6 por ejecución. Portadas a 1000×1000 con `sharp`; fragmentos con `ffmpeg` (busca la zona de más energía). Hace el commit como `github-actions[bot]` y pide a GitHub Pages que publique de nuevo. Requiere que Actions esté activado en el repositorio (lo está por defecto). GitHub pausa las tareas programadas si un repositorio pasa 60 días sin actividad; si pasa, se reactiva en Actions.
+- Corte: `SINCE` en el script (28/01/2026, el día de «Kris m - Lights»). Las «Extended Mix» se descartan. Revisión sin cambiar nada: `SYNC_AUDIT=1 node scripts/sync-soundcloud.mjs` lista cada subida desde el corte y qué haría con ella.
+- `sync-ignore.json` lo escribe el panel al eliminar (enlace de SoundCloud + título); el script trata esas entradas como ya publicadas.
 - No toques `CNAME`.

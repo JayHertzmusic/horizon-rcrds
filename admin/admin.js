@@ -1,6 +1,6 @@
 /* HORIZON RCRDS — panel de administración.
    Sin servidor: el navegador habla directamente con la API de GitHub (token personal del usuario) y cada
-   «Publicar» es UN commit en el repositorio de la web: releases.json, playlists.json y archivos de assets/.
+   «Publicar» es UN commit en el repositorio de la web: releases.json, mixtapes.json, playlists.json y archivos de assets/.
    GitHub Pages vuelve a publicar la web sola en 1–2 minutos. La web no necesita ningún cambio. */
 'use strict';
 (() => {
@@ -109,8 +109,8 @@
       if (!Array.isArray(data)) throw new GhError(`${P(name)} debe ser una lista ([ … ]).`);
       return data;
     };
-    const [releases, playlists] = await Promise.all([json('releases.json', true), json('playlists.json', false)]);
-    return { head, treeSha: commit.tree.sha, files, truncated: !!tree.truncated, releases, playlists };
+    const [releases, mixtapes, playlists] = await Promise.all([json('releases.json', true), json('mixtapes.json', false), json('playlists.json', false)]);
+    return { head, treeSha: commit.tree.sha, files, truncated: !!tree.truncated, releases, mixtapes, playlists };
   }
 
   /* Un «Publicar» = un commit. Los archivos se suben una vez; el JSON se recalcula sobre la versión más
@@ -126,6 +126,7 @@
       const out = build ? build(fresh) : {};
       const entries = made.map(m => ({ path: m.path, mode: '100644', type: 'blob', sha: m.sha }));
       if (out.releases) entries.push({ path: P('releases.json'), mode: '100644', type: 'blob', content: JSON.stringify(out.releases, null, 2) + '\n' });
+      if (out.mixtapes) entries.push({ path: P('mixtapes.json'), mode: '100644', type: 'blob', content: JSON.stringify(out.mixtapes, null, 2) + '\n' });
       if (out.playlists) entries.push({ path: P('playlists.json'), mode: '100644', type: 'blob', content: JSON.stringify(out.playlists, null, 2) + '\n' });
       for (const p of new Set(out.remove || [])) {
         if (fresh.files.has(p) && !made.some(m => m.path === p)) entries.push({ path: p, mode: '100644', type: 'blob', sha: null });
@@ -140,7 +141,7 @@
         throw e;
       }
       for (const m of made) { const old = previews.get(m.path); if (old) URL.revokeObjectURL(old); previews.set(m.path, URL.createObjectURL(m.blob)); }
-      try { repo = await loadRepo(); } catch { repo = { ...fresh, releases: out.releases || fresh.releases, playlists: out.playlists || fresh.playlists }; }
+      try { repo = await loadRepo(); } catch { repo = { ...fresh, releases: out.releases || fresh.releases, mixtapes: out.mixtapes || fresh.mixtapes, playlists: out.playlists || fresh.playlists }; }
       return { out, made };
     }
   }
@@ -412,7 +413,7 @@
           <span class="word">HORIZON<small>RCRDS</small></span>
         </a>
         <nav class="tabs" aria-label="Secciones">
-          ${tab('releases', 'Releases')}${tab('playlists', 'Playlists')}${tab('player', 'Reproductor')}${tab('brand', 'Logo')}
+          ${tab('releases', 'Releases')}${tab('radio', 'Radio')}${tab('playlists', 'Playlists')}${tab('player', 'Reproductor')}${tab('brand', 'Logo')}
         </nav>
         <div class="top-end">
           <a class="link" href="${SITE}" target="_blank" rel="noopener">Ver web ↗</a>
@@ -577,6 +578,210 @@
     return true;
   }
 
+  /* Radio (mixtapes.json): el enlace de SoundCloud rellena número, título, invitado, portada y color */
+  function radioView() {
+    const list = repo.mixtapes;
+    return `
+      <div class="head">
+        <div><p class="eyebrow">Horizon Radio</p><h1>RADIO <span class="count">${list.length}</span></h1></div>
+        <button type="button" class="btn primary" data-act="new-mixtape">+ Nuevo mixtape</button>
+      </div>
+      <ol class="list">${list.length ? list.map((m, i) => `
+        <li class="row">
+          <span class="pos">${i + 1}</span>
+          ${imgTag(m.image, 'thumb')}
+          <span class="meta"><b>${esc(m.number ? 'Horizon Mixtape ' + m.number : m.title || 'Sin título')}</b><span>${esc(m.artist || '')}</span></span>
+          <span class="cat">${m.preview ? '♪ Audio' : '<span class="muted">Sin audio</span>'}</span>
+          <span class="swatch" style="--c:${esc(hex6(m.color) || '#ffffff')}"></span>
+          ${i === 0 ? '<span class="tag">Portada</span>' : '<span></span>'}
+          <button type="button" class="btn ghost sm" data-act="edit-mixtape" data-key="${esc(keyOf(m))}">Editar</button>
+        </li>`).join('') : '<li class="empty">Todavía no hay mixtapes.</li>'}
+      </ol>`;
+  }
+  function nextMixNumber() {
+    let n = 0;
+    for (const m of repo.mixtapes) { const d = String(m.number || m.title || '').match(/(\d+)/); if (d) n = Math.max(n, Number(d[1])); }
+    return '#' + String(n + 1).padStart(3, '0');
+  }
+  const normNumber = v => { const d = String(v).match(/^\s*#?\s*(\d+)\s*$/); return d ? '#' + d[1].padStart(3, '0') : String(v).trim(); };
+  function mixtapeEditor() {
+    const m = editing.orig || {}, isNew = !editing.key, n = repo.mixtapes.length;
+    const cover = editing.cover?.url || (m.image ? assetSrc(m.image) : '');
+    const color = hex6(editing.color ?? m.color) || '#ffffff';
+    const number = m.number || nextMixNumber();
+    return `
+      <form id="ed" class="editor" novalidate>
+        <button type="button" class="back" data-act="back">← Radio</button>
+        <h1>${isNew ? 'NUEVO MIXTAPE' : esc('Horizon Mixtape ' + (m.number || ''))}</h1>
+        <div class="ed-grid">
+          <div class="ed-side">
+            ${coverDrop(cover, m.image && !editing.cover ? P('assets/' + m.image) : '', 'Portada')}
+            <p class="info" id="ed-cover-info">${coverInfo()}</p>
+            <div class="field">
+              <label for="f-color">Color</label>
+              <div class="color-row">
+                <input type="color" id="f-color-pick" value="${esc(color)}" aria-label="Elegir color">
+                <input id="f-color" name="color" value="${esc(color)}" maxlength="7" spellcheck="false" autocomplete="off">
+                <span class="badge-prev" id="color-prev" style="--c:${esc(color)}">RADIO</span>
+              </div>
+            </div>
+          </div>
+          <div class="ed-main">
+            <div class="field">
+              <label for="f-sc">Enlace de SoundCloud</label>
+              <div class="sc-row">
+                <input id="f-sc" name="soundcloud_link" type="url" value="${esc(m.soundcloud_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://soundcloud.com/horizonirecords/…">
+                <button type="button" class="btn ghost" data-act="sc-fill">Rellenar</button>
+              </div>
+              <p class="info sc-info" id="sc-info"></p>
+            </div>
+            <div class="row2">
+              <div class="field"><label for="f-title">Título</label><input id="f-title" name="title" value="${esc(m.title || 'HORIZON RCRDS Mixtape ' + number)}" maxlength="120" autocomplete="off"></div>
+              <div class="field"><label for="f-number">Nº</label><input id="f-number" name="number" value="${esc(number)}" maxlength="12" autocomplete="off" spellcheck="false"></div>
+            </div>
+            <div class="row2">
+              <div class="field"><label for="f-artist">Artista invitado</label><input id="f-artist" name="artist" value="${esc(m.artist || '')}" maxlength="120" autocomplete="off"></div>
+              <div class="field"><label for="f-position">Posición</label><input id="f-position" name="position" type="number" min="1" max="${isNew ? n + 1 : n}" value="${isNew ? 1 : editing.index + 1}" inputmode="numeric"></div>
+            </div>
+            <p class="group">Fragmento de audio</p>
+            <div class="mx-audio" id="mx-audio">${mixAudioHtml()}</div>
+          </div>
+        </div>
+        <p class="ed-error" id="ed-error" role="alert" hidden></p>
+        <div class="ed-actions">
+          <button type="submit" class="btn primary">${isNew ? 'Publicar' : 'Guardar cambios'}</button>
+          <button type="button" class="btn ghost" data-act="back">Cancelar</button>
+          ${isNew ? '' : '<button type="button" class="btn danger push" data-act="delete-mixtape">Eliminar</button>'}
+        </div>
+      </form>`;
+  }
+  function mixAudioHtml() {
+    const a = editing.audio, cur = !editing.removeAudio && editing.orig?.preview;
+    const src = a?.url || (cur ? assetSrc(cur) : '');
+    return `
+      ${src ? `<audio controls preload="metadata" src="${esc(src)}"></audio>` : ''}
+      ${a ? `<p class="info">${esc(a.name)} · ${(a.blob.size / 1048576).toFixed(1)} MB</p>` : src ? '' : '<p class="info">Sin fragmento: en la web el botón abre el mix en SoundCloud.</p>'}
+      <div class="card-actions">
+        <input type="file" id="mx-file" class="sr-only" accept="audio/mpeg,.mp3">
+        <label for="mx-file" class="btn ghost sm">${src ? 'Cambiar MP3' : 'Elegir MP3'}</label>
+        ${src ? '<button type="button" class="btn ghost sm" data-act="mx-remove-audio">Quitar</button>' : ''}
+      </div>`;
+  }
+  async function setMixAudio(file) {
+    try {
+      await checkMp3(file);
+      if (!editing) return;
+      if (editing.audio) URL.revokeObjectURL(editing.audio.url);
+      editing.audio = { blob: file, url: URL.createObjectURL(file), name: file.name };
+      editing.removeAudio = false;
+      $('#mx-audio').innerHTML = mixAudioHtml();
+      $('#ed-error').hidden = true;
+    } catch (e) { showError(e); }
+  }
+  let scSeq = 0;
+  async function scFill(force) {
+    const input = $('#f-sc'), info = $('#sc-info');
+    if (!input || !editing) return;
+    let u;
+    try { u = new URL(input.value.trim()); } catch { if (force) showError(new FieldError('soundcloud_link', 'Pega primero el enlace de SoundCloud del mixtape.')); return; }
+    if (!HOSTS.soundcloud.some(h => h.test(u.hostname))) { if (force) showError(new FieldError('soundcloud_link', 'Ese enlace no es de SoundCloud.')); return; }
+    const id = ++scSeq;
+    info.textContent = 'Leyendo SoundCloud…';
+    try {
+      const res = await fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(u.href)}`).catch(() => null);
+      if (!res?.ok) throw new Error('SoundCloud no encuentra ese enlace (¿es público?).');
+      const o = await res.json();
+      if (id !== scSeq || !editing) return;
+      let title = String(o.title || '').trim();
+      const by = ` by ${o.author_name || ''}`;
+      if (o.author_name && title.endsWith(by)) title = title.slice(0, -by.length).trim();
+      const [main, guest = ''] = title.split('|').map(x => x.trim());
+      const num = (main.match(/#\s*(\d+)/) || [])[1];
+      const put = (name, v) => {
+        const el = $(`[name="${name}"]`);
+        if (el && v && (force || !el.value.trim())) el.value = v;
+      };
+      put('title', main.replace(/[<>]/g, ''));
+      if (num) put('number', '#' + num.padStart(3, '0'));
+      put('artist', guest.replace(/[<>]/g, ''));
+      let gotCover = false;
+      if (o.thumbnail_url && (force || (!editing.cover && !editing.orig?.image))) {
+        const t = o.thumbnail_url;
+        for (const url of [t.replace('-t500x500', '-original'), t.replace('-t500x500.jpg', '-original.png'), t]) {
+          const r = await fetch(url).catch(() => null);
+          const type = r?.headers.get('content-type') || '';
+          if (r?.ok && /^image\/(jpeg|png|webp)/.test(type)) {
+            const b = await r.blob();
+            if (id !== scSeq || !editing) return;
+            await setCover(new File([b], 'cover', { type: b.type || type.split(';')[0] }));
+            gotCover = true;
+            break;
+          }
+        }
+      }
+      info.textContent = gotCover || !force ? '✓ Datos de SoundCloud' : '✓ Datos de SoundCloud (sin portada: súbela a mano)';
+    } catch (e) {
+      if (id === scSeq) info.textContent = e.message;
+    }
+  }
+  async function saveMixtape(form) {
+    const isNew = !editing.key, orig = editing.orig || {};
+    const v = {
+      soundcloud_link: link(form, 'soundcloud_link', 'SoundCloud', HOSTS.soundcloud, 'Falta el enlace de SoundCloud.'),
+      title: text(form, 'title', 'Título', { missing: 'Falta el título.' }),
+      number: normNumber(text(form, 'number', 'Nº', { max: 12, missing: 'Falta el número.' })),
+      artist: text(form, 'artist', 'Artista invitado', { max: 120 }),
+    };
+    const color = hex6(form.elements.color.value);
+    if (!color) throw new FieldError('color', 'Color: escribe un color como #ff68b2.');
+    if (isNew && !editing.cover) throw new Error('Falta la portada (pega el enlace de SoundCloud o súbela).');
+    const pos = position(form, isNew ? repo.mixtapes.length + 1 : repo.mixtapes.length);
+    const base = 'mix' + (normCat(v.number) || 'tape');
+    let image = orig.image, preview = editing.removeAudio ? undefined : orig.preview;
+    const uploads = [];
+    if (editing.cover) { image = uniqueName(base, 'jpg'); uploads.push({ path: P('assets/' + image), blob: editing.cover.blob }); }
+    if (editing.audio) { preview = uniqueName(base, 'mp3'); uploads.push({ path: P('assets/' + preview), blob: editing.audio.blob }); }
+    const res = await publish(`${isNew ? 'Add' : 'Update'} mixtape ${v.number}${v.artist ? ' — ' + v.artist : ''}`, uploads, fresh => {
+      const list = fresh.mixtapes.slice();
+      const idx = isNew ? -1 : list.findIndex(m => keyOf(m) === editing.key);
+      if (!isNew && idx < 0) throw new Error('Este mixtape ya no está en la web (lo han borrado desde otro sitio). Vuelve a la lista.');
+      if (list.some((m, i) => i !== idx && m.number && normCat(m.number) === normCat(v.number))) throw new FieldError('number', `Ya hay un mixtape ${v.number}.`);
+      let entry;
+      if (isNew) {
+        let id = base, k = 2;
+        while (list.some(m => m.id === id)) id = `${base}-${k++}`;
+        entry = { id, number: v.number, title: v.title, artist: v.artist, image, color, preview, soundcloud_link: v.soundcloud_link };
+      } else {
+        entry = { ...list[idx], number: v.number, title: v.title, artist: v.artist, image, color, preview, soundcloud_link: v.soundcloud_link };
+      }
+      if (!entry.artist) delete entry.artist;
+      if (!entry.preview) delete entry.preview;
+      if (!isNew) list.splice(idx, 1);
+      list.splice(Math.min(pos - 1, list.length), 0, entry);
+      const old = idx >= 0 ? fresh.mixtapes[idx] : {};
+      const used = f => list.some(m => m.image === f || m.preview === f) || fresh.releases.some(r => r.image === f);
+      const remove = [old.image !== image && old.image, old.preview !== preview && old.preview]
+        .filter(f => f && safeFile(f) && !used(f)).map(f => P('assets/' + f));
+      return { mixtapes: list, remove };
+    });
+    afterPublish(res, isNew ? 'Mixtape publicado' : 'Cambios guardados', [jsonProbe('mixtapes.json', res.out.mixtapes), ...uploads.map(u => fileProbe(u.path.split('/').pop(), u.blob))]);
+    go('radio');
+  }
+  async function deleteMixtape() {
+    const m = editing.orig;
+    if (!await confirmBox(`¿Eliminar «Horizon Mixtape ${m.number || ''}» de la web? También se borran su portada y su audio.`)) return false;
+    const res = await publish(`Remove mixtape ${m.number || ''}`, [], fresh => {
+      const list = fresh.mixtapes.filter(x => keyOf(x) !== editing.key);
+      if (list.length === fresh.mixtapes.length) throw new Error('Este mixtape ya no estaba en la web.');
+      const gone = fresh.mixtapes.find(x => keyOf(x) === editing.key);
+      const used = f => list.some(x => x.image === f || x.preview === f) || fresh.releases.some(r => r.image === f);
+      return { mixtapes: list, remove: [gone.image, gone.preview].filter(f => f && safeFile(f) && !used(f)).map(f => P('assets/' + f)) };
+    });
+    afterPublish(res, 'Mixtape eliminado', [jsonProbe('mixtapes.json', res.out.mixtapes)]);
+    go('radio');
+    return true;
+  }
+
   /* Playlists */
   function playlistsView() {
     const list = repo.playlists;
@@ -713,15 +918,7 @@
     const card = $(`.card[data-file="${CSS.escape(name)}"]`), err = card?.querySelector('.ed-error');
     try {
       if (f.kind === 'audio') {
-        if (!(file.type === 'audio/mpeg' || /\.mp3$/i.test(file.name))) throw new Error('Usa un archivo MP3.');
-        if (file.size > MAX_AUDIO) throw new Error('El audio pesa demasiado (máx. 25 MB).');
-        await new Promise((ok, ko) => {
-          const a = new Audio(), u = URL.createObjectURL(file), t = setTimeout(() => done(ko), 10000);
-          const done = fn => { clearTimeout(t); a.removeAttribute('src'); a.load(); URL.revokeObjectURL(u); fn(new Error('Este archivo no se puede reproducir. Prueba con otro MP3.')); };
-          a.onloadedmetadata = () => { clearTimeout(t); URL.revokeObjectURL(u); ok(); };
-          a.onerror = () => done(ko);
-          a.preload = 'metadata'; a.src = u;
-        });
+        await checkMp3(file);
       } else {
         if (file.type !== 'image/png') throw new Error('Usa una imagen PNG (con fondo transparente si lo tiene el actual).');
         if (file.size > 3 * 1048576) throw new Error('La imagen pesa demasiado (máx. 3 MB).');
@@ -734,6 +931,17 @@
     } catch (e) {
       if (err) { err.textContent = e.message; err.hidden = false; } else toast(e.message);
     }
+  }
+  async function checkMp3(file) {
+    if (!(file.type === 'audio/mpeg' || /\.mp3$/i.test(file.name))) throw new Error('Usa un archivo MP3.');
+    if (file.size > MAX_AUDIO) throw new Error('El audio pesa demasiado (máx. 25 MB).');
+    await new Promise((ok, ko) => {
+      const a = new Audio(), u = URL.createObjectURL(file), t = setTimeout(() => done(ko), 10000);
+      const done = fn => { clearTimeout(t); a.removeAttribute('src'); a.load(); URL.revokeObjectURL(u); fn(new Error('Este archivo no se puede reproducir. Prueba con otro MP3.')); };
+      a.onloadedmetadata = () => { clearTimeout(t); URL.revokeObjectURL(u); ok(); };
+      a.onerror = () => done(ko);
+      a.preload = 'metadata'; a.src = u;
+    });
   }
   async function publishFile(name, btn) {
     const nw = pending.get(name);
@@ -762,7 +970,7 @@
   function formState() {
     const f = $('#ed');
     if (!f) return null;
-    return JSON.stringify([[...new FormData(f)].filter(([k]) => k !== 'ed-file').map(([k, v]) => [k, typeof v === 'string' ? v : '']), !!editing?.cover]);
+    return JSON.stringify([[...new FormData(f)].filter(([k]) => k !== 'ed-file').map(([k, v]) => [k, typeof v === 'string' ? v : '']), !!editing?.cover, !!editing?.audio, !!editing?.removeAudio]);
   }
   function setDirtyBase(v) { dirtyBase = v; }
   const isDirty = () => !!(editing && dirtyBase !== null && formState() !== dirtyBase) || pending.size > 0;
@@ -786,11 +994,13 @@
     let inner;
     if (editing?.view === 'releases') inner = releaseEditor();
     else if (editing?.view === 'playlists') inner = playlistEditor();
+    else if (editing?.view === 'radio') inner = mixtapeEditor();
+    else if (view === 'radio') inner = radioView();
     else if (view === 'playlists') inner = playlistsView();
     else if (view === 'player' || view === 'brand') inner = filesView(view);
     else inner = releasesView();
     app.innerHTML = shell(inner);
-    const names = { releases: 'Releases', playlists: 'Playlists', player: 'Reproductor', brand: 'Logo' };
+    const names = { releases: 'Releases', radio: 'Radio', playlists: 'Playlists', player: 'Reproductor', brand: 'Logo' };
     document.title = `${editing ? (editing.orig?.title || 'Nuevo') + ' · ' : ''}${names[view] || ''} — Panel HORIZON RCRDS`;
   }
   function busyOn(scope, btn, label) {
@@ -821,7 +1031,7 @@
       drop.prepend(img);
       drop.querySelector('.drop-hint').textContent = 'Cambiar portada';
       if (info) info.innerHTML = coverInfo();
-      if (editing.view === 'releases') setColor(c.color);
+      if (editing.view !== 'playlists') setColor(c.color);
       $('#ed-error').hidden = true;
     } catch (e) {
       if (info) info.textContent = '';
@@ -862,6 +1072,21 @@
         go('releases', { view: 'releases', key: t.dataset.key, orig: repo.releases[index], index, cover: null, px: COVER_PX });
         break;
       }
+      case 'new-mixtape':
+        go('radio', { view: 'radio', key: null, orig: null, index: -1, cover: null, px: COVER_PX });
+        break;
+      case 'edit-mixtape': {
+        const index = repo.mixtapes.findIndex(m => keyOf(m) === t.dataset.key);
+        if (index < 0) return;
+        go('radio', { view: 'radio', key: t.dataset.key, orig: repo.mixtapes[index], index, cover: null, px: COVER_PX });
+        break;
+      }
+      case 'sc-fill': scFill(true); break;
+      case 'mx-remove-audio':
+        if (editing.audio) URL.revokeObjectURL(editing.audio.url);
+        editing.audio = null; editing.removeAudio = true;
+        $('#mx-audio').innerHTML = mixAudioHtml();
+        break;
       case 'new-playlist':
         go('playlists', { view: 'playlists', index: -1, orig: null, cover: null, px: COVER_PX });
         break;
@@ -872,11 +1097,12 @@
         break;
       }
       case 'delete-release':
+      case 'delete-mixtape':
       case 'delete-playlist': {
         const form = $('#ed');
         busyOn(form, t, 'Eliminando…');
         try {
-          const done = await (t.dataset.act === 'delete-release' ? deleteRelease() : deletePlaylist());
+          const done = await (t.dataset.act === 'delete-release' ? deleteRelease() : t.dataset.act === 'delete-mixtape' ? deleteMixtape() : deletePlaylist());
           if (!done) busyOff(form);
         } catch (err) { busyOff(form); showError(err); } finally { busy = false; }
         break;
@@ -900,7 +1126,9 @@
     $('#ed-error').hidden = true;
     busyOn(form, btn, 'Publicando…');
     try {
-      if (editing.view === 'releases') await saveRelease(form); else await savePlaylist(form);
+      if (editing.view === 'releases') await saveRelease(form);
+      else if (editing.view === 'radio') await saveMixtape(form);
+      else await savePlaylist(form);
     } catch (err) {
       busyOff(form);
       showError(err);
@@ -917,6 +1145,8 @@
   document.addEventListener('change', e => {
     const t = e.target;
     if (t.id === 'ed-file' && t.files[0]) { setCover(t.files[0]); t.value = ''; }
+    if (t.id === 'mx-file' && t.files[0]) { setMixAudio(t.files[0]); t.value = ''; }
+    if (t.id === 'f-sc') scFill(!editing?.key);
     if (t.dataset.pick && t.files[0]) { pickFile(t.dataset.pick, t.files[0]); t.value = ''; }
   });
   // Arrastrar y soltar: portada en el editor, archivos en Reproductor/Logo. Fuera de esas zonas no se abre el archivo.

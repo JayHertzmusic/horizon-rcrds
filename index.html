@@ -313,7 +313,7 @@
         border-color   0.38s ease;
     }
     .release-card:hover {
-      transform: scale(1.03) translateY(-5px);
+      transform: translateY(-6px);   /* no scale: scaled text renders blurry */
       box-shadow:
         0 20px 56px rgba(0,0,0,0.75),
         0 0 0 1px rgba(var(--track-color-rgb), 0.45),
@@ -602,7 +602,136 @@
       box-shadow: 0 0 14px rgba(var(--accent-color-rgb), 0.25);
       transform: translateY(-1px);
     }
+
+    /* ── HERO: LATEST RELEASE (protagonist) + LATEST RADIO (floating card) ──
+       Left: the release, big. Right: its cover floating in 3D with the
+       latest radio mixtape stacked on top of the corner. Each block keeps
+       its own colour (the radio card overrides --accent-color locally). */
+    .hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); gap: clamp(40px, 6vw, 96px); align-items: center; }
+    .hero-main .hero-title { font-size: clamp(3.4rem, 7.4vw, 7.6rem); }
+    .hero-main .hero-title.is-fit { white-space: nowrap; word-break: normal; }
+    .hr-artist {
+      font-family: 'Barlow', sans-serif; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.22em;
+      text-transform: uppercase; color: #6b7280; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 22px;
+    }
+    .hr-artist .num-badge { --track-color: var(--accent-color); --track-color-rgb: var(--accent-color-rgb); }
+    .hr-desc { color: #6b7280; font-size: 0.9rem; font-weight: 300; line-height: 1.7; max-width: 30rem; margin-bottom: 26px; }
+    .hero-main .hc-buttons { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 30px; }
+    .hero-main .btn-primary, .hero-main .hc-play { color: var(--card-ink, #000); }
+
+    /* Release player (inline, under the title) */
+    .hc-player { display: flex; align-items: center; gap: 16px; max-width: 30rem; }
+    .hc-player[hidden] { display: none; }
+    .hc-play {
+      flex: none; width: 52px; height: 52px; border-radius: 50%; border: none; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--accent-color); color: var(--card-ink, #000);
+      box-shadow: 0 0 22px rgba(var(--accent-color-rgb), 0.45);
+      transition: transform 0.2s, box-shadow 0.3s, opacity 0.3s;
+    }
+    .hc-play:hover { transform: scale(1.08); box-shadow: 0 0 34px rgba(var(--accent-color-rgb), 0.7); }
+    .hc-play i { font-size: 0.85rem; margin-left: 2px; }
+    .hc-play.is-playing i, .is-link .hc-play i { margin-left: 0; }
+    .hc-play.is-off { opacity: 0.35; cursor: default; }
+    .hc-track { flex: 1; min-width: 0; }
+    .hc-track .waveform { height: 30px; margin-bottom: 8px; overflow: hidden; justify-content: space-between; cursor: pointer; }
+    .hc-track .waveform span {
+      opacity: 0.28; transform-origin: center;
+      animation: wave-breathe 2.6s ease-in-out infinite alternate;
+      animation-delay: calc(var(--i, 0) * -0.11s);
+      transition: opacity 0.15s, height 0.5s ease;
+    }
+    .hc-track .waveform.is-live span { animation: none; transition: opacity 0.15s; }
+    @keyframes wave-breathe { from { transform: scaleY(0.55); } to { transform: scaleY(1); } }
+    @media (prefers-reduced-motion: reduce) { .hc-track .waveform span { animation: none; } }
+    .hc-track .waveform span.on { opacity: 1; box-shadow: 0 0 6px rgba(var(--accent-color-rgb), 0.45); }
+    .hc-track .waveform:hover span { opacity: 0.45; }
+    .hc-track .waveform:hover span.on { opacity: 1; }
+    .hc-progress { cursor: pointer; margin-bottom: 6px; }
+    .hc-progress:focus-visible, .rc-progress:focus-visible { outline: 2px solid var(--accent-color); outline-offset: 6px; }
+    .hc-times { display: flex; justify-content: space-between; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.1em; color: #6b7280; }
+
+    /* Stage: release cover floating in 3D + radio card on top */
+    .hero-stage { position: relative; padding: 0 0 70px 48px; perspective: 1400px; }
+    .stage-tilt { position: relative; transform-style: preserve-3d; transition: transform 0.6s cubic-bezier(.16,1,.3,1); }
+    .stage-cover {
+      position: relative; width: 100%; max-width: 520px; margin-left: auto; aspect-ratio: 1 / 1;
+      border-radius: 14px; overflow: hidden; background: #0d0d0d;
+      transform: rotateY(-9deg) rotateX(4deg) translateZ(0);
+      box-shadow: 0 40px 90px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.05), 0 0 90px -18px rgba(var(--accent-color-rgb), 0.7);
+      animation: stage-float 7s ease-in-out infinite;
+    }
+    .stage-cover img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity 0.6s; }
+    .stage-cover::after {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(115deg, rgba(255,255,255,0.14) 0%, transparent 32%, transparent 70%, rgba(var(--accent-color-rgb), 0.18) 100%);
+    }
+    .stage-fallback {
+      position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 16px;
+      font-family: 'Bebas Neue', sans-serif; font-size: clamp(2rem, 5vw, 3.6rem); letter-spacing: 0.06em; color: #fff;
+      background: linear-gradient(135deg, #141414, #0a0a0a);
+    }
+    .stage-glow {
+      position: absolute; inset: 8% 4% -6% 14%; border-radius: 50%; pointer-events: none; z-index: -1;
+      background: radial-gradient(closest-side, rgba(var(--accent-color-rgb), 0.35), transparent);
+      filter: blur(30px);
+    }
+    @keyframes stage-float {
+      0%, 100% { transform: rotateY(-9deg) rotateX(4deg) translateY(0); }
+      50%      { transform: rotateY(-7deg) rotateX(2deg) translateY(-12px); }
+    }
+
+    .radio-card {
+      position: absolute; left: 0; bottom: 0; z-index: 2;
+      width: min(400px, 84%);
+      display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; align-items: center; gap: 14px;
+      padding: 12px 14px 16px 12px; border-radius: 12px; overflow: hidden;
+      background: rgba(17,17,17,0.82); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(var(--accent-color-rgb), 0.35);
+      box-shadow: 0 26px 60px rgba(0,0,0,0.7), 0 0 40px -10px rgba(var(--accent-color-rgb), 0.55);
+      transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s ease;
+    }
+    .radio-card:hover { transform: translateY(-4px); border-color: rgba(var(--accent-color-rgb), 0.7); box-shadow: 0 30px 70px rgba(0,0,0,0.75), 0 0 54px -8px rgba(var(--accent-color-rgb), 0.7); }
+    .radio-card[hidden] { display: none; }
+    .rc-cover { position: relative; width: 76px; height: 76px; border-radius: 8px; overflow: hidden; background: #0d0d0d; box-shadow: 0 8px 20px rgba(0,0,0,0.5); }
+    .rc-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .rc-body { min-width: 0; }
+    .rc-label { display: flex; align-items: center; gap: 8px; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; color: var(--accent-color); margin-bottom: 4px; }
+    .rc-title { font-family: 'Bebas Neue', sans-serif; font-size: 1.55rem; line-height: 1; letter-spacing: 0.05em; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rc-artist { font-size: 0.66rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: #9ca3af; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rc-link { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: #6b7280; text-decoration: none; transition: color 0.2s; }
+    .rc-link:hover { color: var(--accent-color); }
+    .radio-card .hc-play { width: 46px; height: 46px; }
+    .rc-eq { display: flex; align-items: flex-end; gap: 2px; height: 12px; }
+    .rc-eq span { width: 2px; height: 4px; border-radius: 1px; background: var(--accent-color); }
+    .rc-eq.is-playing span { animation: rc-eq 0.7s ease-in-out infinite alternate; }
+    .rc-eq.is-playing span:nth-child(2) { animation-delay: 0.15s; }
+    .rc-eq.is-playing span:nth-child(3) { animation-delay: 0.3s; }
+    .rc-eq.is-playing span:nth-child(4) { animation-delay: 0.45s; }
+    @keyframes rc-eq { from { height: 3px; } to { height: 12px; } }
+    .rc-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255,255,255,0.06); cursor: pointer; }
+    .rc-progress .progress-fill { height: 100%; }
+    .rc-progress .progress-fill::after { display: none; }
+    .hc-player.is-link .rc-progress, .radio-card.is-link .rc-progress { display: none; }
+
+    @media (max-width: 1023px) {
+      .hero-grid { grid-template-columns: minmax(0, 1fr); gap: 48px; }
+      .hero-stage { order: -1; max-width: 520px; width: 100%; margin: 0 auto; padding: 0 0 56px 24px; }
+    }
+    @media (max-width: 560px) {
+      .hero-stage { padding: 0 0 64px 10px; }
+      .radio-card { width: 92%; grid-template-columns: 60px minmax(0, 1fr) auto; gap: 12px; }
+      .rc-cover { width: 60px; height: 60px; }
+      .rc-title { font-size: 1.3rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .stage-cover, .rc-eq span { animation: none !important; }
+    }
   </style>
+  <!-- Smooth scroll (Lenis, MIT: assets/vendor/LENIS-LICENSE.txt). Desktop mouse/trackpad only. -->
+  <link rel="stylesheet" href="./assets/smooth-scroll.css?v=1"/>
+  <script src="./assets/vendor/lenis.min.js?v=1.3.26" defer></script>
+  <script src="./assets/smooth-scroll.js?v=1" defer></script>
 </head>
 <body>
 
@@ -659,6 +788,7 @@
       <div class="hidden md:flex items-center gap-7">
         <a href="#home"      class="nav-link">Home</a>
         <a href="#releases"  class="nav-link">Releases</a>
+        <a href="#radio"     class="nav-link">Radio</a>
         <a href="#demos"     class="nav-link">Demos</a>
         <a href="#playlists" class="nav-link">Playlists</a>
         <a href="#contact"   class="nav-link">Contact</a>
@@ -684,6 +814,7 @@
     <div class="flex flex-col gap-5 pt-5 px-2">
       <a href="#home"      class="nav-link" onclick="closeMenu()">Home</a>
       <a href="#releases"  class="nav-link" onclick="closeMenu()">Releases</a>
+      <a href="#radio"     class="nav-link" onclick="closeMenu()">Radio</a>
       <a href="#demos"     class="nav-link" onclick="closeMenu()">Demos</a>
       <a href="#playlists" class="nav-link" onclick="closeMenu()">Playlists</a>
       <a href="#contact"   class="nav-link" onclick="closeMenu()">Contact</a>
@@ -694,125 +825,56 @@
 
 
 <!-- ═══════════════════════════════════════
-     HERO — populated dynamically from releases[0]
+     HERO — Latest Release (releases[0]) is the protagonist;
+     Latest Radio (mixtapes[0]) floats on top of its cover.
+     Both are filled by JS and have their own preview player.
 ═══════════════════════════════════════ -->
-<section id="home" class="hero-bg min-h-screen flex flex-col justify-center pt-28 pb-20 px-6 md:px-12 relative overflow-hidden">
+<section id="home" class="hero-bg flex flex-col justify-center pt-28 pb-16 md:pt-32 md:pb-20 px-6 md:px-12 relative overflow-hidden">
   <div style="position:absolute;top:0;left:0;width:1px;height:100%;background:linear-gradient(to bottom,transparent,rgba(var(--accent-color-rgb),0.18),transparent);pointer-events:none;"></div>
-
   <div class="max-w-7xl mx-auto w-full">
-    <div class="grid md:grid-cols-2 gap-16 items-center">
+    <div class="hero-grid">
 
-      <!-- Text column -->
-      <div class="reveal" style="transition-delay:0.1s">
+      <!-- Latest release -->
+      <div id="hero-release" class="hero-main reveal" style="transition-delay:0.1s">
         <div class="label-tag mb-5 flex items-center gap-3">
           <span class="inline-block w-8 h-px accent-line"></span>
           Latest Release
         </div>
-
-        <!-- Title — injected + gradient re-applied by JS -->
-        <div id="hero-title-wrap">
-          <div class="skeleton mb-3" style="height:clamp(3.5rem,11vw,9rem);width:80%;border-radius:6px;"></div>
-        </div>
-
-        <!-- Artist + catalog -->
-        <div id="hero-artist-wrap">
+        <div class="hr-text">
+          <div class="skeleton mb-3" style="height:clamp(3.4rem,7.4vw,7.6rem);width:80%;border-radius:6px;"></div>
           <div class="skeleton mb-6" style="height:1rem;width:40%;"></div>
         </div>
-
-        <!-- Description -->
-        <div id="hero-desc-wrap">
-          <div class="skeleton mb-2" style="height:0.8rem;width:90%;"></div>
-          <div class="skeleton mb-10" style="height:0.8rem;width:70%;"></div>
+        <div class="hc-player" hidden>
+          <button type="button" class="hc-play" aria-label="Play preview"><i class="fa-solid fa-play"></i></button>
+          <div class="hc-track">
+            <div class="waveform hc-wave" aria-hidden="true"><span style="height:10px"></span><span style="height:20px"></span><span style="height:16px"></span><span style="height:26px"></span><span style="height:12px"></span><span style="height:28px"></span><span style="height:18px"></span><span style="height:24px"></span><span style="height:9px"></span><span style="height:22px"></span><span style="height:28px"></span><span style="height:15px"></span><span style="height:26px"></span><span style="height:12px"></span><span style="height:20px"></span><span style="height:27px"></span><span style="height:14px"></span><span style="height:24px"></span><span style="height:28px"></span><span style="height:17px"></span><span style="height:10px"></span><span style="height:25px"></span><span style="height:20px"></span><span style="height:15px"></span><span style="height:22px"></span><span style="height:12px"></span><span style="height:26px"></span><span style="height:18px"></span></div>
+            <div class="progress-track hc-progress" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-fill" style="width:0%;"></div></div>
+            <div class="hc-times"><span class="hc-cur">0:00</span><span class="hc-dur">—:——</span></div>
+          </div>
         </div>
-
-        <!-- Buttons -->
-        <div id="hero-buttons" class="flex flex-wrap gap-4">
-          <div class="skeleton" style="height:48px;width:160px;border-radius:3px;"></div>
-          <div class="skeleton" style="height:48px;width:160px;border-radius:3px;"></div>
-        </div>
+        <div class="hc-buttons"></div>
       </div>
 
-      <!-- Player / cover column -->
-      <div class="reveal" style="transition-delay:0.25s">
-        <div class="player-card p-6">
-
-          <!-- Cover -->
-          <div id="hero-cover-wrap" class="rounded-lg mb-6">
-            <img id="hero-cover-img" src="" alt="" />
-            <div id="hero-cover-fallback">
-              <div style="position:relative;text-align:center;padding:16px;">
-                <div id="hero-cover-text"
-                     style="font-family:'Bebas Neue',sans-serif;font-size:clamp(2rem,6vw,4rem);letter-spacing:0.06em;color:#fff;line-height:1;"></div>
-                <div id="hero-cover-sub"
-                     style="font-size:0.6rem;letter-spacing:0.3em;color:var(--accent-color);margin-top:8px;font-weight:700;"></div>
-              </div>
-            </div>
+      <!-- Cover + latest radio on top -->
+      <div class="hero-stage reveal" style="transition-delay:0.25s">
+        <div class="stage-glow" aria-hidden="true"></div>
+        <div class="stage-tilt" id="hero-stage">
+          <div class="stage-cover" id="hero-cover">
+            <div class="stage-fallback"></div>
+            <img alt="" />
           </div>
-
-          <!-- Track info row -->
-          <div class="flex items-center justify-between mb-5">
-            <div>
-              <div id="player-title"  style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;letter-spacing:0.08em;color:#fff;">—</div>
-              <div id="player-artist" style="font-size:0.68rem;letter-spacing:0.18em;color:#6b7280;font-weight:600;margin-top:2px;">—</div>
-            </div>
-            <div class="flex items-center gap-4">
-              <!-- Rewind — jumps to 0:00 -->
-              <button id="player-rewind-btn"
-                      style="color:#6b7280;font-size:0.9rem;cursor:pointer;background:none;border:none;"
-                      onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent-color')"
-                      onmouseout="this.style.color='#6b7280'"
-                      aria-label="Restart preview">
-                <i class="fa-solid fa-backward-step"></i>
-              </button>
-
-              <!-- Play / Pause — functional -->
-              <button id="player-play-btn"
-                      style="width:42px;height:42px;border-radius:50%;
-                             background:var(--accent-color);color:#000;
-                             display:flex;align-items:center;justify-content:center;
-                             box-shadow:0 0 20px rgba(var(--accent-color-rgb),0.45);
-                             border:none;cursor:pointer;
-                             transition:transform 0.2s,box-shadow 0.3s;"
-                      onmouseover="this.style.transform='scale(1.08)';this.style.boxShadow='0 0 32px rgba(var(--accent-color-rgb),0.65)'"
-                      onmouseout="this.style.transform='scale(1)';this.style.boxShadow='0 0 20px rgba(var(--accent-color-rgb),0.45)'"
-                      aria-label="Play / Pause preview">
-                <i id="player-play-icon" class="fa-solid fa-play" style="font-size:0.75rem;margin-left:2px;"></i>
-              </button>
-
-              <!-- Forward — skips to end / stops -->
-              <button id="player-forward-btn"
-                      style="color:#6b7280;font-size:0.9rem;cursor:pointer;background:none;border:none;"
-                      onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent-color')"
-                      onmouseout="this.style.color='#6b7280'"
-                      aria-label="Skip to end">
-                <i class="fa-solid fa-forward-step"></i>
-              </button>
-            </div>
-          </div>
-
-          <!-- Waveform -->
-          <div id="player-waveform" class="waveform mb-4">
-            <span style="height:12px"></span><span style="height:22px"></span><span style="height:18px"></span><span style="height:30px"></span><span style="height:15px"></span><span style="height:34px"></span><span style="height:20px"></span><span style="height:28px"></span><span style="height:10px"></span><span style="height:26px"></span><span style="height:34px"></span><span style="height:18px"></span><span style="height:30px"></span><span style="height:14px"></span><span style="height:24px"></span><span style="height:32px"></span><span style="height:16px"></span><span style="height:28px"></span><span style="height:34px"></span><span style="height:20px"></span><span style="height:12px"></span><span style="height:30px"></span><span style="height:24px"></span><span style="height:18px"></span><span style="height:28px"></span><span style="height:34px"></span><span style="height:14px"></span><span style="height:22px"></span><span style="height:32px"></span><span style="height:16px"></span><span style="height:26px"></span><span style="height:20px"></span>
-          </div>
-
-          <!-- Progress bar — clickable scrubber -->
-          <div id="player-progress-track" class="progress-track" style="cursor:pointer;">
-            <div id="player-progress-fill" class="progress-fill" style="width:0%;"></div>
-          </div>
-          <div style="display:flex;justify-content:space-between;font-size:0.62rem;color:#6b7280;font-weight:600;letter-spacing:0.1em;margin-bottom:0;">
-            <span id="player-current-time">0:00</span>
-            <span id="player-duration">—:——</span>
-          </div>
-
-          <!-- Platform row -->
-          <div style="margin-top:20px;padding-top:16px;border-top:1px solid #1f1f1f;display:flex;align-items:center;gap:8px;">
-            <span class="pulse-dot"></span>
-            <span style="font-size:0.62rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;">
-              Available on Spotify · SoundCloud · Beatport
-            </span>
-          </div>
-
         </div>
+        <article id="hero-radio" class="radio-card" aria-label="Latest radio mixtape">
+          <div class="rc-cover"><img alt="" /></div>
+          <div class="rc-body">
+            <div class="rc-label"><span class="rc-eq" aria-hidden="true"><span></span><span></span><span></span><span></span></span>Latest Radio</div>
+            <div class="rc-title"><span class="skeleton" style="display:block;height:1.3rem;width:80%;"></span></div>
+            <div class="rc-artist"></div>
+            <a class="rc-link" target="_blank" rel="noopener noreferrer" hidden><i class="fa-brands fa-soundcloud"></i> Full Mix</a>
+          </div>
+          <button type="button" class="hc-play" aria-label="Play preview"><i class="fa-solid fa-play"></i></button>
+          <div class="rc-progress" role="slider" tabindex="0" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="progress-fill" style="width:0%;"></div></div>
+        </article>
       </div>
 
     </div>
@@ -853,6 +915,31 @@
 </section>
 
 <div class="h-px-elec"></div>
+
+
+<!-- ═══════════════════════════════════════
+     RADIO — HORIZON RCRDS Mixtapes (mixtapes.json)
+     Hidden until mixtapes.json loads with at least one mixtape.
+═══════════════════════════════════════ -->
+<section id="radio" class="py-24 px-6 md:px-12" style="background:#0a0a0a;" hidden>
+  <div class="max-w-7xl mx-auto">
+    <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-14 reveal">
+      <div>
+        <div class="section-label mb-3">Horizon Radio</div>
+        <h2 class="section-title">MIXTAPES</h2>
+      </div>
+      <a href="./catalogue.html#radio"
+         style="font-family:'Barlow',sans-serif;font-size:0.68rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #1f1f1f;padding-bottom:2px;transition:color 0.2s,border-color 0.2s;text-decoration:none;"
+         onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent-color');this.style.borderColor=getComputedStyle(document.documentElement).getPropertyValue('--accent-color')"
+         onmouseout="this.style.color='#6b7280';this.style.borderColor='#1f1f1f'">
+        View Full Catalogue →
+      </a>
+    </div>
+    <div id="radio-grid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-5"></div>
+  </div>
+</section>
+
+<div class="h-px-elec" id="radio-divider" hidden></div>
 
 
 <!-- ═══════════════════════════════════════
@@ -976,6 +1063,7 @@
           <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:var(--accent-color);margin-bottom:14px;">Label</div>
           <div class="flex flex-col gap-3">
             <a href="#releases"  style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Releases</a>
+            <a href="#radio"     style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Radio</a>
             <a href="#demos"     style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Demos</a>
             <a href="#playlists" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Playlists</a>
           </div>
@@ -1148,68 +1236,223 @@ function streamIcon(url, iconClass, extraClass, label) {
 }
 
 /* ════════════════════════════════════════════════
-   POPULATE HERO  (releases[0])
+   HERO  — release (releases[0]) + radio (mixtapes[0])
 ════════════════════════════════════════════════ */
+function safeColor(c) {
+  return (c && /^#[0-9a-fA-F]{3,6}$/.test(String(c).trim())) ? String(c).trim() : '#ffffff';
+}
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+/* Dark text on light colours, white on dark ones */
+function inkFor(hex) {
+  const c = hexToRgb(hex) || { r: 255, g: 255, b: 255 };
+  return (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) > 150 ? '#000' : '#fff';
+}
+function setImage(img, fallback, file, alt) {
+  if (!file) { img.style.display = 'none'; return; }
+  img.alt = alt;
+  img.onload  = () => { img.style.opacity = '1'; if (fallback) fallback.style.display = 'none'; };
+  img.onerror = () => { img.style.display = 'none'; if (fallback) fallback.style.display = 'flex'; };
+  img.src = imgPath(file);
+}
+
 function populateHero(r) {
-  const color = (r.color && /^#[0-9a-fA-F]{3,6}$/.test(r.color.trim())) ? r.color.trim() : '#ffffff';
+  const color = safeColor(r.color);
+  applyAccentColor(color);   /* the whole page takes the latest release colour */
+  const box = document.getElementById('hero-release');
+  box.style.setProperty('--card-ink', inkFor(color));
 
-  /* 1. Apply dynamic color to entire page */
-  applyAccentColor(color);
-
-  /* 2. Title */
-  document.getElementById('hero-title-wrap').innerHTML =
-    `<h1 class="hero-title mb-3">${r.title || 'UNTITLED'}</h1>`;
-  /* Re-apply gradient NOW that the element exists in the DOM */
+  const cat = r.catalog_number || r.catalog;
+  box.querySelector('.hr-text').innerHTML =
+    `<h1 class="hero-title mb-3">${escHtml(r.title || 'UNTITLED')}</h1>
+     <p class="hr-artist">${r.artist ? `<span>${escHtml(r.artist)}</span>` : ''}${cat ? `<span class="num-badge">${escHtml(cat)}</span>` : ''}</p>
+     ${r.description ? `<p class="hr-desc">${escHtml(r.description)}</p>` : ''}`;
   applyTitleGradient(color);
+  fitHeroTitle();
 
-  /* 3. Artist + catalog badge */
-  const cat = r.catalog_number
-    ? `<span class="num-badge" style="margin-left:12px;color:${color};background:rgba(${rgbStr(color)},0.1);border-color:rgba(${rgbStr(color)},0.25);">${r.catalog_number}</span>` : '';
-  document.getElementById('hero-artist-wrap').innerHTML =
-    `<p style="font-family:'Barlow',sans-serif;font-size:0.8rem;font-weight:600;letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;display:flex;align-items:center;gap:4px;flex-wrap:wrap;margin-bottom:24px;">
-       ${r.artist || ''}${cat}
-     </p>`;
+  const btns = [];
+  if (r.stream_link)  btns.push(`<a href="${escHtml(r.stream_link)}" target="_blank" rel="noopener noreferrer" class="btn-primary"><i class="fa-solid fa-play" style="font-size:0.65rem;"></i> Stream Now</a>`);
+  if (r.spotify_link) btns.push(`<a href="${escHtml(r.spotify_link)}" target="_blank" rel="noopener noreferrer" class="btn-outline"><i class="fa-brands fa-spotify"></i> Spotify</a>`);
+  box.querySelector('.hc-buttons').innerHTML = btns.join('');
 
-  /* 4. Description */
-  document.getElementById('hero-desc-wrap').innerHTML = r.description
-    ? `<p class="text-gray-500 text-sm font-light leading-relaxed max-w-sm mb-10">${r.description}</p>`
-    : '';
+  const cover = document.getElementById('hero-cover');
+  cover.querySelector('.stage-fallback').textContent = r.title || '';
+  setImage(cover.querySelector('img'), cover.querySelector('.stage-fallback'), r.image, `${r.title || ''} cover`);
 
-  /* 5. Buttons */
-  const streamBtn = r.stream_link
-    ? `<a href="${r.stream_link}" target="_blank" rel="noopener noreferrer" class="btn-primary">
-         <i class="fa-solid fa-play" style="font-size:0.65rem;"></i> Stream Now
-       </a>` : '';
-  const spotifyBtn = r.spotify_link
-    ? `<a href="${r.spotify_link}" target="_blank" rel="noopener noreferrer" class="btn-outline">
-         <i class="fa-brands fa-spotify"></i> Spotify
-       </a>` : '';
-  document.getElementById('hero-buttons').innerHTML = streamBtn + spotifyBtn;
+  const p = box.querySelector('.hc-player');
+  bindPlayer({
+    box: p, btn: p.querySelector('.hc-play'), wave: p.querySelector('.hc-wave'),
+    track: p.querySelector('.hc-progress'), cur: p.querySelector('.hc-cur'), dur: p.querySelector('.hc-dur'),
+  }, './assets/release_preview.mp3', r.title);
+  fillWave(p.querySelector('.hc-wave'));
+  /* Real waveform shape once the page has settled (also warms the audio cache) */
+  const later = window.requestIdleCallback || (fn => setTimeout(fn, 1500));
+  later(() => analyseWave(p.querySelector('.hc-wave'), './assets/release_preview.mp3'));
+}
 
-  /* 6. Mini player labels */
-  document.getElementById('player-title').textContent  = r.title  || '—';
-  document.getElementById('player-artist').textContent = r.artist || '—';
-  if (r.stream_link) document.getElementById('player-play-btn').href = r.stream_link;
+function populateRadioHero(m) {
+  const card = document.getElementById('hero-radio');
+  const color = safeColor(m.color);
+  card.style.setProperty('--accent-color', color);
+  card.style.setProperty('--accent-color-rgb', rgbStr(color));
+  card.style.setProperty('--card-ink', inkFor(color));
+  const name = m.number ? `Horizon Mixtape ${m.number}` : (m.title || 'Horizon Mixtape');
+  card.querySelector('.rc-title').textContent = name;
+  fitRadioTitle();
+  card.querySelector('.rc-artist').textContent = m.artist ? `with ${m.artist}` : 'HORIZON RCRDS';
+  setImage(card.querySelector('.rc-cover img'), null, m.image, `${name} cover`);
+  const link = card.querySelector('.rc-link');
+  if (m.soundcloud_link) { link.href = m.soundcloud_link; link.hidden = false; }
+  bindPlayer({
+    box: card, btn: card.querySelector('.hc-play'), wave: card.querySelector('.rc-eq'),
+    track: card.querySelector('.rc-progress'),
+  }, m.preview ? imgPath(m.preview) : '', name, m.soundcloud_link);
+}
 
-  /* 7. Cover image */
-  const img      = document.getElementById('hero-cover-img');
-  const fallback = document.getElementById('hero-cover-fallback');
-
-  if (r.image) {
-    img.alt    = `${r.title || ''} cover`;
-    img.onload  = () => { img.style.opacity = '1'; fallback.style.display = 'none'; };
-    img.onerror = () => {
-      img.style.display = 'none';
-      fallback.style.display = 'flex';
-      document.getElementById('hero-cover-text').textContent = r.title  || '';
-      document.getElementById('hero-cover-sub').textContent  = (r.artist || '') + ' • HORIZON RCRDS';
-    };
-    img.src = imgPath(r.image);
-  } else {
-    fallback.style.display = 'flex';
-    document.getElementById('hero-cover-text').textContent = r.title  || '';
-    document.getElementById('hero-cover-sub').textContent  = (r.artist || '') + ' • HORIZON RCRDS';
+/* The radio card title shrinks to fit its line (never cut with …) */
+function fitRadioTitle() {
+  const el = document.querySelector('#hero-radio .rc-title');
+  if (!el || !el.clientWidth) return;
+  el.style.fontSize = '';
+  const max = parseFloat(getComputedStyle(el).fontSize);
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const text = range.getBoundingClientRect().width, room = el.clientWidth - 2;
+  if (text > room) el.style.fontSize = Math.max(13, Math.floor(max * room / text * 10) / 10) + 'px';
+}
+/* The release title stays on one line: if it does not fit, the font
+   shrinks (down to 2.4rem); only very long titles wrap. */
+/* Waveform: bars fill the width of the progress bar. Until the audio is
+   analysed they show a soft placeholder; then they take the real shape
+   of the track (loud = tall) and light up as it plays. */
+function fillWave(el) {
+  if (!el || !el.clientWidth) return;
+  const n = Math.max(16, Math.floor((el.clientWidth + 3) / 6));
+  if (el.children.length !== n) {
+    let html = '';
+    for (let i = 0; i < n; i++) html += '<span></span>';
+    el.innerHTML = html;
   }
+  const peaks = el._peaks;
+  [...el.children].forEach((bar, i) => {
+    let h;
+    if (peaks) {
+      const a = Math.floor(i * peaks.length / n), b = Math.max(a + 1, Math.floor((i + 1) * peaks.length / n));
+      let m = 0; for (let k = a; k < b; k++) m = Math.max(m, peaks[k]);
+      h = 4 + Math.round(26 * m);
+    } else {
+      h = 6 + Math.round(8 * Math.abs(Math.sin(i * 0.45)));
+    }
+    bar.style.height = h + 'px';
+    bar.style.setProperty('--i', i);
+    bar.dataset.h = h;
+  });
+  if (el._progress != null) lightWave(el, el._progress);
+}
+function lightWave(el, pct) {
+  el._progress = pct;
+  const n = el.children.length, upto = Math.round(pct / 100 * n);
+  for (let i = 0; i < n; i++) el.children[i].classList.toggle('on', i < upto);
+}
+/* Live bars while playing: each bar follows one frequency band of the
+   music, scaled by the track shape at that point. */
+function liveWave(el, audio) {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC || matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
+  let ctx, analyser, data, raf = 0;
+  const frame = () => {
+    analyser.getByteFrequencyData(data);
+    const bars = el.children, n = bars.length, usable = Math.floor(data.length * 0.72);
+    for (let i = 0; i < n; i++) {
+      /* low frequencies in the middle, highs to the sides: looks like a pulse */
+      const d = Math.abs(i - (n - 1) / 2) / ((n - 1) / 2);
+      const level = data[Math.min(usable - 1, Math.floor(d * usable))] / 255;
+      const base = Number(bars[i].dataset.h) || 14;
+      bars[i].style.height = Math.max(3, Math.round(base * (0.25 + 0.95 * level))) + 'px';
+    }
+    raf = requestAnimationFrame(frame);
+  };
+  return {
+    start() {
+      try {
+        if (!ctx) {
+          ctx = new AC();
+          analyser = ctx.createAnalyser();
+          analyser.fftSize = 128;
+          analyser.smoothingTimeConstant = 0.78;
+          ctx.createMediaElementSource(audio).connect(analyser);
+          analyser.connect(ctx.destination);
+          data = new Uint8Array(analyser.frequencyBinCount);
+        }
+        if (ctx.state === 'suspended') ctx.resume();
+      } catch (err) { console.warn('[HORIZON RCRDS] Live waveform off:', err.message); return; }
+      el.classList.add('is-live');
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(frame);
+    },
+    stop() {
+      cancelAnimationFrame(raf);
+      el.classList.remove('is-live');
+      [...el.children].forEach(b => { if (b.dataset.h) b.style.height = b.dataset.h + 'px'; });
+    },
+  };
+}
+/* Reads the audio once and keeps 400 peaks (0..1) */
+async function analyseWave(el, src) {
+  if (!el || el._peaks || el._analysing || !(window.AudioContext || window.webkitAudioContext)) return;
+  el._analysing = true;
+  try {
+    const buf = await (await fetch(src)).arrayBuffer();
+    const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    const ctx = new Ctx(1, 44100, 44100);
+    const audio = await new Promise((ok, ko) => { const p = ctx.decodeAudioData(buf, ok, ko); if (p && p.catch) p.catch(ko); });
+    const data = audio.getChannelData(0), N = 400, step = Math.max(1, Math.floor(data.length / N));
+    const peaks = new Array(N).fill(0);
+    let top = 0;
+    for (let i = 0; i < N; i++) {
+      let sum = 0;
+      for (let k = i * step, end = Math.min(data.length, k + step); k < end; k += 16) sum += data[k] * data[k];
+      peaks[i] = Math.sqrt(sum / (step / 16));
+      top = Math.max(top, peaks[i]);
+    }
+    const low = Math.min(...peaks);
+    el._peaks = top > low ? peaks.map(v => Math.pow((v - low) / (top - low), 1.3)) : null;
+    fillWave(el);
+  } catch (err) {
+    console.warn('[HORIZON RCRDS] Waveform not available:', err.message);
+  }
+}
+function fitHeroTitle() {
+  const el = document.querySelector('#hero-release .hero-title');
+  if (!el) return;
+  el.style.fontSize = '';
+  el.classList.add('is-fit');
+  const max = parseFloat(getComputedStyle(el).fontSize);
+  const min = 2.4 * parseFloat(getComputedStyle(document.documentElement).fontSize);
+  const room = el.parentElement.clientWidth;
+  let size = max;
+  if (el.scrollWidth > room) size = Math.max(min, Math.floor(max * room / el.scrollWidth));
+  el.style.fontSize = size + 'px';
+  if (el.scrollWidth > room) { el.classList.remove('is-fit'); el.style.fontSize = ''; }
+}
+let fitTimer = 0;
+window.addEventListener('resize', () => {
+  clearTimeout(fitTimer);
+  fitTimer = setTimeout(() => { fitHeroTitle(); fitRadioTitle(); fillWave(document.querySelector('#hero-release .hc-wave')); }, 120);
+});
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { fitHeroTitle(); fitRadioTitle(); });
+
+/* Cover follows the mouse a little (desktop only, not with reduced motion) */
+function initStageTilt() {
+  const stage = document.querySelector('.hero-stage'), tilt = document.getElementById('hero-stage');
+  if (!stage || !tilt || !matchMedia('(hover: hover) and (pointer: fine)').matches || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  stage.addEventListener('pointermove', e => {
+    const r = stage.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width - 0.5, y = (e.clientY - r.top) / r.height - 0.5;
+    tilt.style.transform = `rotateY(${x * 10}deg) rotateX(${-y * 8}deg)`;
+  });
+  stage.addEventListener('pointerleave', () => { tilt.style.transform = ''; });
 }
 
 /* ════════════════════════════════════════════════
@@ -1237,8 +1480,9 @@ function buildCard(r, delay) {
   card.style.setProperty('--track-color-rgb', colorRgb);
 
   /* Catalog badge */
-  const catBadge = r.catalog_number
-    ? `<span class="num-badge">${r.catalog_number}</span>` : '';
+  const catNo = r.catalog_number || r.catalog;
+  const catBadge = catNo
+    ? `<span class="num-badge">${catNo}</span>` : '';
 
   /* Three stream icons: generic link · Spotify · SoundCloud */
   const icons =
@@ -1351,17 +1595,8 @@ async function loadReleases() {
   } catch (err) {
     console.error('[HORIZON RCRDS] Failed to load releases.json:', err);
 
-    document.getElementById('hero-title-wrap').innerHTML =
-      '<h1 class="hero-title mb-3" style="font-size:clamp(1.8rem,5vw,3.5rem);-webkit-text-fill-color:#374151;background:none;color:#374151;">releases.json<br/>not found</h1>';
-    document.getElementById('hero-artist-wrap').innerHTML = '';
-    document.getElementById('hero-desc-wrap').innerHTML =
-      `<p style="font-size:0.8rem;color:#4b5563;line-height:1.7;margin-bottom:40px;">
-         Place <code style="color:var(--accent-color);">releases.json</code> next to
-         <code style="color:var(--accent-color);">index.html</code> and artwork inside
-         <code style="color:var(--accent-color);">./assets/</code>.<br/>
-         Check the browser console for details.
-       </p>`;
-    document.getElementById('hero-buttons').innerHTML = '';
+    document.querySelector('#hero-release .hr-text').innerHTML =
+      '<p class="error-state">Could not load releases — check the browser console.</p>';
     document.getElementById('releases-grid').innerHTML =
       '<p class="error-state" style="grid-column:1/-1;">Could not load releases — check the browser console.</p>';
   }
@@ -1477,164 +1712,201 @@ async function loadPlaylists() {
 }
 
 /* ════════════════════════════════════════════════
-   AUDIO PREVIEW PLAYER
-   Loads ./assets/release_preview.mp3 once the
-   page is ready.  Controls:
-     #player-play-btn     → play / pause toggle
-     #player-rewind-btn   → seek to 0:00
-     #player-forward-btn  → seek to end (triggers ended)
-     #player-progress-track → click to scrub
-   Updates:
-     #player-progress-fill  width %
-     #player-current-time   elapsed mm:ss
-     #player-duration        total  mm:ss
-     #player-waveform        .is-playing class
-     #player-play-icon       fa-play ↔ fa-pause
+   PREVIEW PLAYERS — one per hero card
+   Only one plays at a time. Controls: play/pause,
+   click or arrow keys on the progress bar to seek.
+   Release: ./assets/release_preview.mp3
+   Radio:   mixtapes[0].preview (./assets/…)
 ════════════════════════════════════════════════ */
-(function initAudioPlayer() {
-  /* ── Helpers ── */
-  function fmtTime(sec) {
-    if (!isFinite(sec) || sec < 0) return '0:00';
-    const m = Math.floor(sec / 60);
-    const s = Math.floor(sec % 60);
-    return `${m}:${s.toString().padStart(2, '0')}`;
+const heroPlayers = [];
+function fmtTime(sec) {
+  if (!isFinite(sec) || sec < 0) return '0:00';
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+/* ui: { box, btn, wave?, track?, cur?, dur? }  ·  src: preview clip  ·  link: fallback when there is no clip */
+function bindPlayer(ui, src, title, link) {
+  const { box, btn } = ui;
+  const icon = btn.querySelector('i');
+  if (!src) {
+    /* No preview clip: the button opens the full mix instead */
+    if (!link) { if (box.classList.contains('hc-player')) box.hidden = true; else btn.hidden = true; return; }
+    box.hidden = false;
+    box.classList.add('is-link');
+    icon.className = 'fa-brands fa-soundcloud';
+    btn.setAttribute('aria-label', `Listen on SoundCloud — ${title || ''}`);
+    btn.addEventListener('click', () => window.open(link, '_blank', 'noopener,noreferrer'));
+    return;
   }
+  box.hidden = false;
+  const fill = ui.track && ui.track.querySelector('.progress-fill');
+  const audio = new Audio();
+  const isWave = !!(ui.wave && ui.wave.classList.contains('hc-wave'));
+  audio.preload = 'metadata';
+  audio.src = src;
+  btn.setAttribute('aria-label', `Play preview — ${title || ''}`);
 
-  /* ── DOM refs (grabbed lazily after DOMContentLoaded) ── */
-  let audio, playBtn, playIcon, waveform,
-      progressFill, progressTrack,
-      currentTimeEl, durationEl,
-      rewindBtn, forwardBtn;
+  const setPlaying = playing => {
+    icon.className = playing ? 'fa-solid fa-pause' : 'fa-solid fa-play';
+    btn.classList.toggle('is-playing', playing);
+    if (ui.wave) ui.wave.classList.toggle('is-playing', playing);
+    btn.setAttribute('aria-label', `${playing ? 'Pause' : 'Play'} preview — ${title || ''}`);
+  };
+  const tick = () => {
+    const pct = isFinite(audio.duration) && audio.duration ? (audio.currentTime / audio.duration) * 100 : 0;
+    if (fill) fill.style.width = pct + '%';
+    if (ui.track) ui.track.setAttribute('aria-valuenow', Math.round(pct));
+    if (ui.cur) ui.cur.textContent = fmtTime(audio.currentTime);
+    if (ui.wave && ui.wave.classList.contains('hc-wave')) lightWave(ui.wave, pct);
+  };
+  audio.addEventListener('loadedmetadata', () => { if (ui.dur) ui.dur.textContent = fmtTime(audio.duration); });
+  audio.addEventListener('timeupdate', tick);
+  let live = null;
+  audio.addEventListener('play',  () => setPlaying(true));
+  audio.addEventListener('pause', () => { setPlaying(false); if (live) live.stop(); });
+  audio.addEventListener('ended', () => { audio.currentTime = 0; tick(); setPlaying(false); });
+  audio.addEventListener('error', () => {
+    console.warn('[HORIZON RCRDS] Preview could not load:', src);
+    btn.classList.add('is-off'); btn.title = 'Preview not available';
+    setPlaying(false);
+  });
 
-  function grabRefs() {
-    playBtn       = document.getElementById('player-play-btn');
-    playIcon      = document.getElementById('player-play-icon');
-    waveform      = document.getElementById('player-waveform');
-    progressFill  = document.getElementById('player-progress-fill');
-    progressTrack = document.getElementById('player-progress-track');
-    currentTimeEl = document.getElementById('player-current-time');
-    durationEl    = document.getElementById('player-duration');
-    rewindBtn     = document.getElementById('player-rewind-btn');
-    forwardBtn    = document.getElementById('player-forward-btn');
-  }
-
-  /* ── State helpers ── */
-  function setPlayingState(playing) {
-    if (!playIcon || !waveform) return;
-    if (playing) {
-      playIcon.classList.replace('fa-play', 'fa-pause');
-      playIcon.style.marginLeft = '0';          /* pause icon is symmetric */
-      waveform.classList.add('is-playing');
+  btn.addEventListener('click', () => {
+    if (btn.classList.contains('is-off')) return;
+    if (audio.paused) {
+      if (isWave) {
+        analyseWave(ui.wave, src);
+        if (!live) live = liveWave(ui.wave, audio);
+        if (live) live.start();   /* inside the click: browsers only allow audio here */
+      }
+      heroPlayers.forEach(p => { if (p !== audio) p.pause(); });   /* one at a time */
+      audio.play().catch(err => { console.warn('[HORIZON RCRDS] Playback blocked:', err.message); setPlaying(false); });
     } else {
-      playIcon.classList.replace('fa-pause', 'fa-play');
-      playIcon.style.marginLeft = '2px';        /* nudge play icon visually */
-      waveform.classList.remove('is-playing');
+      audio.pause();
     }
-  }
-
-  function updateProgress() {
-    if (!audio || !isFinite(audio.duration)) return;
-    const pct = (audio.currentTime / audio.duration) * 100;
-    if (progressFill)  progressFill.style.width  = pct + '%';
-    if (currentTimeEl) currentTimeEl.textContent  = fmtTime(audio.currentTime);
-  }
-
-  /* ── Init — called from DOMContentLoaded ── */
-  function init() {
-    grabRefs();
-    if (!playBtn) return;   /* player not in DOM (shouldn't happen) */
-
-    /* Create Audio object — browser won't start downloading until play() */
-    audio = new Audio('./assets/release_preview.mp3');
-    audio.preload = 'metadata';  /* fetch duration only */
-
-    /* Show total duration once metadata is ready */
-    audio.addEventListener('loadedmetadata', () => {
-      if (durationEl) durationEl.textContent = fmtTime(audio.duration);
-    });
-
-    /* Live progress tick */
-    audio.addEventListener('timeupdate', updateProgress);
-
-    /* Reset at end */
-    audio.addEventListener('ended', () => {
-      audio.currentTime = 0;
-      setPlayingState(false);
-      if (progressFill)  progressFill.style.width = '0%';
-      if (currentTimeEl) currentTimeEl.textContent = '0:00';
-    });
-
-    /* Handle load errors gracefully — hide the play button */
-    audio.addEventListener('error', () => {
-      console.warn('[HORIZON RCRDS] release_preview.mp3 not found or could not load.');
-      if (playBtn) playBtn.style.opacity = '0.35';
-      if (playBtn) playBtn.title = 'Preview not available';
-    });
-
-    /* ── Play / Pause ── */
-    playBtn.addEventListener('click', () => {
-      if (audio.readyState === 0) {
-        /* Trigger actual load on first interaction */
-        audio.load();
-      }
-      if (audio.paused) {
-        audio.play().catch(err => {
-          /* Autoplay policy — let user try again */
-          console.warn('[HORIZON RCRDS] Playback blocked:', err.message);
-        });
-        setPlayingState(true);
-      } else {
-        audio.pause();
-        setPlayingState(false);
-      }
-    });
-
-    /* ── Rewind ── */
-    rewindBtn && rewindBtn.addEventListener('click', () => {
-      audio.currentTime = 0;
-      updateProgress();
-      if (!audio.paused) return; /* keep playing if it was */
-      setPlayingState(false);
-    });
-
-    /* ── Forward / skip to end ── */
-    forwardBtn && forwardBtn.addEventListener('click', () => {
-      if (isFinite(audio.duration)) {
-        audio.currentTime = audio.duration;
-      } else {
-        audio.pause();
-        setPlayingState(false);
-      }
-    });
-
-    /* ── Click-to-scrub on progress track ── */
-    progressTrack && progressTrack.addEventListener('click', (e) => {
+  });
+  if (ui.track) {
+    const seek = pct => {
       if (!isFinite(audio.duration)) return;
-      const rect = progressTrack.getBoundingClientRect();
-      const pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      audio.currentTime = pct * audio.duration;
-      updateProgress();
+      audio.currentTime = Math.max(0, Math.min(1, pct)) * audio.duration;
+      tick();
+    };
+    ui.track.addEventListener('click', e => {
+      const rect = ui.track.getBoundingClientRect();
+      seek((e.clientX - rect.left) / rect.width);
     });
-
-    /* Pause audio when page becomes hidden (tab switch / minimize) */
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && !audio.paused) {
-        audio.pause();
-        setPlayingState(false);
-      }
+    if (ui.wave && ui.wave.classList.contains('hc-wave')) ui.wave.addEventListener('click', e => {
+      const rect = ui.wave.getBoundingClientRect();
+      seek((e.clientX - rect.left) / rect.width);
+    });
+    ui.track.addEventListener('keydown', e => {
+      if (!isFinite(audio.duration)) return;
+      const step = 5 / audio.duration, now = audio.currentTime / audio.duration;
+      if (e.key === 'ArrowRight') { seek(now + step); e.preventDefault(); }
+      if (e.key === 'ArrowLeft')  { seek(now - step); e.preventDefault(); }
     });
   }
+  heroPlayers.push(audio);
+}
+/* Pause everything when the tab is hidden */
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) heroPlayers.forEach(p => p.pause());
+});
 
-  /* Hook into DOMContentLoaded — runs alongside loadReleases / loadPlaylists */
-  document.addEventListener('DOMContentLoaded', init);
-})();
+/* ════════════════════════════════════════════════
+   RADIO — mixtapes.json
+   ─────────────────────────────────────────────
+   [
+     {
+       "id":              "mix005",
+       "number":          "#005",
+       "title":           "HORIZON RCRDS Mixtape #005",
+       "artist":          "Guest artist",
+       "image":           "mix005.jpg",      ← filename in ./assets/
+       "color":           "#ff6600",
+       "preview":         "mix005.mp3",      ← short clip in ./assets/ (optional)
+       "soundcloud_link": "https://soundcloud.com/..."
+     },
+     ...  (most recent first)
+   ]
+════════════════════════════════════════════════ */
+function buildRadioCard(m, delay) {
+  const card = document.createElement('div');
+  card.className = 'release-card reveal';
+  card.style.transitionDelay = delay + 's';
+  const color = safeColor(m.color);
+  card.style.setProperty('--track-color', color);
+  card.style.setProperty('--track-color-rgb', rgbStr(color));
+  const name = m.number ? `Horizon Mixtape ${m.number}` : (m.title || 'Horizon Mixtape');
+  card.innerHTML = `
+    <div class="card-cover">
+      <div class="cover-fallback">${escHtml(m.artist || name)}</div>
+      ${m.image ? `<img src="${escHtml(imgPath(m.image))}" alt="${escHtml(name)} cover" loading="lazy" />` : ''}
+      <div class="card-play-overlay">
+        <i class="fa-brands fa-soundcloud" style="color:#fff;font-size:1.8rem;opacity:0.95;filter:drop-shadow(0 0 8px rgba(${rgbStr(color)},0.7));pointer-events:none;"></i>
+      </div>
+    </div>
+    <div class="card-body">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+        <div>
+          <p style="font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:0.06em;color:#fff;line-height:1.2;">${escHtml(name)}</p>
+          <p style="font-size:0.68rem;font-weight:600;letter-spacing:0.14em;color:#6b7280;text-transform:uppercase;margin-top:4px;">${escHtml(m.artist || '')}</p>
+        </div>
+        <span class="num-badge">Radio</span>
+      </div>
+    </div>
+    ${m.soundcloud_link ? `<div class="card-footer">${streamIcon(m.soundcloud_link, 'fa-brands fa-soundcloud', 'soundcloud', 'SoundCloud')}</div>` : ''}
+  `;
+  const imgEl = card.querySelector('img');
+  if (imgEl) {
+    const fb = card.querySelector('.cover-fallback');
+    imgEl.onload  = () => { imgEl.style.opacity = '1'; if (fb) fb.style.display = 'none'; };
+    imgEl.onerror = () => { imgEl.style.display = 'none'; if (fb) fb.style.display = 'flex'; };
+  }
+  if (m.soundcloud_link) {
+    card.style.cursor = 'pointer';
+    card.addEventListener('click', e => {
+      if (e.target.closest('a')) return;
+      window.open(m.soundcloud_link, '_blank', 'noopener,noreferrer');
+    });
+  }
+  return card;
+}
+
+async function loadRadio() {
+  const heroCard = document.getElementById('hero-radio');
+  try {
+    const res = await fetch('./mixtapes.json');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!Array.isArray(data) || !data.length) throw new Error('no mixtapes yet');
+
+    populateRadioHero(data[0]);
+    const grid = document.getElementById('radio-grid');
+    grid.innerHTML = '';
+    /* Latest 8 here; all of them in catalogue.html#radio */
+    data.slice(0, 8).forEach((m, i) => grid.appendChild(buildRadioCard(m, parseFloat((0.05 * (i % 4)).toFixed(2)))));
+    document.getElementById('radio').hidden = false;
+    document.getElementById('radio-divider').hidden = false;
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.08, rootMargin: '0px 0px -30px 0px' });
+    document.querySelectorAll('#radio .reveal').forEach(el => obs.observe(el));
+  } catch (err) {
+    /* No radio yet: the release card stays alone, centred */
+    console.warn('[HORIZON RCRDS] mixtapes.json not loaded:', err.message);
+    heroCard.hidden = true;
+  }
+}
 
 /* ════════════════════════════════════════════════
    BOOT
 ════════════════════════════════════════════════ */
 document.addEventListener('DOMContentLoaded', () => {
   initReveal();
+  initStageTilt();
   loadReleases();
+  loadRadio();
   loadPlaylists();
 });
 </script>

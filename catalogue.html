@@ -96,6 +96,22 @@
       text-transform: uppercase; color: #4b5563; margin-top: 8px;
     }
 
+    /* ── VIEW TABS: Releases / Radio ── */
+    .cat-tabs { display: flex; gap: 6px; margin-top: 22px; }
+    .cat-tabs[hidden] { display: none; }
+    .cat-tab {
+      font-family: 'Barlow', sans-serif; font-size: 0.68rem; font-weight: 700;
+      letter-spacing: 0.24em; text-transform: uppercase;
+      padding: 9px 18px; border-radius: 3px; cursor: pointer;
+      background: transparent; color: #6b7280; border: 1px solid #1f1f1f;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+    .cat-tab:hover { color: #e5e7eb; border-color: #2a2a2a; }
+    .cat-tab.is-on {
+      color: var(--accent-color); border-color: rgba(var(--accent-color-rgb), 0.45);
+      background: rgba(var(--accent-color-rgb), 0.08);
+    }
+
     /* ── SEARCH / FILTER BAR ── */
     .filter-bar {
       max-width: 1400px; margin: 0 auto;
@@ -155,7 +171,7 @@
                   box-shadow 0.3s, border-color 0.3s;
     }
     .cat-card:hover {
-      transform: translateY(-4px) scale(1.02);
+      transform: translateY(-4px);
       box-shadow: 0 12px 36px rgba(0,0,0,0.7),
                   0 0 0 1px rgba(var(--track-color-rgb), 0.35),
                   0 0 20px -4px rgba(var(--track-color-rgb), 0.2);
@@ -257,6 +273,10 @@
     .fade-in { animation: fadeIn 0.4s ease both; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
   </style>
+  <!-- Smooth scroll (Lenis, MIT: assets/vendor/LENIS-LICENSE.txt). Desktop mouse/trackpad only. -->
+  <link rel="stylesheet" href="./assets/smooth-scroll.css?v=1"/>
+  <script src="./assets/vendor/lenis.min.js?v=1.3.26" defer></script>
+  <script src="./assets/smooth-scroll.js?v=1" defer></script>
 </head>
 <body>
 
@@ -279,6 +299,10 @@
   <div class="page-label">Discography</div>
   <h1 class="page-title">FULL CATALOGUE</h1>
   <p id="release-count" class="page-count">Loading releases…</p>
+  <div id="cat-tabs" class="cat-tabs" role="tablist" aria-label="Catalogue" hidden>
+    <button type="button" class="cat-tab is-on" role="tab" aria-selected="true" data-view="releases">Releases</button>
+    <button type="button" class="cat-tab" role="tab" aria-selected="false" data-view="radio">Radio</button>
+  </div>
 </div>
 
 <!-- FILTER BAR -->
@@ -352,7 +376,7 @@ function buildCatCard(r, idx) {
   const imgSrc   = imgPath(r.image);
   const title    = (r.title  || 'Untitled').replace(/</g, '&lt;');
   const artist   = (r.artist || '').replace(/</g, '&lt;');
-  const cat      = r.catalog_number || '';
+  const cat      = r.catalog_number || r.catalog || '';
 
   const iconStream     = r.stream_link
     ? `<a href="${r.stream_link.replace(/"/g,'&quot;')}" target="_blank" rel="noopener noreferrer"
@@ -398,11 +422,12 @@ function buildCatCard(r, idx) {
     img.onerror = () => { img.style.display = 'none'; if (fb) fb.style.display = 'flex'; };
   }
 
-  /* Click card → stream link */
-  if (r.stream_link) {
+  /* Click card → stream link (mixtapes: SoundCloud) */
+  const openUrl = r.stream_link || r.open_link;
+  if (openUrl) {
     card.addEventListener('click', (e) => {
       if (e.target.closest('a')) return;
-      window.open(r.stream_link, '_blank', 'noopener,noreferrer');
+      window.open(openUrl, '_blank', 'noopener,noreferrer');
     });
   }
 
@@ -411,6 +436,10 @@ function buildCatCard(r, idx) {
 
 /* ── Render filtered list ────────────────────── */
 let allReleases = [];
+let allMixtapes = [];   /* mixtapes.json, mapped to the same card shape */
+let view = location.hash === '#radio' ? 'radio' : 'releases';
+const noun = n => view === 'radio' ? `mixtape${n !== 1 ? 's' : ''}` : `release${n !== 1 ? 's' : ''}`;
+const currentList = () => view === 'radio' ? allMixtapes : allReleases;
 
 function renderGrid(list) {
   const grid  = document.getElementById('catalogue-grid');
@@ -418,14 +447,14 @@ function renderGrid(list) {
   grid.innerHTML = '';
 
   if (!list.length) {
-    grid.innerHTML = '<div class="no-results">No releases found</div>';
-    if (badge) { badge.textContent = '0 releases'; badge.style.display = 'inline'; }
+    grid.innerHTML = `<div class="no-results">No ${noun(0)} found</div>`;
+    if (badge) { badge.textContent = `0 ${noun(0)}`; badge.style.display = 'inline'; }
     return;
   }
 
   list.forEach((r, i) => grid.appendChild(buildCatCard(r, i)));
   if (badge) {
-    badge.textContent  = `${list.length} release${list.length !== 1 ? 's' : ''}`;
+    badge.textContent  = `${list.length} ${noun(list.length)}`;
     badge.style.display = 'inline';
   }
 }
@@ -433,11 +462,11 @@ function renderGrid(list) {
 /* ── Search filter ───────────────────────────── */
 function filterReleases(query) {
   const q = query.toLowerCase().trim();
-  if (!q) return allReleases;
-  return allReleases.filter(r =>
+  if (!q) return currentList();
+  return currentList().filter(r =>
     (r.title  || '').toLowerCase().includes(q) ||
     (r.artist || '').toLowerCase().includes(q) ||
-    (r.catalog_number || '').toLowerCase().includes(q)
+    (r.catalog_number || r.catalog || '').toLowerCase().includes(q)
   );
 }
 
@@ -459,11 +488,26 @@ async function loadCatalogue() {
     /* Apply accent from latest release */
     if (data[0] && data[0].color) applyAccent(data[0].color);
 
-    /* Update page subtitle */
-    const countEl = document.getElementById('release-count');
-    if (countEl) countEl.textContent = `${data.length} release${data.length !== 1 ? 's' : ''} in the catalogue`;
+    /* Radio mixtapes (optional: without mixtapes.json there are no tabs) */
+    try {
+      const mres = await fetch('./mixtapes.json');
+      const mix = mres.ok ? await mres.json() : [];
+      if (Array.isArray(mix) && mix.length) {
+        allMixtapes = mix.map(m => ({
+          title: m.number ? `Horizon Mixtape ${m.number}` : (m.title || 'Horizon Mixtape'),
+          artist: m.artist || '',
+          catalog: 'Radio',
+          image: m.image,
+          color: m.color,
+          soundcloud_link: m.soundcloud_link,
+          open_link: m.soundcloud_link,
+        }));
+        document.getElementById('cat-tabs').hidden = false;
+      }
+    } catch (e) { /* no radio yet */ }
+    if (!allMixtapes.length) view = 'releases';
 
-    renderGrid(allReleases);
+    showView(view);
 
   } catch (err) {
     console.error('[HORIZON RCRDS] catalogue fetch failed:', err);
@@ -471,6 +515,29 @@ async function loadCatalogue() {
       '<div class="no-results">Could not load releases — check the console.</div>';
   }
 }
+
+/* ── Releases / Radio tabs ───────────────────── */
+function showView(v) {
+  view = v === 'radio' && allMixtapes.length ? 'radio' : 'releases';
+  document.querySelectorAll('.cat-tab').forEach(t => {
+    const on = t.dataset.view === view;
+    t.classList.toggle('is-on', on);
+    t.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+  const list = currentList();
+  const countEl = document.getElementById('release-count');
+  if (countEl) countEl.textContent = `${list.length} ${noun(list.length)} in the catalogue`;
+  const input = document.getElementById('search-input');
+  input.placeholder = view === 'radio' ? 'Search mixtape or guest…' : 'Search title or artist…';
+  renderGrid(filterReleases(input.value));
+}
+document.getElementById('cat-tabs').addEventListener('click', e => {
+  const t = e.target.closest('.cat-tab');
+  if (!t) return;
+  history.replaceState(null, '', t.dataset.view === 'radio' ? '#radio' : location.pathname);
+  showView(t.dataset.view);
+});
+window.addEventListener('hashchange', () => showView(location.hash === '#radio' ? 'radio' : 'releases'));
 
 loadCatalogue();
 </script>

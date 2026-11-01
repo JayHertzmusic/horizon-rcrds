@@ -1,0 +1,4 @@
+/* Lenis essentials. Page locks stay with each site's own dialogs and overlays (no lenis-stopped overflow rule). */
+html.lenis,html.lenis body{height:auto}
+.lenis.lenis-smooth{scroll-behavior:auto!important}
+.lenis.lenis-smooth iframe{pointer-events:none}

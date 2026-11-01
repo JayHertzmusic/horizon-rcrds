@@ -1,0 +1,91 @@
+[
+  {
+    "id": "mix010",
+    "number": "#010",
+    "title": "HORIZON RCRDS Mixtape #010",
+    "artist": "Toxic Wraith",
+    "image": "mix010.jpg",
+    "color": "#2e3ed1",
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-010"
+  },
+  {
+    "id": "mix009",
+    "number": "#009",
+    "title": "HORIZON RCRDS Mixtape #009",
+    "artist": "Nune",
+    "image": "mix009.jpg",
+    "color": "#d165c2",
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-mixtape-ep-009"
+  },
+  {
+    "id": "mix008",
+    "number": "#008",
+    "title": "HORIZON RCRDS Mixtape #008",
+    "artist": "Kris m",
+    "image": "mix008.jpg",
+    "color": "#6010d1",
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-episode-008"
+  },
+  {
+    "id": "mix007",
+    "number": "#007",
+    "title": "HORIZON RCRDS Mixtape #007",
+    "artist": "Jaxxinator",
+    "image": "mix007.jpg",
+    "color": "#5e0bd1",
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-episode-007"
+  },
+  {
+    "id": "mix006",
+    "number": "#006",
+    "title": "HORIZON RCRDS Mixtape #006",
+    "artist": "BPRTS",
+    "image": "mix006.jpg",
+    "color": "#d1830b",
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-006"
+  },
+  {
+    "id": "mix005",
+    "number": "#005",
+    "title": "HORIZON RCRDS Mixtape #005",
+    "artist": "Neutro",
+    "image": "mix005.jpg",
+    "color": "#078bd1",
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-mixtape-episode-005"
+  },
+  {
+    "id": "mix004",
+    "number": "#004",
+    "title": "HORIZON RCRDS Mixtape #004",
+    "artist": "CHOKKTAW",
+    "image": "mix004.jpg",
+    "color": "#d12f24",
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-mixtape-episode-004"
+  },
+  {
+    "id": "mix003",
+    "number": "#003",
+    "title": "HORIZON RCRDS Mixtape #003",
+    "artist": "ONE MTRX",
+    "image": "mix003.jpg",
+    "color": "#d11668",
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-mixtape-episode-003"
+  },
+  {
+    "id": "mix002",
+    "number": "#002",
+    "title": "HORIZON RCRDS Mixtape #002",
+    "artist": "Tincho",
+    "image": "mix002.jpg",
+    "color": "#d1262a",
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-002"
+  },
+  {
+    "id": "mix001",
+    "number": "#001",
+    "title": "HORIZON RCRDS Mixtape #001",
+    "image": "mix001.jpg",
+    "color": "#e1e3e3",
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-ep001"
+  }
+]

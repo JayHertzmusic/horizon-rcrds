@@ -157,6 +157,16 @@ input::placeholder, textarea::placeholder { color: #4b5058; }
 }
 .ed-actions .push { margin-left: auto; }
 
+/* Radio */
+.sc-row { display: flex; gap: 10px; }
+.sc-row input { flex: 1; min-width: 0; }
+.sc-info { margin: 0; min-height: 0; }
+.sc-info:empty { display: none; }
+.mx-audio audio { width: 100%; margin-bottom: 6px; }
+.mx-audio .info { margin: 6px 0 4px; }
+.mx-audio .card-actions { margin-top: 8px; }
+.muted { color: var(--faint); font-weight: 600; }
+
 /* Reproductor y logo */
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 440px), 1fr)); gap: 20px; }
 .card { padding: 22px; border: 1px solid var(--line); border-radius: var(--radius); background: rgba(13, 13, 13, .7); transition: border-color .2s; }

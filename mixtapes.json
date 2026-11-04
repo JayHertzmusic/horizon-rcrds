@@ -1,5 +1,15 @@
 [
   {
+    "id": "mix011",
+    "number": "#011",
+    "title": "HORIZON RCRDS Mixtape #011",
+    "artist": "Xenox",
+    "image": "mix011.jpg",
+    "color": "#278dd1",
+    "preview": "mix011.mp3",
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-mixtape-ep-011-w-xenox"
+  },
+  {
     "id": "mix010",
     "number": "#010",
     "title": "HORIZON RCRDS Mixtape #010",

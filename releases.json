@@ -1,5 +1,16 @@
 [
   {
+    "id": "hrz090",
+    "catalog": "HRZ#090",
+    "artist": "N1LL",
+    "title": "All I Need",
+    "image": "hrz090.jpg",
+    "color": "#d17a49",
+    "stream_link": "https://too.fm/vpqypxj",
+    "spotify_link": "https://open.spotify.com/album/5BKpz6tGbcx0Rw92jYgDY5",
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/n1ll-all-i-need"
+  },
+  {
     "id": "hrz089",
     "catalog": "HRZ#089",
     "artist": "Medys Delva",

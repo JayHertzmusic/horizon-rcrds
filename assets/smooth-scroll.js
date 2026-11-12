@@ -9,7 +9,7 @@
   const root = document.documentElement;
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   const desktop = matchMedia('(hover: hover) and (pointer: fine)');
-  const LERP = 0.085; // glide length: lower = longer inertia (Lenis default 0.1)
+  const LERP = 0.12; // glide length: lower = longer inertia (Lenis default 0.1); 0.085 felt sluggish
   // The final stretch brakes with constant deceleration from the point where the glide drops below one pixel per
   // 60 Hz frame (SETTLE_SPEED), i.e. where the hops started; everything before it is Lenis's own glide.
   const SETTLE_SPEED = 60; // px/s

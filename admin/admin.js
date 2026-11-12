@@ -327,6 +327,7 @@
   const HOSTS = {
     spotify: [/^open\.spotify\.com$/, /^spotify\.link$/],
     soundcloud: [/^(www\.|m\.)?soundcloud\.com$/, /^on\.soundcloud\.com$/, /^snd\.sc$/],
+    youtube: [/^(www\.|m\.|music\.)?youtube\.com$/, /^youtu\.be$/],
   };
   function link(form, name, label, hosts, missing = '') {
     const v = String(form.elements[name]?.value ?? '').trim();
@@ -491,6 +492,7 @@
             <div class="field"><label for="f-stream">Stream (smart link)</label><input id="f-stream" name="stream_link" type="url" value="${esc(r.stream_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://"></div>
             <div class="field"><label for="f-spotify">Spotify</label><input id="f-spotify" name="spotify_link" type="url" value="${esc(r.spotify_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://open.spotify.com/…"></div>
             <div class="field"><label for="f-soundcloud">SoundCloud</label><input id="f-soundcloud" name="soundcloud_link" type="url" value="${esc(r.soundcloud_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://soundcloud.com/…"></div>
+            <div class="field"><label for="f-youtube">YouTube</label><input id="f-youtube" name="youtube_link" type="url" value="${esc(r.youtube_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…"></div>
             <div class="field"><label for="f-desc">Descripción</label><textarea id="f-desc" name="description" rows="3" maxlength="400">${esc(r.description || '')}</textarea></div>
           </div>
         </div>
@@ -530,6 +532,7 @@
       stream_link: link(form, 'stream_link', 'Stream', null),
       spotify_link: link(form, 'spotify_link', 'Spotify', HOSTS.spotify),
       soundcloud_link: link(form, 'soundcloud_link', 'SoundCloud', HOSTS.soundcloud),
+      youtube_link: link(form, 'youtube_link', 'YouTube', HOSTS.youtube),
       description: text(form, 'description', 'Descripción', { max: 400 }),
     };
     const color = hex6(form.elements.color.value);
@@ -559,7 +562,7 @@
         entry = { ...list[idx], artist: v.artist, title: v.title, image, color };
         if ('catalog_number' in entry && !('catalog' in entry)) entry.catalog_number = v.catalog; else entry.catalog = v.catalog;
       }
-      for (const k of ['stream_link', 'spotify_link', 'soundcloud_link', 'description']) {
+      for (const k of ['stream_link', 'spotify_link', 'soundcloud_link', 'youtube_link', 'description']) {
         if (v[k]) entry[k] = v[k]; else delete entry[k];
       }
       if (!isNew) list.splice(idx, 1);
@@ -687,6 +690,7 @@
               </div>
               <p class="info sc-info" id="sc-info"></p>
             </div>
+            <div class="field"><label for="f-yt">Enlace de YouTube</label><input id="f-yt" name="youtube_link" type="url" value="${esc(m.youtube_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…"></div>
             <div class="row2">
               <div class="field"><label for="f-title">Título</label><input id="f-title" name="title" value="${esc(m.title || 'HORIZON RCRDS Mixtape ' + number)}" maxlength="120" autocomplete="off"></div>
               <div class="field"><label for="f-number">Nº</label><input id="f-number" name="number" value="${esc(number)}" maxlength="12" autocomplete="off" spellcheck="false"></div>
@@ -783,6 +787,7 @@
       title: text(form, 'title', 'Título', { missing: 'Falta el título.' }),
       number: normNumber(text(form, 'number', 'Nº', { max: 12, missing: 'Falta el número.' })),
       artist: text(form, 'artist', 'Artista invitado', { max: 120 }),
+      youtube_link: link(form, 'youtube_link', 'YouTube', HOSTS.youtube),
     };
     const color = hex6(form.elements.color.value);
     if (!color) throw new FieldError('color', 'Color: escribe un color como #ff68b2.');
@@ -808,6 +813,7 @@
       }
       if (!entry.artist) delete entry.artist;
       if (!entry.preview) delete entry.preview;
+      if (v.youtube_link) entry.youtube_link = v.youtube_link; else delete entry.youtube_link;
       if (!isNew) list.splice(idx, 1);
       list.splice(Math.min(pos - 1, list.length), 0, entry);
       const old = idx >= 0 ? fresh.mixtapes[idx] : {};

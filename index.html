@@ -388,6 +388,8 @@
       border-color: rgba(29,185,84,0.3);
       box-shadow: 0 0 12px rgba(29,185,84,0.2);
     }
+    /* YouTube keeps brand red on hover */
+    .stream-icon.youtube:hover { color: #ff0033; background: rgba(255,0,51,0.1); border-color: rgba(255,0,51,0.3); box-shadow: 0 0 12px rgba(255,0,51,0.2); }
     /* SoundCloud keeps brand orange on hover */
     .stream-icon.soundcloud:hover {
       color: #ff5500;
@@ -712,6 +714,28 @@
     /* ── ANIMATED BACKGROUND (same as the release page): the cover blurred and drifting,
           lights in the release colour, a soft grid and floating particles ── */
     #home { isolation: isolate; }
+    /* While a cover loads you only see a dark square; the text fallback appears only if the image fails */
+    .stage-fallback { display: none; }
+    .card-cover:has(img) .cover-fallback, .playlist-cover:has(img) .playlist-cover-fallback { display: none; }
+    /* Releases and Mixtapes: black base with lights in their colour (latest release / latest mixtape) */
+    .sec-tint { position: relative; overflow: hidden; isolation: isolate; --sec-rgb: var(--accent-color-rgb); }
+    .sec-tint::before {
+      content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+      background:
+        radial-gradient(ellipse 55% 60% at 88% 8%, rgba(var(--sec-rgb), 0.16), transparent 70%),
+        radial-gradient(ellipse 45% 50% at 6% 96%, rgba(var(--sec-rgb), 0.11), transparent 70%),
+        linear-gradient(rgba(var(--sec-rgb), 0.045) 1px, transparent 1px) 0 0 / 48px 48px,
+        linear-gradient(90deg, rgba(var(--sec-rgb), 0.045) 1px, transparent 1px) 0 0 / 48px 48px;
+      -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 12%, #000 88%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0%, #000 12%, #000 88%, transparent 100%);
+    }
+    .sec-tint::after {
+      content: ''; position: absolute; z-index: -1; pointer-events: none; width: 46vmax; height: 46vmax; left: 30%; top: 10%;
+      border-radius: 50%; background: radial-gradient(closest-side, rgba(var(--sec-rgb), 0.12), transparent);
+      will-change: transform; animation: sec-drift 26s ease-in-out infinite alternate;
+    }
+    @keyframes sec-drift { from { transform: translate(-30%, -10%); } to { transform: translate(30%, 25%); } }
+    #radio .section-label { color: rgb(var(--sec-rgb)); }
+    @media (prefers-reduced-motion: reduce) { .sec-tint::after { animation: none; } }
     /* sections off screen pause their animations (see pauseOffscreen) */
     .is-off, .is-off *, .is-off *::before, .is-off *::after { animation-play-state: paused !important; }
 
@@ -913,7 +937,7 @@
       <div class="hidden md:flex items-center gap-7">
         <a href="#home"      class="nav-link">Home</a>
         <a href="#releases"  class="nav-link">Releases</a>
-        <a href="#radio"     class="nav-link">Radio</a>
+        <a href="#radio"     class="nav-link">Mixtapes</a>
         <a href="#demos"     class="nav-link">Demos</a>
         <a href="#playlists" class="nav-link">Playlists</a>
         <a href="#contact"   class="nav-link">Contact</a>
@@ -939,7 +963,7 @@
     <div class="flex flex-col gap-5 pt-5 px-2">
       <a href="#home"      class="nav-link" onclick="closeMenu()">Home</a>
       <a href="#releases"  class="nav-link" onclick="closeMenu()">Releases</a>
-      <a href="#radio"     class="nav-link" onclick="closeMenu()">Radio</a>
+      <a href="#radio"     class="nav-link" onclick="closeMenu()">Mixtapes</a>
       <a href="#demos"     class="nav-link" onclick="closeMenu()">Demos</a>
       <a href="#playlists" class="nav-link" onclick="closeMenu()">Playlists</a>
       <a href="#contact"   class="nav-link" onclick="closeMenu()">Contact</a>
@@ -1011,7 +1035,7 @@
 <!-- ═══════════════════════════════════════
      RELEASES GALLERY
 ═══════════════════════════════════════ -->
-<section id="releases" class="py-24 px-6 md:px-12" style="background:#0a0a0a;">
+<section id="releases" class="sec-tint py-24 px-6 md:px-12" style="background:#0a0a0a;">
   <div class="max-w-7xl mx-auto">
 
     <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-14 reveal">
@@ -1045,11 +1069,11 @@
      RADIO — HORIZON RCRDS Mixtapes (mixtapes.json)
      Hidden until mixtapes.json loads with at least one mixtape.
 ═══════════════════════════════════════ -->
-<section id="radio" class="py-24 px-6 md:px-12" style="background:#0a0a0a;" hidden>
+<section id="radio" class="sec-tint py-24 px-6 md:px-12" style="background:#0a0a0a;" hidden>
   <div class="max-w-7xl mx-auto">
     <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-14 reveal">
       <div>
-        <div class="section-label mb-3">Horizon Radio</div>
+        <div class="section-label mb-3">Guest Sessions</div>
         <h2 class="section-title">MIXTAPES</h2>
       </div>
       <a href="./catalogue.html#radio"
@@ -1168,7 +1192,7 @@
           <div style="font-size:0.6rem;font-weight:700;letter-spacing:0.28em;text-transform:uppercase;color:var(--accent-color);margin-bottom:14px;">Label</div>
           <div class="flex flex-col gap-3">
             <a href="#releases"  style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Releases</a>
-            <a href="#radio"     style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Radio</a>
+            <a href="#radio"     style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Mixtapes</a>
             <a href="#demos"     style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Demos</a>
             <a href="#playlists" style="font-size:0.75rem;color:#6b7280;transition:color 0.2s;text-decoration:none;" onmouseover="this.style.color='#e5e7eb'" onmouseout="this.style.color='#6b7280'">Playlists</a>
           </div>
@@ -1321,7 +1345,8 @@ function initReveal() {
 ════════════════════════════════════════════════ */
 /* Each release has its own page (release.html?id=…); without an id, its stream link */
 function releasePage(r) {
-  return r.id ? `./release.html?id=${encodeURIComponent(r.id)}` : (r.stream_link || '');
+  /* from=home: the release page then offers "Back to home" */
+  return r.id ? `./release.html?id=${encodeURIComponent(r.id)}&from=home` : (r.stream_link || '');
 }
 
 function imgPath(filename) {
@@ -1360,7 +1385,7 @@ function inkFor(hex) {
   return (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) > 150 ? '#000' : '#fff';
 }
 function setImage(img, fallback, file, alt) {
-  if (!file) { img.style.display = 'none'; return; }
+  if (!file) { img.style.display = 'none'; if (fallback) fallback.style.display = 'flex'; return; }
   img.alt = alt;
   img.onload  = () => { img.style.opacity = '1'; if (fallback) fallback.style.display = 'none'; };
   img.onerror = () => { img.style.display = 'none'; if (fallback) fallback.style.display = 'flex'; };
@@ -1398,7 +1423,7 @@ function populateHero(r) {
   if (r.stream_link) rows.push(`
     <a class="platform main" href="${escHtml(r.stream_link)}" target="_blank" rel="noopener noreferrer">
       <span class="ico"><i class="fa-solid fa-link"></i></span>
-      <span><span class="name">All platforms</span><span class="sub">Apple Music, YouTube, Deezer, Tidal &amp; more</span></span>
+      <span><span class="name">All platforms</span><span class="sub">Apple Music, Deezer, Tidal, Amazon &amp; more</span></span>
       <span class="go">Open <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.6rem"></i></span>
     </a>`);
   document.getElementById('hero-platforms').innerHTML = rows.join('');
@@ -1669,7 +1694,8 @@ function buildCard(r, delay) {
   const icons =
     streamIcon(r.stream_link,     'fa-solid fa-arrow-up-right-from-square', '',           'Stream') +
     streamIcon(r.spotify_link,    'fa-brands fa-spotify',                   'spotify',    'Spotify') +
-    streamIcon(r.soundcloud_link, 'fa-brands fa-soundcloud',                'soundcloud', 'SoundCloud');
+    streamIcon(r.soundcloud_link, 'fa-brands fa-soundcloud',                'soundcloud', 'SoundCloud') +
+    streamIcon(r.youtube_link,    'fa-brands fa-youtube',                   'youtube',    'YouTube');
 
   card.innerHTML = `
     <div class="card-cover">
@@ -2041,10 +2067,10 @@ function buildRadioCard(m, delay) {
           <p style="font-family:'Bebas Neue',sans-serif;font-size:1.05rem;letter-spacing:0.03em;color:#fff;line-height:1.2;">${escHtml(name)}</p>
           <p style="font-size:0.68rem;font-weight:600;letter-spacing:0.14em;color:#6b7280;text-transform:uppercase;margin-top:4px;">${escHtml(m.artist || '')}</p>
         </div>
-        <span class="num-badge">Radio</span>
+        <span class="num-badge">Mixtape</span>
       </div>
     </div>
-    ${m.soundcloud_link ? `<div class="card-footer">${streamIcon(m.soundcloud_link, 'fa-brands fa-soundcloud', 'soundcloud', 'SoundCloud')}</div>` : ''}
+    ${m.soundcloud_link || m.youtube_link ? `<div class="card-footer">${streamIcon(m.soundcloud_link, 'fa-brands fa-soundcloud', 'soundcloud', 'SoundCloud')}${streamIcon(m.youtube_link, 'fa-brands fa-youtube', 'youtube', 'YouTube')}</div>` : ''}
   `;
   const imgEl = card.querySelector('img');
   if (imgEl) {
@@ -2071,6 +2097,8 @@ async function loadRadio() {
     if (!Array.isArray(data) || !data.length) throw new Error('no mixtapes yet');
 
     populateRadioHero(data[0]);
+    /* the Mixtapes section takes the colour of the latest mixtape */
+    document.getElementById('radio').style.setProperty('--sec-rgb', rgbStr(safeColor(data[0].color)));
     const grid = document.getElementById('radio-grid');
     grid.innerHTML = '';
     /* Latest 8 here; all of them in catalogue.html#radio */
@@ -2108,9 +2136,11 @@ function buildDemoWall(releases) {
   }
 }
 function fillDemoWall(plane, covers) {
-  /* each column must be at least as tall as the wall, so it never runs out of covers while it moves */
+  /* The wall is tilted, so it needs more columns than fit straight across (otherwise a corner stays empty),
+     and each column must be taller than the wall so it never runs out of covers while it moves. */
   const colW = innerWidth <= 1023 ? 140 : 210, GAP = 18;
-  const COLS = 7, PER = Math.max(5, Math.min(14, Math.ceil(plane.clientHeight / (colW + GAP)) + 1));
+  const COLS = Math.max(7, Math.min(16, Math.ceil(plane.clientWidth * 1.45 / (colW + GAP)) + 1));
+  const PER = Math.max(5, Math.min(16, Math.ceil(plane.clientHeight * 1.35 / (colW + GAP)) + 1));
   let html = '';
   for (let c = 0; c < COLS; c++) {
     const list = [];
@@ -2128,7 +2158,7 @@ function pauseOffscreen(...els) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  pauseOffscreen(document.getElementById('home'), document.getElementById('demos'));
+  pauseOffscreen(document.getElementById('home'), document.getElementById('demos'), document.getElementById('releases'), document.getElementById('radio'));
   initReveal();
   initStageTilt();
   loadReleases();

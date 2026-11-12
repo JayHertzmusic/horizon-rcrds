@@ -239,7 +239,7 @@
       <div class="hidden md:flex items-center gap-7">
         <a href="./index.html#home" class="nav-link">Home</a>
         <a href="./index.html#releases" class="nav-link">Releases</a>
-        <a href="./index.html#radio" class="nav-link">Radio</a>
+        <a href="./index.html#radio" class="nav-link">Mixtapes</a>
         <a href="./index.html#demos" class="nav-link">Demos</a>
         <a href="./index.html#playlists" class="nav-link">Playlists</a>
         <a href="./index.html#contact" class="nav-link">Contact</a>
@@ -253,7 +253,7 @@
     <div class="flex flex-col gap-5 pt-5 px-2">
       <a href="./index.html#home" class="nav-link">Home</a>
       <a href="./index.html#releases" class="nav-link">Releases</a>
-      <a href="./index.html#radio" class="nav-link">Radio</a>
+      <a href="./index.html#radio" class="nav-link">Mixtapes</a>
       <a href="./index.html#demos" class="nav-link">Demos</a>
       <a href="./index.html#playlists" class="nav-link">Playlists</a>
       <a href="./index.html#contact" class="nav-link">Contact</a>
@@ -271,7 +271,7 @@
       <canvas id="bg-particles"></canvas>
     </div>
     <div class="max-w-7xl mx-auto w-full">
-      <a href="./catalogue.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> Full catalogue</a>
+      <a href="./index.html" class="back-link" id="back"><i class="fa-solid fa-arrow-left"></i> <span>Home</span></a>
       <div class="rel-grid" id="rel">
         <div class="stage intro">
           <div class="stage-glow" aria-hidden="true"></div>
@@ -296,18 +296,6 @@
           <div class="share-row"><button type="button" class="btn-outline" id="share"><i class="fa-solid fa-share-nodes"></i> Share</button></div>
         </div>
       </div>
-    </div>
-  </section>
-
-  <div class="h-px-elec"></div>
-
-  <section class="py-24 px-6 md:px-12">
-    <div class="max-w-7xl mx-auto">
-      <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-6 mb-12">
-        <div><div class="section-label mb-3">Discography</div><h2 class="section-title">MORE RELEASES</h2></div>
-        <a href="./catalogue.html" class="nav-link" style="font-size:0.68rem;">View Full Catalogue →</a>
-      </div>
-      <div id="more" class="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-5"></div>
     </div>
   </section>
 
@@ -341,7 +329,29 @@ function inkFor(hex) { const c = hexToRgb(hex) || { r: 255, g: 255, b: 255 }; re
 function escHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch])); }
 function imgPath(f) { if (!f) return ''; if (/^(https?:|\.\/|\/)/.test(f)) return f; return './assets/' + f; }
 function fmtTime(sec) { if (!isFinite(sec) || sec < 0) return '0:00'; return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`; }
-const releaseHref = r => r.id ? `./release.html?id=${encodeURIComponent(r.id)}` : (r.stream_link || '#');
+/* Where the visitor came from (set by the links on the home page and the catalogue): home | catalogue */
+const FROM = (p => p === 'home' || p === 'catalogue' ? p : '')(new URLSearchParams(location.search).get('from'));
+/* links to other releases keep that origin, so "back" still leads to the same place */
+const releaseHref = r => r.id ? `./release.html?id=${encodeURIComponent(r.id)}${FROM ? '&from=' + FROM : ''}` : (r.stream_link || '#');
+
+/* Back link: "Back to home" from the home page, "Back to catalogue" from the catalogue, "Home" otherwise
+   (e.g. a shared link). Coming straight from that page, it goes back in history so the page opens where it was left. */
+(() => {
+  const back = document.getElementById('back');
+  const target = FROM === 'catalogue' ? { href: './catalogue.html', label: 'Back to catalogue', page: /catalogue\.html$/ }
+               : FROM === 'home' ? { href: './index.html#releases', label: 'Back to home', page: /(^|\/)(index\.html)?$/ }
+               : { href: './index.html', label: 'Home', page: null };
+  back.href = target.href;
+  back.querySelector('span').textContent = target.label;
+  back.addEventListener('click', e => {
+    let ref = null;
+    try { ref = document.referrer ? new URL(document.referrer) : null; } catch (err) {}
+    if (target.page && ref && ref.origin === location.origin && target.page.test(ref.pathname) && history.length > 1) {
+      e.preventDefault();
+      history.back();
+    }
+  });
+})();
 
 function applyAccentColor(color) {
   const root = document.documentElement;
@@ -522,7 +532,6 @@ new IntersectionObserver(([e]) => e.target.classList.toggle('is-off', !e.isInter
           <a class="btn-outline" href="./index.html"><i class="fa-solid fa-arrow-left"></i> Home</a>
         </div>
       </div>`;
-    document.getElementById('more').closest('section').hidden = true;
     return;
   }
   if (i < 0) i = 0;
@@ -573,30 +582,20 @@ new IntersectionObserver(([e]) => e.target.classList.toggle('is-off', !e.isInter
   if (r.stream_link) rows.push(`
     <a class="platform main" href="${escHtml(r.stream_link)}" target="_blank" rel="noopener noreferrer">
       <span class="ico" style="--pc:var(--accent-color);--pc-rgb:var(--accent-color-rgb)"><i class="fa-solid fa-link"></i></span>
-      <span><span class="name">All platforms</span><span class="sub">Apple Music, YouTube, Deezer, Tidal &amp; more</span></span>
+      <span><span class="name">All platforms</span><span class="sub">Apple Music, Deezer, Tidal, Amazon &amp; more</span></span>
       <span class="go">Open <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.6rem"></i></span>
     </a>`);
   document.getElementById('platforms').innerHTML = rows.join('');
 
   /* share */
   document.getElementById('share').addEventListener('click', async () => {
-    const data = { title: `${r.artist} — ${r.title}`, text: `${r.title} by ${r.artist} on HORIZON RCRDS`, url: location.href };
+    /* the shared link is the clean one, without "&from=…" */
+    const url = `${location.origin}${location.pathname}?id=${encodeURIComponent(r.id)}`;
+    const data = { title: `${r.artist} — ${r.title}`, text: `${r.title} by ${r.artist} on HORIZON RCRDS`, url };
     if (navigator.share) { try { await navigator.share(data); } catch (e) {} return; }
-    try { await navigator.clipboard.writeText(location.href); } catch (e) {}
+    try { await navigator.clipboard.writeText(data.url); } catch (e) {}
     const t = document.getElementById('toast'); t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800);
   });
-
-  /* more releases: the newer and older ones around this release */
-  const start = Math.min(Math.max(0, i - 2), Math.max(0, releases.length - 5));
-  const near = releases.slice(start, start + 5).filter(x => x !== r).slice(0, 4);
-  document.getElementById('more').innerHTML = near.map((x, k) => {
-    const c = safeColor(x.color), idx = releases.indexOf(x);
-    return `<a class="release-card reveal" href="${escHtml(releaseHref(x))}" style="--track-color:${c};--track-color-rgb:${rgbStr(c)};transition-delay:${k * 0.05}s">
-      <div class="card-cover"><img src="${escHtml(imgPath(x.image))}" alt="${escHtml(x.title)} cover" loading="lazy" /></div>
-      <div class="card-body"><div style="min-width:0"><div class="card-tag">${idx < i ? 'Newer' : 'Older'}</div><p class="card-title">${escHtml(x.title)}</p><p class="card-artist">${escHtml(x.artist)}</p></div>
-      ${x.catalog ? `<span class="num-badge">${escHtml(x.catalog)}</span>` : ''}</div>
-    </a>`;
-  }).join('');
 
   /* cover follows the mouse a little, like on the home page */
   const stage = document.querySelector('.stage'), tilt = document.getElementById('stage');

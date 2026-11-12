@@ -7,7 +7,8 @@
     "image": "mix011.jpg",
     "color": "#278dd1",
     "preview": "mix011.mp3",
-    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-mixtape-ep-011-w-xenox"
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-mixtape-ep-011-w-xenox",
+    "youtube_link": "https://www.youtube.com/watch?v=8CfMqzPC4Wc"
   },
   {
     "id": "mix010",
@@ -17,7 +18,8 @@
     "image": "mix010.jpg",
     "color": "#2e3ed1",
     "preview": "mix010.mp3",
-    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-010"
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-010",
+    "youtube_link": "https://www.youtube.com/watch?v=c8DdyvG_izc"
   },
   {
     "id": "mix009",
@@ -26,7 +28,8 @@
     "artist": "Nune",
     "image": "mix009.jpg",
     "color": "#d165c2",
-    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-mixtape-ep-009"
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-mixtape-ep-009",
+    "youtube_link": "https://www.youtube.com/watch?v=p68nvfwoGCY"
   },
   {
     "id": "mix008",
@@ -35,7 +38,8 @@
     "artist": "Kris m",
     "image": "mix008.jpg",
     "color": "#6010d1",
-    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-episode-008"
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-episode-008",
+    "youtube_link": "https://www.youtube.com/watch?v=vqH36S44Ros"
   },
   {
     "id": "mix007",
@@ -44,7 +48,8 @@
     "artist": "Jaxxinator",
     "image": "mix007.jpg",
     "color": "#5e0bd1",
-    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-episode-007"
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-episode-007",
+    "youtube_link": "https://www.youtube.com/watch?v=KS8VlabsCJM"
   },
   {
     "id": "mix006",
@@ -53,7 +58,8 @@
     "artist": "BPRTS",
     "image": "mix006.jpg",
     "color": "#d1830b",
-    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-006"
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-006",
+    "youtube_link": "https://www.youtube.com/watch?v=CRoR2Pd5QAM"
   },
   {
     "id": "mix005",
@@ -62,7 +68,8 @@
     "artist": "Neutro",
     "image": "mix005.jpg",
     "color": "#078bd1",
-    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-mixtape-episode-005"
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-mixtape-episode-005",
+    "youtube_link": "https://www.youtube.com/watch?v=_uyAiSYqWFY"
   },
   {
     "id": "mix004",
@@ -71,7 +78,8 @@
     "artist": "CHOKKTAW",
     "image": "mix004.jpg",
     "color": "#d12f24",
-    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-mixtape-episode-004"
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-mixtape-episode-004",
+    "youtube_link": "https://www.youtube.com/watch?v=miujBvmg9Xc"
   },
   {
     "id": "mix003",
@@ -80,7 +88,8 @@
     "artist": "ONE MTRX",
     "image": "mix003.jpg",
     "color": "#d11668",
-    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-mixtape-episode-003"
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-mixtape-episode-003",
+    "youtube_link": "https://www.youtube.com/watch?v=JneMK9QjHLI"
   },
   {
     "id": "mix002",
@@ -89,7 +98,8 @@
     "artist": "Tincho",
     "image": "mix002.jpg",
     "color": "#d1262a",
-    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-002"
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-002",
+    "youtube_link": "https://www.youtube.com/watch?v=A4UeyKiByIQ"
   },
   {
     "id": "mix001",
@@ -97,6 +107,7 @@
     "title": "HORIZON RCRDS Mixtape #001",
     "image": "mix001.jpg",
     "color": "#e1e3e3",
-    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-ep001"
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/horizon-rcrds-mixtape-ep001",
+    "youtube_link": "https://www.youtube.com/watch?v=crmP7M97woE"
   }
 ]

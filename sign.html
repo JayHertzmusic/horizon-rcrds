@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Contract — HORIZON RCRDS</title>
+<link rel="icon" type="image/png" href="/assets/favicon_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap">
+<style>
+  :root { --bg: #050505; --line: #1f1f1f; --line-2: #2a2a2a; --text: #e5e7eb; --muted: #8b8f98; --accent: #a78bfa; --accent-rgb: 167, 139, 250; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 400 16px/1.6 'Barlow', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  main { width: min(860px, 100%); margin: 0 auto; padding: 40px 16px 96px; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
+  .home { display: inline-flex; align-items: center; gap: 12px; color: #fff; text-decoration: none; }
+  .home img { height: 32px; }
+  .home span { font: 400 22px/1 'Bebas Neue', sans-serif; letter-spacing: .12em; }
+  .status { padding: 6px 12px; border-radius: 3px; font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; border: 1px solid rgba(var(--accent-rgb), .5); color: var(--accent); }
+  .status.ok { color: #3ddc84; border-color: rgba(61, 220, 132, .5); }
+  h1 { margin: 0 0 6px; font: 400 clamp(36px, 7vw, 56px)/.95 'Bebas Neue', sans-serif; color: #fff; }
+  .sub { margin: 0 0 26px; color: var(--muted); }
+  .doc { padding: clamp(22px, 5vw, 56px); border-radius: 6px; background: #fff; color: #111; font: 400 15px/1.6 Georgia, 'Times New Roman', serif; }
+  .doc h1, .doc h2, .doc h3, .doc h4 { color: #111; font-family: Georgia, serif; line-height: 1.3; }
+  .doc h1 { font-size: 22px; } .doc h2 { font-size: 19px; } .doc h3 { font-size: 17px; }
+  .doc p { margin: 0 0 10px; }
+  .doc .c { text-align: center; }
+  .doc hr { border: 0; border-top: 1px solid #ccc; margin: 14px 0; }
+  .doc table { border-collapse: collapse; width: 100%; margin: 10px 0; }
+  .doc td, .doc th { border: 1px solid #ccc; padding: 6px 8px; vertical-align: top; }
+  .sigblock { margin-top: 26px; padding-top: 18px; border-top: 2px solid #111; }
+  .sigblock h3 { margin: 0 0 8px; font-size: 15px; letter-spacing: .08em; text-transform: uppercase; }
+  .sigblock img { max-width: 320px; max-height: 120px; display: block; margin: 6px 0; }
+  .typed-sig { font: italic 400 34px/1.2 'Brush Script MT', 'Segoe Script', cursive; margin: 6px 0; }
+  .cert { font: 400 12px/1.5 'Courier New', monospace; color: #444; word-break: break-all; }
+  .panel { margin-top: 26px; padding: 22px; border: 1px solid var(--line-2); border-radius: 10px; background: #0d0d0d; }
+  .panel h2 { margin: 0 0 14px; font: 400 30px/1 'Bebas Neue', sans-serif; letter-spacing: .05em; color: #fff; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--muted); }
+  input[type=text], input[type=email] { width: 100%; min-height: 46px; padding: 11px 14px; border-radius: 6px; background: #121212; border: 1px solid var(--line-2); color: var(--text); font: inherit; outline: none; }
+  input:focus { border-color: rgba(var(--accent-rgb), .8); }
+  .pad-wrap { position: relative; }
+  canvas { display: block; width: 100%; height: 180px; border-radius: 6px; background: #fff; touch-action: none; cursor: crosshair; }
+  .pad-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 13px; color: var(--muted); }
+  .link-btn { background: none; border: 0; color: var(--accent); font: inherit; cursor: pointer; padding: 0; }
+  .agree { display: flex; gap: 12px; align-items: flex-start; margin: 16px 0; cursor: pointer; }
+  .agree input { width: 20px; height: 20px; margin-top: 2px; accent-color: var(--accent); flex: none; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; padding: 0 36px; border: 0; border-radius: 3px; background: var(--accent); color: #000; font: 700 13px/1 'Barlow', sans-serif; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.ghost { background: none; color: #fff; border: 1px solid var(--line-2); }
+  .err { color: #ffb4b6; margin: 10px 0 0; }
+  .msg { color: var(--muted); }
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+  @media print {
+    body { background: #fff; color: #111; }
+    main { padding: 0; width: 100%; }
+    .top, .sub, .panel, .actions, .no-print { display: none !important; }
+    h1 { color: #111; font-size: 28px; }
+    .doc { padding: 0; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><a class="home" href="/"><img src="/assets/logo.png" alt=""><span>HORIZON RCRDS</span></a><span id="status"></span></div>
+  <div id="root"><p class="msg">Loading…</p></div>
+</main>
+<script src="/sign.js?v=1"></script>
+</body>
+</html>

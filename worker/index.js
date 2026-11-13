@@ -7,6 +7,8 @@
      workflow: no hay claves guardadas en ningún sitio. */
 import STATIC_FILES from './static-files.json';
 import { FORM_SCHEMA, FormError, formsApi, publicFormsApi, formsCount } from './forms.js';
+import { CONTRACT_SCHEMA, ContractError, contractsApi, signApi } from './contracts.js';
+import { EmailMessage } from 'cloudflare:email';
 
 // Secciones del panel y lo que se puede hacer en cada una. Una sección nueva (p. ej. eventos) se añade aquí.
 const SECTIONS = [
@@ -14,6 +16,7 @@ const SECTIONS = [
   { id: 'radio', label: 'Mixtapes', actions: ['view', 'edit', 'delete'] },
   { id: 'playlists', label: 'Playlists', actions: ['view', 'edit', 'delete'] },
   { id: 'player', label: 'Reproductor', actions: ['view', 'edit'] },
+  { id: 'contracts', label: 'Contratos', actions: ['view', 'edit'] },
 ];
 // Datos de la web: nombre en la API → archivo público y sección del panel
 const DATA = {
@@ -76,6 +79,7 @@ async function ensureSchema(env) {
     `CREATE TABLE IF NOT EXISTS panel_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, email TEXT, name TEXT, action TEXT NOT NULL, detail TEXT)`,
     `INSERT OR IGNORE INTO site_meta (k, v) VALUES ('version', 0)`,
     ...FORM_SCHEMA,
+    ...CONTRACT_SCHEMA,
   ].map(q => env.DB.prepare(q)));
   // nombre que le pone el owner a cada persona (columna añadida después)
   try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN label TEXT').run(); } catch { /* ya existe */ }
@@ -414,6 +418,23 @@ async function team(req, env, s, p) {
   throw new HttpError(404, 'No encontrado.');
 }
 
+/* ---------------- Correo (aviso al Gmail de Horizon) ----------------
+   Usa el correo de Cloudflare (Email Routing) con el binding MAIL. Si no está configurado, no se envía nada. */
+function mailer(env) {
+  if (!env.MAIL || !env.MAIL_TO) return null;
+  return async (subject, html) => {
+    const from = env.MAIL_FROM || 'contracts@horizonrcrds.com';
+    const b64 = s => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+    const raw = [
+      `From: HORIZON RCRDS <${from}>`, `To: ${env.MAIL_TO}`, `Subject: =?UTF-8?B?${b64(subject)}?=`,
+      `Message-ID: <${crypto.randomUUID()}@horizonrcrds.com>`, `Date: ${new Date().toUTCString()}`,
+      'MIME-Version: 1.0', 'Content-Type: text/html; charset=utf-8', 'Content-Transfer-Encoding: base64', '',
+      b64(`<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5">${html}</div>`).replace(/.{76}/g, '$&\r\n'),
+    ].join('\r\n');
+    await env.MAIL.send(new EmailMessage(from, env.MAIL_TO, raw));
+  };
+}
+
 /* ---------------- Chat del equipo ---------------- */
 async function chat(req, env, s, url) {
   if (s.sync) throw new HttpError(403, 'No permitido.');   // todo el equipo tiene el chat
@@ -469,6 +490,7 @@ async function api(req, env, p) {
     if (!EMAIL.test(email)) throw new HttpError(400, 'Email no válido.');
     return json(await startSession(env, { email, name: clean(b.name || email.split('@')[0], 80), picture: '' }, area(b.area)));
   }
+  if (p.startsWith('/api/public/sign/')) return json(await signApi(req, env, url, mailer(env)));   // firma de contratos (enlace privado)
   if (p.startsWith('/api/public/')) return json(await publicFormsApi(req, env, url));   // formularios públicos (sin sesión)
   const s = await session(req, env);
   if (p === '/api/auth/me' && req.method === 'GET') return json({ user: { ...userOut(s), formsCount: await formsCount(env, s) }, sections: SECTIONS });
@@ -482,6 +504,10 @@ async function api(req, env, p) {
   }
   if (p === '/api/publish' && req.method === 'POST') return publish(req, env, s);
   if (p === '/api/chat') return chat(req, env, s, url);
+  if (p === '/api/contracts' || p.startsWith('/api/contracts/')) {
+    const r = await contractsApi(req, env, s, url, act => can(s, 'contracts', act), action => audit(env, s, action));
+    return r instanceof Response ? r : json(r);
+  }
   if (p === '/api/forms' || p.startsWith('/api/forms/')) {
     const r = await formsApi(req, env, s, url, action => audit(env, s, action));
     return r instanceof Response ? r : json(r);
@@ -497,6 +523,8 @@ export default {
       if (p.startsWith('/api/')) return await api(req, env, p);
       // página pública de cada formulario: /forms/<enlace>
       if (/^\/forms\/[a-z0-9-]+\/?$/.test(p)) return env.ASSETS.fetch(new Request(new URL('/form', url), req));
+      // página de firma de cada contrato: /sign/<token>
+      if (/^\/sign\/[\w-]{20,64}\/?$/.test(p)) return env.ASSETS.fetch(new Request(new URL('/sign', url), req));
       if (req.method === 'GET' || req.method === 'HEAD') {
         const file = p.slice(1);
         if (BY_FILE[file]) { await ensureSchema(env); return await serveData(BY_FILE[file], req, env); }
@@ -505,7 +533,7 @@ export default {
       }
       return env.ASSETS.fetch(req);
     } catch (e) {
-      if (e instanceof HttpError || e instanceof FormError) return fail(e.status, e.message);
+      if (e instanceof HttpError || e instanceof FormError || e instanceof ContractError) return fail(e.status, e.message);
       console.error(e);
       return fail(500, 'Error del servidor. Inténtalo otra vez.');
     }

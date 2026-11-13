@@ -71,9 +71,12 @@ async function ensureSchema(env) {
     `CREATE TABLE IF NOT EXISTS panel_members (email TEXT PRIMARY KEY, role_id TEXT, name TEXT, picture TEXT, added_by TEXT, added_at INTEGER, last_login INTEGER)`,
     `CREATE TABLE IF NOT EXISTS panel_sessions (hash TEXT PRIMARY KEY, email TEXT NOT NULL, area TEXT NOT NULL, name TEXT, picture TEXT, created_at INTEGER, expires_at INTEGER NOT NULL)`,
     `CREATE INDEX IF NOT EXISTS panel_sessions_email ON panel_sessions (email)`,
+    `CREATE TABLE IF NOT EXISTS chat_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, email TEXT NOT NULL, name TEXT, picture TEXT, text TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)`,
     `CREATE TABLE IF NOT EXISTS panel_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, email TEXT, name TEXT, action TEXT NOT NULL, detail TEXT)`,
     `INSERT OR IGNORE INTO site_meta (k, v) VALUES ('version', 0)`,
   ].map(q => env.DB.prepare(q)));
+  // nombre que le pone el owner a cada persona (columna añadida después)
+  try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN label TEXT').run(); } catch { /* ya existe */ }
   schemaReady = true;
 }
 const audit = (env, who, action, detail = '') => env.DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)')
@@ -93,9 +96,9 @@ function normPerms(p) {
 const fullPerms = () => Object.fromEntries(SECTIONS.map(s => [s.id, Object.fromEntries(s.actions.map(a => [a, true]))]));
 async function resolve(env, email) {
   if (owners(env).includes(email)) return { owner: true, role: { id: 'owner', name: 'Owner' }, perms: fullPerms() };
-  const m = await env.DB.prepare('SELECT m.email, m.role_id, r.name AS role_name, r.perms FROM panel_members m LEFT JOIN panel_roles r ON r.id = m.role_id WHERE m.email = ?').bind(email).first();
+  const m = await env.DB.prepare('SELECT m.email, m.role_id, m.label, r.name AS role_name, r.perms FROM panel_members m LEFT JOIN panel_roles r ON r.id = m.role_id WHERE m.email = ?').bind(email).first();
   if (!m) return null;
-  return { owner: false, role: m.role_name ? { id: m.role_id, name: m.role_name } : null, perms: normPerms(m.role_name ? parse(m.perms) : null) };
+  return { owner: false, label: m.label || '', role: m.role_name ? { id: m.role_id, name: m.role_name } : null, perms: normPerms(m.role_name ? parse(m.perms) : null) };
 }
 const can = (s, sec, act) => s.owner || !!s.perms?.[sec]?.[act];
 const anyCan = (s, act) => s.owner || SECTIONS.some(x => s.perms?.[x.id]?.[act]);
@@ -164,7 +167,7 @@ async function startSession(env, g, area) {
     env.DB.prepare('UPDATE panel_members SET name = ?, picture = ?, last_login = ? WHERE email = ?').bind(g.name, g.picture, t, g.email),
   ]);
   await audit(env, g, `Entró en /${area}`);
-  return { token, user: { email: g.email, name: g.name, picture: g.picture, ...who }, sections: SECTIONS };
+  return { token, user: { email: g.email, name: who.label || g.name, picture: g.picture, ...who }, sections: SECTIONS };
 }
 async function session(req, env) {
   const m = (req.headers.get('Authorization') || '').match(/^Bearer\s+(\S+)$/);
@@ -178,7 +181,7 @@ async function session(req, env) {
     await env.DB.prepare('DELETE FROM panel_sessions WHERE hash = ?').bind(hash).run();
     throw new HttpError(401, 'Ya no tienes acceso a este panel.');
   }
-  return { hash, area: s.area, email: s.email, name: s.name || '', picture: s.picture || '', ...who };
+  return { hash, area: s.area, email: s.email, picture: s.picture || '', ...who, name: who.label || s.name || '' };
 }
 const userOut = s => ({ email: s.email, name: s.name, picture: s.picture, owner: s.owner, role: s.role, perms: s.perms });
 
@@ -329,7 +332,7 @@ async function team(req, env, s, p) {
   const body = m === 'POST' ? parse(await req.text()) || {} : null;
   if (p === '/api/team' && m === 'GET') {
     const [members, roles] = await Promise.all([
-      DB.prepare('SELECT email, role_id, name, picture, added_at, last_login FROM panel_members ORDER BY added_at').all(),
+      DB.prepare('SELECT email, role_id, label, name, picture, added_at, last_login FROM panel_members ORDER BY added_at').all(),
       DB.prepare('SELECT id, name, perms FROM panel_roles ORDER BY created_at').all(),
     ]);
     return json({ owners: owners(env), sections: SECTIONS, members: members.results, roles: roles.results.map(r => ({ id: r.id, name: r.name, perms: normPerms(parse(r.perms)) })) });
@@ -341,12 +344,18 @@ async function team(req, env, s, p) {
     const email = String(body.email || '').trim().toLowerCase();
     if (!EMAIL.test(email) || email.length > 120) throw new HttpError(400, 'Ese email no es válido.');
     if (owners(env).includes(email)) throw new HttpError(400, 'Esa cuenta ya es owner.');
+    const exists = await DB.prepare('SELECT email FROM panel_members WHERE email = ?').bind(email).first();
+    const label = 'label' in body ? clean(body.label, 40) : undefined;
+    // solo cambiar el nombre
+    if (exists && label !== undefined && !body.role_id) {
+      await DB.prepare('UPDATE panel_members SET label = ? WHERE email = ?').bind(label || null, email).run();
+      return json({ ok: true });
+    }
     const role = await DB.prepare('SELECT id, name FROM panel_roles WHERE id = ?').bind(String(body.role_id || '')).first();
     if (!role) throw new HttpError(400, 'Elige un rol.');
-    const exists = await DB.prepare('SELECT email FROM panel_members WHERE email = ?').bind(email).first();
-    if (exists) await DB.prepare('UPDATE panel_members SET role_id = ? WHERE email = ?').bind(role.id, email).run();
-    else await DB.prepare('INSERT INTO panel_members (email, role_id, added_by, added_at) VALUES (?, ?, ?, ?)').bind(email, role.id, s.email, now()).run();
-    await audit(env, s, exists ? `Cambió el rol de ${email} a ${role.name}` : `Añadió a ${email} como ${role.name}`);
+    if (exists) await DB.prepare('UPDATE panel_members SET role_id = ?' + (label !== undefined ? ', label = ?' : '') + ' WHERE email = ?').bind(...(label !== undefined ? [role.id, label || null, email] : [role.id, email])).run();
+    else await DB.prepare('INSERT INTO panel_members (email, role_id, label, added_by, added_at) VALUES (?, ?, ?, ?, ?)').bind(email, role.id, label || null, s.email, now()).run();
+    await audit(env, s, exists ? `Cambió el rol de ${email} a ${role.name}` : `Añadió a ${email}${label ? ' (' + label + ')' : ''} como ${role.name}`);
     return json({ ok: true });
   }
   if (p === '/api/team/members' && m === 'DELETE') {
@@ -385,8 +394,40 @@ async function team(req, env, s, p) {
   throw new HttpError(404, 'No encontrado.');
 }
 
+/* ---------------- Chat del equipo ---------------- */
+async function chat(req, env, s, url) {
+  if (s.sync) throw new HttpError(403, 'No permitido.');   // todo el equipo tiene el chat
+  const DB = env.DB;
+  if (req.method === 'GET') {
+    const after = Math.max(0, Number(url.searchParams.get('after')) || 0);
+    const rows = after
+      ? (await DB.prepare('SELECT id, at, email, name, picture, text, deleted FROM chat_messages WHERE id > ? ORDER BY id LIMIT 200').bind(after).all()).results
+      : (await DB.prepare('SELECT * FROM (SELECT id, at, email, name, picture, text, deleted FROM chat_messages ORDER BY id DESC LIMIT 150) ORDER BY id').all()).results;
+    // borrados recientes (para quitarlos de la pantalla de quien ya los tenía)
+    const gone = after ? (await DB.prepare('SELECT id FROM chat_messages WHERE deleted = 1 AND id <= ? AND id > ? - 300').bind(after, after).all()).results.map(r => r.id) : [];
+    return json({ me: s.email, owner: !!s.owner, messages: rows.filter(r => !r.deleted).map(({ deleted, ...r }) => r), gone });
+  }
+  if (req.method === 'POST') {
+    const b = parse(await req.text()) || {};
+    const text = String(b.text ?? '').replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b-\u001f]/g, '').trim().slice(0, 1000);
+    if (!text) throw new HttpError(400, 'Escribe algo.');
+    const r = await DB.prepare('INSERT INTO chat_messages (at, email, name, picture, text) VALUES (?, ?, ?, ?, ?)').bind(now(), s.email, s.name || '', s.picture || '', text).run();
+    return json({ id: r.meta.last_row_id });
+  }
+  if (req.method === 'DELETE') {
+    const id = Number(url.searchParams.get('id')) || 0;
+    const m = await DB.prepare('SELECT email FROM chat_messages WHERE id = ?').bind(id).first();
+    if (!m) throw new HttpError(404, 'Ese mensaje ya no existe.');
+    if (m.email !== s.email && !s.owner) throw new HttpError(403, 'Solo puedes borrar tus mensajes.');
+    await DB.prepare('UPDATE chat_messages SET deleted = 1, text = \'\' WHERE id = ?').bind(id).run();
+    return json({ ok: true });
+  }
+  throw new HttpError(405, 'No permitido.');
+}
+
 /* ---------------- API ---------------- */
 async function api(req, env, p) {
+  const url = new URL(req.url);
   // Mismo origen siempre (la web y el panel están en el mismo dominio): se rechazan peticiones de otras webs
   const origin = req.headers.get('Origin');
   if (origin && origin !== new URL(req.url).origin && !(env.DEV_LOGIN === '1' && isDevOrigin(origin))) throw new HttpError(403, 'Origen no permitido.');
@@ -399,7 +440,7 @@ async function api(req, env, p) {
   }
   // Solo para probar en el ordenador (wrangler dev con DEV_LOGIN=1): entrar sin Google
   if (p === '/api/auth/dev' && req.method === 'POST') {
-    if (env.DEV_LOGIN !== '1' || !isDevOrigin(origin)) throw new HttpError(404, 'No encontrado.');
+    if (env.DEV_LOGIN !== '1') throw new HttpError(404, 'No encontrado.');   // DEV_LOGIN solo existe en .dev.vars (local)
     const b = parse(await req.text()) || {};
     const email = String(b.email || '').trim().toLowerCase();
     if (!EMAIL.test(email)) throw new HttpError(400, 'Email no válido.');
@@ -416,6 +457,7 @@ async function api(req, env, p) {
     return json({ ...await readData(env), files: await fileList(env) });
   }
   if (p === '/api/publish' && req.method === 'POST') return publish(req, env, s);
+  if (p === '/api/chat') return chat(req, env, s, url);
   if (p === '/api/team' || p.startsWith('/api/team/')) return team(req, env, s, p);
   throw new HttpError(404, 'No encontrado.');
 }

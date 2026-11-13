@@ -356,6 +356,7 @@
   function logout(message = '') {
     if (auth?.token) api('POST', '/api/auth/logout').catch(() => {});
     try { window.google?.accounts?.id?.disableAutoSelect(); } catch { /* nada */ }
+    chatStop();
     clearAuth(); auth = null; repo = null; editing = null; setDirtyBase(null); teamData = null; teamErr = '';
     watchId++; deploy();
     loginView(message);
@@ -444,15 +445,17 @@
         ${owners.map(e => `<li class="row tm">${person('', e, '')}<span class="tag">Owner</span><span class="muted sm-txt">Acceso total</span><span></span></li>`).join('')}
         ${members.map(m => `
           <li class="row tm">
-            ${person(m.name, m.email, m.picture)}
+            ${m.picture ? `<img class="thumb round" src="${esc(m.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="thumb round ini">${esc((m.label || m.name || m.email)[0].toUpperCase())}</span>`}
+            <span class="meta"><input class="name-in" data-member="${esc(m.email)}" value="${esc(m.label || '')}" placeholder="${esc(m.name || 'Ponle un nombre')}" maxlength="40" aria-label="Nombre de ${esc(m.email)}" autocomplete="off"><span>${esc(m.email)}</span></span>
             <select class="role-sel" data-member="${esc(m.email)}" aria-label="Rol de ${esc(m.email)}">${m.role_id && roles.some(r => r.id === m.role_id) ? '' : '<option value="" selected>Sin rol</option>'}${roleOpts(m.role_id)}</select>
-            <span class="muted sm-txt">${m.last_login ? 'Entró ' + esc(fmtDate(m.last_login)) : 'Aún no ha entrado'}</span>
+            <span class="muted sm-txt" title="${m.last_login ? 'Última vez: ' + esc(fmtDate(m.last_login)) : ''}">Acceso activo</span>
             <button type="button" class="btn ghost sm" data-act="remove-member" data-email="${esc(m.email)}">Quitar</button>
           </li>`).join('')}
       </ol>
       ${roles.length ? `
       <form id="add-member" class="add-row" novalidate>
         <input name="email" type="email" placeholder="email@gmail.com" aria-label="Email de Google" autocomplete="off" spellcheck="false">
+        <input name="label" placeholder="Nombre (p. ej. Kris m)" maxlength="40" aria-label="Nombre" autocomplete="off">
         <select name="role_id" aria-label="Rol">${roleOpts(roles[0].id)}</select>
         <button type="submit" class="btn primary">Añadir</button>
         <p class="ed-error" role="alert" hidden></p>
@@ -1126,6 +1129,7 @@
     else if (view === 'player') inner = filesView(view);
     else inner = releasesView();
     app.innerHTML = shell(inner);
+    chatStart();
     const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Reproductor', team: 'Equipo', none: 'Equipo' };
     document.title = `${editing ? (editing.orig?.title || 'Nuevo') + ' · ' : ''}${names[view] || ''} — Panel HORIZON RCRDS`;
   }
@@ -1280,7 +1284,7 @@
       const box = form.querySelector('.ed-error'); box.hidden = true;
       const email = form.elements.email.value.trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) { box.textContent = 'Escribe un email válido.'; box.hidden = false; form.elements.email.focus(); return; }
-      teamAction(() => api('POST', '/api/team/members', { email, role_id: form.elements.role_id.value }), `${email} añadido al equipo`, box);
+      teamAction(() => api('POST', '/api/team/members', { email, label: form.elements.label.value.trim(), role_id: form.elements.role_id.value }), `${email} añadido al equipo`, box);
       return;
     }
     if (form.classList.contains('role-card')) {
@@ -1317,6 +1321,7 @@
     if (t.id === 'ed-file' && t.files[0]) { setCover(t.files[0]); t.value = ''; }
     if (t.id === 'mx-file' && t.files[0]) { setMixAudio(t.files[0]); t.value = ''; }
     if (t.id === 'f-sc') scFill(!editing?.key);
+    if (t.classList.contains('name-in') && !busy) teamAction(() => api('POST', '/api/team/members', { email: t.dataset.member, label: t.value.trim() }), 'Nombre guardado');
     if (t.classList.contains('role-sel') && t.value && !busy) teamAction(() => api('POST', '/api/team/members', { email: t.dataset.member, role_id: t.value }), 'Rol cambiado');
     // Editar o Eliminar llevan Ver; sin Ver no hay nada más
     const pm = t.closest?.('.perm-table') && t.name?.match(/^(.+)\.(view|edit|delete)$/);
@@ -1346,6 +1351,142 @@
     if (card) pickFile(card.dataset.file, file);
   });
   window.addEventListener('beforeunload', e => { if (isDirty() || busy) e.preventDefault(); });
+
+  /* ---------------- Chat del equipo (burbuja abajo a la derecha) ---------------- */
+  const CHAT_SEEN = 'hz_chat_seen';
+  const chatState = { on: false, open: false, timer: 0, last: 0, msgs: new Map(), me: '', owner: false, loading: false, seen: 0 };
+  try { chatState.seen = Number(localStorage.getItem(CHAT_SEEN)) || 0; } catch { /* nada */ }
+  const linkify = t => esc(t).replace(/https?:\/\/[^\s<>"']+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`).replace(/\n/g, '<br>');
+  function chatEl() {
+    let el = $('#chat');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'chat'; el.className = 'chat';
+    el.innerHTML = `
+      <button type="button" class="chat-fab" data-chat="toggle" aria-label="Chat del equipo" aria-expanded="false">
+        <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.5 3 2 6.9 2 11.6c0 2.6 1.4 4.9 3.6 6.5L5 22l4-2.2c.9.2 1.9.4 3 .4 5.5 0 10-3.9 10-8.6S17.5 3 12 3z"/></svg>
+        <span class="chat-badge" hidden></span>
+      </button>
+      <section class="chat-box" hidden aria-label="Chat del equipo">
+        <header class="chat-head"><b>Chat del equipo</b><button type="button" class="chat-x" data-chat="toggle" aria-label="Cerrar">×</button></header>
+        <ol class="chat-list" aria-live="polite"></ol>
+        <form class="chat-form" novalidate>
+          <textarea name="text" rows="1" maxlength="1000" placeholder="Escribe un mensaje…" aria-label="Mensaje"></textarea>
+          <button type="submit" class="chat-send" aria-label="Enviar"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3 20.5 21 12 3 3.5 3 10l12 2-12 2z"/></svg></button>
+        </form>
+      </section>`;
+    document.body.appendChild(el);
+    return el;
+  }
+  function chatBadge() {
+    const el = $('#chat .chat-badge');
+    if (!el) return;
+    const n = [...chatState.msgs.values()].filter(m => m.id > chatState.seen && m.email !== chatState.me).length;
+    el.hidden = !n || chatState.open; el.textContent = n > 9 ? '9+' : String(n);
+  }
+  function chatRender(stick) {
+    const list = $('#chat .chat-list');
+    if (!list) return;
+    const near = list.scrollHeight - list.scrollTop - list.clientHeight < 60;
+    const msgs = [...chatState.msgs.values()].sort((a, b) => a.id - b.id);
+    let prev = null;
+    list.innerHTML = msgs.length ? msgs.map(m => {
+      const mine = m.email === chatState.me, d = new Date(m.at);
+      const same = prev && prev.email === m.email && m.at - prev.at < 5 * 60e3;
+      const day = !prev || new Date(prev.at).toDateString() !== d.toDateString();
+      prev = m;
+      const who = m.name || m.email.split('@')[0];
+      return `${day ? `<li class="chat-day">${esc(d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))}</li>` : ''}
+        <li class="chat-msg${mine ? ' mine' : ''}${same ? ' cont' : ''}" data-id="${m.id}">
+          ${same || mine ? '' : `<span class="chat-av">${m.picture ? `<img src="${esc(m.picture)}" alt="" referrerpolicy="no-referrer">` : esc(who[0].toUpperCase())}</span>`}
+          <div class="chat-bubble">
+            ${same || mine ? '' : `<b>${esc(who)}</b>`}
+            <p>${linkify(m.text)}</p>
+            <time>${esc(d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }))}</time>
+            ${mine || chatState.owner ? '<button type="button" class="chat-del" data-chat="del" aria-label="Borrar mensaje">×</button>' : ''}
+          </div>
+        </li>`;
+    }).join('') : '<li class="chat-empty">Aún no hay mensajes. ¡Escribe el primero!</li>';
+    if (stick || near) list.scrollTop = list.scrollHeight;
+  }
+  async function chatPoll() {
+    clearTimeout(chatState.timer);
+    if (!chatState.on) return;
+    if (!document.hidden && !chatState.loading) {
+      chatState.loading = true;
+      try {
+        const r = await api('GET', `/api/chat?after=${chatState.last}`);
+        chatState.me = r.me; chatState.owner = r.owner;
+        for (const id of r.gone || []) chatState.msgs.delete(id);
+        for (const m of r.messages) { chatState.msgs.set(m.id, m); chatState.last = Math.max(chatState.last, m.id); }
+        if (r.messages.length || (r.gone || []).length) chatRender(false);
+        if (chatState.open) chatMarkSeen();
+        chatBadge();
+      } catch (e) {
+        if (e.status === 401) { chatState.loading = false; logout(e.message); return; }
+        if (e.status === 403) { chatStop(); return; }
+      }
+      chatState.loading = false;
+    }
+    chatState.timer = setTimeout(chatPoll, chatState.open ? 3000 : 20000);
+  }
+  function chatMarkSeen() {
+    chatState.seen = chatState.last;
+    try { localStorage.setItem(CHAT_SEEN, String(chatState.seen)); } catch { /* nada */ }
+  }
+  function chatStart() {
+    if (chatState.on || !auth?.user) return;
+    chatState.on = true;
+    chatEl().hidden = false;
+    chatPoll();
+  }
+  function chatStop() {
+    chatState.on = false; chatState.open = false; clearTimeout(chatState.timer);
+    chatState.msgs.clear(); chatState.last = 0;
+    $('#chat')?.remove();
+  }
+  function chatToggle(force) {
+    const el = chatEl(), open = force ?? !chatState.open;
+    chatState.open = open;
+    el.classList.toggle('is-open', open);
+    el.querySelector('.chat-box').hidden = !open;
+    el.querySelector('.chat-fab').setAttribute('aria-expanded', String(open));
+    if (open) { chatRender(true); chatMarkSeen(); chatBadge(); el.querySelector('textarea').focus(); chatPoll(); }
+    else chatBadge();
+  }
+  async function chatSend(form) {
+    const ta = form.elements.text, text = ta.value.trim();
+    if (!text) return;
+    ta.disabled = true;
+    try { await api('POST', '/api/chat', { text }); ta.value = ''; ta.style.height = ''; await chatPoll(); chatRender(true); }
+    catch (e) { toast(e.message); }
+    finally { ta.disabled = false; ta.focus(); }
+  }
+  document.addEventListener('click', async e => {
+    const t = e.target.closest('[data-chat]');
+    if (!t) return;
+    if (t.dataset.chat === 'toggle') chatToggle();
+    if (t.dataset.chat === 'del') {
+      const id = Number(t.closest('.chat-msg')?.dataset.id);
+      if (!id || !await confirmBox('¿Borrar este mensaje?', 'Borrar')) return;
+      try { await api('DELETE', `/api/chat?id=${id}`); chatState.msgs.delete(id); chatRender(false); } catch (err) { toast(err.message); }
+    }
+  });
+  document.addEventListener('submit', e => {
+    if (!e.target.classList?.contains('chat-form')) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    chatSend(e.target);
+  }, true);
+  document.addEventListener('keydown', e => {
+    const ta = e.target.closest?.('.chat-form textarea');
+    if (ta && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); chatSend(ta.form); }
+    if (e.key === 'Escape' && chatState.open) chatToggle(false);
+  });
+  document.addEventListener('input', e => {
+    const ta = e.target.closest?.('.chat-form textarea');
+    if (ta) { ta.style.height = ''; ta.style.height = Math.min(ta.scrollHeight, 120) + 'px'; }
+  });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && chatState.on) chatPoll(); });
 
   /* ---------------- Arranque ---------------- */
   async function boot() {

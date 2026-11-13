@@ -5,6 +5,10 @@
   "main": "worker/index.js",
   "compatibility_date": "2025-09-01",
   "workers_dev": true,
+  "routes": [
+    { "pattern": "horizonrcrds.com", "custom_domain": true },
+    { "pattern": "www.horizonrcrds.com", "custom_domain": true }
+  ],
   "build": { "command": "node worker/build.mjs" },
   "assets": {
     "directory": ".",

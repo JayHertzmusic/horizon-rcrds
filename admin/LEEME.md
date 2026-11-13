@@ -20,6 +20,7 @@ Cada 3 horas, GitHub mira el SoundCloud de Horizon y añade a la web lo nuevo:
 - **«HORIZON RCRDS Mixtape #011 | Invitado»** va a **Radio**, con su número, el invitado, la portada, el color y un fragmento de 45 segundos del momento más intenso del mix, que suena en la portada.
 - **«Artista - Título»** va a **Releases**, con el siguiente HRZ#, la portada, el color y los enlaces, y pasa a ser el protagonista de la portada. Su drop (30 segundos) pasa a ser el audio del reproductor. Lo que vaya entre corchetes, como «[ADE Sampler 2026]», no aparece en el título.
 - Las versiones **«(Extended Mix)»** se ignoran siempre: en la web solo va el release normal.
+- **YouTube:** también mira el canal https://www.youtube.com/@HORIZONRCRDS. Cuando sube el vídeo de un release («Artista - Título») o de un mixtape («HORIZON RCRDS Mixtape #012 | Invitado»), pone su enlace de YouTube en la web si aún no lo tenía. Nunca cambia uno que ya esté puesto; desde el panel se puede poner o corregir a mano.
 - Lo demás (IDs, etc.) se ignora.
 - **Nunca mira nada anterior a «Kris m - Lights» (HRZ#047, 28 de enero de 2026)**: la web empieza ahí y lo de antes no entra.
 

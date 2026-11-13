@@ -8,6 +8,9 @@
 // Nothing older than "Kris m - Lights" (HRZ#047, 28 Jan 2026) is ever looked at: the site starts there.
 // One exception to "never edits": a release on the site with no Spotify button gets the Spotify link as soon
 // as it appears in its SoundCloud description (it is only filled in, never replaced).
+// Same for YouTube: the channel's public feed (latest 15 videos) is read too, and a release or mixtape with no
+// YouTube link gets the link of its video ("Artist - Title" / "HORIZON RCRDS Mixtape #011 | Guest") as soon as
+// it is on the channel (only filled in, never replaced; if YouTube is down, this step is just skipped).
 // Whatever was deleted in the admin panel is listed in sync-ignore.json and never comes back.
 // Links come from the SoundCloud description: "Stream / Download: <smart link>" and, if present,
 // an open.spotify.com/track or /album link. Without one, the Spotify link is read from the smart link page
@@ -32,7 +35,10 @@ const MAX_NEW = 6;              // safety: never add more than this per run and 
 const COVER_PX = 1000;          // same size as the covers already on the site
 const RELEASE_CLIP = 30;        // seconds (release_preview.mp3)
 const MIX_CLIP = 45;            // seconds (mixtape preview)
-const sharp = createRequire(process.env.SYNC_REQUIRE_FROM || import.meta.url)('sharp');
+const YT_FEED_URL = process.env.YT_FEED_URL || 'https://www.youtube.com/feeds/videos.xml?channel_id=UCL9z3Rnz-fivTSuSARZdilw';   // @HORIZONRCRDS
+/* sharp (image processing) is only loaded when a cover has to be made */
+let sharpLib = null;
+const sharp = (...a) => (sharpLib ||= createRequire(process.env.SYNC_REQUIRE_FROM || import.meta.url)('sharp'))(...a);
 
 const log = (...a) => console.log('[sync]', ...a);
 const readJson = (f, fallback) => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, f), 'utf8')); } catch { return fallback; } };
@@ -290,15 +296,45 @@ for (const it of feed) {
   log(`spotify link for ${out.catalog || out.title}`);
 }
 
-const changed = addedRel.length + addedMix.length + filled.length > 0;
+/* YouTube: a release or mixtape with no youtube_link gets the link of its video once it is on the channel. */
+const ytRel = [], ytMix = [];
+try {
+  const xml = process.env.YT_FEED_FILE ? fs.readFileSync(process.env.YT_FEED_FILE, 'utf8')
+    : await (await fetch(YT_FEED_URL, { signal: AbortSignal.timeout(15000) })).text();
+  const videos = [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/g)].map(m => ({ id: tag(m[1], 'yt:videoId'), title: tag(m[1], 'title') }))
+    .filter(v => /^[\w-]{11}$/.test(v.id));
+  if (!videos.length) throw new Error('feed empty');
+  for (const v of videos) {
+    const c = classify({ title: v.title });
+    const url = `https://www.youtube.com/watch?v=${v.id}`;
+    if (c?.kind === 'release') {
+      const i = releases.findIndex(r => norm(`${r.artist}${r.title}`) === norm(`${c.artist}${c.title}`) ||
+        (norm(r.title) === norm(c.title) && norm(r.artist).slice(0, 6) === norm(c.artist).slice(0, 6)));
+      if (i < 0 || releases[i].youtube_link) continue;
+      releases[i] = { ...releases[i], youtube_link: url };
+      if (!addedRel.some(a => a.id === releases[i].id)) ytRel.push(releases[i]);   // a release added in this run is already in the message
+      log(`youtube link for ${releases[i].catalog || releases[i].title}`);
+    } else if (c?.kind === 'mixtape') {
+      const i = mixtapes.findIndex(m => m.number && norm(m.number) === norm(c.number));
+      if (i < 0 || mixtapes[i].youtube_link) continue;
+      mixtapes[i] = { ...mixtapes[i], youtube_link: url };
+      if (!addedMix.some(a => a.id === mixtapes[i].id)) ytMix.push(mixtapes[i]);
+      log(`youtube link for mixtape ${mixtapes[i].number}`);
+    }
+  }
+} catch (e) { log('youtube skipped:', e.message); }
+
+const changed = addedRel.length + addedMix.length + filled.length + ytRel.length + ytMix.length > 0;
 if (changed && !DRY) {
-  if (addedRel.length || filled.length) fs.writeFileSync(path.join(ROOT, 'releases.json'), JSON.stringify(releases, null, 2) + '\n');
-  if (addedMix.length) fs.writeFileSync(path.join(ROOT, 'mixtapes.json'), JSON.stringify(mixtapes, null, 2) + '\n');
+  if (addedRel.length || filled.length || ytRel.length) fs.writeFileSync(path.join(ROOT, 'releases.json'), JSON.stringify(releases, null, 2) + '\n');
+  if (addedMix.length || ytMix.length) fs.writeFileSync(path.join(ROOT, 'mixtapes.json'), JSON.stringify(mixtapes, null, 2) + '\n');
 }
 const lines = [
   ...addedRel.map(r => `Add release ${r.catalog} — ${r.title}`),
   ...addedMix.map(m => `Add mixtape ${m.number}${m.artist ? ' — ' + m.artist : ''}`),
   ...filled.filter(r => !addedRel.includes(r)).map(r => `Add Spotify link to ${r.catalog} — ${r.title}`),
+  ...ytRel.map(r => `Add YouTube link to ${r.catalog} — ${r.title}`),
+  ...ytMix.map(m => `Add YouTube link to mixtape ${m.number}`),
 ];
 const message = lines.length === 1 ? lines[0] : `Sync from SoundCloud\n\n${lines.join('\n')}`;
 if (process.env.SYNC_MESSAGE_FILE) fs.writeFileSync(process.env.SYNC_MESSAGE_FILE, message + '\n');

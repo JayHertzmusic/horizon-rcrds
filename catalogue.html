@@ -295,7 +295,7 @@
 
 <!-- HEADER -->
 <header>
-  <a href="./index.html#releases" class="back-link" id="back-home">
+  <a href="./#releases" class="back-link" id="back-home">
     <i class="fa-solid fa-arrow-left"></i> Back to Home
   </a>
 
@@ -442,7 +442,7 @@ function buildCatCard(r, idx) {
   }
 
   /* Click card → the release page (mixtapes: SoundCloud) */
-  const page = r.id && !r.open_link ? `./release.html?id=${encodeURIComponent(r.id)}&from=catalogue` : '';
+  const page = r.id && !r.open_link ? `./release?id=${encodeURIComponent(r.id)}&from=catalogue` : '';
   const openUrl = r.stream_link || r.open_link;
   if (page || openUrl) {
     card.addEventListener('click', (e) => {
@@ -575,7 +575,7 @@ backHome.addEventListener('click', e => {
 
 function showView(v) {
   view = v === 'radio' && allMixtapes.length ? 'radio' : 'releases';
-  backHome.href = './index.html#' + (view === 'radio' ? 'radio' : 'releases');
+  backHome.href = './#' + (view === 'radio' ? 'radio' : 'releases');
   document.querySelectorAll('.cat-tab').forEach(t => {
     const on = t.dataset.view === view;
     t.classList.toggle('is-on', on);

@@ -305,22 +305,22 @@
 <!-- NAVBAR — same as the home page -->
 <nav id="navbar" class="fixed top-0 left-0 right-0 z-50 px-6 md:px-10 py-4">
   <div class="max-w-7xl mx-auto grid items-center" style="grid-template-columns:1fr auto 1fr;">
-    <a href="./index.html" class="hidden sm:flex flex-col leading-none justify-self-start" style="text-decoration:none;">
+    <a href="./" class="hidden sm:flex flex-col leading-none justify-self-start" style="text-decoration:none;">
       <span style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;letter-spacing:0.12em;color:#fff;">HORIZON</span>
       <span style="font-family:'Bebas Neue',sans-serif;font-size:0.78rem;letter-spacing:0.4em;color:var(--accent-color);margin-top:-2px;">RCRDS</span>
     </a>
     <span class="sm:hidden justify-self-start"></span>
-    <a href="./index.html" class="justify-self-center" style="text-decoration:none;line-height:0;" aria-label="HORIZON RCRDS — home">
+    <a href="./" class="justify-self-center" style="text-decoration:none;line-height:0;" aria-label="HORIZON RCRDS — home">
       <img id="nav-logo" src="./assets/logo.png" alt="HORIZON RCRDS" style="height:50px;width:auto;object-fit:contain;transition:filter 0.5s ease;" />
     </a>
     <div class="justify-self-end flex items-center">
       <div class="hidden md:flex items-center gap-7">
-        <a href="./index.html#home" class="nav-link">Home</a>
-        <a href="./index.html#releases" class="nav-link">Releases</a>
-        <a href="./index.html#radio" class="nav-link">Mixtapes</a>
-        <a href="./index.html#demos" class="nav-link">Demos</a>
-        <a href="./index.html#playlists" class="nav-link">Playlists</a>
-        <a href="./index.html#contact" class="nav-link">Contact</a>
+        <a href="./#home" class="nav-link">Home</a>
+        <a href="./#releases" class="nav-link">Releases</a>
+        <a href="./#radio" class="nav-link">Mixtapes</a>
+        <a href="./#demos" class="nav-link">Demos</a>
+        <a href="./#playlists" class="nav-link">Playlists</a>
+        <a href="./#contact" class="nav-link">Contact</a>
       </div>
       <button id="nav-toggle" class="md:hidden flex flex-col gap-[5px] cursor-pointer bg-transparent border-none p-1" aria-label="Open menu" aria-expanded="false">
         <span class="block w-6 h-px bg-gray-400"></span><span class="block w-4 h-px accent-line"></span><span class="block w-6 h-px bg-gray-400"></span>
@@ -329,12 +329,12 @@
   </div>
   <div id="nav-menu" class="md:hidden mt-3 pb-4 border-t" style="border-color:#1f1f1f">
     <div class="flex flex-col gap-5 pt-5 px-2">
-      <a href="./index.html#home" class="nav-link">Home</a>
-      <a href="./index.html#releases" class="nav-link">Releases</a>
-      <a href="./index.html#radio" class="nav-link">Mixtapes</a>
-      <a href="./index.html#demos" class="nav-link">Demos</a>
-      <a href="./index.html#playlists" class="nav-link">Playlists</a>
-      <a href="./index.html#contact" class="nav-link">Contact</a>
+      <a href="./#home" class="nav-link">Home</a>
+      <a href="./#releases" class="nav-link">Releases</a>
+      <a href="./#radio" class="nav-link">Mixtapes</a>
+      <a href="./#demos" class="nav-link">Demos</a>
+      <a href="./#playlists" class="nav-link">Playlists</a>
+      <a href="./#contact" class="nav-link">Contact</a>
     </div>
   </div>
 </nav>
@@ -349,7 +349,7 @@
       <canvas id="bg-particles"></canvas>
     </div>
     <div class="max-w-7xl mx-auto w-full">
-      <a href="./index.html" class="back-link" id="back"><i class="fa-solid fa-arrow-left"></i> <span>Home</span></a>
+      <a href="./" class="back-link" id="back"><i class="fa-solid fa-arrow-left"></i> <span>Home</span></a>
       <div class="rel-grid" id="rel">
         <div class="stage intro">
           <div class="stage-glow" aria-hidden="true"></div>
@@ -407,15 +407,15 @@ function fmtTime(sec) { if (!isFinite(sec) || sec < 0) return '0:00'; return `${
 /* Where the visitor came from (set by the links on the home page and the catalogue): home | catalogue */
 const FROM = (p => p === 'home' || p === 'catalogue' ? p : '')(new URLSearchParams(location.search).get('from'));
 /* links to other releases keep that origin, so "back" still leads to the same place */
-const releaseHref = r => r.id ? `./release.html?id=${encodeURIComponent(r.id)}${FROM ? '&from=' + FROM : ''}` : (r.stream_link || '#');
+const releaseHref = r => r.id ? `./release?id=${encodeURIComponent(r.id)}${FROM ? '&from=' + FROM : ''}` : (r.stream_link || '#');
 
 /* Back link: "Back to home" from the home page, "Back to catalogue" from the catalogue, "Home" otherwise
    (e.g. a shared link). Coming straight from that page, it goes back in history so the page opens where it was left. */
 (() => {
   const back = document.getElementById('back');
-  const target = FROM === 'catalogue' ? { href: './catalogue.html', label: 'Back to catalogue', page: /catalogue\.html$/ }
-               : FROM === 'home' ? { href: './index.html#releases', label: 'Back to home', page: /(^|\/)(index\.html)?$/ }
-               : { href: './index.html', label: 'Home', page: null };
+  const target = FROM === 'catalogue' ? { href: './catalogue', label: 'Back to catalogue', page: /catalogue(\.html)?$/ }
+               : FROM === 'home' ? { href: './#releases', label: 'Back to home', page: /(^|\/)(index\.html)?$/ }
+               : { href: './', label: 'Home', page: null };
   back.href = target.href;
   back.querySelector('span').textContent = target.label;
   back.addEventListener('click', e => {
@@ -621,8 +621,8 @@ new IntersectionObserver(([e]) => e.target.classList.toggle('is-off', !e.isInter
         <h1 class="hero-title">RELEASE NOT FOUND</h1>
         <p class="hr-artist" style="justify-content:center;margin-top:18px;">This release doesn't exist or is no longer available.</p>
         <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:30px;">
-          <a class="btn-outline" href="./catalogue.html"><i class="fa-solid fa-arrow-right"></i> Full catalogue</a>
-          <a class="btn-outline" href="./index.html"><i class="fa-solid fa-arrow-left"></i> Home</a>
+          <a class="btn-outline" href="./catalogue"><i class="fa-solid fa-arrow-right"></i> Full catalogue</a>
+          <a class="btn-outline" href="./"><i class="fa-solid fa-arrow-left"></i> Home</a>
         </div>
       </div>`;
     return;

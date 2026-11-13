@@ -1126,7 +1126,7 @@
         <div class="section-label mb-3">Discography</div>
         <h2 class="section-title">RELEASES</h2>
       </div>
-      <a href="./catalogue.html"
+      <a href="./catalogue"
          style="font-family:'Barlow',sans-serif;font-size:0.68rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #1f1f1f;padding-bottom:2px;transition:color 0.2s,border-color 0.2s;text-decoration:none;"
          onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent-color');this.style.borderColor=getComputedStyle(document.documentElement).getPropertyValue('--accent-color')"
          onmouseout="this.style.color='#6b7280';this.style.borderColor='#1f1f1f'">
@@ -1159,7 +1159,7 @@
         <div class="section-label mb-3">Guest Sessions</div>
         <h2 class="section-title">MIXTAPES</h2>
       </div>
-      <a href="./catalogue.html#radio"
+      <a href="./catalogue#radio"
          style="font-family:'Barlow',sans-serif;font-size:0.68rem;font-weight:700;letter-spacing:0.22em;text-transform:uppercase;color:#6b7280;border-bottom:1px solid #1f1f1f;padding-bottom:2px;transition:color 0.2s,border-color 0.2s;text-decoration:none;"
          onmouseover="this.style.color=getComputedStyle(document.documentElement).getPropertyValue('--accent-color');this.style.borderColor=getComputedStyle(document.documentElement).getPropertyValue('--accent-color')"
          onmouseout="this.style.color='#6b7280';this.style.borderColor='#1f1f1f'">
@@ -1433,7 +1433,7 @@ function initReveal() {
 /* Each release has its own page (release.html?id=…); without an id, its stream link */
 function releasePage(r) {
   /* from=home: the release page then offers "Back to home" */
-  return r.id ? `./release.html?id=${encodeURIComponent(r.id)}&from=home` : (r.stream_link || '');
+  return r.id ? `./release?id=${encodeURIComponent(r.id)}&from=home` : (r.stream_link || '');
 }
 
 function imgPath(filename) {
@@ -1830,7 +1830,7 @@ function buildCard(r, delay) {
     card.style.cursor = 'pointer';
     card.addEventListener('click', (e) => {
       if (e.target.closest('a')) return;
-      if (page.startsWith('./release.html')) location.href = page;
+      if (page.startsWith('./release?')) location.href = page;
       else window.open(page, '_blank', 'noopener,noreferrer');
     });
   }

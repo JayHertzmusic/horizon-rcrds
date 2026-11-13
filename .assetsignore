@@ -1,0 +1,17 @@
+.git
+.github
+.vscode
+.wrangler
+.assetsignore
+.dev.vars
+node_modules
+worker
+scripts
+propuestas
+wrangler.jsonc
+CNAME
+*.md
+releases.json
+mixtapes.json
+playlists.json
+sync-ignore.json

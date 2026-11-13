@@ -1,0 +1,24 @@
+// La web de HORIZON RCRDS en Cloudflare (cuenta "Horizon Records").
+// Publicar:  node worker/wrangler.mjs deploy   (usa la sesión de Cloudflare de Horizon, la del bot)
+{
+  "name": "horizon-web",
+  "main": "worker/index.js",
+  "compatibility_date": "2025-09-01",
+  "workers_dev": true,
+  "build": { "command": "node worker/build.mjs" },
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    "not_found_handling": "none",
+    // Estas rutas pasan siempre por el servidor: datos, API y archivos que el panel puede sustituir
+    "run_worker_first": ["/api/*", "/releases.json", "/mixtapes.json", "/playlists.json", "/sync-ignore.json", "/assets/release_preview.mp3", "/assets/logo.png", "/assets/favicon_icon.png"]
+  },
+  "vars": {
+    // ID de cliente de Google (público). Los emails de los owners van como secreto (OWNER_EMAILS).
+    "GOOGLE_CLIENT_ID": "157268274335-7oct5ose15hu5c9dhq1bh2fem0dnden0.apps.googleusercontent.com",
+    "SYNC_REPO": "JayHertzmusic/horizon-rcrds"
+  },
+  "d1_databases": [{ "binding": "DB", "database_name": "horizon-web", "database_id": "a9514982-6bf4-47ad-8181-cd95caf3df46" }],
+  "kv_namespaces": [{ "binding": "FILES", "id": "f2ce183033764564beb769fcb97505bc" }],
+  "observability": { "enabled": true }
+}

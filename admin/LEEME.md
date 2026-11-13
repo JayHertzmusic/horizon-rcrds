@@ -2,7 +2,21 @@
 
 Un panel para publicar en la web sin tocar código: **releases**, **radio (mixtapes)**, **playlists**, **audio del reproductor** y **logo / icono**.
 
-No necesita servidor ni cuentas nuevas. El panel vive en la carpeta `admin/` de la web y guarda cada cambio directamente en el repositorio de GitHub. GitHub Pages vuelve a publicar la web sola en 1–2 minutos.
+Cada cambio se guarda en el repositorio de GitHub y GitHub Pages vuelve a publicar la web sola en 1–2 minutos.
+
+## La web en Cloudflare, acceso con Google y roles
+
+- La web está en Cloudflare (cuenta **Horizon Records**, Worker `horizon-web`). Las páginas y portadas de siempre van con la web; releases, mixtapes y playlists están en su base de datos, y lo que se sube desde el panel o llega de SoundCloud se guarda allí también. Los cambios salen **al momento**.
+- **horizonrcrds.com/admin** — solo los owners (secreto `OWNER_EMAILS` del Worker; no está en el repositorio). Todo, más la pestaña **Equipo**.
+- **horizonrcrds.com/team** — el resto del equipo. Cada uno entra con su cuenta de Google y solo ve lo que permite su rol.
+- **Equipo** (en /admin): añadir o quitar emails y elegir su rol. Quitar a alguien le cierra la sesión al momento.
+- **Roles**: crear roles y marcar por sección **Ver / Editar / Eliminar** («Editar» incluye crear; «Eliminar» incluye Excluir). El servidor (`worker/index.js`) comprueba cada cambio contra el rol.
+- **Historial**: quién entró y qué publicó cada uno.
+- Login de Google: proyecto «HORIZON RCRDS Panel» de la cuenta de Google de Horizon.
+- La sincronización con SoundCloud sigue en GitHub Actions: baja los datos de la web, busca lo nuevo y lo manda a Cloudflare (`scripts/cloud-sync.mjs`), identificándose con el token propio de GitHub Actions (sin claves). Después guarda una copia de los datos y archivos en este repositorio.
+- Publicar cambios de código: `node worker/wrangler.mjs deploy` (usa la sesión de Cloudflare de Horizon de la carpeta del bot).
+- Secciones nuevas (p. ej. Eventos): se añaden en `SECTIONS` de `worker/index.js` y aparecen solas como casillas en Roles.
+- Lo de más abajo sobre GitHub Pages y el token de GitHub es del sistema anterior.
 
 ## Qué cambia en la web
 

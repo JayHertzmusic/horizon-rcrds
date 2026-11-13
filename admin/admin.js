@@ -1,13 +1,12 @@
-/* HORIZON RCRDS — panel de administración.
-   Sin servidor: el navegador habla directamente con la API de GitHub (token personal del usuario) y cada
-   «Publicar» es UN commit en el repositorio de la web: releases.json, mixtapes.json, playlists.json y archivos de assets/.
-   GitHub Pages vuelve a publicar la web sola en 1–2 minutos. La web no necesita ningún cambio. */
+/* HORIZON RCRDS — panel (/admin para los owners, /team para el resto del equipo).
+   Se entra con Google. El servidor de la web en Cloudflare (worker/index.js) revisa cada cambio contra el rol de
+   quien lo hace y lo guarda: releases, mixtapes, playlists y los archivos subidos. Sale en la web al momento. */
 'use strict';
 (() => {
-  const CFG = Object.assign({ owner: '', repo: '', branch: '', root: '' }, window.HZ_CONFIG || {});
-  const API = 'https://api.github.com';
-  const SITE = '../';                 // el panel vive en <web>/admin/
-  const AUTH_KEY = 'hz_admin_auth';
+  const CFG = Object.assign({ api: '' }, window.HZ_CONFIG || {});
+  const MODE = document.documentElement.dataset.panel === 'team' ? 'team' : 'admin';
+  const SITE = '../';                 // el panel vive en <web>/admin/ o <web>/team/
+  const AUTH_KEY = 'hz_panel_' + MODE;
   const COVER_PX = 1000;              // mismo tamaño que las portadas que ya tiene la web
   const MAX_AUDIO = 25 * 1024 * 1024;
   const MAX_IMAGE_IN = 30 * 1024 * 1024;
@@ -17,7 +16,7 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const app = $('#app');
 
-  let auth = null;        // { token, owner, repo, branch, root }
+  let auth = null;        // { token (sesión del panel), user, sections, owner, repo, branch, root }
   let repo = null;        // { head, treeSha, files: Map(ruta → {sha,size}), truncated, releases: [], playlists: [] }
   let view = 'releases';
   let editing = null;     // editor abierto (lanzamiento o playlist)
@@ -28,7 +27,7 @@
   /* ---------------- Sesión ---------------- */
   function readAuth() {
     for (const s of [localStorage, sessionStorage]) {
-      try { const a = JSON.parse(s.getItem(AUTH_KEY) || 'null'); if (a?.token && a.owner && a.repo) return a; } catch { /* almacenamiento bloqueado */ }
+      try { const a = JSON.parse(s.getItem(AUTH_KEY) || 'null'); if (a?.token && a.user) return a; } catch { /* almacenamiento bloqueado */ }
     }
     return null;
   }
@@ -38,120 +37,53 @@
   }
   function clearAuth() { for (const s of [localStorage, sessionStorage]) { try { s.removeItem(AUTH_KEY); } catch { /* nada */ } } }
 
-  /* ---------------- GitHub ---------------- */
+  /* ---------------- Servidor (Cloudflare) ---------------- */
   class GhError extends Error { constructor(msg, status = 0) { super(msg); this.status = status; } }
-  const R = () => `/repos/${encodeURIComponent(auth.owner)}/${encodeURIComponent(auth.repo)}`;
-  const encPath = p => p.split('/').map(encodeURIComponent).join('/');
-  const root = () => { const r = String(auth?.root || '').replace(/^\/+|\/+$/g, ''); return r ? r + '/' : ''; };
-  const P = p => root() + p;
-
-  function ghMessage(status, msg) {
-    if (status === 401) return 'El token no es válido o ha caducado. Entra con uno nuevo.';
-    if (status === 403 && /rate limit/i.test(msg)) return 'GitHub ha limitado las peticiones durante un rato. Espera unos minutos.';
-    if (status === 403) return 'El token no tiene permiso para esto. Necesita «Contents: Read and write» en este repositorio.';
-    if (status === 404) return 'No se encuentra el repositorio o la rama (o el token no tiene acceso a ese repositorio).';
-    if (status === 409) return 'El repositorio está vacío.';
-    if (status === 422) return 'GitHub rechazó el cambio' + (msg ? `: ${msg}` : '.');
-    return `Error de GitHub (${status})${msg ? `: ${msg}` : ''}.`;
-  }
-  async function gh(method, path, body, raw) {
+  const P = p => p;   // rutas de la web (assets/…) tal cual
+  /* Sus errores ya vienen explicados ({ message }). */
+  async function api(method, path, body) {
     let res;
+    const form = typeof FormData !== 'undefined' && body instanceof FormData;
     try {
-      res = await fetch(API + path, {
+      res = await fetch(CFG.api + path, {
         method, cache: 'no-store',
-        headers: {
-          Authorization: `Bearer ${auth.token}`,
-          Accept: raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-          ...(body ? { 'Content-Type': 'application/json' } : {}),
-        },
-        body: body ? JSON.stringify(body) : undefined,
+        headers: { ...(auth?.token ? { Authorization: `Bearer ${auth.token}` } : {}), ...(body && !form ? { 'Content-Type': 'application/json' } : {}) },
+        body: body ? (form ? body : JSON.stringify(body)) : undefined,
       });
-    } catch { throw new GhError('Sin conexión con GitHub. Revisa tu internet y vuelve a intentarlo.'); }
-    if (res.ok) return raw ? res.blob() : res.status === 204 ? null : res.json();
+    } catch { throw new GhError('Sin conexión con el servidor. Revisa tu internet y vuelve a intentarlo.'); }
     const j = await res.json().catch(() => ({}));
-    throw new GhError(ghMessage(res.status, j.message || ''), res.status);
+    if (res.ok) return j;
+    throw new GhError(j.message || `Error del servidor (${res.status}).`, res.status);
   }
-  function toB64(u8) {
-    let s = '';
-    for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
-    return btoa(s);
-  }
-  function textOfB64(b64) {
-    const bin = atob(String(b64).replace(/\s/g, ''));
-    const u8 = new Uint8Array(bin.length);
-    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
-    return new TextDecoder().decode(u8);   // UTF-8: nombres como 浩林Hali se leen bien
-  }
+  /* Permisos del rol (el servidor los vuelve a comprobar en cada cambio) */
+  const can = (sec, act = 'view') => !!(auth?.user?.owner || auth?.user?.perms?.[sec]?.[act]);
 
   async function loadRepo() {
-    const ref = await gh('GET', `${R()}/git/ref/heads/${encPath(auth.branch)}`);
-    const head = ref.object.sha;
-    const commit = await gh('GET', `${R()}/git/commits/${head}`);
-    const tree = await gh('GET', `${R()}/git/trees/${commit.tree.sha}?recursive=1`);
+    const d = await api('GET', '/api/data');
     const files = new Map();
-    for (const t of tree.tree || []) if (t.type === 'blob') files.set(t.path, { sha: t.sha, size: t.size });
-    const fileInfo = async path => {
-      if (files.has(path)) return files.get(path);
-      if (!tree.truncated) return null;
-      try { const c = await gh('GET', `${R()}/contents/${encPath(path)}?ref=${head}`); return { sha: c.sha, size: c.size }; }
-      catch (e) { if (e.status === 404) return null; throw e; }
-    };
-    const json = async (name, required, lenient) => {
-      const f = await fileInfo(P(name));
-      if (!f) {
-        if (required) throw new GhError(`No encuentro ${P(name)} en el repositorio. Revisa «root» en config.js.`);
-        return [];
-      }
-      const blob = await gh('GET', `${R()}/git/blobs/${f.sha}`);
-      const raw = textOfB64(blob.content).trim();
-      if (!raw && !required) return [];                   // empty file (e.g. emptied by hand in GitHub) = nothing
-      let data;
-      try { data = JSON.parse(raw); } catch {
-        if (lenient) return [];
-        throw new GhError(`${P(name)} tiene un error de formato. Corrígelo en GitHub antes de usar el panel.`);
-      }
-      if (!Array.isArray(data)) {
-        if (lenient) return [];
-        throw new GhError(`${P(name)} debe ser una lista ([ … ]).`);
-      }
-      return data;
-    };
-    const [releases, mixtapes, playlists, ignore] = await Promise.all([json('releases.json', true), json('mixtapes.json', false), json('playlists.json', false), json('sync-ignore.json', false, true)]);
-    return { head, treeSha: commit.tree.sha, files, truncated: !!tree.truncated, releases, mixtapes, playlists, ignore };
+    for (const [name, f] of Object.entries(d.files || {})) files.set('assets/' + name, { sha: String(f.v), size: f.size });
+    return { head: d.version, files, releases: d.releases || [], mixtapes: d.mixtapes || [], playlists: d.playlists || [], ignore: d.ignore || [] };
   }
 
-  /* Un «Publicar» = un commit. Los archivos se suben una vez; el JSON se recalcula sobre la versión más
-     reciente del repositorio (si alguien publicó a la vez, se reintenta sin pisar su cambio). */
+  /* Un «Publicar» = un cambio en el servidor. Las listas se recalculan sobre la versión más reciente
+     (si alguien publicó a la vez, se reintenta sin pisar su cambio). Sale en la web al momento. */
   async function publish(message, uploads, build) {
-    const made = [];
-    for (const u of uploads) {
-      const { sha } = await gh('POST', `${R()}/git/blobs`, { content: toB64(new Uint8Array(await u.blob.arrayBuffer())), encoding: 'base64' });
-      made.push({ ...u, sha });
-    }
     for (let attempt = 0; ; attempt++) {
       const fresh = await loadRepo();
       const out = build ? build(fresh) : {};
-      const entries = made.map(m => ({ path: m.path, mode: '100644', type: 'blob', sha: m.sha }));
-      if (out.releases) entries.push({ path: P('releases.json'), mode: '100644', type: 'blob', content: JSON.stringify(out.releases, null, 2) + '\n' });
-      if (out.ignore) entries.push({ path: P('sync-ignore.json'), mode: '100644', type: 'blob', content: JSON.stringify(out.ignore, null, 2) + '\n' });
-      if (out.mixtapes) entries.push({ path: P('mixtapes.json'), mode: '100644', type: 'blob', content: JSON.stringify(out.mixtapes, null, 2) + '\n' });
-      if (out.playlists) entries.push({ path: P('playlists.json'), mode: '100644', type: 'blob', content: JSON.stringify(out.playlists, null, 2) + '\n' });
-      for (const p of new Set(out.remove || [])) {
-        if (fresh.files.has(p) && !made.some(m => m.path === p)) entries.push({ path: p, mode: '100644', type: 'blob', sha: null });
-      }
-      const tree = await gh('POST', `${R()}/git/trees`, { base_tree: fresh.treeSha, tree: entries });
-      if (tree.sha === fresh.treeSha) { repo = fresh; return { out, unchanged: true }; }
-      const commit = await gh('POST', `${R()}/git/commits`, { message, tree: tree.sha, parents: [fresh.head] });
-      try {
-        await gh('PATCH', `${R()}/git/refs/heads/${encPath(auth.branch)}`, { sha: commit.sha, force: false });
-      } catch (e) {
-        if (e.status === 422 && attempt < 3) continue;   // otro commit entró antes: repetir sobre el nuevo
-        throw e;
-      }
-      for (const m of made) { const old = previews.get(m.path); if (old) URL.revokeObjectURL(old); previews.set(m.path, URL.createObjectURL(m.blob)); }
+      const lists = {};
+      for (const k of ['releases', 'mixtapes', 'playlists', 'ignore']) if (out[k]) lists[k] = out[k];
+      const remove = [...new Set(out.remove || [])].filter(p => fresh.files.has(p) && !uploads.some(u => u.path === p)).map(p => p.replace(/^assets\//, ''));
+      const form = new FormData();
+      form.append('meta', JSON.stringify({ base: fresh.head, message, lists, remove }));
+      for (const u of uploads) form.append('file:' + u.path.replace(/^assets\//, ''), u.blob, u.path.split('/').pop());
+      let res;
+      try { res = await api('POST', '/api/publish', form); }
+      catch (e) { if (e.status === 409 && attempt < 3) continue; throw e; }
+      if (res.unchanged) { repo = fresh; return { out, unchanged: true }; }
+      for (const m of uploads) { const old = previews.get(m.path); if (old) URL.revokeObjectURL(old); previews.set(m.path, URL.createObjectURL(m.blob)); }
       try { repo = await loadRepo(); } catch { repo = { ...fresh, releases: out.releases || fresh.releases, mixtapes: out.mixtapes || fresh.mixtapes, playlists: out.playlists || fresh.playlists }; }
-      return { out, made };
+      return { out, made: uploads };
     }
   }
 
@@ -172,11 +104,11 @@
         if (!ok) break;
       }
       if (id !== watchId) return;
-      if (ok) { deploy('✓ Ya está en la web', 'ok'); watchTimer = setTimeout(() => id === watchId && deploy(), 8000); return; }
-      if (Date.now() - start > 6 * 60e3) { deploy('GitHub sigue publicando. Mira la web en unos minutos.', 'warn'); watchTimer = setTimeout(() => id === watchId && deploy(), 15000); return; }
-      watchTimer = setTimeout(tick, 8000);
+      if (ok) { deploy('✓ Ya está en la web', 'ok'); watchTimer = setTimeout(() => id === watchId && deploy(), 5000); return; }
+      if (Date.now() - start > 2 * 60e3) { deploy('Aún no se ve el cambio. Recarga la web en un momento.', 'warn'); watchTimer = setTimeout(() => id === watchId && deploy(), 15000); return; }
+      watchTimer = setTimeout(tick, 2000);
     };
-    watchTimer = setTimeout(tick, 4000);
+    watchTimer = setTimeout(tick, 400);
   }
   const jsonProbe = (name, data) => ({ url: name, test: async res => { try { return JSON.stringify(await res.json()) === JSON.stringify(data); } catch { return false; } } });
   const fileProbe = (file, blob) => ({ url: `assets/${encodeURIComponent(file)}`, test: async res => (await res.blob()).size === blob.size });
@@ -246,13 +178,10 @@
     document.documentElement.style.setProperty('--accent-rgb', `${n >> 16 & 255}, ${n >> 8 & 255}, ${n & 255}`);
   }
 
-  /* Si la web aún no tiene un archivo (recién publicado) o el repositorio es privado: se pide a GitHub. */
-  document.addEventListener('error', async e => {
+  /* Imagen que no carga: se marca (el panel sigue funcionando) */
+  document.addEventListener('error', e => {
     const img = e.target;
-    if (!(img instanceof HTMLImageElement) || !img.dataset.repo || img.dataset.tried || !auth || !repo) return;
-    img.dataset.tried = '1';
-    try { img.src = URL.createObjectURL(await gh('GET', `${R()}/contents/${encPath(img.dataset.repo)}?ref=${repo.head}`, null, true)); }
-    catch { img.classList.add('is-broken'); }
+    if (img instanceof HTMLImageElement && img.dataset.repo) img.classList.add('is-broken');
   }, true);
 
   /* ---------------- Imágenes ---------------- */
@@ -357,65 +286,85 @@
   }
 
   /* ---------------- Pantallas ---------------- */
-  function loginView(message = '') {
-    const needRepo = !CFG.owner || !CFG.repo;
-    document.title = 'Panel — HORIZON RCRDS';
+  /* Login con Google (botón oficial de Google Identity Services) */
+  let gisLoad = null, serverCfg = null;
+  function loadGis() {
+    if (!gisLoad) gisLoad = new Promise((ok, ko) => {
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
+      s.onload = ok;
+      s.onerror = () => { gisLoad = null; ko(new Error('No se pudo cargar el botón de Google. Revisa tu internet o desactiva el bloqueador de anuncios en esta página.')); };
+      document.head.appendChild(s);
+    });
+    return gisLoad;
+  }
+  function loginError(msg) {
+    const el = $('.login-error');
+    if (el) { el.textContent = msg || ''; el.hidden = !msg; }
+  }
+  async function loginView(message = '') {
+    document.title = MODE === 'team' ? 'Equipo — HORIZON RCRDS' : 'Panel — HORIZON RCRDS';
     app.innerHTML = `
       <main class="login">
-        <form id="login" class="login-card" novalidate>
+        <div class="login-card">
           <img class="login-logo" src="${SITE}assets/logo.png" alt="">
           <h1>HORIZON <span>RCRDS</span></h1>
-          <p class="login-sub">Panel</p>
-          ${needRepo ? `
-          <div class="field"><label for="l-owner">Usuario u organización de GitHub</label><input id="l-owner" name="owner" autocomplete="off" spellcheck="false" required></div>
-          <div class="field"><label for="l-repo">Repositorio</label><input id="l-repo" name="repo" autocomplete="off" spellcheck="false" required></div>` : ''}
-          <div class="field"><label for="l-token">Token de GitHub</label><input id="l-token" name="token" type="password" autocomplete="off" spellcheck="false" required></div>
-          <label class="check"><input type="checkbox" name="remember" checked><span>Recordar en este navegador</span></label>
+          <p class="login-sub">${MODE === 'team' ? 'Equipo' : 'Panel · Owners'}</p>
+          <p class="login-text">${MODE === 'team' ? 'Entra con la cuenta de Google con la que te han dado de alta en el equipo.' : 'Solo para los owners. Entra con tu cuenta de Google.'}</p>
+          <div id="g-btn" class="g-btn"></div>
+          <form id="dev-login" class="dev-login" hidden novalidate>
+            <div class="field"><label for="dev-email">Prueba local · email</label><input id="dev-email" name="email" type="email" autocomplete="off" spellcheck="false"></div>
+            <button class="btn ghost wide" type="submit">Entrar (prueba local)</button>
+          </form>
+          <label class="check"><input type="checkbox" id="remember" checked><span>Recordar en este navegador</span></label>
           <p class="login-error" role="alert" ${message ? '' : 'hidden'}>${esc(message)}</p>
-          <button class="btn primary wide" type="submit">Entrar</button>
-          <details class="howto">
-            <summary>¿Cómo consigo el token?</summary>
-            <ol>
-              <li>GitHub → Settings → Developer settings → Personal access tokens → <b>Fine-grained tokens</b> → Generate new token.</li>
-              <li>Repository access: <b>Only select repositories</b> → el repositorio de la web.</li>
-              <li>Permissions → Repository permissions → <b>Contents: Read and write</b>.</li>
-              <li>Generate token, cópialo y pégalo aquí.</li>
-            </ol>
-          </details>
-        </form>
+        </div>
       </main>`;
-    (needRepo ? $('#l-owner') : $('#l-token')).focus();
+    try {
+      serverCfg = serverCfg || await api('GET', '/api/auth/config');
+      if (serverCfg.dev) $('#dev-login').hidden = false;
+      if (serverCfg.clientId) {
+        await loadGis();
+        if (!$('#g-btn')) return;
+        google.accounts.id.initialize({ client_id: serverCfg.clientId, callback: r => login({ credential: r.credential }), auto_select: false, cancel_on_tap_outside: true });
+        google.accounts.id.renderButton($('#g-btn'), { theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', locale: 'es', width: 280 });
+      } else if (!serverCfg.dev) throw new Error('El panel aún no está configurado: falta el ID de cliente de Google en el servidor.');
+    } catch (e) { serverCfg = null; loginError(e.message); }
   }
 
-  async function login(form) {
-    const btn = form.querySelector('[type=submit]'), err = form.querySelector('.login-error');
-    const val = n => String(form.elements[n]?.value || '').trim();
-    const a = { token: val('token'), owner: CFG.owner || val('owner'), repo: CFG.repo || val('repo'), branch: CFG.branch || '', root: CFG.root || '' };
-    if (!a.owner || !a.repo || !a.token) { err.textContent = 'Rellena todos los campos.'; err.hidden = false; return; }
-    if (/^https?:\/\//.test(a.repo)) a.repo = a.repo.replace(/\/+$/, '').split('/').pop();
-    btn.disabled = true; btn.textContent = 'Comprobando…'; err.hidden = true;
-    auth = a;
+  const VIEWS = ['releases', 'radio', 'playlists', 'player', 'brand'];
+  const firstView = () => VIEWS.find(v => can(v)) || (MODE === 'admin' && auth?.user?.owner ? 'team' : 'none');
+  const emptyRepo = () => ({ head: '', treeSha: '', files: new Map(), truncated: false, releases: [], mixtapes: [], playlists: [], ignore: [] });
+  function useSession(res) {
+    auth = { token: res.token || auth?.token, user: res.user, sections: res.sections };
+  }
+  async function login(cred) {
+    const card = $('.login-card'), remember = $('#remember')?.checked !== false;
+    loginError(''); card?.setAttribute('aria-busy', 'true');
     try {
-      const info = await gh('GET', R());
-      if (!info.permissions?.push) throw new GhError('El token puede leer el repositorio pero no escribir. Dale «Contents: Read and write».', 403);
-      a.branch = a.branch || info.default_branch || 'main';
-      repo = await loadRepo();
-      saveAuth(a, form.elements.remember.checked);
-      go('releases');
+      const res = await api('POST', cred.email ? '/api/auth/dev' : '/api/auth/login', cred.email ? { email: cred.email, area: MODE } : { credential: cred.credential, area: MODE });
+      useSession(res);
+      repo = firstView() === 'none' ? emptyRepo() : await loadRepo();
+      saveAuth(auth, remember);
+      go(firstView());
     } catch (e) {
+      if (auth?.token) api('POST', '/api/auth/logout').catch(() => {});
       auth = null; repo = null;
-      err.textContent = e.message; err.hidden = false;
-      btn.disabled = false; btn.textContent = 'Entrar';
+      loginError(e.message); card?.removeAttribute('aria-busy');
     }
   }
   function logout(message = '') {
-    clearAuth(); auth = null; repo = null; editing = null; setDirtyBase(null);
+    if (auth?.token) api('POST', '/api/auth/logout').catch(() => {});
+    try { window.google?.accounts?.id?.disableAutoSelect(); } catch { /* nada */ }
+    clearAuth(); auth = null; repo = null; editing = null; setDirtyBase(null); teamData = null; teamErr = '';
     watchId++; deploy();
     loginView(message);
   }
 
   function shell(inner) {
     const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}</button>`;
+    const u = auth.user, names = { releases: 'Releases', radio: 'Radio', playlists: 'Playlists', player: 'Reproductor', brand: 'Logo' };
+    const initials = (u.name || u.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
     return `
       <header class="top">
         <a class="brand" href="${SITE}" target="_blank" rel="noopener" aria-label="Abrir la web">
@@ -423,14 +372,117 @@
           <span class="word">HORIZON<small>RCRDS</small></span>
         </a>
         <nav class="tabs" aria-label="Secciones">
-          ${tab('releases', 'Releases')}${tab('radio', 'Radio')}${tab('playlists', 'Playlists')}${tab('player', 'Reproductor')}${tab('brand', 'Logo')}
+          ${VIEWS.filter(v => can(v)).map(v => tab(v, names[v])).join('')}${MODE === 'admin' && u.owner ? tab('team', 'Equipo') : ''}
         </nav>
         <div class="top-end">
+          <span class="who" title="${esc(u.email)}">
+            ${u.picture ? `<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="who-ini">${esc(initials)}</span>`}
+            <span class="who-txt"><b>${esc(u.name || u.email.split('@')[0])}</b><small>${esc(u.owner ? 'Owner' : u.role?.name || 'Sin rol')}</small></span>
+          </span>
           <a class="link" href="${SITE}" target="_blank" rel="noopener">Ver web ↗</a>
           <button type="button" class="link" data-act="logout">Salir</button>
         </div>
       </header>
       <main id="main" class="main" tabindex="-1">${inner}</main>`;
+  }
+  function noAccessView() {
+    return `<div class="head"><div><p class="eyebrow">Equipo</p><h1>SIN SECCIONES</h1></div></div>
+      <p class="info">Tu rol (${esc(auth.user.role?.name || 'sin rol')}) todavía no tiene ninguna sección. Cuando un owner te dé acceso, sal y vuelve a entrar.</p>`;
+  }
+
+  /* ---------------- Equipo y roles (solo owners, en /admin) ---------------- */
+  let teamData = null, teamErr = '', teamLoading = false, newRole = false;
+  const ACTIONS = { view: 'Ver', edit: 'Editar', delete: 'Eliminar' };
+  const fmtDate = t => t ? new Date(t).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : '';
+  async function loadTeam() {
+    if (teamLoading) return;
+    teamLoading = true;
+    try {
+      const [t, a] = await Promise.all([api('GET', '/api/team'), api('GET', '/api/team/audit')]);
+      teamData = { ...t, audit: a.items }; teamErr = '';
+    } catch (e) {
+      teamErr = e.message;
+      if (e.status === 401) { teamLoading = false; logout(e.message); return; }
+    }
+    teamLoading = false;
+    if (view === 'team' && !editing) render();
+  }
+  function roleCard(r) {
+    const isNew = !r.id;
+    return `
+      <form class="role-card" data-role="${esc(r.id || '')}" novalidate>
+        <div class="role-top">
+          <input name="name" value="${esc(r.name || '')}" maxlength="40" placeholder="Nombre del rol (p. ej. A&R, Mod)" aria-label="Nombre del rol" autocomplete="off">
+          <button type="submit" class="btn primary sm">${isNew ? 'Crear rol' : 'Guardar'}</button>
+          ${isNew ? '<button type="button" class="btn ghost sm" data-act="cancel-role">Cancelar</button>' : '<button type="button" class="btn danger sm" data-act="delete-role">Eliminar</button>'}
+        </div>
+        <table class="perm-table">
+          <thead><tr><th scope="col">Sección</th>${Object.values(ACTIONS).map(a => `<th scope="col">${a}</th>`).join('')}</tr></thead>
+          <tbody>${teamData.sections.map(s => `
+            <tr><th scope="row">${esc(s.label)}</th>${Object.keys(ACTIONS).map(a => `<td>${s.actions.includes(a)
+              ? `<label class="perm"><input type="checkbox" name="${esc(s.id)}.${a}" ${r.perms?.[s.id]?.[a] ? 'checked' : ''} aria-label="${esc(s.label)}: ${ACTIONS[a]}"><span></span></label>`
+              : '<span class="muted">—</span>'}</td>`).join('')}</tr>`).join('')}
+          </tbody>
+        </table>
+        <p class="ed-error" role="alert" hidden></p>
+      </form>`;
+  }
+  function teamView() {
+    const head = `<div class="head"><div><p class="eyebrow">Accesos</p><h1>EQUIPO${teamData ? ` <span class="count">${teamData.owners.length + teamData.members.length}</span>` : ''}</h1></div></div>`;
+    if (!teamData) {
+      if (!teamErr) setTimeout(loadTeam, 0);
+      return head + (teamErr ? `<p class="login-error" role="alert">${esc(teamErr)}</p><button type="button" class="btn ghost" data-act="team-retry">Reintentar</button>` : '<p class="info">Cargando…</p>');
+    }
+    const { owners, members, roles, audit: log } = teamData;
+    const roleOpts = sel => roles.map(r => `<option value="${esc(r.id)}" ${r.id === sel ? 'selected' : ''}>${esc(r.name)}</option>`).join('');
+    const person = (name, email, pic) => `
+      ${pic ? `<img class="thumb round" src="${esc(pic)}" alt="" referrerpolicy="no-referrer">` : `<span class="thumb round ini">${esc((name || email)[0].toUpperCase())}</span>`}
+      <span class="meta"><b>${esc(name || email)}</b><span>${esc(name ? email : '')}</span></span>`;
+    return `${head}
+      <p class="info lead">Cada persona entra en <b>horizonrcrds.com/team</b> con su cuenta de Google y solo ve lo que permite su rol. /admin es solo para los owners.</p>
+      <ol class="list team-list">
+        ${owners.map(e => `<li class="row tm">${person('', e, '')}<span class="tag">Owner</span><span class="muted sm-txt">Acceso total</span><span></span></li>`).join('')}
+        ${members.map(m => `
+          <li class="row tm">
+            ${person(m.name, m.email, m.picture)}
+            <select class="role-sel" data-member="${esc(m.email)}" aria-label="Rol de ${esc(m.email)}">${m.role_id && roles.some(r => r.id === m.role_id) ? '' : '<option value="" selected>Sin rol</option>'}${roleOpts(m.role_id)}</select>
+            <span class="muted sm-txt">${m.last_login ? 'Entró ' + esc(fmtDate(m.last_login)) : 'Aún no ha entrado'}</span>
+            <button type="button" class="btn ghost sm" data-act="remove-member" data-email="${esc(m.email)}">Quitar</button>
+          </li>`).join('')}
+      </ol>
+      ${roles.length ? `
+      <form id="add-member" class="add-row" novalidate>
+        <input name="email" type="email" placeholder="email@gmail.com" aria-label="Email de Google" autocomplete="off" spellcheck="false">
+        <select name="role_id" aria-label="Rol">${roleOpts(roles[0].id)}</select>
+        <button type="submit" class="btn primary">Añadir</button>
+        <p class="ed-error" role="alert" hidden></p>
+      </form>` : '<p class="info">Crea primero un rol (abajo) para poder añadir personas.</p>'}
+
+      <div class="head sub"><div><p class="eyebrow">Permisos</p><h2>ROLES <span class="count">${roles.length}</span></h2></div>
+        ${newRole ? '' : '<button type="button" class="btn ghost" data-act="new-role">+ Nuevo rol</button>'}</div>
+      <p class="info">Marca lo que puede hacer cada rol. «Editar» incluye crear. Los owners siempre lo tienen todo.</p>
+      <div class="roles">${newRole ? roleCard({ perms: {} }) : ''}${roles.map(roleCard).join('')}${!roles.length && !newRole ? '<p class="info">Todavía no hay roles.</p>' : ''}</div>
+
+      <div class="head sub"><div><p class="eyebrow">Quién hizo qué</p><h2>HISTORIAL</h2></div></div>
+      <ol class="list log">${log.length ? log.map(x => `
+        <li class="row lg"><span class="muted">${esc(fmtDate(x.at))}</span><b>${esc(x.name || x.email)}</b><span>${esc(x.action)}</span></li>`).join('') : '<li class="empty">Aún no hay nada.</li>'}
+      </ol>`;
+  }
+  function rolePerms(form) {
+    const perms = {};
+    for (const s of teamData.sections) {
+      perms[s.id] = {};
+      for (const a of s.actions) perms[s.id][a] = !!form.elements[`${s.id}.${a}`]?.checked;
+    }
+    return perms;
+  }
+  async function teamAction(fn, okMsg, errBox) {
+    busy = true;
+    try { await fn(); if (okMsg) toast(okMsg); newRole = false; teamData = null; await loadTeam(); }
+    catch (e) {
+      if (e.status === 401) { logout(e.message); return; }
+      if (errBox) { errBox.textContent = e.message; errBox.hidden = false; } else toast(e.message);
+    } finally { busy = false; }
   }
 
   /* Releases */
@@ -446,14 +498,14 @@
         <span class="cat">${esc(catOf(r))}</span>
         <span class="swatch" style="--c:${esc(hex6(r.color) || '#ffffff')}" title="${esc(r.color || '')}"></span>
         ${i === 0 ? '<span class="tag">Portada</span>' : '<span></span>'}
-        <button type="button" class="btn ghost sm" data-act="edit-release" data-key="${esc(keyOf(r))}">Editar</button>
+        ${can('releases', 'edit') ? `<button type="button" class="btn ghost sm" data-act="edit-release" data-key="${esc(keyOf(r))}">Editar</button>` : '<span></span>'}
       </li>`).join('');
   }
   function releasesView() {
     return `
       <div class="head">
         <div><p class="eyebrow">Discography</p><h1>RELEASES <span class="count">${repo.releases.length}</span></h1></div>
-        <button type="button" class="btn primary" data-act="new-release">+ Nuevo lanzamiento</button>
+        ${can('releases', 'edit') ? '<button type="button" class="btn primary" data-act="new-release">+ Nuevo lanzamiento</button>' : ''}
       </div>
       <input class="search" type="search" id="rel-filter" placeholder="Buscar" aria-label="Buscar lanzamientos" value="${esc(filter)}">
       <ol class="list" id="rel-list">${releaseRows()}</ol>
@@ -500,7 +552,7 @@
         <div class="ed-actions">
           <button type="submit" class="btn primary">${isNew ? 'Publicar' : 'Guardar cambios'}</button>
           <button type="button" class="btn ghost" data-act="back">Cancelar</button>
-          ${isNew ? '' : `${r.soundcloud_link ? '<button type="button" class="btn ghost push" data-act="exclude-release">Excluir</button>' : ''}<button type="button" class="btn danger${r.soundcloud_link ? '' : ' push'}" data-act="delete-release">Eliminar</button>`}
+          ${isNew || !can('releases', 'delete') ? '' : `${r.soundcloud_link ? '<button type="button" class="btn ghost push" data-act="exclude-release">Excluir</button>' : ''}<button type="button" class="btn danger${r.soundcloud_link ? '' : ' push'}" data-act="delete-release">Eliminar</button>`}
         </div>
       </form>`;
   }
@@ -592,7 +644,7 @@
           <li class="row ex">
             <span class="meta"><b>${esc(x.title || x.soundcloud_link)}</b><span>${esc(x.removed ? 'Excluido el ' + x.removed : '')}</span></span>
             <a class="link" href="${esc(x.soundcloud_link)}" target="_blank" rel="noopener">SoundCloud ↗</a>
-            <button type="button" class="btn ghost sm" data-act="unexclude" data-link="${esc(x.soundcloud_link)}">Permitir de nuevo</button>
+            ${can(kind === 'mixtape' ? 'radio' : 'releases', 'delete') ? `<button type="button" class="btn ghost sm" data-act="unexclude" data-link="${esc(x.soundcloud_link)}">Permitir de nuevo</button>` : '<span></span>'}
           </li>`).join('')}
         </ol>
       </section>`;
@@ -638,7 +690,7 @@
     return `
       <div class="head">
         <div><p class="eyebrow">Horizon Radio</p><h1>RADIO <span class="count">${list.length}</span></h1></div>
-        <button type="button" class="btn primary" data-act="new-mixtape">+ Nuevo mixtape</button>
+        ${can('radio', 'edit') ? '<button type="button" class="btn primary" data-act="new-mixtape">+ Nuevo mixtape</button>' : ''}
       </div>
       <ol class="list">${list.length ? list.map((m, i) => `
         <li class="row">
@@ -648,7 +700,7 @@
           <span class="cat">${m.preview ? '♪ Audio' : '<span class="muted">Sin audio</span>'}</span>
           <span class="swatch" style="--c:${esc(hex6(m.color) || '#ffffff')}"></span>
           ${i === 0 ? '<span class="tag">Portada</span>' : '<span></span>'}
-          <button type="button" class="btn ghost sm" data-act="edit-mixtape" data-key="${esc(keyOf(m))}">Editar</button>
+          ${can('radio', 'edit') ? `<button type="button" class="btn ghost sm" data-act="edit-mixtape" data-key="${esc(keyOf(m))}">Editar</button>` : '<span></span>'}
         </li>`).join('') : '<li class="empty">Todavía no hay mixtapes.</li>'}
       </ol>
       ${excludedHtml('mixtape')}`;
@@ -707,7 +759,7 @@
         <div class="ed-actions">
           <button type="submit" class="btn primary">${isNew ? 'Publicar' : 'Guardar cambios'}</button>
           <button type="button" class="btn ghost" data-act="back">Cancelar</button>
-          ${isNew ? '' : `${m.soundcloud_link ? '<button type="button" class="btn ghost push" data-act="exclude-mixtape">Excluir</button>' : ''}<button type="button" class="btn danger${m.soundcloud_link ? '' : ' push'}" data-act="delete-mixtape">Eliminar</button>`}
+          ${isNew || !can('radio', 'delete') ? '' : `${m.soundcloud_link ? '<button type="button" class="btn ghost push" data-act="exclude-mixtape">Excluir</button>' : ''}<button type="button" class="btn danger${m.soundcloud_link ? '' : ' push'}" data-act="delete-mixtape">Eliminar</button>`}
         </div>
       </form>`;
   }
@@ -853,14 +905,14 @@
     return `
       <div class="head">
         <div><p class="eyebrow">Curated</p><h1>PLAYLISTS <span class="count">${list.length}</span></h1></div>
-        <button type="button" class="btn primary" data-act="new-playlist">+ Nueva playlist</button>
+        ${can('playlists', 'edit') ? '<button type="button" class="btn primary" data-act="new-playlist">+ Nueva playlist</button>' : ''}
       </div>
       <ol class="list">${list.length ? list.map((p, i) => `
         <li class="row pl">
           <span class="pos">${i + 1}</span>
           ${imgTag(p.image, 'thumb')}
           <span class="meta"><b>${esc(p.title || 'Sin título')}</b><span>${esc(p.description || '')}</span></span>
-          <button type="button" class="btn ghost sm" data-act="edit-playlist" data-index="${i}">Editar</button>
+          ${can('playlists', 'edit') ? `<button type="button" class="btn ghost sm" data-act="edit-playlist" data-index="${i}">Editar</button>` : '<span></span>'}
         </li>`).join('') : '<li class="empty">Todavía no hay playlists.</li>'}
       </ol>`;
   }
@@ -887,7 +939,7 @@
         <div class="ed-actions">
           <button type="submit" class="btn primary">${isNew ? 'Publicar' : 'Guardar cambios'}</button>
           <button type="button" class="btn ghost" data-act="back">Cancelar</button>
-          ${isNew ? '' : '<button type="button" class="btn danger push" data-act="delete-playlist">Eliminar</button>'}
+          ${isNew || !can('playlists', 'delete') ? '' : '<button type="button" class="btn danger push" data-act="delete-playlist">Eliminar</button>'}
         </div>
       </form>`;
   }
@@ -953,7 +1005,7 @@
     ],
   };
   const pending = new Map();   // archivo → { blob, url }
-  function fileCard(f) {
+  function fileCard(f, editable) {
     const path = P('assets/' + f.file), has = repo.files.has(path) || previews.has(path), nw = pending.get(f.file);
     const src = nw?.url || (has ? assetSrc(f.file) : '');
     const media = f.kind === 'audio'
@@ -964,19 +1016,19 @@
         <h2>${esc(f.title)}${nw ? ' <span class="tag">Nuevo, sin publicar</span>' : ''}</h2>
         ${media}
         ${nw ? `<p class="info">${esc(nw.name)} · ${(nw.blob.size / 1048576).toFixed(1)} MB</p>` : ''}
-        <div class="card-actions">
+        ${editable ? `<div class="card-actions">
           <input type="file" id="file-${esc(f.file)}" class="sr-only" accept="${esc(f.accept)}" data-pick="${esc(f.file)}">
           <label for="file-${esc(f.file)}" class="btn ghost">${nw ? 'Elegir otro' : f.kind === 'audio' ? 'Cambiar audio' : 'Cambiar imagen'}</label>
           ${nw ? `<button type="button" class="btn primary" data-act="publish-file" data-file="${esc(f.file)}">Publicar</button>
                   <button type="button" class="btn ghost" data-act="discard-file" data-file="${esc(f.file)}">Descartar</button>` : ''}
-        </div>
+        </div>` : ''}
         <p class="ed-error" role="alert" hidden></p>
       </section>`;
   }
   function filesView(which) {
     const title = which === 'player' ? 'REPRODUCTOR' : 'LOGO';
     return `<div class="head"><div><p class="eyebrow">${which === 'player' ? 'Latest Release' : 'Brand'}</p><h1>${title}</h1></div></div>
-      <div class="cards">${FILES[which].map(fileCard).join('')}</div>`;
+      <div class="cards">${FILES[which].map(f => fileCard(f, can(which, 'edit'))).join('')}</div>`;
   }
   async function pickFile(name, file) {
     const f = Object.values(FILES).flat().find(x => x.file === name);
@@ -1056,8 +1108,12 @@
   function render() {
     if (!auth || !repo) return;
     accent();
+    if (view !== 'team' && view !== 'none' && !can(view)) { view = firstView(); editing = null; }
+    if (view === 'team' && !(MODE === 'admin' && auth.user.owner)) view = firstView();
     let inner;
-    if (editing?.view === 'releases') inner = releaseEditor();
+    if (view === 'none') inner = noAccessView();
+    else if (view === 'team') inner = teamView();
+    else if (editing?.view === 'releases') inner = releaseEditor();
     else if (editing?.view === 'playlists') inner = playlistEditor();
     else if (editing?.view === 'radio') inner = mixtapeEditor();
     else if (view === 'radio') inner = radioView();
@@ -1065,7 +1121,7 @@
     else if (view === 'player' || view === 'brand') inner = filesView(view);
     else inner = releasesView();
     app.innerHTML = shell(inner);
-    const names = { releases: 'Releases', radio: 'Radio', playlists: 'Playlists', player: 'Reproductor', brand: 'Logo' };
+    const names = { releases: 'Releases', radio: 'Radio', playlists: 'Playlists', player: 'Reproductor', brand: 'Logo', team: 'Equipo', none: 'Equipo' };
     document.title = `${editing ? (editing.orig?.title || 'Nuevo') + ' · ' : ''}${names[view] || ''} — Panel HORIZON RCRDS`;
   }
   function busyOn(scope, btn, label) {
@@ -1121,7 +1177,27 @@
       filter = ''; go(t.dataset.view);
       return;
     }
+    // El servidor también lo comprueba; aquí solo se evita abrir lo que el rol no puede usar
+    const needs = { 'new-release': ['releases', 'edit'], 'edit-release': ['releases', 'edit'], 'delete-release': ['releases', 'delete'], 'exclude-release': ['releases', 'delete'],
+      'new-mixtape': ['radio', 'edit'], 'edit-mixtape': ['radio', 'edit'], 'delete-mixtape': ['radio', 'delete'], 'exclude-mixtape': ['radio', 'delete'],
+      'new-playlist': ['playlists', 'edit'], 'edit-playlist': ['playlists', 'edit'], 'delete-playlist': ['playlists', 'delete'] }[t.dataset.act];
+    if (needs && !can(...needs)) { toast('Tu rol no tiene permiso para esto.'); return; }
     switch (t.dataset.act) {
+      case 'team-retry': teamErr = ''; render(); break;
+      case 'new-role': newRole = true; render(); $('.role-card input[name=name]')?.focus(); break;
+      case 'cancel-role': newRole = false; render(); break;
+      case 'delete-role': {
+        const form = t.closest('.role-card'), r = teamData.roles.find(x => x.id === form.dataset.role);
+        if (!r || !await confirmBox(`¿Eliminar el rol «${r.name}»?`)) return;
+        teamAction(() => api('DELETE', `/api/team/roles?id=${encodeURIComponent(r.id)}`), 'Rol eliminado', form.querySelector('.ed-error'));
+        break;
+      }
+      case 'remove-member': {
+        const email = t.dataset.email;
+        if (!await confirmBox(`¿Quitar a ${email} del equipo? Dejará de poder entrar en /team al momento.`, 'Quitar')) return;
+        teamAction(() => api('DELETE', `/api/team/members?email=${encodeURIComponent(email)}`), 'Quitado del equipo');
+        break;
+      }
       case 'logout':
         if (await leaveOk()) logout();
         break;
@@ -1193,7 +1269,23 @@
     const form = e.target;
     if (form.method === 'dialog') return;   // la ventana de confirmar se cierra sola
     e.preventDefault();
-    if (form.id === 'login') { login(form); return; }
+    if (form.id === 'dev-login') { const email = form.elements.email.value.trim(); if (email) login({ email }); return; }
+    if (busy) return;
+    if (form.id === 'add-member') {
+      const box = form.querySelector('.ed-error'); box.hidden = true;
+      const email = form.elements.email.value.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) { box.textContent = 'Escribe un email válido.'; box.hidden = false; form.elements.email.focus(); return; }
+      teamAction(() => api('POST', '/api/team/members', { email, role_id: form.elements.role_id.value }), `${email} añadido al equipo`, box);
+      return;
+    }
+    if (form.classList.contains('role-card')) {
+      const box = form.querySelector('.ed-error'); box.hidden = true;
+      const name = form.elements.name.value.trim();
+      if (!name) { box.textContent = 'Ponle un nombre al rol.'; box.hidden = false; form.elements.name.focus(); return; }
+      const id = form.dataset.role || undefined;
+      teamAction(() => api('POST', '/api/team/roles', { id, name, perms: rolePerms(form) }), id ? 'Rol guardado' : 'Rol creado', box);
+      return;
+    }
     if (form.id !== 'ed' || busy) return;
     const btn = form.querySelector('[type=submit]');
     $('#ed-error').hidden = true;
@@ -1220,6 +1312,14 @@
     if (t.id === 'ed-file' && t.files[0]) { setCover(t.files[0]); t.value = ''; }
     if (t.id === 'mx-file' && t.files[0]) { setMixAudio(t.files[0]); t.value = ''; }
     if (t.id === 'f-sc') scFill(!editing?.key);
+    if (t.classList.contains('role-sel') && t.value && !busy) teamAction(() => api('POST', '/api/team/members', { email: t.dataset.member, role_id: t.value }), 'Rol cambiado');
+    // Editar o Eliminar llevan Ver; sin Ver no hay nada más
+    const pm = t.closest?.('.perm-table') && t.name?.match(/^(.+)\.(view|edit|delete)$/);
+    if (pm) {
+      const f = t.form, box = n => f.elements[`${pm[1]}.${n}`];
+      if (pm[2] !== 'view' && t.checked && box('view')) box('view').checked = true;
+      if (pm[2] === 'view' && !t.checked) for (const n of ['edit', 'delete']) if (box(n)) box(n).checked = false;
+    }
     if (t.dataset.pick && t.files[0]) { pickFile(t.dataset.pick, t.files[0]); t.value = ''; }
   });
   // Arrastrar y soltar: portada en el editor, archivos en Reproductor/Logo. Fuera de esas zonas no se abre el archivo.
@@ -1246,14 +1346,15 @@
   async function boot() {
     auth = readAuth();
     if (!auth) { loginView(); return; }
-    // config.js manda sobre lo guardado (si se cambia de repositorio, no se usa el antiguo)
-    if ((CFG.owner && CFG.owner !== auth.owner) || (CFG.repo && CFG.repo !== auth.repo)) { logout(); return; }
     app.innerHTML = '<p class="boot">Cargando…</p>';
     try {
-      repo = await loadRepo();
-      go('releases');
+      useSession(await api('GET', '/api/auth/me'));   // el rol puede haber cambiado desde la última vez
+      const remembered = (() => { try { return !!localStorage.getItem(AUTH_KEY); } catch { return false; } })();
+      saveAuth(auth, remembered);
+      repo = firstView() === 'none' ? emptyRepo() : await loadRepo();
+      go(firstView());
     } catch (e) {
-      if (e.status === 401 || e.status === 404) { logout(e.message); return; }
+      if (e.status === 401 || e.status === 403 || e.status === 404) { logout(e.message); return; }
       app.innerHTML = `<main class="login"><div class="login-card"><p class="login-error" role="alert">${esc(e.message)}</p>
         <button type="button" class="btn primary wide" id="retry">Reintentar</button>
         <button type="button" class="btn ghost wide" data-act="logout">Salir</button></div></main>`;

@@ -1,5 +1,8 @@
-# Every 3 hours: looks at the label's SoundCloud and adds new releases and mixtapes to the website.
-# Script: scripts/sync-soundcloud.mjs. It can also be started by hand: Actions → Sync SoundCloud → Run workflow.
+# Every 3 hours: looks at the label's SoundCloud (and YouTube) and adds new releases and mixtapes to the website.
+# The website lives on Cloudflare: this job reads the current data from it, runs scripts/sync-soundcloud.mjs and sends
+# back what is new (scripts/cloud-sync.mjs). It signs in with GitHub's own OIDC token: no keys are stored anywhere.
+# Afterwards the current data and files are committed here as a backup.
+# It can also be started by hand: Actions → Sync SoundCloud → Run workflow.
 name: Sync SoundCloud
 
 on:
@@ -9,7 +12,7 @@ on:
 
 permissions:
   contents: write
-  pages: write
+  id-token: write
 
 concurrency:
   group: soundcloud-sync
@@ -19,6 +22,8 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      SITE_URL: https://horizon-web.horizon-records.workers.dev
     steps:
       - uses: actions/checkout@v4
 
@@ -31,6 +36,9 @@ jobs:
           command -v ffmpeg || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
           mkdir -p /tmp/sync && cd /tmp/sync && npm init -y > /dev/null && npm install --silent --no-audit --no-fund sharp@0.33.5
 
+      - name: Get the site data from Cloudflare
+        run: node scripts/cloud-sync.mjs pull
+
       - name: Check SoundCloud
         id: sync
         env:
@@ -38,16 +46,18 @@ jobs:
           SYNC_MESSAGE_FILE: /tmp/sync/message.txt
         run: node scripts/sync-soundcloud.mjs
 
-      - name: Publish
+      - name: Send to the website
         if: steps.sync.outputs.changed == 'true'
         env:
-          GH_TOKEN: ${{ github.token }}
+          SYNC_MESSAGE_FILE: /tmp/sync/message.txt
+        run: node scripts/cloud-sync.mjs push
+
+      - name: Backup to GitHub
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add releases.json mixtapes.json assets
-          git commit -F /tmp/sync/message.txt
+          git add releases.json mixtapes.json playlists.json sync-ignore.json assets
+          if git diff --cached --quiet; then exit 0; fi
+          if [ -s /tmp/sync/message.txt ]; then git commit -F /tmp/sync/message.txt; else git commit -m "Backup from horizonrcrds.com"; fi
           git pull --rebase --quiet
           git push
-          # make sure GitHub Pages rebuilds the site (commits made by Actions may not trigger it)
-          gh api -X POST "repos/${{ github.repository }}/pages/builds" > /dev/null || true

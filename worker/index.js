@@ -345,7 +345,15 @@ async function team(req, env, s, p) {
     const rows = email
       ? (await DB.prepare('SELECT a.id, a.at, a.email, COALESCE(m.label, a.name) AS name, m.color, a.action, a.detail FROM panel_audit a LEFT JOIN panel_members m ON m.email = a.email WHERE a.email = ? AND a.id < ? ORDER BY a.id DESC LIMIT 101').bind(email, before).all()).results
       : (await DB.prepare('SELECT a.id, a.at, a.email, COALESCE(m.label, a.name) AS name, m.color, a.action, a.detail FROM panel_audit a LEFT JOIN panel_members m ON m.email = a.email WHERE a.id < ? ORDER BY a.id DESC LIMIT 101').bind(before).all()).results;
-    const people = (await DB.prepare('SELECT DISTINCT a.email, COALESCE(m.label, (SELECT name FROM panel_audit x WHERE x.email = a.email ORDER BY x.id DESC LIMIT 1)) AS name FROM panel_audit a LEFT JOIN panel_members m ON m.email = a.email').all()).results;
+    // todo el equipo (owners y miembros, hayan entrado o no) + quien aparezca en el registro
+    const members = (await DB.prepare('SELECT email, COALESCE(label, name) AS name FROM panel_members').all()).results;
+    const seen = (await DB.prepare('SELECT a.email, (SELECT name FROM panel_audit x WHERE x.email = a.email ORDER BY x.id DESC LIMIT 1) AS name FROM panel_audit a GROUP BY a.email').all()).results;
+    const map = new Map();
+    for (const e of owners(env)) map.set(e, { email: e, name: seen.find(x => x.email === e)?.name || '', owner: true });
+    for (const m of members) map.set(m.email, { email: m.email, name: m.name || '' });
+    for (const x of seen) if (!map.has(x.email) && x.email !== 'sync@github') map.set(x.email, { email: x.email, name: x.name || '' });
+    if (seen.some(x => x.email === 'sync@github')) map.set('sync@github', { email: 'sync@github', name: 'Sync SoundCloud' });
+    const people = [...map.values()];
     return json({ items: rows.slice(0, 100), more: rows.length > 100, people });
   }
   if (p === '/api/team/members' && m === 'POST') {
@@ -426,10 +434,13 @@ async function chat(req, env, s, url) {
   }
   if (req.method === 'DELETE') {
     const id = Number(url.searchParams.get('id')) || 0;
-    const m = await DB.prepare('SELECT email FROM chat_messages WHERE id = ?').bind(id).first();
-    if (!m) throw new HttpError(404, 'Ese mensaje ya no existe.');
+    const m = await DB.prepare('SELECT email, name, text, deleted FROM chat_messages WHERE id = ?').bind(id).first();
+    if (!m || m.deleted) throw new HttpError(404, 'Ese mensaje ya no existe.');
     if (m.email !== s.email && !s.owner) throw new HttpError(403, 'Solo puedes borrar tus mensajes.');
-    await DB.prepare('UPDATE chat_messages SET deleted = 1, text = \'\' WHERE id = ?').bind(id).run();
+    // se oculta del chat pero el texto queda guardado y apuntado en el historial
+    await DB.prepare('UPDATE chat_messages SET deleted = 1 WHERE id = ?').bind(id).run();
+    const author = m.email === s.email ? 'suyo' : `de ${m.name || m.email}`;
+    await audit(env, s, `Borró un mensaje ${author} del chat: «${String(m.text).replace(/\s+/g, ' ').slice(0, 220)}»`);
     return json({ ok: true });
   }
   throw new HttpError(405, 'No permitido.');

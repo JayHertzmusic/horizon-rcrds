@@ -512,8 +512,8 @@
   }
   function logView() {
     if (!logState.loaded && !logState.err && !logState.loading) setTimeout(() => loadLog(false), 0);
-    const opts = logState.people.slice().sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email))
-      .map(p => `<option value="${esc(p.email)}" ${p.email === logState.who ? 'selected' : ''}>${esc(p.name ? `${p.name} · ${p.email}` : p.email)}</option>`).join('');
+    const opts = logState.people.slice().sort((a, b) => (b.owner ? 1 : 0) - (a.owner ? 1 : 0) || (a.name || a.email).localeCompare(b.name || b.email))
+      .map(p => `<option value="${esc(p.email)}" ${p.email === logState.who ? 'selected' : ''}>${esc((p.name || p.email.split('@')[0]) + (p.owner ? ' (owner)' : '') + ' · ' + p.email)}</option>`).join('');
     let day = '';
     const rows = logState.items.map(x => {
       const d = new Date(x.at), k = d.toDateString();

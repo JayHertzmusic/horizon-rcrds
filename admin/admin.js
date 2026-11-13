@@ -411,14 +411,37 @@
     teamLoading = false;
     if (view === 'team' && !editing) render();
   }
+  let openRole = null;   // rol desplegado para editar
+  function roleSummary(r) {
+    const parts = teamData.sections.map(s => {
+      const acts = s.actions.filter(a => r.perms?.[s.id]?.[a]);
+      if (!acts.length) return '';
+      const word = acts.includes('delete') ? 'todo' : acts.includes('edit') ? 'editar' : 'ver';
+      return `<span class="rs">${esc(s.label)} <i>${word}</i></span>`;
+    }).filter(Boolean);
+    return parts.length ? parts.join('') : '<span class="muted">Sin secciones todavía</span>';
+  }
   function roleCard(r) {
     const isNew = !r.id;
+    if (!isNew && openRole !== r.id) {
+      const n = teamData.members.filter(m => m.role_id === r.id).length;
+      return `
+      <div class="role-line" data-role="${esc(r.id)}">
+        <b>${esc(r.name)}</b>
+        <span class="role-sum">${roleSummary(r)}</span>
+        <span class="muted sm-txt">${n} ${n === 1 ? 'persona' : 'personas'}</span>
+        <span class="role-btns">
+          <button type="button" class="btn ghost sm" data-act="preview-role" title="Ver el panel como este rol">Probar</button>
+          <button type="button" class="btn ghost sm" data-act="open-role">Editar</button>
+        </span>
+      </div>`;
+    }
     return `
       <form class="role-card" data-role="${esc(r.id || '')}" novalidate>
         <div class="role-top">
           <input name="name" value="${esc(r.name || '')}" maxlength="40" placeholder="Nombre del rol (p. ej. A&R, Mod)" aria-label="Nombre del rol" autocomplete="off">
           <button type="submit" class="btn primary sm">${isNew ? 'Crear rol' : 'Guardar'}</button>
-          ${isNew ? '<button type="button" class="btn ghost sm" data-act="cancel-role">Cancelar</button>' : '<button type="button" class="btn ghost sm" data-act="preview-role" title="Ver el panel como este rol">Probar</button><button type="button" class="btn danger sm" data-act="delete-role">Eliminar</button>'}
+          ${isNew ? '<button type="button" class="btn ghost sm" data-act="cancel-role">Cancelar</button>' : '<button type="button" class="btn ghost sm" data-act="close-role">Cerrar</button><button type="button" class="btn danger sm" data-act="delete-role">Eliminar</button>'}
         </div>
         <table class="perm-table">
           <thead><tr><th scope="col">Sección</th>${Object.values(ACTIONS).map(a => `<th scope="col">${a}</th>`).join('')}</tr></thead>
@@ -517,7 +540,7 @@
   }
   async function teamAction(fn, okMsg, errBox) {
     busy = true;
-    try { await fn(); if (okMsg) toast(okMsg); newRole = false; teamData = null; await loadTeam(); }
+    try { await fn(); if (okMsg) toast(okMsg); newRole = false; openRole = null; teamData = null; await loadTeam(); }
     catch (e) {
       if (e.status === 401) { logout(e.message); return; }
       if (errBox) { errBox.textContent = e.message; errBox.hidden = false; } else toast(e.message);
@@ -1232,14 +1255,16 @@
       case 'team-retry': teamErr = ''; render(); break;
       case 'log-more': loadLog(true); break;
       case 'preview-role': {
-        const r = teamData?.roles.find(x => x.id === t.closest('.role-card')?.dataset.role);
+        const r = teamData?.roles.find(x => x.id === t.closest('[data-role]')?.dataset.role);
         if (!r) return;
         preview = { id: r.id, name: r.name, perms: r.perms };
         filter = ''; go(firstView());
         break;
       }
       case 'preview-off': preview = null; go('team'); break;
-      case 'new-role': newRole = true; render(); $('.role-card input[name=name]')?.focus(); break;
+      case 'open-role': openRole = t.closest('[data-role]').dataset.role; newRole = false; render(); $('.role-card input[name=name]')?.focus(); break;
+      case 'close-role': openRole = null; render(); break;
+      case 'new-role': newRole = true; openRole = null; render(); $('.role-card input[name=name]')?.focus(); break;
       case 'cancel-role': newRole = false; render(); break;
       case 'delete-role': {
         const form = t.closest('.role-card'), r = teamData.roles.find(x => x.id === form.dataset.role);

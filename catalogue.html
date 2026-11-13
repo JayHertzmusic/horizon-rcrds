@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <link rel="icon" type="image/png" href="./assets/favicon_icon.png" />
   <title>Full Catalogue — HORIZON RCRDS</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" media="print" onload="this.media='all'"/><noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/></noscript>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@300;400;600;700&display=swap" rel="stylesheet"/>
 
   <style>
@@ -285,6 +285,10 @@
     /* 16px stops iPhone from zooming the page when the search box is tapped */
     .search-input { font-size: 16px; padding-top: 10px; padding-bottom: 10px; }
   }</style>
+  <!-- Smooth scroll (Lenis, MIT: assets/vendor/LENIS-LICENSE.txt). Desktop mouse/trackpad only. -->
+  <link rel="stylesheet" href="./assets/smooth-scroll.css?v=1"/>
+  <script src="./assets/vendor/lenis.min.js?v=1.3.26" defer></script>
+  <script src="./assets/smooth-scroll.js?v=2" defer></script>
   <link rel="stylesheet" href="./assets/tailwind.css?v=1"/>
 </head>
 <body>
@@ -458,18 +462,42 @@ let view = location.hash === '#radio' ? 'radio' : 'releases';
 const noun = n => view === 'radio' ? `mixtape${n !== 1 ? 's' : ''}` : `release${n !== 1 ? 's' : ''}`;
 const currentList = () => view === 'radio' ? allMixtapes : allReleases;
 
+/* Cards are built once per tab and then only shown or hidden: typing in the search box no longer
+   rebuilds the grid (which reloaded every cover and replayed the fade-in on each letter). */
+const cardCache = new WeakMap();
+let shownView = null;
+function cardFor(r, i) {
+  let card = cardCache.get(r);
+  if (!card) {
+    card = buildCatCard(r, i);
+    /* the entrance fade plays once; showing the card again after a search must not replay it */
+    card.addEventListener('animationend', () => { card.classList.remove('fade-in'); card.style.animationDelay = ''; }, { once: true });
+    cardCache.set(r, card);
+  }
+  return card;
+}
 function renderGrid(list) {
   const grid  = document.getElementById('catalogue-grid');
   const badge = document.getElementById('count-badge');
-  grid.innerHTML = '';
+  const all = currentList();
 
+  if (shownView !== view) {            /* first time, or the other tab: put this tab's cards in the grid */
+    grid.innerHTML = '';
+    all.forEach((r, i) => grid.appendChild(cardFor(r, i)));
+    shownView = view;
+  }
+  const keep = new Set(list);
+  all.forEach(r => { cardCache.get(r).style.display = keep.has(r) ? '' : 'none'; });
+
+  let empty = grid.querySelector('.no-results');
   if (!list.length) {
-    grid.innerHTML = `<div class="no-results">No ${noun(0)} found</div>`;
-    if (badge) { badge.textContent = `0 ${noun(0)}`; badge.style.display = 'inline'; }
-    return;
+    if (!empty) { empty = document.createElement('div'); empty.className = 'no-results'; grid.appendChild(empty); }
+    empty.textContent = `No ${noun(0)} found`;
+    empty.style.display = '';
+  } else if (empty) {
+    empty.style.display = 'none';
   }
 
-  list.forEach((r, i) => grid.appendChild(buildCatCard(r, i)));
   if (badge) {
     badge.textContent  = `${list.length} ${noun(list.length)}`;
     badge.style.display = 'inline';

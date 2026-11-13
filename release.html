@@ -3,11 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script>
+    /* start downloading the release data straight away, in parallel with the styles */
+    window.HZ_RELEASES = fetch('./releases.json', { cache: 'no-cache' }).then(function (r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    });
+    window.HZ_RELEASES.catch(function () {});
+  </script>
   <title>HORIZON RCRDS</title>
   <meta name="description" content="Listen on Spotify, SoundCloud and every platform. Released by HORIZON RCRDS." />
   <link rel="icon" type="image/png" href="./assets/favicon_icon.png" />
 
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" media="print" onload="this.media='all'"/><noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/></noscript>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:ital,wght@0,300;0,400;0,600;0,700;1,300&display=swap" rel="stylesheet"/>
@@ -206,8 +214,9 @@
     .social-icon:hover { color: var(--accent-color); border-color: var(--accent-color); box-shadow: 0 0 16px rgba(var(--accent-color-rgb), 0.35); transform: translateY(-2px); }
 
     /* the top of the page appears on load; the rest when it scrolls into view */
-    .intro { animation: intro-rise 0.8s cubic-bezier(.16,1,.3,1) both; }
-    @keyframes intro-rise { from { opacity: 0; transform: translateY(28px); } to { opacity: 1; transform: none; } }
+    .intro { animation: intro-rise 0.35s ease-out both; }
+    #cover { transition: opacity 0.25s ease, transform 0.7s cubic-bezier(.16,1,.3,1); }
+    @keyframes intro-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
     @media (prefers-reduced-motion: reduce) { .intro { animation: none; } }
     .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
     .reveal.visible { opacity: 1; transform: none; }
@@ -216,6 +225,39 @@
     @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
     .toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 16px); opacity: 0; pointer-events: none; z-index: 60; background: #111; border: 1px solid rgba(var(--accent-color-rgb), 0.5); color: #fff; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; padding: 12px 20px; border-radius: 3px; transition: opacity 0.3s, transform 0.3s; }
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    /* ═════════ ONE SCREEN ═════════ */
+    /* Share sits on the "Listen on" line (saves a row) */
+    .listen-label .share-btn { order: 2; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 3px; border: 1px solid rgba(var(--accent-color-rgb), 0.5); color: var(--accent-color); font-size: 0.6rem; font-weight: 700; letter-spacing: 0.25em; text-transform: uppercase; background: transparent; cursor: pointer; transition: background 0.25s, box-shadow 0.25s; }
+    .listen-label .share-btn:hover { background: rgba(var(--accent-color-rgb), 0.1); box-shadow: 0 0 16px rgba(var(--accent-color-rgb), 0.3); }
+    .listen-label::after { order: 1; }
+    .listen-label { max-width: 32rem; }
+    /* footer: below everything on phones, a thin bar inside the screen on desktop */
+    .rel-foot { margin-top: 56px; padding: 28px 0 8px; border-top: 1px solid #1f1f1f; }
+    @media (min-width: 1024px) and (min-height: 560px) {
+      /* desktop: the whole release fits in the window, no scrolling */
+      .rel-bg { min-height: 100vh; min-height: 100svh; padding-top: 86px !important; padding-bottom: 62px !important; }
+      .back-link { margin-bottom: 10px; }
+      .stage-cover { max-width: min(600px, calc(100vh - 230px)) !important; max-width: min(600px, calc(100svh - 230px)) !important; }
+      .hero-title { font-size: clamp(2.6rem, min(5.4vw, 9vh), 6rem); }
+      #tag { margin-bottom: 12px; }
+      .hr-artist { margin-top: 10px; }
+      .hc-player { margin-top: min(26px, 3vh); }
+      .listen-label { margin: min(28px, 3vh) 0 10px; }
+      .platforms { gap: 8px; }
+      .platform { padding: 7px 10px 7px 8px; }
+      .platform .ico { width: 40px; height: 40px; }
+      .rel-foot { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 0 clamp(24px, 4vw, 48px) 14px; border: 0; }
+      .rel-foot .social-icon { width: 34px; height: 34px; font-size: 0.85rem; }
+    }
+    @media (min-width: 1024px) and (max-height: 780px) {
+      /* short screens: a little tighter */
+      .platform .sub { display: none; }
+      .platform .name { font-size: 1.15rem; }
+      .platform .ico { width: 34px; height: 34px; font-size: 1.05rem; }
+      .hc-play { width: 48px; height: 48px; }
+      .stage-cover { max-width: min(560px, calc(100vh - 210px)) !important; max-width: min(560px, calc(100svh - 210px)) !important; }
+    }
 
     /* ═════════ PHONES ═════════ */
     #nav-menu { margin-top: 0 !important; padding-bottom: 0 !important; border-top-width: 0 !important; }
@@ -247,6 +289,9 @@
     @keyframes float-flat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
     @media (hover: none) { .platform:hover { transform: none; } }
   </style>
+  <link rel="stylesheet" href="./assets/smooth-scroll.css?v=1"/>
+  <script src="./assets/vendor/lenis.min.js?v=1.3.26" defer></script>
+  <script src="./assets/smooth-scroll.js?v=2" defer></script>
   <link rel="stylesheet" href="./assets/tailwind.css?v=1"/>
 </head>
 <body>
@@ -318,17 +363,13 @@
               <div class="hc-times"><span id="cur">0:00</span><span id="dur">—:——</span></div>
             </div>
           </div>
-          <div class="listen-label">Listen on</div>
+          <div class="listen-label"><span>Listen on</span><button type="button" class="share-btn" id="share"><i class="fa-solid fa-share-nodes"></i> Share</button></div>
           <div class="platforms" id="platforms"></div>
-          <div class="share-row"><button type="button" class="btn-outline" id="share"><i class="fa-solid fa-share-nodes"></i> Share</button></div>
         </div>
       </div>
     </div>
-  </section>
 
-  <div class="h-px-elec"></div>
-
-  <footer style="padding:40px 24px;">
+  <footer class="rel-foot">
     <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-6">
       <div class="flex items-center gap-3">
         <a href="https://www.instagram.com/horizon_rcrds/" target="_blank" rel="noopener noreferrer" class="social-icon" aria-label="Instagram"><i class="fa-brands fa-instagram"></i></a>
@@ -339,6 +380,7 @@
       <p style="font-size:0.62rem;font-weight:600;letter-spacing:0.2em;text-transform:uppercase;color:#374151;text-align:center;">© 2027 HORIZON RCRDS. ALL RIGHTS RESERVED.</p>
     </div>
   </footer>
+  </section>
 </main>
 <div class="toast" id="toast" role="status">Link copied</div>
 
@@ -554,9 +596,7 @@ new IntersectionObserver(([e]) => e.target.classList.toggle('is-off', !e.isInter
 (async () => {
   let releases;
   try {
-    const res = await fetch('./releases.json', { cache: 'no-cache' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    releases = await res.json();
+    releases = await (window.HZ_RELEASES || fetch('./releases.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }));
     if (!Array.isArray(releases) || !releases.length) throw new Error('empty');
   } catch (err) {
     document.getElementById('head').innerHTML = '<p style="color:#ef4444;font-size:0.75rem;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;">Could not load this release.</p>';
@@ -595,6 +635,7 @@ new IntersectionObserver(([e]) => e.target.classList.toggle('is-off', !e.isInter
   const bgCover = document.getElementById('bg-cover');
   cover.onload = () => { cover.style.opacity = '1'; bgCover.classList.add('on'); };
   cover.alt = `${r.title} cover`;
+  cover.fetchPriority = 'high';   /* the cover is the first thing that must arrive */
   cover.src = imgPath(r.image);
   bgCover.style.backgroundImage = `url("${imgPath(r.image).replace(/"/g, '%22')}")`;
   const dots = particles(document.getElementById('bg-particles'));

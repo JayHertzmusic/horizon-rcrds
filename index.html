@@ -3,9 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <script>
+    /* Start downloading the data straight away, in parallel with the styles and fonts
+       (loadReleases / loadRadio / loadPlaylists use these instead of waiting for the end of the page). */
+    window.HZ_DATA = {};
+    ['releases', 'mixtapes', 'playlists'].forEach(function (n) {
+      HZ_DATA[n] = fetch('./' + n + '.json', { cache: 'no-cache' }).then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status + ' — ' + r.statusText);
+        return r.json();
+      });
+      HZ_DATA[n].catch(function () {});
+    });
+  </script>
   <link rel="icon" type="image/png" href="./assets/favicon_icon.png" />
   <title>HORIZON RCRDS — Official</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" media="print" onload="this.media='all'"/><noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/></noscript>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:ital,wght@0,300;0,400;0,600;0,700;1,300&display=swap" rel="stylesheet"/>
@@ -494,6 +506,11 @@
 
     /* Reveal animation */
     .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
+    /* the top of the page appears right away with a short fade (no waiting for the scroll observer) */
+    .hero-intro { animation: hero-in 0.35s ease-out both; }
+    @keyframes hero-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .hero-intro { animation: none; } }
+    #hero-cover img { transition: opacity 0.25s ease, transform 0.7s cubic-bezier(.16,1,.3,1); }
     .reveal.visible { opacity: 1; transform: translateY(0); }
 
     /* Skeleton loader */
@@ -942,6 +959,10 @@
       .release-card:hover .card-play-overlay { opacity: 0; }
     }
   </style>
+  <!-- Smooth scroll (Lenis, MIT: assets/vendor/LENIS-LICENSE.txt). Desktop mouse/trackpad only. -->
+  <link rel="stylesheet" href="./assets/smooth-scroll.css?v=1"/>
+  <script src="./assets/vendor/lenis.min.js?v=1.3.26" defer></script>
+  <script src="./assets/smooth-scroll.js?v=2" defer></script>
   <link rel="stylesheet" href="./assets/tailwind.css?v=1"/>
 </head>
 <body>
@@ -1052,7 +1073,7 @@
     <div class="hero-grid">
 
       <!-- Latest release -->
-      <div id="hero-release" class="hero-main reveal" style="transition-delay:0.1s">
+      <div id="hero-release" class="hero-main hero-intro">
         <div class="label-tag mb-5 flex items-center gap-3">
           <span class="pulse-dot"></span>
           Latest Release · Out now
@@ -1075,7 +1096,7 @@
       </div>
 
       <!-- Cover + latest radio on top -->
-      <div class="hero-stage reveal" style="transition-delay:0.25s">
+      <div class="hero-stage hero-intro" style="animation-delay:0.05s">
         <div class="stage-glow" aria-hidden="true"></div>
         <div class="stage-tilt" id="hero-stage">
           <div class="stage-cover" id="hero-cover">
@@ -1498,6 +1519,7 @@ function populateHero(r) {
     ? `<a href="${escHtml(releasePage(r))}" class="btn-outline"><i class="fa-solid fa-arrow-right"></i> View release</a>` : '';
 
   const cover = document.getElementById('hero-cover');
+  cover.querySelector('img').fetchPriority = 'high';   /* the big cover is the first thing that must arrive */
   cover.querySelector('.stage-fallback').textContent = r.title || '';
   setImage(cover.querySelector('img'), cover.querySelector('.stage-fallback'), r.image, `${r.title || ''} cover`);
 
@@ -1522,7 +1544,8 @@ function populateHero(r) {
   }, './assets/release_preview.mp3?v=' + encodeURIComponent(r.id || ''), r.title);
   fillWave(p.querySelector('.hc-wave'));
   /* Real waveform shape once the page has settled (also warms the audio cache) */
-  const later = window.requestIdleCallback || (fn => setTimeout(fn, 1500));
+  /* the real waveform needs the whole clip: download it only once the page has finished loading */
+  const later = fn => { const go = () => setTimeout(fn, 2500); if (document.readyState === 'complete') go(); else addEventListener('load', go, { once: true }); };
   later(() => analyseWave(p.querySelector('.hc-wave'), './assets/release_preview.mp3?v=' + encodeURIComponent(r.id || '')));
 }
 
@@ -1644,6 +1667,9 @@ async function analyseWave(el, src) {
     const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     const ctx = new Ctx(1, 44100, 44100);
     const audio = await new Promise((ok, ko) => { const p = ctx.decodeAudioData(buf, ok, ko); if (p && p.catch) p.catch(ko); });
+    /* the clip is no longer preloaded, so its length comes from here (until the visitor presses play) */
+    const durEl = el.closest('.hc-player') && el.closest('.hc-player').querySelector('.hc-dur');
+    if (durEl && /—/.test(durEl.textContent)) durEl.textContent = fmtTime(audio.duration);
     const data = audio.getChannelData(0), N = 400, step = Math.max(1, Math.floor(data.length / N));
     const peaks = new Array(N).fill(0);
     let top = 0;
@@ -1769,7 +1795,7 @@ function buildCard(r, delay) {
   card.innerHTML = `
     <div class="card-cover">
       <div class="cover-fallback">${r.artist || r.title || '?'}</div>
-      ${r.image ? `<img src="${imgPath(r.image)}" alt="${(r.title||'').replace(/"/g,'&quot;')} cover" loading="lazy" />` : ''}
+      ${r.image ? `<img src="${imgPath(r.image)}" alt="${(r.title||'').replace(/"/g,'&quot;')} cover" loading="lazy" decoding="async" fetchpriority="low" />` : ''}
       <div class="card-play-overlay">
         <i class="fa-solid fa-play" style="color:#fff;font-size:1.6rem;opacity:0.95;filter:drop-shadow(0 0 8px rgba(${colorRgb},0.7));pointer-events:none;"></i>
       </div>
@@ -1859,9 +1885,8 @@ function populateGrid(releases) {
 ════════════════════════════════════════════════ */
 async function loadReleases() {
   try {
-    const res = await fetch('./releases.json', { cache: 'no-cache' });
-    if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
-    const data = await res.json();
+    /* already requested at the top of the page (window.HZ_DATA) */
+    const data = await (window.HZ_DATA && HZ_DATA.releases || fetch('./releases.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }));
 
     if (!Array.isArray(data) || data.length === 0) {
       throw new Error('releases.json must be a non-empty array');
@@ -1908,7 +1933,7 @@ function buildPlaylistCard(p, delay) {
   card.innerHTML = `
     <div class="playlist-cover">
       ${imgSrc
-        ? `<img src="${imgSrc}" alt="${title} cover" loading="lazy"
+        ? `<img src="${imgSrc}" alt="${title} cover" loading="lazy" decoding="async" fetchpriority="low"
                 onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />`
         : ''}
       <div class="playlist-cover-fallback"${imgSrc ? '' : ' style="display:flex"'}>
@@ -1960,9 +1985,8 @@ function buildPlaylistCard(p, delay) {
 async function loadPlaylists() {
   const grid = document.getElementById('playlists-grid');
   try {
-    const res = await fetch('./playlists.json', { cache: 'no-cache' });
-    if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
-    const data = await res.json();
+    /* already requested at the top of the page (window.HZ_DATA) */
+    const data = await (window.HZ_DATA && HZ_DATA.playlists || fetch('./playlists.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }));
 
     if (!Array.isArray(data) || data.length === 0) {
       throw new Error('playlists.json must be a non-empty array');
@@ -2021,7 +2045,7 @@ function bindPlayer(ui, src, title, link) {
   const fill = ui.track && ui.track.querySelector('.progress-fill');
   const audio = new Audio();
   const isWave = !!(ui.wave && ui.wave.classList.contains('hc-wave'));
-  audio.preload = 'metadata';
+  audio.preload = 'none';   /* the clip is fetched on play (or by the waveform analysis after load), not during page load */
   audio.src = src;
   btn.setAttribute('aria-label', `Play preview — ${title || ''}`);
 
@@ -2125,7 +2149,7 @@ function buildRadioCard(m, delay) {
   card.innerHTML = `
     <div class="card-cover">
       <div class="cover-fallback">${escHtml(m.artist || name)}</div>
-      ${m.image ? `<img src="${escHtml(imgPath(m.image))}" alt="${escHtml(name)} cover" loading="lazy" />` : ''}
+      ${m.image ? `<img src="${escHtml(imgPath(m.image))}" alt="${escHtml(name)} cover" loading="lazy" decoding="async" fetchpriority="low" />` : ''}
       <div class="card-play-overlay">
         <i class="fa-brands fa-soundcloud" style="color:#fff;font-size:1.8rem;opacity:0.95;filter:drop-shadow(0 0 8px rgba(${rgbStr(color)},0.7));pointer-events:none;"></i>
       </div>
@@ -2160,9 +2184,8 @@ function buildRadioCard(m, delay) {
 async function loadRadio() {
   const heroCard = document.getElementById('hero-radio');
   try {
-    const res = await fetch('./mixtapes.json', { cache: 'no-cache' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    /* already requested at the top of the page (window.HZ_DATA) */
+    const data = await (window.HZ_DATA && HZ_DATA.mixtapes || fetch('./mixtapes.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }));
     if (!Array.isArray(data) || !data.length) throw new Error('no mixtapes yet');
 
     populateRadioHero(data[0]);

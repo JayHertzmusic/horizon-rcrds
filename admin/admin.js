@@ -336,7 +336,7 @@
   }
 
   const VIEWS = ['releases', 'radio', 'playlists', 'player'];
-  const firstView = () => VIEWS.find(v => can(v)) || (MODE === 'admin' && auth?.user?.owner && !preview ? 'team' : 'none');
+  const firstView = () => VIEWS.find(v => can(v)) || (showForms() ? 'forms' : MODE === 'admin' && auth?.user?.owner && !preview ? 'team' : 'none');
   const emptyRepo = () => ({ head: '', treeSha: '', files: new Map(), truncated: false, releases: [], mixtapes: [], playlists: [], ignore: [] });
   function useSession(res) {
     auth = { token: res.token || auth?.token, user: res.user, sections: res.sections };
@@ -377,7 +377,7 @@
           <span class="word">HORIZON<small>RCRDS</small></span>
         </a>
         <nav class="tabs" aria-label="Secciones">
-          ${VIEWS.filter(v => can(v)).map(v => tab(v, names[v])).join('')}${MODE === 'admin' && u.owner && !preview ? tab('team', 'Equipo') + tab('log', 'Historial') : ''}
+          ${VIEWS.filter(v => can(v)).map(v => tab(v, names[v])).join('')}${showForms() ? tab('forms', 'Formularios') : ''}${MODE === 'admin' && u.owner && !preview ? tab('team', 'Equipo') + tab('log', 'Historial') : ''}
         </nav>
         <div class="top-end">
           <span class="who" title="${esc(u.email)}">
@@ -1165,6 +1165,7 @@
     return ok;
   }
   function go(v, ed = null) {
+    formOpen = null;
     view = v; editing = ed; setDirtyBase(null);
     render();
     if (editing) setDirtyBase(formState());
@@ -1175,12 +1176,14 @@
   function render() {
     if (!auth || !repo) return;
     accent();
-    if (view !== 'team' && view !== 'log' && view !== 'none' && !can(view)) { view = firstView(); editing = null; }
+    if (view === 'forms' && !showForms()) view = firstView();
+    if (view !== 'team' && view !== 'log' && view !== 'none' && view !== 'forms' && !can(view)) { view = firstView(); editing = null; }
     if ((view === 'team' || view === 'log') && (preview || !(MODE === 'admin' && auth.user.owner))) view = firstView();
     let inner;
     if (view === 'none') inner = noAccessView();
     else if (view === 'team') inner = teamView();
     else if (view === 'log') inner = logView();
+    else if (view === 'forms') inner = formsPage();
     else if (editing?.view === 'releases') inner = releaseEditor();
     else if (editing?.view === 'playlists') inner = playlistEditor();
     else if (editing?.view === 'radio') inner = mixtapeEditor();
@@ -1190,7 +1193,7 @@
     else inner = releasesView();
     app.innerHTML = shell(inner);
     chatStart();
-    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Reproductor', team: 'Equipo', log: 'Historial', none: 'Equipo' };
+    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Reproductor', team: 'Equipo', log: 'Historial', forms: 'Formularios', none: 'Equipo' };
     document.title = `${editing ? (editing.orig?.title || 'Nuevo') + ' · ' : ''}${names[view] || ''} — Panel HORIZON RCRDS`;
   }
   function busyOn(scope, btn, label) {
@@ -1425,6 +1428,234 @@
     if (card) pickFile(card.dataset.file, file);
   });
   window.addEventListener('beforeunload', e => { if (isDirty() || busy) e.preventDefault(); });
+
+  /* ---------------- Formularios ---------------- */
+  // Los owners los ven todos; el resto, solo los que tengan su rol o su email en «Quién puede ver las respuestas».
+  let formsData = null, formsErr = '', formsLoading = false, formOpen = null;
+  const FTYPES = { text: 'Texto corto', textarea: 'Texto largo', email: 'Email', url: 'Enlace', radio: 'Una opción', checkbox: 'Varias opciones', select: 'Desplegable', section: 'Sección (título)' };
+  const isOwnerNow = () => !!auth?.user?.owner && !preview;
+  const visibleForms = () => (formsData?.forms || []).filter(f => !preview || f.access?.roles?.includes(preview.id));
+  const showForms = () => preview ? visibleForms().length > 0 : !!(auth?.user?.owner || auth?.user?.formsCount > 0);
+  async function loadForms() {
+    if (formsLoading) return;
+    formsLoading = true;
+    try { formsData = await api('GET', '/api/forms'); formsErr = ''; }
+    catch (e) { formsErr = e.message; if (e.status === 401) { formsLoading = false; logout(e.message); return; } }
+    formsLoading = false;
+    if (view === 'forms') render();
+  }
+  const publicUrl = f => `${location.origin}/forms/${f.slug}`;
+  function formsPage() {
+    if (!formsData) {
+      if (!formsErr) setTimeout(loadForms, 0);
+      return `<div class="head"><div><p class="eyebrow">Formularios</p><h1>FORMULARIOS</h1></div></div>${formsErr ? `<p class="login-error" role="alert">${esc(formsErr)}</p>` : '<p class="info">Cargando…</p>'}`;
+    }
+    if (formOpen?.mode === 'edit') return formEditor();
+    if (formOpen?.mode === 'responses') return formResponses();
+    const list = visibleForms(), own = isOwnerNow();
+    return `
+      <div class="head"><div><p class="eyebrow">Respuestas y enlaces</p><h1>FORMULARIOS <span class="count">${list.length}</span></h1></div>
+        ${own ? '<button type="button" class="btn primary" data-act="form-new">+ Nuevo formulario</button>' : ''}</div>
+      <p class="info lead">${own ? 'Ordénalos con las flechas. Cada uno tiene su enlace público (si lo abres) y puede salir como botón en «Send your demo» de la web. Las respuestas solo las veis los owners y quien elijas en cada formulario.' : 'Los formularios a los que tienes acceso.'}</p>
+      <ol class="list forms-list">${list.length ? list.map((f, i) => `
+        <li class="row fm" data-form="${esc(f.id)}">
+          ${own ? `<span class="ord"><button type="button" class="ic" data-act="form-up" aria-label="Subir" ${i ? '' : 'disabled'}>▲</button><button type="button" class="ic" data-act="form-down" aria-label="Bajar" ${i < list.length - 1 ? '' : 'disabled'}>▼</button></span>` : '<span></span>'}
+          <span class="meta"><b>${esc(f.title)}</b><span>${f.public ? `<a href="${esc(publicUrl(f))}" target="_blank" rel="noopener">/forms/${esc(f.slug)}</a>` : `/forms/${esc(f.slug)}`}</span></span>
+          <span class="badges">${f.public ? '<span class="tag">Abierto</span>' : '<span class="tag off">Cerrado</span>'}${f.on_site ? '<span class="tag">En la web</span>' : ''}</span>
+          <span class="resp-n"><b>${f.total}</b> ${f.total === 1 ? 'respuesta' : 'respuestas'}${f.unseen ? ` <i>${f.unseen} ${f.unseen === 1 ? 'nueva' : 'nuevas'}</i>` : ''}</span>
+          <span class="fm-btns"><button type="button" class="btn ghost sm" data-act="form-resp">Respuestas</button>${own ? '<button type="button" class="btn ghost sm" data-act="form-edit">Editar</button>' : ''}</span>
+        </li>`).join('') : '<li class="empty">No hay formularios.</li>'}
+      </ol>`;
+  }
+  /* Respuestas */
+  async function openResponses(id) {
+    formOpen = { mode: 'responses', id, responses: null, more: false, err: '' };
+    render();
+    try {
+      const r = await api('GET', `/api/forms/${encodeURIComponent(id)}/responses`);
+      if (formOpen?.id !== id) return;
+      formOpen.responses = r.responses; formOpen.more = r.more;
+      if (!preview) api('POST', `/api/forms/${encodeURIComponent(id)}/seen`).then(() => { const f = formsData.forms.find(x => x.id === id); if (f) f.unseen = 0; }).catch(() => {});
+    } catch (e) { if (formOpen) formOpen.err = e.message; }
+    if (view === 'forms') render();
+  }
+  function answerHtml(v) {
+    if (Array.isArray(v)) return v.length ? v.map(esc).join('<br>') : '<span class="muted">—</span>';
+    if (!v) return '<span class="muted">—</span>';
+    return esc(v).replace(/https?:\/\/[^\s<>"']+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`).replace(/\n/g, '<br>');
+  }
+  function formResponses() {
+    const f = formsData.forms.find(x => x.id === formOpen.id);
+    if (!f) { formOpen = null; return formsPage(); }
+    const qs = f.fields.filter(x => x.type !== 'section'), own = isOwnerNow();
+    const rs = formOpen.responses;
+    return `
+      <button type="button" class="back" data-act="form-back">← Formularios</button>
+      <div class="head"><div><p class="eyebrow">Respuestas</p><h1>${esc(f.title)} <span class="count">${f.total}</span></h1></div>
+        ${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Descargar (Excel / CSV)</button>' : ''}</div>
+      ${formOpen.err ? `<p class="login-error" role="alert">${esc(formOpen.err)}</p>` : ''}
+      ${!rs ? '<p class="info">Cargando…</p>' : rs.length ? `<div class="resps">${rs.map(r => `
+        <article class="resp${r.seen ? '' : ' is-new'}" data-resp="${r.id}">
+          <header><b>${esc(fmtDate(r.at))}</b>${r.seen ? '' : '<span class="tag">Nueva</span>'}${own ? '<button type="button" class="btn ghost sm push" data-act="resp-del">Borrar</button>' : ''}</header>
+          <dl>${qs.map(q => `<dt>${esc(q.label)}</dt><dd>${answerHtml(r.data[q.id])}</dd>`).join('')}</dl>
+        </article>`).join('')}</div>
+        ${formOpen.more ? '<button type="button" class="btn ghost log-more" data-act="resp-more">Ver más</button>' : ''}` : '<p class="info">Todavía no hay respuestas.</p>'}`;
+  }
+  /* Editor (owners) */
+  function openEditor(f) {
+    formOpen = { mode: 'edit', id: f?.id || null, draft: f ? JSON.parse(JSON.stringify({ title: f.title, slug: f.slug, description: f.description, public: f.public, on_site: f.on_site, button: f.button, access: f.access || { roles: [], emails: [] }, fields: f.fields }))
+      : { title: '', slug: '', description: '', public: false, on_site: false, button: '', access: { roles: [], emails: [] }, fields: [{ id: 'q1', type: 'text', label: '', help: '', required: true }] } };
+    if (!teamData) loadTeam().then(() => view === 'forms' && formOpen?.mode === 'edit' && (syncDraft(), render()));
+    render();
+    $('#fe-title')?.focus();
+  }
+  function syncDraft() {
+    const f = $('#form-ed'), d = formOpen?.draft;
+    if (!f || !d) return;
+    d.title = f.elements.title.value; d.slug = f.elements.slug.value.trim().toLowerCase(); d.description = f.elements.description.value;
+    d.public = f.elements.public.checked; d.on_site = f.elements.on_site.checked; d.button = f.elements.button.value;
+    d.access = { roles: $$('input[name="acc-role"]:checked', f).map(i => i.value), emails: $$('input[name="acc-email"]:checked', f).map(i => i.value) };
+    d.fields = $$('.qe', f).map(q => {
+      const type = q.querySelector('[name=type]').value;
+      const x = { id: q.dataset.id, type, label: q.querySelector('[name=label]').value, help: q.querySelector('[name=help]').value };
+      if (type !== 'section') x.required = q.querySelector('[name=required]')?.checked ?? false;
+      if (['radio', 'checkbox', 'select'].includes(type)) {
+        x.options = (q.querySelector('[name=options]')?.value || '').split('\n').map(s => s.trim()).filter(Boolean);
+        x.other = !!q.querySelector('[name=other]')?.checked;
+      }
+      return x;
+    });
+  }
+  function questionEditor(x, i, n) {
+    const choice = ['radio', 'checkbox', 'select'].includes(x.type);
+    return `
+      <div class="qe${x.type === 'section' ? ' is-sec' : ''}" data-id="${esc(x.id)}">
+        <div class="qe-top">
+          <select name="type" aria-label="Tipo de pregunta">${Object.entries(FTYPES).map(([k, v]) => `<option value="${k}" ${k === x.type ? 'selected' : ''}>${v}</option>`).join('')}</select>
+          ${x.type === 'section' ? '' : `<label class="check sm"><input type="checkbox" name="required" ${x.required ? 'checked' : ''}><span>Obligatoria</span></label>`}
+          <span class="qe-btns"><button type="button" class="ic" data-act="q-up" aria-label="Subir" ${i ? '' : 'disabled'}>▲</button><button type="button" class="ic" data-act="q-down" aria-label="Bajar" ${i < n - 1 ? '' : 'disabled'}>▼</button><button type="button" class="ic danger" data-act="q-del" aria-label="Quitar pregunta">✕</button></span>
+        </div>
+        <input name="label" value="${esc(x.label)}" placeholder="${x.type === 'section' ? 'Título de la sección' : 'Pregunta'}" maxlength="300" aria-label="Texto de la pregunta">
+        <input name="help" value="${esc(x.help || '')}" placeholder="Explicación (opcional)" maxlength="600" aria-label="Explicación">
+        ${choice ? `<textarea name="options" rows="${Math.max(2, (x.options || []).length)}" placeholder="Una opción por línea" aria-label="Opciones">${esc((x.options || []).join('\n'))}</textarea>
+          ${x.type !== 'select' ? `<label class="check sm"><input type="checkbox" name="other" ${x.other ? 'checked' : ''}><span>Añadir opción «Other» con texto libre</span></label>` : ''}` : ''}
+      </div>`;
+  }
+  function formEditor() {
+    const d = formOpen.draft, isNew = !formOpen.id;
+    const roles = teamData?.roles || [], members = teamData?.members || [];
+    return `
+      <form id="form-ed" class="editor fe" novalidate>
+        <button type="button" class="back" data-act="form-back">← Formularios</button>
+        <h1>${isNew ? 'NUEVO FORMULARIO' : esc(d.title || 'Formulario')}</h1>
+        <div class="fe-grid">
+          <div class="fe-main">
+            <div class="field"><label for="fe-title">Título</label><input id="fe-title" name="title" value="${esc(d.title)}" maxlength="140" autocomplete="off"></div>
+            <div class="field"><label for="fe-slug">Enlace</label><div class="slug-row"><span>${esc(location.host)}/forms/</span><input id="fe-slug" name="slug" value="${esc(d.slug)}" maxlength="60" placeholder="demo-submission" autocomplete="off" spellcheck="false"></div></div>
+            <div class="field"><label for="fe-desc">Descripción</label><textarea id="fe-desc" name="description" rows="4" maxlength="4000">${esc(d.description || '')}</textarea></div>
+            <p class="group">Preguntas</p>
+            <div class="qes">${d.fields.map((x, i) => questionEditor(x, i, d.fields.length)).join('')}</div>
+            <div class="card-actions"><button type="button" class="btn ghost sm" data-act="q-add">+ Pregunta</button><button type="button" class="btn ghost sm" data-act="q-sec">+ Sección</button></div>
+          </div>
+          <aside class="fe-side">
+            <div class="fe-box">
+              <label class="switch"><input type="checkbox" name="public" ${d.public ? 'checked' : ''}><span></span><b>Link público</b></label>
+              <p class="info">Abierto: cualquiera con el enlace puede rellenarlo. Cerrado: nadie puede enviar respuestas.</p>
+              ${!isNew && d.public ? `<p class="copy-row"><a href="${esc(publicUrl(d))}" target="_blank" rel="noopener">${esc(publicUrl(d).replace(/^https?:\/\//, ''))}</a> <button type="button" class="btn ghost sm" data-act="copy-link">Copiar</button></p>` : ''}
+              <label class="switch"><input type="checkbox" name="on_site" ${d.on_site ? 'checked' : ''}><span></span><b>En la web</b></label>
+              <p class="info">Sale como botón en «Send your demo» de la portada (tiene que estar abierto).</p>
+              <div class="field"><label for="fe-btn">Texto del botón</label><input id="fe-btn" name="button" value="${esc(d.button || '')}" maxlength="60" placeholder="Submit via Form" autocomplete="off"></div>
+            </div>
+            <div class="fe-box">
+              <b class="fe-h">Quién puede ver las respuestas</b>
+              <p class="info">Los owners siempre. Además:</p>
+              ${!teamData ? '<p class="info">Cargando equipo…</p>' : `
+              ${roles.length ? `<p class="mini">Roles</p>${roles.map(r => `<label class="check sm"><input type="checkbox" name="acc-role" value="${esc(r.id)}" ${d.access.roles.includes(r.id) ? 'checked' : ''}><span>${esc(r.name)}</span></label>`).join('')}` : ''}
+              ${members.length ? `<p class="mini">Personas</p>${members.map(m => `<label class="check sm"><input type="checkbox" name="acc-email" value="${esc(m.email)}" ${d.access.emails.includes(m.email) ? 'checked' : ''}><span style="${m.color ? `color:${esc(m.color)}` : ''}">${esc(m.label || m.name || m.email)}</span></label>`).join('')}` : ''}
+              ${!roles.length && !members.length ? '<p class="info">Aún no hay equipo.</p>' : ''}`}
+            </div>
+          </aside>
+        </div>
+        <p class="ed-error" id="ed-error" role="alert" hidden></p>
+        <div class="ed-actions">
+          <button type="submit" class="btn primary">${isNew ? 'Crear formulario' : 'Guardar cambios'}</button>
+          <button type="button" class="btn ghost" data-act="form-back">Cancelar</button>
+          ${isNew ? '' : '<button type="button" class="btn danger push" data-act="form-del">Eliminar formulario</button>'}
+        </div>
+      </form>`;
+  }
+  async function formAction(fn, ok) {
+    busy = true;
+    try { await fn(); if (ok) toast(ok); }
+    catch (e) { if (e.status === 401) { busy = false; logout(e.message); return; } const box = $('#ed-error'); if (box) { box.textContent = e.message; box.hidden = false; box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } else toast(e.message); throw e; }
+    finally { busy = false; }
+  }
+  document.addEventListener('click', async e => {
+    const t = e.target.closest('[data-act]');
+    if (!t || busy || view !== 'forms') return;
+    const id = t.closest('[data-form]')?.dataset.form;
+    const act = t.dataset.act;
+    if (act === 'form-new') openEditor(null);
+    else if (act === 'form-edit') openEditor(formsData.forms.find(f => f.id === id));
+    else if (act === 'form-resp') openResponses(id);
+    else if (act === 'form-back') { formOpen = null; render(); loadForms(); }
+    else if (act === 'form-up' || act === 'form-down') {
+      const ids = formsData.forms.map(f => f.id), i = ids.indexOf(id), j = act === 'form-up' ? i - 1 : i + 1;
+      if (j < 0 || j >= ids.length) return;
+      [ids[i], ids[j]] = [ids[j], ids[i]];
+      formsData.forms.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+      render();
+      try { await formAction(() => api('POST', '/api/forms/order', { ids })); } catch { loadForms(); }
+    } else if (act === 'form-csv') {
+      const f = formsData.forms.find(x => x.id === formOpen.id);
+      try {
+        const r = await fetch(`/api/forms/${encodeURIComponent(f.id)}/csv`, { headers: { Authorization: `Bearer ${auth.token}` }, cache: 'no-store' });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || 'No se pudo descargar.');
+        const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = `${f.slug}.csv`; a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      } catch (err) { toast(err.message); }
+    } else if (act === 'resp-more') {
+      const last = formOpen.responses.at(-1)?.id;
+      try { const r = await api('GET', `/api/forms/${encodeURIComponent(formOpen.id)}/responses?before=${last}`); formOpen.responses.push(...r.responses); formOpen.more = r.more; render(); } catch (err) { toast(err.message); }
+    } else if (act === 'resp-del') {
+      const rid = Number(t.closest('[data-resp]').dataset.resp);
+      if (!await confirmBox('¿Borrar esta respuesta? No se puede deshacer.', 'Borrar')) return;
+      try { await formAction(() => api('DELETE', `/api/forms/${encodeURIComponent(formOpen.id)}/responses/${rid}`), 'Respuesta borrada'); formOpen.responses = formOpen.responses.filter(r => r.id !== rid); const f = formsData.forms.find(x => x.id === formOpen.id); if (f) f.total--; render(); } catch { /* aviso ya mostrado */ }
+    } else if (act === 'copy-link') {
+      try { await navigator.clipboard.writeText(publicUrl(formOpen.draft)); toast('Enlace copiado'); } catch { toast(publicUrl(formOpen.draft)); }
+    } else if (['q-add', 'q-sec', 'q-up', 'q-down', 'q-del'].includes(act)) {
+      syncDraft();
+      const fs = formOpen.draft.fields, qi = fs.findIndex(x => x.id === t.closest('.qe')?.dataset.id);
+      const nid = () => { let k = fs.length + 1; while (fs.some(x => x.id === 'q' + k)) k++; return 'q' + k; };
+      if (act === 'q-add') fs.push({ id: nid(), type: 'text', label: '', help: '', required: false });
+      if (act === 'q-sec') fs.push({ id: nid(), type: 'section', label: '', help: '' });
+      if (act === 'q-del') fs.splice(qi, 1);
+      if (act === 'q-up' && qi > 0) [fs[qi - 1], fs[qi]] = [fs[qi], fs[qi - 1]];
+      if (act === 'q-down' && qi < fs.length - 1) [fs[qi + 1], fs[qi]] = [fs[qi], fs[qi + 1]];
+      render();
+      if (act === 'q-add' || act === 'q-sec') $$('.qe').at(-1)?.querySelector('[name=label]')?.focus();
+    } else if (act === 'form-del') {
+      const f = formsData.forms.find(x => x.id === formOpen.id);
+      if (!await confirmBox(`¿Eliminar «${f?.title}» y sus ${f?.total || 0} respuestas? No se puede deshacer.`, 'Eliminar')) return;
+      try { await formAction(() => api('DELETE', `/api/forms/${encodeURIComponent(formOpen.id)}`), 'Formulario eliminado'); formOpen = null; formsData = null; render(); } catch { /* aviso ya mostrado */ }
+    }
+  });
+  document.addEventListener('change', e => {
+    // cambiar el tipo de pregunta redibuja (aparecen o desaparecen las opciones)
+    if (view === 'forms' && e.target.matches('.qe [name=type]')) { syncDraft(); render(); }
+  });
+  document.addEventListener('submit', async e => {
+    if (e.target.id !== 'form-ed') return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (busy) return;
+    syncDraft();
+    const d = formOpen.draft;
+    if (!d.slug && d.title) d.slug = d.title.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+    try {
+      const r = await formAction(() => api('POST', '/api/forms', { id: formOpen.id || undefined, ...d }), formOpen.id ? 'Formulario guardado' : 'Formulario creado');
+      formOpen = null; formsData = null; render();
+    } catch { /* aviso ya mostrado */ }
+  }, true);
 
   /* ---------------- Chat del equipo (burbuja abajo a la derecha) ---------------- */
   const CHAT_SEEN = 'hz_chat_seen';

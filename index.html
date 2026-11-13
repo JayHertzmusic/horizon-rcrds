@@ -1194,7 +1194,7 @@
           <a href="https://www.labelradar.com/labels/horizonrcrds/portal" target="_blank" rel="noopener noreferrer" class="btn-primary" style="font-size:0.75rem;padding:17px 38px;">
             <i class="fa-solid fa-paper-plane"></i> Submit via LabelRadar
           </a>
-          <a href="https://forms.gle/3EoUexMGbFUyGVSU6" target="_blank" rel="noopener noreferrer" class="btn-outline dx-ghost" style="font-size:0.75rem;padding:16px 30px;">
+          <a id="dx-form-btn" href="https://forms.gle/3EoUexMGbFUyGVSU6" target="_blank" rel="noopener noreferrer" class="btn-outline dx-ghost" style="font-size:0.75rem;padding:16px 30px;">
             <i class="fa-solid fa-file-lines"></i> Submit via Form
           </a>
         </div>
@@ -2260,5 +2260,21 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 </script>
 
+<script>
+/* Forms the owners mark as "En la web" in the panel replace the Google Form button in Send your demo */
+(function () {
+  var btn = document.getElementById('dx-form-btn');
+  if (!btn || !window.fetch) return;
+  fetch('/api/public/site-forms', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    if (!j || !j.forms || !j.forms.length) return;
+    var html = j.forms.map(function (f) {
+      var t = String(f.button || f.title).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+      return '<a href="/forms/' + encodeURIComponent(f.slug) + '" class="btn-outline dx-ghost" style="font-size:0.75rem;padding:16px 30px;"><i class="fa-solid fa-file-lines"></i> ' + t + '</a>';
+    }).join('');
+    btn.insertAdjacentHTML('afterend', html);
+    btn.remove();
+  }).catch(function () {});
+})();
+</script>
 </body>
 </html>

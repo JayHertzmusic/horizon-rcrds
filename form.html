@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HORIZON RCRDS</title>
+<meta name="robots" content="noindex">
+<link rel="icon" type="image/png" href="/assets/favicon_icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap">
+<style>
+  :root { --bg: #050505; --panel: #0d0d0d; --panel-2: #121212; --line: #1f1f1f; --line-2: #2a2a2a; --text: #e5e7eb; --muted: #8b8f98; --faint: #6b7280; --accent: #a78bfa; --accent-rgb: 167, 139, 250; --danger: #ff5a5f; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { min-height: 100vh; background: radial-gradient(1100px 560px at 80% -10%, rgba(var(--accent-rgb), .1), transparent 60%), var(--bg); color: var(--text); font: 400 16px/1.6 'Barlow', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  main { width: min(760px, 100%); margin: 0 auto; padding: 48px 16px 96px; }
+  .home { display: inline-flex; align-items: center; gap: 12px; margin-bottom: 36px; color: #fff; text-decoration: none; }
+  .home img { height: 34px; }
+  .home span { font: 400 22px/1 'Bebas Neue', sans-serif; letter-spacing: .12em; }
+  h1 { margin: 0 0 14px; font: 400 clamp(42px, 8vw, 68px)/.95 'Bebas Neue', sans-serif; letter-spacing: .03em; color: #fff; }
+  .desc { margin: 0 0 34px; color: var(--muted); white-space: pre-line; }
+  .q { margin: 0 0 14px; padding: 20px 22px; border: 1px solid var(--line); border-radius: 10px; background: rgba(13, 13, 13, .85); }
+  .q.bad { border-color: rgba(255, 90, 95, .6); }
+  .q > label, .q > .lbl { display: block; margin-bottom: 4px; font-weight: 600; color: #fff; }
+  .req { color: var(--accent); margin-left: 4px; }
+  .help { margin: 0 0 12px; font-size: 14px; color: var(--muted); white-space: pre-line; }
+  .sec { margin: 34px 0 14px; }
+  .sec h2 { margin: 0; font: 400 32px/1 'Bebas Neue', sans-serif; letter-spacing: .05em; color: #fff; }
+  .sec p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+  input[type=text], input[type=email], input[type=url], textarea, select { width: 100%; min-height: 46px; padding: 11px 14px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--text); font: inherit; outline: none; }
+  textarea { min-height: 110px; resize: vertical; }
+  input:focus, textarea:focus, select:focus { border-color: rgba(var(--accent-rgb), .8); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .15); }
+  .opt { display: flex; align-items: center; gap: 12px; padding: 7px 0; cursor: pointer; }
+  .opt input[type=radio], .opt input[type=checkbox] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); flex: none; }
+  .opt input[type=text] { min-height: 38px; padding: 6px 10px; }
+  .err { margin: 10px 0 0; color: #ffb4b6; font-size: 14px; }
+  .send { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; margin-top: 18px; padding: 0 40px; border: 0; border-radius: 3px; background: var(--accent); color: #000; font: 700 13px/1 'Barlow', sans-serif; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; box-shadow: 0 0 24px rgba(var(--accent-rgb), .3); }
+  .send:disabled { opacity: .5; cursor: default; }
+  .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+  .done { padding: 40px 28px; border: 1px solid rgba(var(--accent-rgb), .45); border-radius: 12px; text-align: center; background: rgba(13, 13, 13, .85); }
+  .done h2 { margin: 0 0 8px; font: 400 44px/1 'Bebas Neue', sans-serif; color: #fff; }
+  .done p { margin: 0; color: var(--muted); }
+  .done a { display: inline-block; margin-top: 22px; color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
+  .msg { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <a class="home" href="/"><img src="/assets/logo.png" alt=""><span>HORIZON RCRDS</span></a>
+  <div id="root"><p class="msg">Loading…</p></div>
+</main>
+<script>
+(() => {
+  const root = document.getElementById('root');
+  const slug = (location.pathname.match(/^\/forms\/([a-z0-9-]+)/) || [])[1] || new URLSearchParams(location.search).get('f') || '';
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  let form = null;
+
+  function field(f) {
+    if (f.type === 'section') return `<div class="sec"><h2>${esc(f.label)}</h2>${f.help ? `<p>${esc(f.help)}</p>` : ''}</div>`;
+    const id = 'f-' + f.id, req = f.required ? '<span class="req" aria-hidden="true">*</span>' : '';
+    const help = f.help ? `<p class="help" id="${id}-h">${esc(f.help)}</p>` : '';
+    const aria = `${f.required ? 'required aria-required="true"' : ''} ${f.help ? `aria-describedby="${id}-h"` : ''}`;
+    let input;
+    if (f.type === 'textarea') input = `<textarea id="${id}" name="${esc(f.id)}" ${aria} maxlength="8000"></textarea>`;
+    else if (f.type === 'select') input = `<select id="${id}" name="${esc(f.id)}" ${aria}><option value="">Choose…</option>${(f.options || []).map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
+    else if (f.type === 'radio' || f.type === 'checkbox') {
+      input = `<div role="${f.type === 'radio' ? 'radiogroup' : 'group'}" aria-labelledby="${id}-l">${(f.options || []).map(o => `
+        <label class="opt"><input type="${f.type}" name="${esc(f.id)}" value="${esc(o)}"><span>${esc(o)}</span></label>`).join('')}
+        ${f.other ? `<label class="opt"><input type="${f.type}" name="${esc(f.id)}" value="__other"><span>Other:</span><input type="text" data-other="${esc(f.id)}" maxlength="300" aria-label="Other"></label>` : ''}</div>`;
+      return `<div class="q" data-q="${esc(f.id)}"><span class="lbl" id="${id}-l">${esc(f.label)}${req}</span>${help}${input}</div>`;
+    } else input = `<input id="${id}" name="${esc(f.id)}" type="${f.type === 'email' ? 'email' : f.type === 'url' ? 'url' : 'text'}" ${aria} maxlength="1000" autocomplete="${f.type === 'email' ? 'email' : 'off'}">`;
+    return `<div class="q" data-q="${esc(f.id)}"><label for="${id}">${esc(f.label)}${req}</label>${help}${input}</div>`;
+  }
+
+  async function load() {
+    try {
+      const r = await fetch('/api/public/forms/' + encodeURIComponent(slug), { cache: 'no-store' });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.message || 'This form is not available.');
+      form = j;
+      document.title = `${form.title} — HORIZON RCRDS`;
+      root.innerHTML = `<h1>${esc(form.title)}</h1>${form.description ? `<p class="desc">${esc(form.description)}</p>` : ''}
+        <form id="f" novalidate>
+          ${form.fields.map(field).join('')}
+          <div class="hp" aria-hidden="true"><label>Leave empty <input name="_hp" tabindex="-1" autocomplete="off"></label></div>
+          <p class="err" id="err" role="alert" hidden></p>
+          <button class="send" type="submit">Send</button>
+        </form>`;
+    } catch (e) { root.innerHTML = `<h1>Not available</h1><p class="msg">${esc(e.message)}</p>`; }
+  }
+
+  function answers(f) {
+    const out = {};
+    for (const x of form.fields) {
+      if (x.type === 'section') continue;
+      if (x.type === 'checkbox') {
+        out[x.id] = [...f.querySelectorAll(`input[name="${CSS.escape(x.id)}"]:checked`)].map(i => i.value === '__other' ? f.querySelector(`[data-other="${CSS.escape(x.id)}"]`).value.trim() : i.value).filter(Boolean);
+      } else if (x.type === 'radio') {
+        const c = f.querySelector(`input[name="${CSS.escape(x.id)}"]:checked`);
+        out[x.id] = !c ? '' : c.value === '__other' ? f.querySelector(`[data-other="${CSS.escape(x.id)}"]`).value.trim() : c.value;
+      } else out[x.id] = (f.elements[x.id]?.value || '').trim();
+    }
+    return out;
+  }
+
+  document.addEventListener('submit', async e => {
+    e.preventDefault();
+    const f = e.target, err = document.getElementById('err'), btn = f.querySelector('.send');
+    const a = answers(f);
+    f.querySelectorAll('.q.bad').forEach(q => q.classList.remove('bad'));
+    const missing = form.fields.find(x => x.required && (!a[x.id] || (Array.isArray(a[x.id]) && !a[x.id].length)));
+    if (missing) {
+      const q = f.querySelector(`[data-q="${CSS.escape(missing.id)}"]`);
+      q.classList.add('bad'); q.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      err.textContent = `Please answer “${missing.label.trim()}”.`; err.hidden = false;
+      return;
+    }
+    btn.disabled = true; btn.textContent = 'Sending…'; err.hidden = true;
+    try {
+      const r = await fetch('/api/public/forms/' + encodeURIComponent(slug), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: a, _hp: f.elements._hp.value }) });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.message || 'Something went wrong. Please try again.');
+      root.innerHTML = `<div class="done"><h2>Thank you!</h2><p>Your answer has been sent to HORIZON RCRDS.</p><a href="/">Back to the website</a></div>`;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (x) { err.textContent = x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Send'; }
+  });
+  document.addEventListener('input', e => {
+    const o = e.target.closest('[data-other]');
+    if (o && o.value) { const r = o.closest('.opt').querySelector('input[type=radio], input[type=checkbox]'); if (r) r.checked = true; }
+    e.target.closest('.q')?.classList.remove('bad');
+  });
+  load();
+})();
+</script>
+</body>
+</html>

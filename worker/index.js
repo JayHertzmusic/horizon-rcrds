@@ -6,6 +6,7 @@
    - La sincronización con SoundCloud (GitHub Actions) se identifica con el token OIDC que GitHub da a ese
      workflow: no hay claves guardadas en ningún sitio. */
 import STATIC_FILES from './static-files.json';
+import { FORM_SCHEMA, FormError, formsApi, publicFormsApi, formsCount } from './forms.js';
 
 // Secciones del panel y lo que se puede hacer en cada una. Una sección nueva (p. ej. eventos) se añade aquí.
 const SECTIONS = [
@@ -74,6 +75,7 @@ async function ensureSchema(env) {
     `CREATE TABLE IF NOT EXISTS chat_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, email TEXT NOT NULL, name TEXT, picture TEXT, text TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)`,
     `CREATE TABLE IF NOT EXISTS panel_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, email TEXT, name TEXT, action TEXT NOT NULL, detail TEXT)`,
     `INSERT OR IGNORE INTO site_meta (k, v) VALUES ('version', 0)`,
+    ...FORM_SCHEMA,
   ].map(q => env.DB.prepare(q)));
   // nombre que le pone el owner a cada persona (columna añadida después)
   try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN label TEXT').run(); } catch { /* ya existe */ }
@@ -168,7 +170,7 @@ async function startSession(env, g, area) {
     env.DB.prepare('UPDATE panel_members SET name = ?, picture = ?, last_login = ? WHERE email = ?').bind(g.name, g.picture, t, g.email),
   ]);
   await audit(env, g, `Entró en /${area}`);
-  return { token, user: { email: g.email, name: who.label || g.name, picture: g.picture, ...who }, sections: SECTIONS };
+  return { token, user: { email: g.email, name: who.label || g.name, picture: g.picture, ...who, formsCount: await formsCount(env, { ...who, email: g.email }) }, sections: SECTIONS };
 }
 async function session(req, env) {
   const m = (req.headers.get('Authorization') || '').match(/^Bearer\s+(\S+)$/);
@@ -467,8 +469,9 @@ async function api(req, env, p) {
     if (!EMAIL.test(email)) throw new HttpError(400, 'Email no válido.');
     return json(await startSession(env, { email, name: clean(b.name || email.split('@')[0], 80), picture: '' }, area(b.area)));
   }
+  if (p.startsWith('/api/public/')) return json(await publicFormsApi(req, env, url));   // formularios públicos (sin sesión)
   const s = await session(req, env);
-  if (p === '/api/auth/me' && req.method === 'GET') return json({ user: userOut(s), sections: SECTIONS });
+  if (p === '/api/auth/me' && req.method === 'GET') return json({ user: { ...userOut(s), formsCount: await formsCount(env, s) }, sections: SECTIONS });
   if (p === '/api/auth/logout' && req.method === 'POST') {
     if (!s.sync) await env.DB.prepare('DELETE FROM panel_sessions WHERE hash = ?').bind(s.hash).run();
     return json({ ok: true });
@@ -479,6 +482,10 @@ async function api(req, env, p) {
   }
   if (p === '/api/publish' && req.method === 'POST') return publish(req, env, s);
   if (p === '/api/chat') return chat(req, env, s, url);
+  if (p === '/api/forms' || p.startsWith('/api/forms/')) {
+    const r = await formsApi(req, env, s, url, action => audit(env, s, action));
+    return r instanceof Response ? r : json(r);
+  }
   if (p === '/api/team' || p.startsWith('/api/team/')) return team(req, env, s, p);
   throw new HttpError(404, 'No encontrado.');
 }
@@ -488,6 +495,8 @@ export default {
     const url = new URL(req.url), p = url.pathname;
     try {
       if (p.startsWith('/api/')) return await api(req, env, p);
+      // página pública de cada formulario: /forms/<enlace>
+      if (/^\/forms\/[a-z0-9-]+\/?$/.test(p)) return env.ASSETS.fetch(new Request(new URL('/form', url), req));
       if (req.method === 'GET' || req.method === 'HEAD') {
         const file = p.slice(1);
         if (BY_FILE[file]) { await ensureSchema(env); return await serveData(BY_FILE[file], req, env); }
@@ -496,7 +505,7 @@ export default {
       }
       return env.ASSETS.fetch(req);
     } catch (e) {
-      if (e instanceof HttpError) return fail(e.status, e.message);
+      if (e instanceof HttpError || e instanceof FormError) return fail(e.status, e.message);
       console.error(e);
       return fail(500, 'Error del servidor. Inténtalo otra vez.');
     }

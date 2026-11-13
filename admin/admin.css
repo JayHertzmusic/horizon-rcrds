@@ -480,6 +480,8 @@ select:focus { border-color: rgba(var(--accent-rgb), .7); }
 .rte-bar button:hover { border-color: var(--line-2); background: rgba(255, 255, 255, .05); }
 .doc-view { background: #fff; color: #000; font-family: Arial, sans-serif; font-size: 11pt; line-height: normal; text-align: left; letter-spacing: 0; text-transform: none; }
 .doc-view * { letter-spacing: inherit; }
+/* mismo modelo de caja que Google Docs: el ancho no incluye los márgenes de la hoja (si no, todo queda corrido a la izquierda) */
+.doc-view, .doc-view * { box-sizing: content-box; }
 .doc-view p, .doc-view h1, .doc-view h2, .doc-view h3, .doc-view h4, .doc-view h5, .doc-view h6 { margin: 0; font-family: inherit; color: inherit; line-height: inherit; text-transform: none; }
 .doc-view h1 { font-size: 20pt; } .doc-view h2 { font-size: 16pt; } .doc-view h3 { font-size: 14pt; }
 .doc-view ul, .doc-view ol { margin: 0; padding-left: 36pt; }

@@ -1524,11 +1524,11 @@ function populateHero(r) {
     box: p, btn: p.querySelector('.hc-play'), wave: p.querySelector('.hc-wave'),
     track: p.querySelector('.hc-progress'), cur: p.querySelector('.hc-cur'), dur: p.querySelector('.hc-dur'),
     extra: [coverPlay],
-  }, './assets/release_preview.mp3', r.title);
+  }, './assets/release_preview.mp3?v=' + encodeURIComponent(r.id || ''), r.title);
   fillWave(p.querySelector('.hc-wave'));
   /* Real waveform shape once the page has settled (also warms the audio cache) */
   const later = window.requestIdleCallback || (fn => setTimeout(fn, 1500));
-  later(() => analyseWave(p.querySelector('.hc-wave'), './assets/release_preview.mp3'));
+  later(() => analyseWave(p.querySelector('.hc-wave'), './assets/release_preview.mp3?v=' + encodeURIComponent(r.id || '')));
 }
 
 function populateRadioHero(m) {
@@ -1861,7 +1861,7 @@ function populateGrid(releases) {
 ════════════════════════════════════════════════ */
 async function loadReleases() {
   try {
-    const res = await fetch('./releases.json');
+    const res = await fetch('./releases.json', { cache: 'no-cache' });
     if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
     const data = await res.json();
 
@@ -1962,7 +1962,7 @@ function buildPlaylistCard(p, delay) {
 async function loadPlaylists() {
   const grid = document.getElementById('playlists-grid');
   try {
-    const res = await fetch('./playlists.json');
+    const res = await fetch('./playlists.json', { cache: 'no-cache' });
     if (!res.ok) throw new Error(`HTTP ${res.status} — ${res.statusText}`);
     const data = await res.json();
 
@@ -2162,7 +2162,7 @@ function buildRadioCard(m, delay) {
 async function loadRadio() {
   const heroCard = document.getElementById('hero-radio');
   try {
-    const res = await fetch('./mixtapes.json');
+    const res = await fetch('./mixtapes.json', { cache: 'no-cache' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (!Array.isArray(data) || !data.length) throw new Error('no mixtapes yet');

@@ -554,7 +554,7 @@ new IntersectionObserver(([e]) => e.target.classList.toggle('is-off', !e.isInter
 (async () => {
   let releases;
   try {
-    const res = await fetch('./releases.json');
+    const res = await fetch('./releases.json', { cache: 'no-cache' });
     if (!res.ok) throw new Error('HTTP ' + res.status);
     releases = await res.json();
     if (!Array.isArray(releases) || !releases.length) throw new Error('empty');

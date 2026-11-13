@@ -499,7 +499,7 @@ document.getElementById('search-input').addEventListener('input', (e) => {
 /* ── Fetch & boot ────────────────────────────── */
 async function loadCatalogue() {
   try {
-    const res  = await fetch('./releases.json');
+    const res  = await fetch('./releases.json', { cache: 'no-cache' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
@@ -512,7 +512,7 @@ async function loadCatalogue() {
 
     /* Radio mixtapes (optional: without mixtapes.json there are no tabs) */
     try {
-      const mres = await fetch('./mixtapes.json');
+      const mres = await fetch('./mixtapes.json', { cache: 'no-cache' });
       const mix = mres.ok ? await mres.json() : [];
       if (Array.isArray(mix) && mix.length) {
         allMixtapes = mix.map(m => ({

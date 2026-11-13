@@ -227,6 +227,8 @@
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
     /* ═════════ ONE SCREEN ═════════ */
+    /* the back link always stays above the floating cover */
+    .back-link { position: relative; z-index: 3; }
     /* Share sits on the "Listen on" line (saves a row) */
     .listen-label .share-btn { order: 2; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 3px; border: 1px solid rgba(var(--accent-color-rgb), 0.5); color: var(--accent-color); font-size: 0.6rem; font-weight: 700; letter-spacing: 0.25em; text-transform: uppercase; background: transparent; cursor: pointer; transition: background 0.25s, box-shadow 0.25s; }
     .listen-label .share-btn:hover { background: rgba(var(--accent-color-rgb), 0.1); box-shadow: 0 0 16px rgba(var(--accent-color-rgb), 0.3); }
@@ -237,8 +239,8 @@
     @media (min-width: 1024px) and (min-height: 560px) {
       /* desktop: the whole release fits in the window, no scrolling */
       .rel-bg { min-height: 100vh; min-height: 100svh; padding-top: 86px !important; padding-bottom: 62px !important; }
-      .back-link { margin-bottom: 10px; }
-      .stage-cover { max-width: min(600px, calc(100vh - 230px)) !important; max-width: min(600px, calc(100svh - 230px)) !important; }
+      .back-link { margin-bottom: 30px; }
+      .stage-cover { max-width: min(600px, calc(100vh - 252px)) !important; max-width: min(600px, calc(100svh - 252px)) !important; }
       .hero-title { font-size: clamp(2.6rem, min(5.4vw, 9vh), 6rem); }
       #tag { margin-bottom: 12px; }
       .hr-artist { margin-top: 10px; }
@@ -253,10 +255,14 @@
     @media (min-width: 1024px) and (max-height: 780px) {
       /* short screens: a little tighter */
       .platform .sub { display: none; }
+      .back-link { margin-bottom: 28px; }
+      .listen-label { margin: 14px 0 8px; }
+      .hc-player { margin-top: 16px; }
+      .platforms { gap: 6px; }
       .platform .name { font-size: 1.15rem; }
       .platform .ico { width: 34px; height: 34px; font-size: 1.05rem; }
       .hc-play { width: 48px; height: 48px; }
-      .stage-cover { max-width: min(560px, calc(100vh - 210px)) !important; max-width: min(560px, calc(100svh - 210px)) !important; }
+      .stage-cover { max-width: min(560px, calc(100vh - 232px)) !important; max-width: min(560px, calc(100svh - 232px)) !important; }
     }
 
     /* ═════════ PHONES ═════════ */
@@ -271,7 +277,7 @@
     @media (max-width: 767px) { #navbar { padding-top: 10px; padding-bottom: 10px; } #nav-logo { height: 42px !important; } }
     @media (max-width: 640px) {
       .rel-bg { padding-top: 84px; padding-bottom: 56px; min-height: 0; }
-      .back-link { padding: 12px 0; margin-bottom: 10px; }
+      .back-link { padding: 12px 0; margin-bottom: 22px; }
       .rel-grid { gap: 28px; }
       .hero-title { font-size: clamp(2.7rem, 15vw, 4.6rem); }
       .hc-player { gap: 12px; margin-top: 24px; }

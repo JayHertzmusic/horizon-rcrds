@@ -77,6 +77,7 @@ async function ensureSchema(env) {
   ].map(q => env.DB.prepare(q)));
   // nombre que le pone el owner a cada persona (columna añadida después)
   try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN label TEXT').run(); } catch { /* ya existe */ }
+  try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN color TEXT').run(); } catch { /* ya existe */ }
   schemaReady = true;
 }
 const audit = (env, who, action, detail = '') => env.DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)')
@@ -332,13 +333,20 @@ async function team(req, env, s, p) {
   const body = m === 'POST' ? parse(await req.text()) || {} : null;
   if (p === '/api/team' && m === 'GET') {
     const [members, roles] = await Promise.all([
-      DB.prepare('SELECT email, role_id, label, name, picture, added_at, last_login FROM panel_members ORDER BY added_at').all(),
+      DB.prepare('SELECT email, role_id, label, color, name, picture, added_at, last_login FROM panel_members ORDER BY added_at').all(),
       DB.prepare('SELECT id, name, perms FROM panel_roles ORDER BY created_at').all(),
     ]);
     return json({ owners: owners(env), sections: SECTIONS, members: members.results, roles: roles.results.map(r => ({ id: r.id, name: r.name, perms: normPerms(parse(r.perms)) })) });
   }
   if (p === '/api/team/audit' && m === 'GET') {
-    return json({ items: (await DB.prepare('SELECT at, email, name, action, detail FROM panel_audit ORDER BY id DESC LIMIT 100').all()).results });
+    // historial completo, de 100 en 100 (before = id del último que ya se ve), de todos o de una persona
+    const email = String(url.searchParams.get('email') || '').toLowerCase();
+    const before = Number(url.searchParams.get('before')) || 9e15;
+    const rows = email
+      ? (await DB.prepare('SELECT a.id, a.at, a.email, COALESCE(m.label, a.name) AS name, m.color, a.action, a.detail FROM panel_audit a LEFT JOIN panel_members m ON m.email = a.email WHERE a.email = ? AND a.id < ? ORDER BY a.id DESC LIMIT 101').bind(email, before).all()).results
+      : (await DB.prepare('SELECT a.id, a.at, a.email, COALESCE(m.label, a.name) AS name, m.color, a.action, a.detail FROM panel_audit a LEFT JOIN panel_members m ON m.email = a.email WHERE a.id < ? ORDER BY a.id DESC LIMIT 101').bind(before).all()).results;
+    const people = (await DB.prepare('SELECT DISTINCT a.email, COALESCE(m.label, (SELECT name FROM panel_audit x WHERE x.email = a.email ORDER BY x.id DESC LIMIT 1)) AS name FROM panel_audit a LEFT JOIN panel_members m ON m.email = a.email').all()).results;
+    return json({ items: rows.slice(0, 100), more: rows.length > 100, people });
   }
   if (p === '/api/team/members' && m === 'POST') {
     const email = String(body.email || '').trim().toLowerCase();
@@ -346,15 +354,17 @@ async function team(req, env, s, p) {
     if (owners(env).includes(email)) throw new HttpError(400, 'Esa cuenta ya es owner.');
     const exists = await DB.prepare('SELECT email FROM panel_members WHERE email = ?').bind(email).first();
     const label = 'label' in body ? clean(body.label, 40) : undefined;
-    // solo cambiar el nombre
-    if (exists && label !== undefined && !body.role_id) {
-      await DB.prepare('UPDATE panel_members SET label = ? WHERE email = ?').bind(label || null, email).run();
+    const color = /^#[0-9a-f]{6}$/i.test(body.color || '') ? body.color.toLowerCase() : null;
+    // solo cambiar el nombre o el color
+    if (exists && !body.role_id) {
+      if (label !== undefined) await DB.prepare('UPDATE panel_members SET label = ? WHERE email = ?').bind(label || null, email).run();
+      if (color) await DB.prepare('UPDATE panel_members SET color = ? WHERE email = ?').bind(color, email).run();
       return json({ ok: true });
     }
     const role = await DB.prepare('SELECT id, name FROM panel_roles WHERE id = ?').bind(String(body.role_id || '')).first();
     if (!role) throw new HttpError(400, 'Elige un rol.');
     if (exists) await DB.prepare('UPDATE panel_members SET role_id = ?' + (label !== undefined ? ', label = ?' : '') + ' WHERE email = ?').bind(...(label !== undefined ? [role.id, label || null, email] : [role.id, email])).run();
-    else await DB.prepare('INSERT INTO panel_members (email, role_id, label, added_by, added_at) VALUES (?, ?, ?, ?, ?)').bind(email, role.id, label || null, s.email, now()).run();
+    else await DB.prepare('INSERT INTO panel_members (email, role_id, label, color, added_by, added_at) VALUES (?, ?, ?, ?, ?, ?)').bind(email, role.id, label || null, color, s.email, now()).run();
     await audit(env, s, exists ? `Cambió el rol de ${email} a ${role.name}` : `Añadió a ${email}${label ? ' (' + label + ')' : ''} como ${role.name}`);
     return json({ ok: true });
   }
@@ -401,8 +411,8 @@ async function chat(req, env, s, url) {
   if (req.method === 'GET') {
     const after = Math.max(0, Number(url.searchParams.get('after')) || 0);
     const rows = after
-      ? (await DB.prepare('SELECT id, at, email, name, picture, text, deleted FROM chat_messages WHERE id > ? ORDER BY id LIMIT 200').bind(after).all()).results
-      : (await DB.prepare('SELECT * FROM (SELECT id, at, email, name, picture, text, deleted FROM chat_messages ORDER BY id DESC LIMIT 150) ORDER BY id').all()).results;
+      ? (await DB.prepare('SELECT c.id, c.at, c.email, COALESCE(m.label, c.name) AS name, m.color, c.picture, c.text, c.deleted FROM chat_messages c LEFT JOIN panel_members m ON m.email = c.email WHERE c.id > ? ORDER BY c.id LIMIT 200').bind(after).all()).results
+      : (await DB.prepare('SELECT * FROM (SELECT c.id, c.at, c.email, COALESCE(m.label, c.name) AS name, m.color, c.picture, c.text, c.deleted FROM chat_messages c LEFT JOIN panel_members m ON m.email = c.email ORDER BY c.id DESC LIMIT 150) ORDER BY id').all()).results;
     // borrados recientes (para quitarlos de la pantalla de quien ya los tenía)
     const gone = after ? (await DB.prepare('SELECT id FROM chat_messages WHERE deleted = 1 AND id <= ? AND id > ? - 300').bind(after, after).all()).results.map(r => r.id) : [];
     return json({ me: s.email, owner: !!s.owner, messages: rows.filter(r => !r.deleted).map(({ deleted, ...r }) => r), gone });

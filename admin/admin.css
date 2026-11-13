@@ -258,6 +258,9 @@ input::placeholder, textarea::placeholder { color: #4b5058; }
 .head.sub { margin: 56px 0 10px; }
 .head.sub h2 { margin: 0; font: 400 clamp(30px, 4vw, 40px)/1 'Bebas Neue', sans-serif; letter-spacing: .05em; color: #fff; }
 .row.tm { grid-template-columns: 44px minmax(0, 1fr) 200px 170px 84px; }
+.color-dot { position: relative; display: block; width: 28px; height: 28px; margin: 0 8px; border-radius: 50%; background: var(--c); box-shadow: 0 0 12px color-mix(in srgb, var(--c) 45%, transparent); cursor: pointer; }
+.color-dot.big { width: 46px; height: 46px; margin: 0; border-radius: 4px; }
+.color-dot input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
 .row.tm .btn { justify-self: end; }
 .thumb.round { width: 44px; height: 44px; border-radius: 50%; }
 .thumb.ini { display: grid; place-items: center; font: 400 22px/1 'Bebas Neue', sans-serif; color: var(--accent); background: rgba(var(--accent-rgb), .1); }
@@ -265,7 +268,7 @@ input::placeholder, textarea::placeholder { color: #4b5058; }
 .sm-txt { font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 select { min-height: 40px; padding: 0 34px 0 12px; border-radius: 4px; border: 1px solid var(--line-2); background: var(--panel-2) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238b8f98'/%3E%3C/svg%3E") no-repeat right 12px center; -webkit-appearance: none; appearance: none; cursor: pointer; outline: none; }
 select:focus { border-color: rgba(var(--accent-rgb), .7); }
-.add-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(130px, 200px) auto; gap: 10px; margin-top: 16px; }
+.add-row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 46px minmax(130px, 200px) auto; gap: 10px; margin-top: 16px; }
 .name-in { min-height: 34px !important; padding: 4px 8px !important; margin-left: -8px; width: min(100%, 320px) !important; background: transparent !important; border-color: transparent !important; font: 400 19px/1.1 'Bebas Neue', sans-serif !important; letter-spacing: .06em; color: #fff; }
 .name-in:hover, .name-in:focus { border-color: var(--line-2) !important; background: var(--panel-2) !important; }
 .name-in::placeholder { color: var(--muted); }
@@ -286,7 +289,11 @@ select:focus { border-color: rgba(var(--accent-rgb), .7); }
 .perm input:checked + span { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 12px rgba(var(--accent-rgb), .35); background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='10'%3E%3Cpath d='M1 5l3.5 3.5L11 1.5' stroke='%23000' stroke-width='2' fill='none'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: center; }
 .perm input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 .role-card .ed-error { margin-top: 12px; }
-.row.lg { grid-template-columns: 130px minmax(0, 180px) minmax(0, 1fr); padding-top: 12px; padding-bottom: 12px; font-size: 14px; }
+.row.lg { grid-template-columns: 70px minmax(0, 200px) minmax(0, 1fr); padding-top: 11px; padding-bottom: 11px; font-size: 14px; }
+.row.lg.in > span:last-child { color: var(--faint); }
+.log-day { margin: 26px 0 6px; padding: 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; color: var(--accent); list-style: none; }
+.log-who { min-width: 280px; min-height: 46px; }
+.log-more { margin-top: 18px; }
 .row.lg b { font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row.lg .muted { font-size: 12px; font-weight: 500; }
 @media (max-width: 900px) { .who-txt { display: none; } }
@@ -371,3 +378,4 @@ select:focus { border-color: rgba(var(--accent-rgb), .7); }
   .chat.is-open .chat-fab { display: none; }
   .chat-box { width: 100%; height: 100%; border: 0; border-radius: 0; }
 }
+@media (max-width: 640px) { .row.tm .color-dot { grid-area: img; margin: 0 auto; } .add-row .color-dot.big { width: 100%; } }

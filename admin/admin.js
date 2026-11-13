@@ -373,7 +373,7 @@
           <span class="word">HORIZON<small>RCRDS</small></span>
         </a>
         <nav class="tabs" aria-label="Secciones">
-          ${VIEWS.filter(v => can(v)).map(v => tab(v, names[v])).join('')}${MODE === 'admin' && u.owner ? tab('team', 'Equipo') : ''}
+          ${VIEWS.filter(v => can(v)).map(v => tab(v, names[v])).join('')}${MODE === 'admin' && u.owner ? tab('team', 'Equipo') + tab('log', 'Historial') : ''}
         </nav>
         <div class="top-end">
           <span class="who" title="${esc(u.email)}">
@@ -399,8 +399,7 @@
     if (teamLoading) return;
     teamLoading = true;
     try {
-      const [t, a] = await Promise.all([api('GET', '/api/team'), api('GET', '/api/team/audit')]);
-      teamData = { ...t, audit: a.items }; teamErr = '';
+      teamData = await api('GET', '/api/team'); teamErr = '';
     } catch (e) {
       teamErr = e.message;
       if (e.status === 401) { teamLoading = false; logout(e.message); return; }
@@ -434,7 +433,7 @@
       if (!teamErr) setTimeout(loadTeam, 0);
       return head + (teamErr ? `<p class="login-error" role="alert">${esc(teamErr)}</p><button type="button" class="btn ghost" data-act="team-retry">Reintentar</button>` : '<p class="info">Cargando…</p>');
     }
-    const { owners, members, roles, audit: log } = teamData;
+    const { owners, members, roles } = teamData;
     const roleOpts = sel => roles.map(r => `<option value="${esc(r.id)}" ${r.id === sel ? 'selected' : ''}>${esc(r.name)}</option>`).join('');
     const person = (name, email, pic) => `
       ${pic ? `<img class="thumb round" src="${esc(pic)}" alt="" referrerpolicy="no-referrer">` : `<span class="thumb round ini">${esc((name || email)[0].toUpperCase())}</span>`}
@@ -445,8 +444,8 @@
         ${owners.map(e => `<li class="row tm">${person('', e, '')}<span class="tag">Owner</span><span class="muted sm-txt">Acceso total</span><span></span></li>`).join('')}
         ${members.map(m => `
           <li class="row tm">
-            ${m.picture ? `<img class="thumb round" src="${esc(m.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="thumb round ini">${esc((m.label || m.name || m.email)[0].toUpperCase())}</span>`}
-            <span class="meta"><input class="name-in" data-member="${esc(m.email)}" value="${esc(m.label || '')}" placeholder="${esc(m.name || 'Ponle un nombre')}" maxlength="40" aria-label="Nombre de ${esc(m.email)}" autocomplete="off"><span>${esc(m.email)}</span></span>
+            <label class="color-dot" style="--c:${esc(m.color || '#ffffff')}" title="Color de ${esc(m.label || m.email)}"><input type="color" class="color-in" data-member="${esc(m.email)}" value="${esc(m.color || '#ffffff')}" aria-label="Color de ${esc(m.label || m.email)}"></label>
+            <span class="meta" title="${esc(m.email)}"><input class="name-in" data-member="${esc(m.email)}" value="${esc(m.label || '')}" placeholder="${esc(m.name || m.email.split('@')[0])}" maxlength="40" aria-label="Nombre de ${esc(m.email)}" autocomplete="off" style="color:${esc(m.color || '#ffffff')}"></span>
             <select class="role-sel" data-member="${esc(m.email)}" aria-label="Rol de ${esc(m.email)}">${m.role_id && roles.some(r => r.id === m.role_id) ? '' : '<option value="" selected>Sin rol</option>'}${roleOpts(m.role_id)}</select>
             <span class="muted sm-txt" title="${m.last_login ? 'Última vez: ' + esc(fmtDate(m.last_login)) : ''}">Acceso activo</span>
             <button type="button" class="btn ghost sm" data-act="remove-member" data-email="${esc(m.email)}">Quitar</button>
@@ -456,6 +455,7 @@
       <form id="add-member" class="add-row" novalidate>
         <input name="email" type="email" placeholder="email@gmail.com" aria-label="Email de Google" autocomplete="off" spellcheck="false">
         <input name="label" placeholder="Nombre (p. ej. Kris m)" maxlength="40" aria-label="Nombre" autocomplete="off">
+        <label class="color-dot big" style="--c:#a78bfa" title="Color"><input type="color" name="color" value="#a78bfa" aria-label="Color"></label>
         <select name="role_id" aria-label="Rol">${roleOpts(roles[0].id)}</select>
         <button type="submit" class="btn primary">Añadir</button>
         <p class="ed-error" role="alert" hidden></p>
@@ -464,13 +464,45 @@
       <div class="head sub"><div><p class="eyebrow">Permisos</p><h2>ROLES <span class="count">${roles.length}</span></h2></div>
         ${newRole ? '' : '<button type="button" class="btn ghost" data-act="new-role">+ Nuevo rol</button>'}</div>
       <p class="info">Marca lo que puede hacer cada rol. «Editar» incluye crear. Los owners siempre lo tienen todo.</p>
-      <div class="roles">${newRole ? roleCard({ perms: {} }) : ''}${roles.map(roleCard).join('')}${!roles.length && !newRole ? '<p class="info">Todavía no hay roles.</p>' : ''}</div>
-
-      <div class="head sub"><div><p class="eyebrow">Quién hizo qué</p><h2>HISTORIAL</h2></div></div>
-      <ol class="list log">${log.length ? log.map(x => `
-        <li class="row lg"><span class="muted">${esc(fmtDate(x.at))}</span><b>${esc(x.name || x.email)}</b><span>${esc(x.action)}</span></li>`).join('') : '<li class="empty">Aún no hay nada.</li>'}
-      </ol>`;
+      <div class="roles">${newRole ? roleCard({ perms: {} }) : ''}${roles.map(roleCard).join('')}${!roles.length && !newRole ? '<p class="info">Todavía no hay roles.</p>' : ''}</div>`;
   }
+  /* ---------------- Historial (solo owners) ---------------- */
+  const logState = { who: '', items: [], more: false, people: [], loading: false, err: '', loaded: false };
+  async function loadLog(more) {
+    if (logState.loading) return;
+    logState.loading = true;
+    try {
+      const last = more && logState.items.length ? logState.items[logState.items.length - 1].id : '';
+      const r = await api('GET', `/api/team/audit?email=${encodeURIComponent(logState.who)}${last ? '&before=' + last : ''}`);
+      logState.items = more ? logState.items.concat(r.items) : r.items;
+      logState.more = r.more; logState.people = r.people; logState.err = ''; logState.loaded = true;
+    } catch (e) {
+      if (e.status === 401) { logState.loading = false; logout(e.message); return; }
+      logState.err = e.message;
+    }
+    logState.loading = false;
+    if (view === 'log') render();
+  }
+  function logView() {
+    if (!logState.loaded && !logState.err && !logState.loading) setTimeout(() => loadLog(false), 0);
+    const opts = logState.people.slice().sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email))
+      .map(p => `<option value="${esc(p.email)}" ${p.email === logState.who ? 'selected' : ''}>${esc(p.name ? `${p.name} · ${p.email}` : p.email)}</option>`).join('');
+    let day = '';
+    const rows = logState.items.map(x => {
+      const d = new Date(x.at), k = d.toDateString();
+      const head = k !== day ? `<li class="log-day">${esc(d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</li>` : '';
+      day = k;
+      const kind = /^Entró/.test(x.action) ? 'in' : /(Añadió|Quitó|rol)/.test(x.action) ? 'team' : 'web';
+      return `${head}<li class="row lg ${kind}"><span class="muted">${esc(d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }))}</span><b style="${x.color ? `color:${esc(x.color)}` : ''}" title="${esc(x.email)}">${esc(x.name || x.email)}</b><span>${esc(x.action)}</span></li>`;
+    }).join('');
+    return `<div class="head"><div><p class="eyebrow">Quién hizo qué</p><h1>HISTORIAL</h1></div>
+        <select class="log-who" aria-label="Ver el historial de"><option value="">Todo el equipo</option>${opts}</select></div>
+      <p class="info lead">Todo lo que pasa en el panel: quién entra, qué publica, qué borra y los cambios del equipo. Solo lo veis los owners.</p>
+      ${logState.err ? `<p class="login-error" role="alert">${esc(logState.err)}</p>` : ''}
+      <ol class="list log">${rows || `<li class="empty">${logState.loading || !logState.loaded ? 'Cargando…' : 'Nada todavía.'}</li>`}</ol>
+      ${logState.more ? `<button type="button" class="btn ghost log-more" data-act="log-more"${logState.loading ? ' disabled' : ''}>Ver más</button>` : ''}`;
+  }
+
   function rolePerms(form) {
     const perms = {};
     for (const s of teamData.sections) {
@@ -1116,11 +1148,12 @@
   function render() {
     if (!auth || !repo) return;
     accent();
-    if (view !== 'team' && view !== 'none' && !can(view)) { view = firstView(); editing = null; }
-    if (view === 'team' && !(MODE === 'admin' && auth.user.owner)) view = firstView();
+    if (view !== 'team' && view !== 'log' && view !== 'none' && !can(view)) { view = firstView(); editing = null; }
+    if ((view === 'team' || view === 'log') && !(MODE === 'admin' && auth.user.owner)) view = firstView();
     let inner;
     if (view === 'none') inner = noAccessView();
     else if (view === 'team') inner = teamView();
+    else if (view === 'log') inner = logView();
     else if (editing?.view === 'releases') inner = releaseEditor();
     else if (editing?.view === 'playlists') inner = playlistEditor();
     else if (editing?.view === 'radio') inner = mixtapeEditor();
@@ -1130,7 +1163,7 @@
     else inner = releasesView();
     app.innerHTML = shell(inner);
     chatStart();
-    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Reproductor', team: 'Equipo', none: 'Equipo' };
+    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Reproductor', team: 'Equipo', log: 'Historial', none: 'Equipo' };
     document.title = `${editing ? (editing.orig?.title || 'Nuevo') + ' · ' : ''}${names[view] || ''} — Panel HORIZON RCRDS`;
   }
   function busyOn(scope, btn, label) {
@@ -1193,6 +1226,7 @@
     if (needs && !can(...needs)) { toast('Tu rol no tiene permiso para esto.'); return; }
     switch (t.dataset.act) {
       case 'team-retry': teamErr = ''; render(); break;
+      case 'log-more': loadLog(true); break;
       case 'new-role': newRole = true; render(); $('.role-card input[name=name]')?.focus(); break;
       case 'cancel-role': newRole = false; render(); break;
       case 'delete-role': {
@@ -1284,7 +1318,7 @@
       const box = form.querySelector('.ed-error'); box.hidden = true;
       const email = form.elements.email.value.trim().toLowerCase();
       if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) { box.textContent = 'Escribe un email válido.'; box.hidden = false; form.elements.email.focus(); return; }
-      teamAction(() => api('POST', '/api/team/members', { email, label: form.elements.label.value.trim(), role_id: form.elements.role_id.value }), `${email} añadido al equipo`, box);
+      teamAction(() => api('POST', '/api/team/members', { email, label: form.elements.label.value.trim(), color: form.elements.color.value, role_id: form.elements.role_id.value }), `${email} añadido al equipo`, box);
       return;
     }
     if (form.classList.contains('role-card')) {
@@ -1312,6 +1346,7 @@
     const t = e.target;
     if (t.id === 'rel-filter') { filter = t.value; $('#rel-list').innerHTML = releaseRows(); return; }
     if (t.id === 'f-color-pick') setColor(t.value);
+    if (t.type === 'color' && t.closest('.color-dot')) { t.closest('.color-dot').style.setProperty('--c', t.value); const n = t.dataset.member && $$('.name-in').find(i => i.dataset.member === t.dataset.member); if (n) n.style.color = t.value; }
     if (t.id === 'f-color' && hex6(t.value)) { editing.color = hex6(t.value); $('#f-color-pick').value = editing.color; $('#color-prev').style.setProperty('--c', editing.color); }
     if (t.id === 'f-catalog') $('#color-prev').textContent = t.value || ' ';
     if (t.matches('[aria-invalid]')) t.removeAttribute('aria-invalid');
@@ -1321,6 +1356,8 @@
     if (t.id === 'ed-file' && t.files[0]) { setCover(t.files[0]); t.value = ''; }
     if (t.id === 'mx-file' && t.files[0]) { setMixAudio(t.files[0]); t.value = ''; }
     if (t.id === 'f-sc') scFill(!editing?.key);
+    if (t.classList.contains('log-who')) { logState.who = t.value; logState.items = []; logState.loaded = false; loadLog(false); render(); }
+    if (t.classList.contains('color-in') && !busy) teamAction(() => api('POST', '/api/team/members', { email: t.dataset.member, color: t.value }), 'Color guardado');
     if (t.classList.contains('name-in') && !busy) teamAction(() => api('POST', '/api/team/members', { email: t.dataset.member, label: t.value.trim() }), 'Nombre guardado');
     if (t.classList.contains('role-sel') && t.value && !busy) teamAction(() => api('POST', '/api/team/members', { email: t.dataset.member, role_id: t.value }), 'Rol cambiado');
     // Editar o Eliminar llevan Ver; sin Ver no hay nada más
@@ -1400,7 +1437,7 @@
         <li class="chat-msg${mine ? ' mine' : ''}${same ? ' cont' : ''}" data-id="${m.id}">
           ${same || mine ? '' : `<span class="chat-av">${m.picture ? `<img src="${esc(m.picture)}" alt="" referrerpolicy="no-referrer">` : esc(who[0].toUpperCase())}</span>`}
           <div class="chat-bubble">
-            ${same || mine ? '' : `<b>${esc(who)}</b>`}
+            ${same || mine ? '' : `<b style="${m.color ? `color:${esc(m.color)}` : ''}">${esc(who)}</b>`}
             <p>${linkify(m.text)}</p>
             <time>${esc(d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }))}</time>
             ${mine || chatState.owner ? '<button type="button" class="chat-del" data-chat="del" aria-label="Borrar mensaje">×</button>' : ''}

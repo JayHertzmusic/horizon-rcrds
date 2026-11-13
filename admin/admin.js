@@ -1676,34 +1676,46 @@
     if (view === 'contracts') render();
   }
   /* Pegar desde Google Docs / Word: se queda con negritas, cursivas, subrayados, títulos, listas, tablas y centrado. */
+  const PASTE_PROPS = ['font-family', 'font-size', 'font-weight', 'font-style', 'text-decoration', 'color', 'background-color', 'text-align', 'line-height', 'text-indent', 'margin-left', 'margin-top', 'margin-bottom', 'padding-left', 'vertical-align', 'list-style-type'];
   function cleanPaste(html) {
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const keep = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'table', 'tbody', 'tr', 'td', 'th', 'br', 'hr', 'b', 'strong', 'i', 'em', 'u', 'blockquote']);
+    const keep = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'table', 'tbody', 'tr', 'td', 'th', 'br', 'hr', 'b', 'strong', 'i', 'em', 'u', 's', 'sup', 'sub', 'span', 'div', 'img']);
     const walk = n => {
       if (n.nodeType === 3) return esc(n.textContent);
       if (n.nodeType !== 1) return '';
-      const tag = n.tagName.toLowerCase(), st = n.getAttribute('style') || '';
-      if (['script', 'style', 'meta', 'title', 'img', 'svg'].includes(tag)) return '';
-      let inner = [...n.childNodes].map(walk).join('');
-      if (!inner.trim() && !['br', 'hr', 'td', 'th'].includes(tag)) return tag === 'p' ? '' : inner;
-      if (/font-weight\s*:\s*(bold|[6-9]00)/i.test(st) && !['b', 'strong', 'h1', 'h2', 'h3', 'h4'].includes(tag)) inner = `<b>${inner}</b>`;
-      if (/font-style\s*:\s*italic/i.test(st) && !['i', 'em'].includes(tag)) inner = `<i>${inner}</i>`;
-      if (/text-decoration[^;]*underline/i.test(st) && tag !== 'u') inner = `<u>${inner}</u>`;
-      if (!keep.has(tag)) return tag === 'div' ? `<p>${inner}</p>` : inner;
+      const tag = n.tagName.toLowerCase();
+      if (['script', 'style', 'meta', 'title', 'svg', 'link'].includes(tag)) return '';
+      const inner = [...n.childNodes].map(walk).join('');
+      if (!keep.has(tag)) return inner;
+      const st = PASTE_PROPS.map(p => [p, n.style?.getPropertyValue(p)]).filter(([, v]) => v && !/url\(/i.test(v)).map(([p, v]) => `${p}:${v.replace(/"/g, "'")}`).join(';');
+      if (tag === 'img') return /^data:image\//.test(n.getAttribute('src') || '') ? `<img src="${n.getAttribute('src')}" style="width:${n.width || ''}px">` : '';
       if (tag === 'br' || tag === 'hr') return `<${tag}>`;
-      const center = /text-align\s*:\s*center/i.test(st) && ['p', 'h1', 'h2', 'h3', 'h4'].includes(tag) ? ' class="c"' : '';
-      return `<${tag}${center}>${inner}</${tag}>`;
+      return `<${tag}${st ? ` style="${st}"` : ''}>${inner}</${tag}>`;
     };
-    return walk(doc.body).replace(/<\/b><b>/g, '').replace(/<\/i><i>/g, '').replace(/<p>\s*<\/p>/g, '');
+    return walk(doc.body);
   }
+  const RTE_FONTS = ['Arial', 'Lexend', 'Comfortaa', 'Impact', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Montserrat', 'Roboto'];
+  const RTE_SIZES = [6, 7, 8, 9, 10, 10.5, 11, 12, 14, 15, 16, 18, 20, 24, 26, 31, 36, 48];
   function richEditor(html, id = 'rte') {
     return `
       <div class="rte-bar" role="toolbar" aria-label="Formato">
-        <button type="button" data-cmd="bold" title="Negrita"><b>B</b></button><button type="button" data-cmd="italic" title="Cursiva"><i>I</i></button><button type="button" data-cmd="underline" title="Subrayado"><u>U</u></button>
-        <button type="button" data-cmd="h2" title="Título">T1</button><button type="button" data-cmd="h3" title="Subtítulo">T2</button><button type="button" data-cmd="p" title="Texto normal">¶</button>
-        <button type="button" data-cmd="center" title="Centrar">≡</button><button type="button" data-cmd="ol" title="Lista numerada">1.</button><button type="button" data-cmd="ul" title="Lista">•</button><button type="button" data-cmd="hr" title="Línea">—</button>
+        <button type="button" data-cmd="undo" title="Deshacer (Ctrl+Z)">↶</button><button type="button" data-cmd="redo" title="Rehacer (Ctrl+Y)">↷</button>
+        <span class="sep"></span>
+        <select data-cmdsel="fontName" title="Fuente" aria-label="Fuente"><option value="">Fuente</option>${RTE_FONTS.map(f => `<option value="${f}" style="font-family:'${f}'">${f}</option>`).join('')}</select>
+        <select data-cmdsel="fontSize" title="Tamaño" aria-label="Tamaño"><option value="">Tamaño</option>${RTE_SIZES.map(s => `<option value="${s}">${s}</option>`).join('')}</select>
+        <select data-cmdsel="formatBlock" title="Estilo de párrafo" aria-label="Estilo"><option value="">Estilo</option><option value="p">Texto normal</option><option value="h1">Título 1</option><option value="h2">Título 2</option><option value="h3">Título 3</option></select>
+        <span class="sep"></span>
+        <button type="button" data-cmd="bold" title="Negrita (Ctrl+B)"><b>B</b></button><button type="button" data-cmd="italic" title="Cursiva (Ctrl+I)"><i>I</i></button><button type="button" data-cmd="underline" title="Subrayado (Ctrl+U)"><u>U</u></button><button type="button" data-cmd="strikeThrough" title="Tachado"><s>S</s></button>
+        <label class="rte-color" title="Color del texto">A<input type="color" data-cmdsel="foreColor" value="#000000"></label>
+        <label class="rte-color hl" title="Color de resaltado">▮<input type="color" data-cmdsel="hiliteColor" value="#ffff00"></label>
+        <span class="sep"></span>
+        <button type="button" data-cmd="justifyLeft" title="Alinear a la izquierda">⯇</button><button type="button" data-cmd="justifyCenter" title="Centrar">≡</button><button type="button" data-cmd="justifyRight" title="Alinear a la derecha">⯈</button><button type="button" data-cmd="justifyFull" title="Justificar">☰</button>
+        <span class="sep"></span>
+        <button type="button" data-cmd="insertOrderedList" title="Lista numerada">1.</button><button type="button" data-cmd="insertUnorderedList" title="Lista con viñetas">•</button>
+        <button type="button" data-cmd="outdent" title="Reducir sangría">⇤</button><button type="button" data-cmd="indent" title="Aumentar sangría">⇥</button>
+        <button type="button" data-cmd="insertHorizontalRule" title="Línea horizontal">—</button><button type="button" data-cmd="removeFormat" title="Quitar formato">Tx</button>
       </div>
-      <div class="rte doc-view" id="${id}" contenteditable="true" spellcheck="true">${html || '<p><br></p>'}</div>`;
+      <div class="rte-page"><div class="rte doc-view" id="${id}" contenteditable="true" spellcheck="true">${html || '<div style="max-width:540pt;padding:72pt 36pt"><p><br></p></div>'}</div></div>`;
   }
   function ctList() {
     const list = ctData.contracts, ed = ctCanEdit();
@@ -1832,17 +1844,13 @@
   document.addEventListener('click', async e => {
     if (view !== 'contracts') return;
     const ins = e.target.closest('[data-ins]');
-    if (ins) { $('#rte')?.focus(); document.execCommand('insertText', false, `{{${ins.dataset.ins}}}`); return; }
+    if (ins) { rteApply('insertText', `{{${ins.dataset.ins}}}`); return; }
     const cmd = e.target.closest('[data-cmd]');
     if (cmd) {
-      e.preventDefault(); $('#rte')?.focus();
-      const k = cmd.dataset.cmd;
-      if (['bold', 'italic', 'underline'].includes(k)) document.execCommand(k);
-      else if (['h2', 'h3', 'p'].includes(k)) document.execCommand('formatBlock', false, k);
-      else if (k === 'center') { document.execCommand('justifyCenter'); }
-      else if (k === 'ol') document.execCommand('insertOrderedList');
-      else if (k === 'ul') document.execCommand('insertUnorderedList');
-      else if (k === 'hr') document.execCommand('insertHorizontalRule');
+      e.preventDefault();
+      document.execCommand('styleWithCSS', false, true);
+      document.execCommand(cmd.dataset.cmd, false, null);
+      $('#rte')?.focus();
       return;
     }
     const t = e.target.closest('[data-ct]');
@@ -1879,6 +1887,31 @@
         window.open(URL.createObjectURL(await r.blob()), '_blank', 'noopener');
       } catch (err) { toast(err.message); }
     }
+  });
+  let rteRange = null;
+  document.addEventListener('selectionchange', () => {
+    const sel = window.getSelection(), r = $('#rte');
+    if (r && sel.rangeCount && r.contains(sel.anchorNode)) rteRange = sel.getRangeAt(0).cloneRange();
+  });
+  document.addEventListener('mousedown', e => { if (e.target.closest('.rte-bar button')) e.preventDefault(); });
+  function rteApply(kind, val) {
+    const r = $('#rte');
+    if (!r || !val) return;
+    r.focus();
+    if (rteRange) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rteRange); }
+    document.execCommand('styleWithCSS', false, true);
+    if (kind === 'fontSize') {
+      document.execCommand('fontSize', false, '7');
+      r.querySelectorAll('font[size="7"]').forEach(f => { f.removeAttribute('size'); f.style.fontSize = val + 'pt'; });
+      r.querySelectorAll('span[style*="xxx-large"]').forEach(sp => { sp.style.fontSize = val + 'pt'; });
+    } else if (kind === 'formatBlock') document.execCommand('formatBlock', false, val);
+    else document.execCommand(kind, false, val);
+  }
+  document.addEventListener('change', e => {
+    const s = e.target.closest?.('[data-cmdsel]');
+    if (!s) return;
+    rteApply(s.dataset.cmdsel, s.value);
+    if (s.tagName === 'SELECT') s.value = '';
   });
   document.addEventListener('paste', e => {
     const r = e.target.closest?.('#rte');

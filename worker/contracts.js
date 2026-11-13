@@ -22,18 +22,54 @@ export const CONTRACT_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS contracts (id TEXT PRIMARY KEY, title TEXT NOT NULL, artist TEXT, email TEXT, template_id TEXT, html TEXT NOT NULL DEFAULT '', vars TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'draft', token TEXT UNIQUE, notes TEXT, file TEXT, created_by TEXT, created_at INTEGER, updated_at INTEGER, sent_at INTEGER, signed_at INTEGER, signer_name TEXT, signer_email TEXT, signature TEXT, sign_ip TEXT, sign_ua TEXT, doc_hash TEXT, countersigned_by TEXT)`,
 ];
 
-/* Limpieza del HTML de los contratos: solo etiquetas de texto, sin atributos (salvo class="c" = centrado). */
-const ALLOWED = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'b', 'strong', 'i', 'em', 'u', 'ul', 'ol', 'li', 'br', 'hr', 'table', 'tbody', 'tr', 'td', 'th', 'blockquote']);
+/* Limpieza del HTML de los contratos: se conserva el formato de Google Docs (fuentes, tamaños, colores, márgenes,
+   sangrías, alineación, tablas e imágenes incrustadas), pero nada que pueda ejecutar código. */
+const ALLOWED = new Set(['div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'b', 'strong', 'i', 'em', 'u', 's', 'sup', 'sub', 'ul', 'ol', 'li', 'br', 'hr', 'table', 'thead', 'tbody', 'tr', 'td', 'th', 'img', 'blockquote', 'font']);
+const VOID = new Set(['br', 'hr', 'img']);
+const STYLE_PROPS = new Set(['font-family', 'font-size', 'font-weight', 'font-style', 'text-decoration', 'text-decoration-line', 'color', 'background-color',
+  'text-align', 'line-height', 'letter-spacing', 'text-indent', 'vertical-align', 'white-space', 'text-transform',
+  'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left', 'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+  'width', 'height', 'max-width', 'min-width', 'display', 'overflow', 'list-style-type', 'border', 'border-top', 'border-right', 'border-bottom', 'border-left',
+  'border-color', 'border-style', 'border-width', 'border-collapse', 'border-spacing', 'border-radius', 'float', 'clear', 'orphans', 'widows', 'page-break-after', 'page-break-before']);
+function cleanStyle(st) {
+  const out = [];
+  // trocea por ';' sin romper url(data:...;base64,...)
+  for (const m of String(st).matchAll(/([a-zA-Z-]+)\s*:\s*((?:[^;(]|\([^)]*\))+)/g)) {
+    const k = m[1].trim().toLowerCase(), v = m[2].trim();
+    // marca de agua de la página (imagen incrustada, nunca enlaces externos)
+    if (k === 'background-image') { if (/^url\(data:image\/(png|jpe?g|webp);base64,[A-Za-z0-9+/=]+\)$/.test(v) && v.length < 900000) out.push(`${k}:${v}`); continue; }
+    if (['background-repeat', 'background-size', 'background-position'].includes(k)) { if (/^[\w\s.%-]{1,40}$/.test(v)) out.push(`${k}:${v}`); continue; }
+    if (!STYLE_PROPS.has(k) || !v || v.length > 160) continue;
+    if (/url\s*\(|expression|javascript:|@import|\\|[<>{}]/i.test(v)) continue;
+    if (!/^[#\w\s.,%()"'+\-\/!]*$/.test(v)) continue;
+    out.push(`${k}:${v.replace(/"/g, "'")}`);
+  }
+  return out.join(';');
+}
+const attr = (attrs, name) => { const m = attrs.match(new RegExp(`\\b${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s>]+))`, 'i')); return m ? (m[2] ?? m[3] ?? m[4] ?? '') : null; };
 export function sanitize(html) {
-  let s = String(html || '').slice(0, 400000);
-  s = s.replace(/<(script|style|iframe|object|embed|svg|math|template|noscript)[\s\S]*?<\/\1\s*>/gi, '').replace(/<!--[\s\S]*?-->/g, '');
+  let s = String(html || '').slice(0, 1900000);
+  s = s.replace(/<(script|style|iframe|object|embed|svg|math|template|noscript|title|head)[\s\S]*?<\/\1\s*>/gi, '').replace(/<!--[\s\S]*?-->/g, '');
   s = s.replace(/<\/?([a-zA-Z][a-zA-Z0-9]*)\b([^>]*)>/g, (m, tag, attrs) => {
     const t = tag.toLowerCase();
     if (!ALLOWED.has(t)) return '';
-    const close = m.startsWith('</');
-    if (close) return t === 'br' || t === 'hr' ? '' : `</${t}>`;
-    const center = /class\s*=\s*["'][^"']*\bc\b/i.test(attrs) || /text-align\s*:\s*center/i.test(attrs);
-    return `<${t}${center && ['p', 'h1', 'h2', 'h3', 'h4'].includes(t) ? ' class="c"' : ''}>`;
+    if (m.startsWith('</')) return VOID.has(t) ? '' : `</${t === 'font' ? 'span' : t}>`;
+    const parts = [];
+    let style = cleanStyle(attr(attrs, 'style') || '');
+    if (/\bclass\s*=\s*["'][^"']*\bc\b/i.test(attrs) && !/text-align/.test(style)) style = (style ? style + ';' : '') + 'text-align:center';
+    if (t === 'font') {   // <font face size color> del editor → estilos
+      const face = attr(attrs, 'face'), color = attr(attrs, 'color');
+      style = cleanStyle([style, face && `font-family:${face}`, color && `color:${color}`].filter(Boolean).join(';'));
+    }
+    if (t === 'img') {
+      const src = attr(attrs, 'src') || '';
+      if (!/^data:image\/(png|jpe?g|gif|webp);base64,[A-Za-z0-9+/=\s]+$/.test(src)) return '';
+      parts.push(`src="${src.replace(/\s/g, '')}"`, 'alt=""');
+    }
+    if (t === 'td' || t === 'th') for (const n of ['colspan', 'rowspan']) { const v = attr(attrs, n); if (v && /^\d{1,2}$/.test(v)) parts.push(`${n}="${v}"`); }
+    if (t === 'ol' || t === 'ul') { const st = attr(attrs, 'start'); if (st && /^\d{1,4}$/.test(st)) parts.push(`start="${st}"`); }
+    if (style) parts.push(`style="${style}"`);
+    return `<${t === 'font' ? 'span' : t}${parts.length ? ' ' + parts.join(' ') : ''}>`;
   });
   return s.replace(/<(?![a-zA-Z/])/g, '&lt;');
 }

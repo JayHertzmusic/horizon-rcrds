@@ -478,17 +478,25 @@ select:focus { border-color: rgba(var(--accent-rgb), .7); }
 .rte-bar { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; border: 1px solid var(--line-2); border-bottom: 0; border-radius: 6px 6px 0 0; background: #111; position: sticky; top: 0; z-index: 2; }
 .rte-bar button { min-width: 34px; height: 30px; padding: 0 8px; border: 1px solid transparent; border-radius: 4px; background: none; color: var(--text); font: 600 13px/1 'Barlow', sans-serif; cursor: pointer; }
 .rte-bar button:hover { border-color: var(--line-2); background: rgba(255, 255, 255, .05); }
-.doc-view { padding: clamp(18px, 4vw, 48px); background: #fff; color: #111; font: 400 15px/1.6 Georgia, 'Times New Roman', serif; }
-.doc-view.ro { border-radius: 6px; }
-.rte { min-height: 420px; max-height: 70vh; overflow-y: auto; border-radius: 0 0 6px 6px; outline: none; }
-.rte:focus { box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .3); }
-.doc-view h1, .doc-view h2, .doc-view h3, .doc-view h4 { color: #111; font-family: Georgia, serif; line-height: 1.3; letter-spacing: 0; }
-.doc-view h1 { font-size: 22px; } .doc-view h2 { font-size: 19px; } .doc-view h3 { font-size: 17px; }
-.doc-view p { margin: 0 0 10px; }
-.doc-view .c, .doc-view [style*="center"] { text-align: center; }
-.doc-view table { border-collapse: collapse; width: 100%; }
-.doc-view td, .doc-view th { border: 1px solid #ccc; padding: 6px 8px; }
-.doc-view hr { border: 0; border-top: 1px solid #ccc; }
+.doc-view { background: #fff; color: #000; font-family: Arial, sans-serif; font-size: 11pt; line-height: normal; text-align: left; letter-spacing: 0; text-transform: none; }
+.doc-view * { letter-spacing: inherit; }
+.doc-view p, .doc-view h1, .doc-view h2, .doc-view h3, .doc-view h4, .doc-view h5, .doc-view h6 { margin: 0; font-family: inherit; color: inherit; line-height: inherit; text-transform: none; }
+.doc-view h1 { font-size: 20pt; } .doc-view h2 { font-size: 16pt; } .doc-view h3 { font-size: 14pt; }
+.doc-view ul, .doc-view ol { margin: 0; padding-left: 36pt; }
+.doc-view table { border-collapse: collapse; }
+.doc-view img { display: inline-block; max-width: none; }
+.doc-view a { color: inherit; }
+.doc-view.ro { border-radius: 4px; overflow-x: auto; }
+.rte-page { padding: 24px; background: #2b2b2b; border: 1px solid var(--line-2); border-top: 0; border-radius: 0 0 6px 6px; max-height: 75vh; overflow: auto; }
+.rte { margin: 0 auto; width: 612pt; max-width: 100%; min-height: 792pt; box-shadow: 0 2px 14px rgba(0, 0, 0, .5); outline: none; }
+.rte:focus { box-shadow: 0 2px 14px rgba(0, 0, 0, .5), 0 0 0 3px rgba(var(--accent-rgb), .35); }
+.ro.doc-view { width: 612pt; max-width: 100%; margin: 0 auto 10px; box-shadow: 0 2px 14px rgba(0, 0, 0, .5); }
+.rte-bar select { min-height: 30px; padding: 0 26px 0 8px; font-size: 12px; background-position: right 8px center; }
+.rte-bar select[data-cmdsel=fontName] { width: 130px; } .rte-bar select[data-cmdsel=fontSize] { width: 76px; } .rte-bar select[data-cmdsel=formatBlock] { width: 118px; }
+.rte-bar .sep { width: 1px; align-self: stretch; margin: 2px 4px; background: var(--line-2); }
+.rte-color { position: relative; display: inline-grid; place-items: center; min-width: 30px; height: 30px; border-radius: 4px; font-weight: 700; cursor: pointer; border-bottom: 3px solid #e5e7eb; }
+.rte-color.hl { border-bottom-color: #ffff00; }
+.rte-color input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .sigblock { margin-top: 24px; padding-top: 14px; border-top: 2px solid #111; }
 .sig-img { max-width: 320px; max-height: 120px; display: block; }
 .typed-sig { font: italic 400 32px/1.2 'Brush Script MT', 'Segoe Script', cursive; }

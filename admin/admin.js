@@ -332,7 +332,7 @@
     } catch (e) { serverCfg = null; loginError(e.message); }
   }
 
-  const VIEWS = ['releases', 'radio', 'playlists', 'player', 'brand'];
+  const VIEWS = ['releases', 'radio', 'playlists', 'player'];
   const firstView = () => VIEWS.find(v => can(v)) || (MODE === 'admin' && auth?.user?.owner ? 'team' : 'none');
   const emptyRepo = () => ({ head: '', treeSha: '', files: new Map(), truncated: false, releases: [], mixtapes: [], playlists: [], ignore: [] });
   function useSession(res) {
@@ -363,7 +363,7 @@
 
   function shell(inner) {
     const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}</button>`;
-    const u = auth.user, names = { releases: 'Releases', radio: 'Radio', playlists: 'Playlists', player: 'Reproductor', brand: 'Logo' };
+    const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Reproductor' };
     const initials = (u.name || u.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
     return `
       <header class="top">
@@ -485,6 +485,13 @@
     } finally { busy = false; }
   }
 
+  /* Qué enlaces tiene cada uno (encendido = puesto) */
+  const CHIP = { spotify_link: 'Spotify', soundcloud_link: 'SoundCloud', youtube_link: 'YouTube', stream_link: 'Smart link' };
+  const CHIP_SHORT = { spotify_link: 'SP', soundcloud_link: 'SC', youtube_link: 'YT', stream_link: 'LINK' };
+  const linkChips = (x, keys) => `<span class="links">${keys.map(k => x[k]
+    ? `<a class="chip on" href="${esc(x[k])}" target="_blank" rel="noopener" title="${CHIP[k]}">${CHIP_SHORT[k]}</a>`
+    : `<span class="chip" title="Sin ${CHIP[k]}">${CHIP_SHORT[k]}</span>`).join('')}</span>`;
+
   /* Releases */
   function releaseRows() {
     const q = filter.trim().toLowerCase();
@@ -496,6 +503,7 @@
         ${imgTag(r.image, 'thumb')}
         <span class="meta"><b>${esc(r.title || 'Sin título')}</b><span>${esc(r.artist || '')}</span></span>
         <span class="cat">${esc(catOf(r))}</span>
+        ${linkChips(r, ['spotify_link', 'soundcloud_link', 'youtube_link', 'stream_link'])}
         <span class="swatch" style="--c:${esc(hex6(r.color) || '#ffffff')}" title="${esc(r.color || '')}"></span>
         ${i === 0 ? '<span class="tag">Portada</span>' : '<span></span>'}
         ${can('releases', 'edit') ? `<button type="button" class="btn ghost sm" data-act="edit-release" data-key="${esc(keyOf(r))}">Editar</button>` : '<span></span>'}
@@ -689,7 +697,7 @@
     const list = repo.mixtapes;
     return `
       <div class="head">
-        <div><p class="eyebrow">Horizon Radio</p><h1>RADIO <span class="count">${list.length}</span></h1></div>
+        <div><p class="eyebrow">Horizon Mixtapes</p><h1>MIXTAPES <span class="count">${list.length}</span></h1></div>
         ${can('radio', 'edit') ? '<button type="button" class="btn primary" data-act="new-mixtape">+ Nuevo mixtape</button>' : ''}
       </div>
       <ol class="list">${list.length ? list.map((m, i) => `
@@ -698,6 +706,7 @@
           ${imgTag(m.image, 'thumb')}
           <span class="meta"><b>${esc(m.number ? 'Horizon Mixtape ' + m.number : m.title || 'Sin título')}</b><span>${esc(m.artist || '')}</span></span>
           <span class="cat">${m.preview ? '♪ Audio' : '<span class="muted">Sin audio</span>'}</span>
+          ${linkChips(m, ['soundcloud_link', 'youtube_link'])}
           <span class="swatch" style="--c:${esc(hex6(m.color) || '#ffffff')}"></span>
           ${i === 0 ? '<span class="tag">Portada</span>' : '<span></span>'}
           ${can('radio', 'edit') ? `<button type="button" class="btn ghost sm" data-act="edit-mixtape" data-key="${esc(keyOf(m))}">Editar</button>` : '<span></span>'}
@@ -718,7 +727,7 @@
     const number = m.number || nextMixNumber();
     return `
       <form id="ed" class="editor" novalidate>
-        <button type="button" class="back" data-act="back">← Radio</button>
+        <button type="button" class="back" data-act="back">← Mixtapes</button>
         <h1>${isNew ? 'NUEVO MIXTAPE' : esc('Horizon Mixtape ' + (m.number || ''))}</h1>
         <div class="ed-grid">
           <div class="ed-side">
@@ -999,10 +1008,6 @@
   /* Reproductor y logo: archivos que se sustituyen tal cual */
   const FILES = {
     player: [{ file: 'release_preview.mp3', title: 'Audio del reproductor', kind: 'audio', accept: 'audio/mpeg,.mp3' }],
-    brand: [
-      { file: 'logo.png', title: 'Logo', kind: 'image', accept: 'image/png' },
-      { file: 'favicon_icon.png', title: 'Icono de la pestaña', kind: 'image', accept: 'image/png' },
-    ],
   };
   const pending = new Map();   // archivo → { blob, url }
   function fileCard(f, editable) {
@@ -1118,10 +1123,10 @@
     else if (editing?.view === 'radio') inner = mixtapeEditor();
     else if (view === 'radio') inner = radioView();
     else if (view === 'playlists') inner = playlistsView();
-    else if (view === 'player' || view === 'brand') inner = filesView(view);
+    else if (view === 'player') inner = filesView(view);
     else inner = releasesView();
     app.innerHTML = shell(inner);
-    const names = { releases: 'Releases', radio: 'Radio', playlists: 'Playlists', player: 'Reproductor', brand: 'Logo', team: 'Equipo', none: 'Equipo' };
+    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Reproductor', team: 'Equipo', none: 'Equipo' };
     document.title = `${editing ? (editing.orig?.title || 'Nuevo') + ' · ' : ''}${names[view] || ''} — Panel HORIZON RCRDS`;
   }
   function busyOn(scope, btn, label) {

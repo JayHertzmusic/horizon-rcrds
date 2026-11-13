@@ -13,7 +13,6 @@ const SECTIONS = [
   { id: 'radio', label: 'Mixtapes', actions: ['view', 'edit', 'delete'] },
   { id: 'playlists', label: 'Playlists', actions: ['view', 'edit', 'delete'] },
   { id: 'player', label: 'Reproductor', actions: ['view', 'edit'] },
-  { id: 'brand', label: 'Logo', actions: ['view', 'edit'] },
 ];
 // Datos de la web: nombre en la API → archivo público y sección del panel
 const DATA = {

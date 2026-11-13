@@ -56,7 +56,9 @@
     throw new GhError(j.message || `Error del servidor (${res.status}).`, res.status);
   }
   /* Permisos del rol (el servidor los vuelve a comprobar en cada cambio) */
-  const can = (sec, act = 'view') => !!(auth?.user?.owner || auth?.user?.perms?.[sec]?.[act]);
+  // «Probar rol» (owners en /admin): el panel se ve con los permisos de ese rol y no se puede guardar nada
+  let preview = null;   // { id, name, perms }
+  const can = (sec, act = 'view') => preview ? !!preview.perms?.[sec]?.[act] : !!(auth?.user?.owner || auth?.user?.perms?.[sec]?.[act]);
 
   async function loadRepo() {
     const d = await api('GET', '/api/data');
@@ -68,6 +70,7 @@
   /* Un «Publicar» = un cambio en el servidor. Las listas se recalculan sobre la versión más reciente
      (si alguien publicó a la vez, se reintenta sin pisar su cambio). Sale en la web al momento. */
   async function publish(message, uploads, build) {
+    if (preview) throw new Error(`Estás probando el rol ${preview.name}: los cambios no se guardan. Sal de la prueba para publicar.`);
     for (let attempt = 0; ; attempt++) {
       const fresh = await loadRepo();
       const out = build ? build(fresh) : {};
@@ -333,7 +336,7 @@
   }
 
   const VIEWS = ['releases', 'radio', 'playlists', 'player'];
-  const firstView = () => VIEWS.find(v => can(v)) || (MODE === 'admin' && auth?.user?.owner ? 'team' : 'none');
+  const firstView = () => VIEWS.find(v => can(v)) || (MODE === 'admin' && auth?.user?.owner && !preview ? 'team' : 'none');
   const emptyRepo = () => ({ head: '', treeSha: '', files: new Map(), truncated: false, releases: [], mixtapes: [], playlists: [], ignore: [] });
   function useSession(res) {
     auth = { token: res.token || auth?.token, user: res.user, sections: res.sections };
@@ -357,6 +360,7 @@
     if (auth?.token) api('POST', '/api/auth/logout').catch(() => {});
     try { window.google?.accounts?.id?.disableAutoSelect(); } catch { /* nada */ }
     chatStop();
+    preview = null;
     clearAuth(); auth = null; repo = null; editing = null; setDirtyBase(null); teamData = null; teamErr = '';
     watchId++; deploy();
     loginView(message);
@@ -373,22 +377,22 @@
           <span class="word">HORIZON<small>RCRDS</small></span>
         </a>
         <nav class="tabs" aria-label="Secciones">
-          ${VIEWS.filter(v => can(v)).map(v => tab(v, names[v])).join('')}${MODE === 'admin' && u.owner ? tab('team', 'Equipo') + tab('log', 'Historial') : ''}
+          ${VIEWS.filter(v => can(v)).map(v => tab(v, names[v])).join('')}${MODE === 'admin' && u.owner && !preview ? tab('team', 'Equipo') + tab('log', 'Historial') : ''}
         </nav>
         <div class="top-end">
           <span class="who" title="${esc(u.email)}">
             ${u.picture ? `<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="who-ini">${esc(initials)}</span>`}
-            <span class="who-txt"><b>${esc(u.name || u.email.split('@')[0])}</b><small>${esc(u.owner ? 'Owner' : u.role?.name || 'Sin rol')}</small></span>
+            <span class="who-txt"><b>${esc(u.name || u.email.split('@')[0])}</b><small>${esc(preview ? 'Probando: ' + preview.name : u.owner ? 'Owner' : u.role?.name || 'Sin rol')}</small></span>
           </span>
           <a class="link" href="${SITE}" target="_blank" rel="noopener">Ver web ↗</a>
           <button type="button" class="link" data-act="logout">Salir</button>
         </div>
       </header>
-      <main id="main" class="main" tabindex="-1">${inner}</main>`;
+      <main id="main" class="main" tabindex="-1">${preview ? `<div class="preview-bar" role="status"><span>Estás viendo el panel como <b>${esc(preview.name)}</b>. Los cambios no se guardan.</span><button type="button" class="btn primary sm" data-act="preview-off">Salir de la prueba</button></div>` : ''}${inner}</main>`;
   }
   function noAccessView() {
     return `<div class="head"><div><p class="eyebrow">Equipo</p><h1>SIN SECCIONES</h1></div></div>
-      <p class="info">Tu rol (${esc(auth.user.role?.name || 'sin rol')}) todavía no tiene ninguna sección. Cuando un owner te dé acceso, sal y vuelve a entrar.</p>`;
+      <p class="info">Tu rol (${esc(preview ? preview.name : auth.user.role?.name || 'sin rol')}) todavía no tiene ninguna sección. Cuando un owner te dé acceso, sal y vuelve a entrar.</p>`;
   }
 
   /* ---------------- Equipo y roles (solo owners, en /admin) ---------------- */
@@ -414,7 +418,7 @@
         <div class="role-top">
           <input name="name" value="${esc(r.name || '')}" maxlength="40" placeholder="Nombre del rol (p. ej. A&R, Mod)" aria-label="Nombre del rol" autocomplete="off">
           <button type="submit" class="btn primary sm">${isNew ? 'Crear rol' : 'Guardar'}</button>
-          ${isNew ? '<button type="button" class="btn ghost sm" data-act="cancel-role">Cancelar</button>' : '<button type="button" class="btn danger sm" data-act="delete-role">Eliminar</button>'}
+          ${isNew ? '<button type="button" class="btn ghost sm" data-act="cancel-role">Cancelar</button>' : '<button type="button" class="btn ghost sm" data-act="preview-role" title="Ver el panel como este rol">Probar</button><button type="button" class="btn danger sm" data-act="delete-role">Eliminar</button>'}
         </div>
         <table class="perm-table">
           <thead><tr><th scope="col">Sección</th>${Object.values(ACTIONS).map(a => `<th scope="col">${a}</th>`).join('')}</tr></thead>
@@ -1149,7 +1153,7 @@
     if (!auth || !repo) return;
     accent();
     if (view !== 'team' && view !== 'log' && view !== 'none' && !can(view)) { view = firstView(); editing = null; }
-    if ((view === 'team' || view === 'log') && !(MODE === 'admin' && auth.user.owner)) view = firstView();
+    if ((view === 'team' || view === 'log') && (preview || !(MODE === 'admin' && auth.user.owner))) view = firstView();
     let inner;
     if (view === 'none') inner = noAccessView();
     else if (view === 'team') inner = teamView();
@@ -1227,6 +1231,14 @@
     switch (t.dataset.act) {
       case 'team-retry': teamErr = ''; render(); break;
       case 'log-more': loadLog(true); break;
+      case 'preview-role': {
+        const r = teamData?.roles.find(x => x.id === t.closest('.role-card')?.dataset.role);
+        if (!r) return;
+        preview = { id: r.id, name: r.name, perms: r.perms };
+        filter = ''; go(firstView());
+        break;
+      }
+      case 'preview-off': preview = null; go('team'); break;
       case 'new-role': newRole = true; render(); $('.role-card input[name=name]')?.focus(); break;
       case 'cancel-role': newRole = false; render(); break;
       case 'delete-role': {

@@ -736,6 +736,7 @@
     @keyframes sec-drift { from { transform: translate(-30%, -10%); } to { transform: translate(30%, 25%); } }
     #radio .section-label { color: rgb(var(--sec-rgb)); }
     @media (prefers-reduced-motion: reduce) { .sec-tint::after { animation: none; } }
+
     /* sections off screen pause their animations (see pauseOffscreen) */
     .is-off, .is-off *, .is-off *::before, .is-off *::after { animation-play-state: paused !important; }
 
@@ -874,6 +875,72 @@
     }
     @media (prefers-reduced-motion: reduce) {
       .stage-cover, .rc-eq span { animation: none !important; }
+    }
+    /* ═════════ PHONES ═════════ */
+    @keyframes float-flat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+    /* Mobile menu: closed it takes no space; open it has a solid bar and big tap targets */
+    #nav-menu { margin-top: 0 !important; padding-bottom: 0 !important; border-top-width: 0 !important; }
+    #nav-menu.open { margin-top: 12px !important; padding-bottom: 8px !important; border-top-width: 1px !important; }
+    #nav-menu > div { gap: 0 !important; padding-top: 6px !important; }
+    #nav-menu .nav-link { display: block; padding: 13px 2px; font-size: 0.78rem; }
+    #nav-menu .nav-link::after { display: none; }
+    #navbar.menu-open { background: rgba(10,10,10,0.97); border-bottom: 1px solid #1f1f1f; }
+    #nav-toggle { width: 44px; height: 44px; padding: 0; align-items: flex-end; justify-content: center; margin-right: -6px; }
+    #nav-toggle span { margin-right: 6px; }
+    @media (max-width: 767px) { #navbar { padding-top: 10px; padding-bottom: 10px; } #nav-logo { height: 42px !important; } }
+
+    @media (max-width: 640px) {
+      /* hero: cover centred, bigger title, compact "Listen on" rows */
+      .hero-stage { padding: 0 0 4px 0 !important; max-width: 100% !important; }
+      .hero-stage .stage-cover { margin: 0 auto !important; max-width: min(100%, 420px); transform: none; animation-name: float-flat; }
+      #home { padding-top: 84px; padding-bottom: 56px; min-height: 0; }
+      .hero-grid { gap: 30px !important; }
+      .hero-main .hero-title { font-size: clamp(2.7rem, 15vw, 4.6rem); }
+      .hero-main .label-tag { margin-bottom: 14px; }
+      .hc-player { gap: 12px; }
+      .listen-label { margin: 24px 0 10px; }
+      .platforms { gap: 8px; }
+      .platform { grid-template-columns: 38px minmax(0, 1fr) auto; gap: 12px; padding: 8px 10px 8px 8px; }
+      .platform .ico { width: 38px; height: 38px; font-size: 1.1rem; }
+      .platform .name { font-size: 1.15rem; }
+      .platform .sub { display: none; }
+      .platform .go { padding: 9px 12px; letter-spacing: 0.16em; }
+      .hero-main .hc-buttons .btn-outline { width: 100%; justify-content: center; }
+
+      /* "View full catalogue →" style links: a finger-sized tap area */
+      #releases .md\:flex-row > a, #radio .md\:flex-row > a, #playlists .md\:flex-row > a { display: inline-block; padding: 12px 0; }
+      /* sections: less empty space */
+      #releases, #radio, #playlists { padding-top: 64px !important; padding-bottom: 64px !important; }
+      #releases .mb-14, #radio .mb-14, #playlists .mb-14 { margin-bottom: 28px; }
+
+      /* release / mixtape cards: platform icons in one tidy row */
+      .card-body { padding: 10px 10px 8px; }
+      .card-footer { padding: 4px 4px 6px; gap: 0; justify-content: space-between; }
+      .stream-icon { width: auto; flex: 1 1 0; max-width: 40px; height: 38px; font-size: 0.95rem; }
+
+      /* playlists: two per row instead of one huge column */
+      #playlists-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 12px !important; }
+      .playlist-body { padding: 10px 10px 12px; gap: 4px; }
+      .playlist-name { font-size: 1rem; }
+      .playlist-meta { font-size: 0.56rem; margin-bottom: 6px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+      .btn-playlist { width: 100%; justify-content: center; padding: 9px 6px; font-size: 0.56rem; letter-spacing: 0.12em; }
+      .playlist-overlay { display: none; }
+
+      /* send your demo */
+      .dx { padding: 84px 0 64px; min-height: 0; }
+      #demos .btn-primary, #demos .btn-outline { width: 100%; justify-content: center; }
+      .dx-facts { margin-top: 44px; }
+
+      /* footer: e-mail on its own row, no overflow */
+      #contact .gap-x-16 { column-gap: 24px; }
+      #contact .grid > div:last-child { grid-column: 1 / -1; }
+      #contact a[href^="mailto:"] { overflow-wrap: anywhere; }
+    }
+    /* touch screens: hover effects would stay "stuck" after a tap */
+    @media (hover: none) {
+      .release-card:hover, .playlist-card:hover, .platform:hover, .radio-card:hover { transform: none; }
+      .release-card:hover .card-cover img, .playlist-card:hover .playlist-cover img { transform: none; }
+      .release-card:hover .card-play-overlay { opacity: 0; }
     }
   </style>
   <!-- Smooth scroll (Lenis, MIT: assets/vendor/LENIS-LICENSE.txt). Desktop mouse/trackpad only. -->
@@ -1317,16 +1384,20 @@ window.addEventListener('scroll', () => {
 const toggle  = document.getElementById('nav-toggle');
 const navMenu = document.getElementById('nav-menu');
 let menuOpen  = false;
-toggle.addEventListener('click', () => {
-  menuOpen = !menuOpen;
-  navMenu.style.maxHeight = menuOpen ? '320px' : '0';
-  navMenu.style.opacity   = menuOpen ? '1'     : '0';
-});
-function closeMenu() {
-  menuOpen = false;
-  navMenu.style.maxHeight = '0';
-  navMenu.style.opacity   = '0';
+/* The open state is a class: closed, the menu takes no space (no stray line under the bar);
+   open, the bar gets a solid background so the links are readable over the page. */
+function setMenu(open) {
+  menuOpen = open;
+  navMenu.classList.toggle('open', open);
+  navbar.classList.toggle('menu-open', open);
+  navMenu.style.maxHeight = open ? navMenu.scrollHeight + 'px' : '0';
+  navMenu.style.opacity   = open ? '1' : '0';
+  toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
 }
+toggle.setAttribute('aria-expanded', 'false');
+toggle.addEventListener('click', () => setMenu(!menuOpen));
+function closeMenu() { setMenu(false); }
 
 /* ════════════════════════════════════════════════
    SCROLL REVEAL
@@ -2139,8 +2210,9 @@ function fillDemoWall(plane, covers) {
   /* The wall is tilted, so it needs more columns than fit straight across (otherwise a corner stays empty),
      and each column must be taller than the wall so it never runs out of covers while it moves. */
   const colW = innerWidth <= 1023 ? 140 : 210, GAP = 18;
-  const COLS = Math.max(7, Math.min(16, Math.ceil(plane.clientWidth * 1.45 / (colW + GAP)) + 1));
-  const PER = Math.max(5, Math.min(16, Math.ceil(plane.clientHeight * 1.35 / (colW + GAP)) + 1));
+  const phone = innerWidth <= 640;   /* phones: the wall is mostly shaded, so fewer covers (lighter to render) */
+  const COLS = Math.max(phone ? 5 : 7, Math.min(phone ? 6 : 16, Math.ceil(plane.clientWidth * 1.45 / (colW + GAP)) + 1));
+  const PER = Math.max(5, Math.min(phone ? 12 : 16, Math.ceil(plane.clientHeight * 1.35 / (colW + GAP)) + 1));
   let html = '';
   for (let c = 0; c < COLS; c++) {
     const list = [];

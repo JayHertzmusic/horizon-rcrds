@@ -216,6 +216,36 @@
     @keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
     .toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 16px); opacity: 0; pointer-events: none; z-index: 60; background: #111; border: 1px solid rgba(var(--accent-color-rgb), 0.5); color: #fff; font-size: 0.68rem; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase; padding: 12px 20px; border-radius: 3px; transition: opacity 0.3s, transform 0.3s; }
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    /* ═════════ PHONES ═════════ */
+    #nav-menu { margin-top: 0 !important; padding-bottom: 0 !important; border-top-width: 0 !important; }
+    #nav-menu.open { margin-top: 12px !important; padding-bottom: 8px !important; border-top-width: 1px !important; }
+    #nav-menu > div { gap: 0 !important; padding-top: 6px !important; }
+    #nav-menu .nav-link { display: block; padding: 13px 2px; font-size: 0.78rem; }
+    #nav-menu .nav-link::after { display: none; }
+    #navbar.menu-open { background: rgba(10,10,10,0.97); border-bottom: 1px solid #1f1f1f; }
+    #nav-toggle { width: 44px; height: 44px; padding: 0; align-items: flex-end; justify-content: center; margin-right: -6px; }
+    #nav-toggle span { margin-right: 6px; }
+    @media (max-width: 767px) { #navbar { padding-top: 10px; padding-bottom: 10px; } #nav-logo { height: 42px !important; } }
+    @media (max-width: 640px) {
+      .rel-bg { padding-top: 84px; padding-bottom: 56px; min-height: 0; }
+      .back-link { padding: 12px 0; margin-bottom: 10px; }
+      .rel-grid { gap: 28px; }
+      .hero-title { font-size: clamp(2.7rem, 15vw, 4.6rem); }
+      .hc-player { gap: 12px; margin-top: 24px; }
+      .listen-label { margin: 26px 0 10px; }
+      .platforms { gap: 8px; }
+      .platform { grid-template-columns: 38px minmax(0, 1fr) auto; gap: 12px; padding: 8px 10px 8px 8px; }
+      .platform .ico { width: 38px; height: 38px; font-size: 1.1rem; }
+      .platform .name { font-size: 1.15rem; }
+      .platform .sub { display: none; }
+      .platform .go { padding: 9px 12px; letter-spacing: 0.16em; }
+      .share-row .btn-outline { width: 100%; justify-content: center; }
+      /* flat cover on phones (the 3D tilt squeezes it), still gently floating */
+      .stage-cover { transform: none; animation: float-flat 7s ease-in-out infinite; }
+    }
+    @keyframes float-flat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+    @media (hover: none) { .platform:hover { transform: none; } }
   </style>
   <link rel="stylesheet" href="./assets/smooth-scroll.css?v=1"/>
   <script src="./assets/vendor/lenis.min.js?v=1.3.26" defer></script>
@@ -369,7 +399,10 @@ const toggle = document.getElementById('nav-toggle'), navMenu = document.getElem
 toggle.addEventListener('click', () => {
   const open = toggle.getAttribute('aria-expanded') !== 'true';
   toggle.setAttribute('aria-expanded', open);
-  navMenu.style.maxHeight = open ? '320px' : '0'; navMenu.style.opacity = open ? '1' : '0';
+  toggle.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+  navMenu.classList.toggle('open', open);
+  navbar.classList.toggle('menu-open', open);
+  navMenu.style.maxHeight = open ? navMenu.scrollHeight + 'px' : '0'; navMenu.style.opacity = open ? '1' : '0';
 });
 
 /* ── platforms: only real links. too.fm ("All platforms") reaches every store.
@@ -403,11 +436,20 @@ function scPlayer(url, ui) {
     const bars = ui.wave.children, upto = Math.round(rel * bars.length);
     for (let i = 0; i < bars.length; i++) bars[i].classList.toggle('on', i < upto);
   };
+  let frame = null, shown = false;
+  /* Plan B (mostly iPhone): if the hidden player was not allowed to start, show the real SoundCloud
+     player under ours so the visitor can press play inside it. */
+  function showFrame() {
+    if (!frame || shown) return;
+    shown = true;
+    frame.style.cssText = 'display:block;width:100%;max-width:32rem;height:120px;border:0;border-radius:8px;margin-top:14px;';
+    ui.box.insertAdjacentElement('afterend', frame);
+  }
   function load() {
     if (ready) return ready;
     return ready = new Promise((ok, ko) => {
       const go = () => {
-        const f = document.createElement('iframe');
+        const f = frame = document.createElement('iframe');
         f.allow = 'autoplay'; f.title = 'SoundCloud player';
         f.style.cssText = 'position:fixed;width:1px;height:1px;left:-10px;bottom:-10px;opacity:0;pointer-events:none;border:0';
         f.src = `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&auto_play=false&visual=false`;
@@ -429,7 +471,10 @@ function scPlayer(url, ui) {
     if (state === 'play') { widget.pause(); return; }
     if (state === 'loading') return;
     set('loading');
-    try { await load(); widget.play(); }
+    try {
+      await load(); widget.play();
+      setTimeout(() => { if (state === 'loading') { set('idle'); showFrame(); } }, 3500);
+    }
     catch { set('idle'); window.open(url, '_blank', 'noopener,noreferrer'); }
   };
   buttons.forEach(b => b.addEventListener('click', e => { e.stopPropagation(); toggle(); }));
@@ -446,6 +491,8 @@ function scPlayer(url, ui) {
   });
   /* warm up the widget when the visitor gets close to a play button */
   [...buttons, ui.area].filter(Boolean).forEach(b => b.addEventListener('pointerenter', () => load().catch(() => {}), { once: true }));
+  /* touch screens have no hover: get it ready as soon as the page is idle, so a tap starts it straight away */
+  if (matchMedia('(hover: none)').matches) (window.requestIdleCallback || (fn => setTimeout(fn, 1200)))(() => load().catch(() => {}));
 }
 
 /* Floating particles in the release colour; they speed up while the track plays */

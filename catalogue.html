@@ -274,7 +274,18 @@
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
     /* text fallback only when the cover fails to load */
   .cat-cover:has(img) .cat-cover-fallback { display: none; }
-</style>
+  /* ═════════ PHONES ═════════ */
+  @media (max-width: 639px) {
+    .catalogue-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 4px 16px 56px; }
+    .page-hero { padding: 36px 16px 28px; }
+    .filter-bar { padding-left: 16px; padding-right: 16px; }
+    .back-link { padding: 14px 0; }
+    .cat-icons { justify-content: space-between; padding: 2px 4px 6px; gap: 0; }
+    .cat-icon { width: auto; flex: 1 1 0; max-width: 36px; height: 34px; }
+    .cat-title { font-size: 0.9rem; }
+    /* 16px stops iPhone from zooming the page when the search box is tapped */
+    .search-input { font-size: 16px; padding-top: 10px; padding-bottom: 10px; }
+  }</style>
   <!-- Smooth scroll (Lenis, MIT: assets/vendor/LENIS-LICENSE.txt). Desktop mouse/trackpad only. -->
   <link rel="stylesheet" href="./assets/smooth-scroll.css?v=1"/>
   <script src="./assets/vendor/lenis.min.js?v=1.3.26" defer></script>

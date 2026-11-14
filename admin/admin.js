@@ -175,7 +175,8 @@
     return name;
   }
   function accent() {
-    const c = hex6(repo?.releases?.[0]?.color) || '#ffffff';
+    // el panel va en blanco y gris (legible); el color de cada release solo se ve en sus muestras de color
+    const c = '#ffffff';
     const n = parseInt(c.slice(1), 16);
     document.documentElement.style.setProperty('--accent', c);
     document.documentElement.style.setProperty('--accent-rgb', `${n >> 16 & 255}, ${n >> 8 & 255}, ${n & 255}`);
@@ -468,12 +469,16 @@
     return `${head}
       <p class="info lead">Cada persona entra en <b>horizonrcrds.com/team</b> con su cuenta de Google y solo ve lo que permite su rol. /admin es solo para los owners.</p>
       <ol class="list team-list">
-        ${owners.map(e => `<li class="row tm">${person('', e, '')}<span class="tag">Owner</span><span class="muted sm-txt">Acceso total</span><span></span></li>`).join('')}
+        ${owners.map(e => `<li class="row tm">
+            <span class="av" style="--c:#ffffff">${esc(e[0].toUpperCase())}</span>
+            <span class="meta"><b class="who-name">${esc(e.split('@')[0])}</b><span>${esc(e)}</span></span>
+            <span class="role-tag owner">Owner</span>
+            <span class="muted sm-txt">Acceso total</span><span></span></li>`).join('')}
         ${members.map(m => `
           <li class="row tm">
-            <label class="color-dot" style="--c:${esc(m.color || '#ffffff')}" title="Color de ${esc(m.label || m.email)}"><input type="color" class="color-in" data-member="${esc(m.email)}" value="${esc(m.color || '#ffffff')}" aria-label="Color de ${esc(m.label || m.email)}"></label>
-            <span class="meta" title="${esc(m.email)}"><input class="name-in" data-member="${esc(m.email)}" value="${esc(m.label || '')}" placeholder="${esc(m.name || m.email.split('@')[0])}" maxlength="40" aria-label="Nombre de ${esc(m.email)}" autocomplete="off" style="color:${esc(m.color || '#ffffff')}"></span>
-            <select class="role-sel" data-member="${esc(m.email)}" aria-label="Rol de ${esc(m.email)}">${m.role_id && roles.some(r => r.id === m.role_id) ? '' : '<option value="" selected>Sin rol</option>'}${roleOpts(m.role_id)}</select>
+            <label class="av color-dot" style="--c:${esc(m.color || '#ffffff')}" title="Cambiar color">${esc((m.label || m.name || m.email)[0].toUpperCase())}<input type="color" class="color-in" data-member="${esc(m.email)}" value="${esc(m.color || '#ffffff')}" aria-label="Color de ${esc(m.label || m.email)}"></label>
+            <span class="meta"><input class="name-in" data-member="${esc(m.email)}" value="${esc(m.label || '')}" placeholder="${esc(m.name || m.email.split('@')[0])}" maxlength="40" aria-label="Nombre de ${esc(m.email)}" autocomplete="off" title="Haz clic para cambiar el nombre"><span>${esc(m.email)}</span></span>
+            <select class="role-sel role-tag" style="--c:${esc(m.color || '#ffffff')}" data-member="${esc(m.email)}" aria-label="Rol de ${esc(m.email)}" title="Cambiar rol">${m.role_id && roles.some(r => r.id === m.role_id) ? '' : '<option value="" selected>Sin rol</option>'}${roleOpts(m.role_id)}</select>
             <span class="muted sm-txt" title="${m.last_login ? 'Última vez: ' + esc(fmtDate(m.last_login)) : ''}">Acceso activo</span>
             <button type="button" class="btn ghost sm" data-act="remove-member" data-email="${esc(m.email)}">Quitar</button>
           </li>`).join('')}
@@ -482,7 +487,7 @@
       <form id="add-member" class="add-row" novalidate>
         <input name="email" type="email" placeholder="email@gmail.com" aria-label="Email de Google" autocomplete="off" spellcheck="false">
         <input name="label" placeholder="Nombre (p. ej. Kris m)" maxlength="40" aria-label="Nombre" autocomplete="off">
-        <label class="color-dot big" style="--c:#a78bfa" title="Color"><input type="color" name="color" value="#a78bfa" aria-label="Color"></label>
+        <label class="color-dot big" style="--c:#4fc3f7" title="Color"><input type="color" name="color" value="#4fc3f7" aria-label="Color"></label>
         <select name="role_id" aria-label="Rol">${roleOpts(roles[0].id)}</select>
         <button type="submit" class="btn primary">Añadir</button>
         <p class="ed-error" role="alert" hidden></p>
@@ -1666,7 +1671,7 @@
   let ctData = null, ctErr = '', ctLoading = false, ctOpen = null;
   const CT_STATUS = { draft: ['Borrador', 'off'], sent: ['Enviado', ''], signed: ['Firmado', 'ok'], void: ['Anulado', 'off'] };
   const ctCanEdit = () => !!ctData?.canEdit && can('contracts', 'edit');
-  const signUrl = c => `${location.origin}/sign/${c.token}`;
+  const signUrl = c => `${location.origin}/sign/${c.signers?.[0]?.token || c.token}`;
   async function loadContracts() {
     if (ctLoading) return;
     ctLoading = true;
@@ -1680,9 +1685,10 @@
     if (!r.ok) { const j = await r.json().catch(() => ({})); throw new GhError(j.message || `Error ${r.status}`, r.status); }
     return r;
   }
-  function gmailUrl(c) {
-    const body = `Hi ${c.artist || ''},\n\nHere is your contract with HORIZON RCRDS: ${c.title}.\nYou can read it and sign it online here:\n${signUrl(c)}\n\nIf you have any questions, just reply to this email.\n\nBest,\nHORIZON RCRDS`;
-    return `https://mail.google.com/mail/?authuser=contacthorizonids@gmail.com&view=cm&fs=1&to=${encodeURIComponent(c.email || '')}&su=${encodeURIComponent('HORIZON RCRDS — ' + c.title)}&body=${encodeURIComponent(body)}`;
+  const signerUrl = sg => `${location.origin}/sign/${sg.token}`;
+  function gmailUrl(c, sg) {
+    const body = `Hi${sg.label && !/^Artista/.test(sg.label) ? ' ' + sg.label : c.artist ? ' ' + c.artist : ''},\n\nHere is your contract with HORIZON RCRDS: ${c.title}.\nYou can read it and sign it online here:\n${signerUrl(sg)}\n\nIf you have any questions, just reply to this email.\n\nBest,\nHORIZON RCRDS`;
+    return `https://mail.google.com/mail/?authuser=contacthorizonids@gmail.com&view=cm&fs=1&to=${encodeURIComponent(sg.email || '')}&su=${encodeURIComponent('HORIZON RCRDS — ' + c.title)}&body=${encodeURIComponent(body)}`;
   }
   function ctList() {
     const list = ctData.contracts, ed = ctCanEdit();
@@ -1694,7 +1700,7 @@
         <li class="row ct" data-ctid="${esc(c.id)}">
           <span class="meta"><b>${esc(c.title)}</b><span>${esc(c.artist || '')}${c.email ? ' · ' + esc(c.email) : ''}</span></span>
           <span class="tag ${CT_STATUS[c.status]?.[1] || ''}">${CT_STATUS[c.status]?.[0] || c.status}</span>
-          <span class="muted sm-txt">${c.status === 'signed' ? 'Firmado ' + esc(fmtDate(c.signed_at)) : c.sent_at ? 'Enviado ' + esc(fmtDate(c.sent_at)) : !c.pdf ? 'Falta el PDF' : !c.box ? 'Falta marcar la firma' : 'Listo para enviar'}</span>
+          <span class="muted sm-txt">${c.status === 'signed' ? 'Firmado ' + esc(fmtDate(c.signed_at)) : !c.pdf ? 'Falta el PDF' : c.signers.some(x => !x.box) ? 'Falta marcar firmas' : c.sent_at ? `Firmado ${c.signers.filter(x => x.signed).length} de ${c.signers.length}` : 'Listo para enviar'}</span>
           <button type="button" class="btn ghost sm" data-ct="open">Abrir</button>
         </li>`).join('') : '<li class="empty">Todavía no hay contratos.</li>'}
       </ol>`;
@@ -1721,23 +1727,20 @@
       <form id="ct-ed" class="editor ct-ed" novalidate>
         <button type="button" class="back" data-ct="back">← Contratos</button>
         <div class="head"><div><p class="eyebrow">Contrato</p><h1>${esc(c.title)}</h1></div><span class="tag big ${st[1]}">${st[0]}</span></div>
-        ${c.token && (c.status === 'sent' || signed) ? `<div class="ct-link"><b>Enlace de firma</b><a href="${esc(signUrl(c))}" target="_blank" rel="noopener">${esc(signUrl(c).replace(/^https?:\/\//, ''))}</a>
-          <button type="button" class="btn ghost sm" data-ct="copy">Copiar</button>${!signed ? `<a class="btn primary sm" href="${esc(gmailUrl(c))}" target="_blank" rel="noopener">Enviar por Gmail</a>` : ''}</div>` : ''}
-        ${signed && c.signer_name ? `<div class="ct-proof"><b>Firmado</b> por ${esc(c.signer_name)} (${esc(c.signer_email)}) el ${esc(fmtDate(c.signed_at))}${c.sign_ip ? ` · IP ${esc(c.sign_ip)}` : ''}<br><span class="muted">Huella del PDF (SHA-256): ${esc(c.pdf_hash)}</span></div>` : ''}
         ${!signed && ed ? `
           <div class="row2 wide"><div class="field"><label for="c-title">Título</label><input id="c-title" name="title" value="${esc(c.title)}" maxlength="160" autocomplete="off"></div>
             <div class="field"><label for="c-artist">Artista</label><input id="c-artist" name="artist" value="${esc(c.artist)}" maxlength="160" autocomplete="off"></div></div>
-          <div class="field"><label for="c-email">Email del artista</label><input id="c-email" name="email" type="email" value="${esc(c.email)}" maxlength="160" autocomplete="off"></div>` : ''}
+          ` : ''}
+        ${c.pdf ? signersBlock(c, ed && !signed) : ''}
         ${c.pdf ? `
-          ${!signed && ed ? `<p class="ct-step ${c.box ? 'done' : ''}">${c.box ? '✓ Firma del artista colocada (página ' + (c.box.page + 1) + '). Para moverla, haz clic en otro sitio del documento.' : '<b>Haz clic en el documento donde debe firmar el artista</b> (sobre su línea de firma).'}</p>` : ''}
           <div class="pdf-viewer" id="pdf-viewer"><p class="info">Cargando el PDF…</p></div>` : `<p class="ct-step">Sube el PDF del contrato (descargado de Google Docs).</p>`}
         <div class="field" style="margin-top:18px"><label for="c-notes">Notas internas (no las ve el artista)</label><textarea id="c-notes" name="notes" rows="2" maxlength="2000" ${ed ? '' : 'readonly'}>${esc(c.notes)}</textarea></div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions">
           ${ed ? '<button type="submit" class="btn primary">Guardar</button>' : ''}
           ${ed && !signed ? `<label class="btn ghost" for="ct-pdf">${c.pdf ? 'Cambiar PDF' : 'Subir PDF'}</label><input type="file" id="ct-pdf" class="sr-only" accept="application/pdf">` : ''}
-          ${ed && !signed && c.status !== 'void' && c.pdf && c.box ? `<button type="button" class="btn ghost" data-ct="send">${c.token ? 'Enlace listo ✓' : 'Preparar enlace de firma'}</button>` : ''}
-          ${signed && c.signer_name ? '<button type="button" class="btn ghost" data-ct="dl-signed">Descargar PDF firmado</button>' : ''}
+          ${ed && !signed && c.status !== 'void' && c.pdf && c.signers.every(x => x.box) && c.signers.some(x => !x.token) ? '<button type="button" class="btn ghost" data-ct="send">Preparar enlaces de firma</button>' : ''}
+          ${c.signers.some(x => x.signed) ? `<button type="button" class="btn ghost" data-ct="dl-signed">${signed ? 'Descargar PDF firmado' : 'Descargar con las firmas que hay'}</button>` : ''}
           ${c.pdf ? '<button type="button" class="btn ghost" data-ct="dl-orig">Descargar PDF original</button>' : ''}
           ${c.file ? '<button type="button" class="btn ghost" data-ct="dl-file">Ver PDF firmado (archivo)</button>' : ''}
           ${ed && !signed ? `<label class="btn ghost" for="ct-arch" title="Para contratos que ya se firmaron fuera de la web">Subir PDF ya firmado</label><input type="file" id="ct-arch" class="sr-only" accept="application/pdf">` : ''}
@@ -1745,6 +1748,28 @@
           ${ed && (!signed || auth.user.owner) ? '<button type="button" class="btn danger push" data-ct="del">Eliminar</button>' : ''}
         </div>
       </form>`;
+  }
+  function signersBlock(c, ed) {
+    const act = ctOpen.active ?? c.signers.findIndex(x => !x.box && !x.signed);
+    return `
+      <div class="signers">
+        <div class="signers-head"><b>Firmantes</b><span class="muted">${ed ? 'Elige un firmante y haz clic en el documento donde firma. Cada uno recibe su propio enlace.' : ''}</span></div>
+        ${c.signers.map((x, i) => `
+          <div class="signer${i === act && ed && !x.signed ? ' is-on' : ''}" data-sg="${esc(x.id)}" data-i="${i}">
+            <span class="sg-n">${i + 1}</span>
+            ${ed && !x.signed ? `<input class="sg-label" value="${esc(x.label)}" maxlength="60" aria-label="Nombre del firmante ${i + 1}" placeholder="Artista ${i + 1}">
+              <input class="sg-email" type="email" value="${esc(x.email)}" maxlength="160" aria-label="Email del firmante ${i + 1}" placeholder="email del artista">`
+              : `<span class="sg-txt"><b>${esc(x.label)}</b><span>${esc(x.email || '')}</span></span><span></span>`}
+            <span class="sg-state ${x.signed ? 'ok' : x.box ? 'set' : ''}">${x.signed ? `✓ Firmado · ${esc(x.name)} · ${esc(fmtDate(x.signed_at))}` : x.box ? `Firma en pág. ${x.box.page + 1}` : 'Falta marcar dónde firma'}</span>
+            <span class="sg-btns">
+              ${ed && !x.signed ? `<button type="button" class="btn ghost sm" data-ct="sg-pick">${i === act ? 'Colocando…' : 'Colocar firma'}</button>` : ''}
+              ${x.token && !x.signed && c.status !== 'void' ? `<button type="button" class="btn ghost sm" data-ct="sg-copy" title="${esc(signerUrl(x))}">Copiar enlace</button><a class="btn primary sm" href="${esc(gmailUrl(c, x))}" target="_blank" rel="noopener">Enviar por Gmail</a>` : ''}
+              ${x.signed && x.token ? `<a class="btn ghost sm" href="${esc(signerUrl(x))}" target="_blank" rel="noopener">Ver</a>` : ''}
+              ${ed && !x.signed && c.signers.length > 1 ? '<button type="button" class="ic danger" data-ct="sg-del" aria-label="Quitar firmante">✕</button>' : ''}
+            </span>
+          </div>`).join('')}
+        ${ed ? '<button type="button" class="btn ghost sm" data-ct="sg-add">+ Añadir firmante</button>' : ''}
+      </div>`;
   }
   function contractsPage() {
     if (!ctData) {
@@ -1761,22 +1786,33 @@
     if (!c || !box || !c.pdf) return;
     try {
       if (!ctOpen.bytes) ctOpen.bytes = new Uint8Array(await (await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/pdf`)).arrayBuffer());
-      const signed = c.status === 'signed' && c.signer_name, ed = ctCanEdit() && c.status !== 'signed';
-      ctOpen.view = await HZPDF.render(box, ctOpen.bytes, {
-        box: c.box, maxWidth: 820,
-        sign: signed ? c.signature : null, signedLabel: signed ? `Signed electronically by ${c.signer_name}` : '',
-        onPage: ed ? (page, x, y) => placeBox(page, x, y) : null,
-      });
+      const ed = ctCanEdit() && c.status !== 'signed';
+      ctOpen.view = await HZPDF.render(box, ctOpen.bytes, { marks: ctMarks(), maxWidth: 820, onPage: ed ? (page, x, y) => placeBox(page, x, y) : null });
     } catch (e) { box.innerHTML = `<p class="login-error">${esc(e.message)}</p>`; }
   }
+  function ctMarks() {
+    const c = ctOpen.contract, act = ctOpen.active ?? c.signers.findIndex(x => !x.box && !x.signed);
+    return c.signers.map((x, i) => x.signed
+      ? { box: x.box, sign: x.signature, label: `Signed electronically by ${x.name}` }
+      : { box: x.box, title: x.label || `Artista ${i + 1}`, active: i === act });
+  }
   async function placeBox(page, x, y) {
-    const c = ctOpen.contract, old = c.box;
-    const w = old?.w || 0.32, h = old?.h || 0.075;
+    const c = ctOpen.contract;
+    const act = ctOpen.active ?? c.signers.findIndex(s => !s.box && !s.signed);
+    const sg = c.signers[act >= 0 ? act : 0];
+    if (!sg || sg.signed) { toast('Elige primero un firmante («Colocar firma»).'); return; }
+    const old = sg.box;
+    const w = old?.w || (c.signers.length > 2 ? 0.24 : 0.3), h = old?.h || 0.07;
     const b = { page, x: Math.min(Math.max(0, x - w / 2), 1 - w), y: Math.min(Math.max(0, y - h * 0.75), 1 - h), w, h };
-    c.box = b;
-    HZPDF.drawBox(ctOpen.view.pages, b);
-    try { await api('POST', `/api/contracts/${encodeURIComponent(c.id)}/box`, b); toast('Firma colocada'); const st = $('.ct-step'); if (st) { st.classList.add('done'); st.textContent = `✓ Firma del artista colocada (página ${page + 1}). Para moverla, haz clic en otro sitio del documento.`; } if (!$('[data-ct=send]')) { ctRefresh(); } }
-    catch (e) { toast(e.message); c.box = old; HZPDF.drawBox(ctOpen.view.pages, old); }
+    sg.box = b;
+    HZPDF.drawMarks(ctOpen.view.pages, ctMarks());
+    try {
+      await api('POST', `/api/contracts/${encodeURIComponent(c.id)}/box`, { signer: sg.id, box: b });
+      toast(`Firma de ${sg.label || 'firmante'} colocada`);
+      const next = c.signers.findIndex(s => !s.box && !s.signed);
+      ctOpen.active = next >= 0 ? next : act;
+      ctRefresh();
+    } catch (e) { toast(e.message); sg.box = old; HZPDF.drawMarks(ctOpen.view.pages, ctMarks()); }
   }
   async function pdfInfo(file) {
     const bytes = new Uint8Array(await file.arrayBuffer());
@@ -1794,7 +1830,7 @@
     try { const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); if (ctOpen?.id === id) { ctOpen.contract = r.contract; render(); } }
     catch (e) { toast(e.message); ctOpen = null; render(); }
   }
-  async function ctRefresh() { const keep = ctOpen?.bytes; const id = ctOpen.id; const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); ctOpen = { mode: 'contract', id, contract: r.contract, bytes: keep }; render(); }
+  async function ctRefresh() { const keep = ctOpen?.bytes; const id = ctOpen.id; const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); ctOpen = { mode: 'contract', id, contract: r.contract, bytes: keep, active: ctOpen.active }; render(); }
   async function ctAction(fn, ok) {
     busy = true;
     try { const r = await fn(); if (ok) toast(ok); return r; }
@@ -1809,7 +1845,14 @@
     if (a === 'back') { ctOpen = null; render(); loadContracts(); }
     else if (a === 'new') { ctOpen = { mode: 'new' }; render(); $('#ct-title')?.focus(); }
     else if (a === 'open') openContract(t.closest('[data-ctid]').dataset.ctid);
-    else if (a === 'copy') { try { await navigator.clipboard.writeText(signUrl(c)); toast('Enlace copiado'); } catch { toast(signUrl(c)); } }
+    else if (a === 'sg-pick') { ctOpen.active = Number(t.closest('[data-i]').dataset.i); render(); toast('Haz clic en el documento donde firma'); }
+    else if (a === 'sg-copy') { const sg = c.signers[Number(t.closest('[data-i]').dataset.i)]; try { await navigator.clipboard.writeText(signerUrl(sg)); toast('Enlace copiado'); } catch { toast(signerUrl(sg)); } }
+    else if (a === 'sg-add') { try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/signers`, { action: 'add' }), 'Firmante añadido'); ctOpen.active = c.signers.length; ctRefresh(); } catch { /* aviso ya mostrado */ } }
+    else if (a === 'sg-del') {
+      const sg = c.signers[Number(t.closest('[data-i]').dataset.i)];
+      if (!await confirmBox(`¿Quitar a ${sg.label || 'este firmante'}?`, 'Quitar')) return;
+      try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/signers`, { action: 'remove', signer: sg.id }), 'Firmante quitado'); ctOpen.active = null; ctRefresh(); } catch { /* aviso ya mostrado */ }
+    }
     else if (a === 'send') { try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/send`), 'Enlace de firma listo'); ctRefresh(); } catch { /* aviso ya mostrado */ } }
     else if (a === 'void' || a === 'unvoid') {
       if (a === 'void' && !await confirmBox('¿Anular este contrato? El enlace de firma dejará de funcionar.', 'Anular')) return;
@@ -1821,8 +1864,8 @@
     else if (a === 'dl-file') { try { const r = await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/file`); HZPDF.download(new Uint8Array(await r.arrayBuffer()), `${c.title} (firmado).pdf`); } catch (err) { toast(err.message); } }
     else if (a === 'dl-signed') {
       try {
-        const out = await HZPDF.signed(ctOpen.bytes, { title: c.title, box: c.box, link: signUrl(c),
-          signed: { name: c.signer_name, email: c.signer_email, at: c.signed_at, ip: c.sign_ip, ua: c.sign_ua, signature: c.signature, hash: c.pdf_hash } });
+        const out = await HZPDF.signed(ctOpen.bytes, { title: c.title, hash: c.pdf_hash, link: signUrl(c),
+          signers: c.signers.map(x => ({ label: x.label, box: x.box, signed: x.signed ? { name: x.name, email: x.signer_email, at: x.signed_at, ip: x.ip, ua: x.ua, signature: x.signature, hash: c.pdf_hash } : null })) });
         HZPDF.download(out, `${c.title} (firmado).pdf`);
       } catch (err) { toast('No se pudo crear el PDF firmado: ' + err.message); }
     }
@@ -1856,7 +1899,8 @@
         openContract(r.id); loadContracts();
       } else {
         const c = ctOpen.contract;
-        await ctAction(() => api('POST', '/api/contracts', { id: c.id, title: f.elements.title?.value ?? c.title, artist: f.elements.artist?.value ?? c.artist, email: f.elements.email?.value ?? c.email, notes: f.elements.notes.value }), 'Guardado');
+        const signers = $$('.signer', f).map(el => ({ id: el.dataset.sg, label: el.querySelector('.sg-label')?.value, email: el.querySelector('.sg-email')?.value })).filter(x => x.label !== undefined);
+        await ctAction(() => api('POST', '/api/contracts', { id: c.id, title: f.elements.title?.value ?? c.title, artist: f.elements.artist?.value ?? c.artist, email: signers[0]?.email ?? c.email, notes: f.elements.notes.value, signers }), 'Guardado');
         ctRefresh();
       }
     } catch { /* aviso ya mostrado */ }

@@ -72,6 +72,38 @@
   .pdf-sig-label { font: 400 8px/1.1 Arial, sans-serif; color: #444; }
   .proof { margin-top: 14px; padding: 14px 16px; border: 1px solid rgba(61,220,132,.4); border-radius: 8px; font-size: 14px; color: var(--text); }
   .proof code { font-size: 11px; color: var(--muted); word-break: break-all; }
+  /* estilo DocuSign */
+  .ds-bar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 -16px 22px; padding: 14px 16px; background: #1a1f36; border-bottom: 3px solid #ffd335; }
+  .ds-bar.done { border-bottom-color: #3ddc84; }
+  .ds-bar p { margin: 0; color: #fff; font-size: 15px; }
+  .ds-bar .btn { background: #ffd335; color: #000; min-height: 44px; flex: none; }
+  .ds-bar.done .btn { background: #3ddc84; }
+  .pdf-box.is-active { border: 2px solid #f5b800; background: rgba(255, 211, 53, .22); cursor: pointer; }
+  .pdf-box.is-signed.is-active { border: 1px dashed rgba(245,184,0,.7); background: none; }
+  .pdf-box.is-active.pulse { animation: ds-pulse .6s ease-in-out 3; }
+  @keyframes ds-pulse { 50% { box-shadow: 0 0 0 8px rgba(255, 211, 53, .45); } }
+  .pdf-flag { position: absolute; left: -2px; top: 50%; transform: translate(-100%, -50%); padding: 6px 10px 6px 8px; background: #ffd335; color: #000; font: 700 11px/1 Arial, sans-serif; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; clip-path: polygon(0 0, 88% 0, 100% 50%, 88% 100%, 0 100%); padding-right: 16px; }
+  .pdf-box:not(.is-active):not(.is-signed) { border: 1px dashed #9aa0aa; background: rgba(150, 150, 150, .08); }
+  .pdf-box:not(.is-active):not(.is-signed) .pdf-flag { background: #c9ccd3; }
+  .ds-modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, .7); }
+  .ds-card { width: min(560px, 100%); max-height: 92vh; overflow: auto; padding: 24px; border-radius: 10px; background: #fff; color: #111; }
+  .ds-card h2 { margin: 0 0 4px; font: 700 22px/1.2 Arial, sans-serif; color: #111; }
+  .ds-card .msg { color: #555; margin: 0 0 16px; }
+  .ds-card .field label { color: #555; }
+  .ds-card input[type=text], .ds-card input[type=email] { background: #fff; color: #111; border-color: #c9ccd3; }
+  .ds-tabs { display: flex; gap: 4px; margin: 6px 0 12px; border-bottom: 1px solid #ddd; }
+  .ds-tabs button { background: none; border: 0; border-bottom: 3px solid transparent; padding: 10px 14px; font: 700 13px/1 Arial, sans-serif; color: #555; cursor: pointer; }
+  .ds-tabs button.on { color: #111; border-bottom-color: #ffd335; }
+  .ds-styles { display: grid; gap: 8px; }
+  .ds-style { text-align: left; padding: 12px 16px; border: 1px solid #ddd; border-radius: 6px; background: #fafafa; font-size: 30px; font-style: italic; color: #0d0d33; cursor: pointer; overflow: hidden; white-space: nowrap; }
+  .ds-style.on { border-color: #f5b800; box-shadow: 0 0 0 2px rgba(245, 184, 0, .35); background: #fffbea; }
+  .ds-card canvas { display: block; width: 100%; height: 170px; border: 1px solid #ddd; border-radius: 6px; background: #fff; touch-action: none; }
+  .ds-card .pad-actions { color: #555; }
+  .ds-card .agree { color: #333; font-size: 14px; }
+  .ds-card .err { color: #c0262d; }
+  .ds-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .ds-card .btn { background: #ffd335; color: #000; }
+  .ds-card .btn.ghost { background: none; color: #111; border: 1px solid #c9ccd3; }
 </style>
 </head>
 <body>
@@ -81,7 +113,7 @@
 </main>
 <script src="/assets/vendor/pdf/pdf.min.js"></script>
 <script src="/assets/vendor/pdf/pdf-lib.min.js"></script>
-<script src="/contract-pdf.js?v=2"></script>
-<script src="/sign.js?v=3"></script>
+<script src="/contract-pdf.js?v=3"></script>
+<script src="/sign.js?v=4"></script>
 </body>
 </html>

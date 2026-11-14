@@ -515,3 +515,43 @@ select:focus { border-color: rgba(var(--accent-rgb), .7); }
 .pdf-sig-label { font: 400 8px/1.1 Arial, sans-serif; color: #444; }
 .ct-step { margin: 0 0 12px; padding: 12px 14px; border: 1px solid rgba(var(--accent-rgb), .45); border-radius: 6px; background: rgba(var(--accent-rgb), .07); font-size: 14px; }
 .ct-step.done { border-color: rgba(61, 220, 132, .4); background: rgba(61, 220, 132, .05); }
+
+/* ---------- Equipo: cada persona con su etiqueta de rol, en neutro ---------- */
+.row.tm { grid-template-columns: 44px minmax(0, 1fr) auto 150px 84px; gap: 18px; }
+.av { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--c); color: #0a0a0a; font: 700 16px/1 'Barlow', sans-serif; cursor: default; margin: 0; box-shadow: none; }
+label.av { cursor: pointer; }
+label.av input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.row.tm .meta { gap: 2px; }
+.row.tm .meta span { font-size: 12.5px; color: var(--faint); }
+.who-name { font: 600 16px/1.2 'Barlow', sans-serif !important; letter-spacing: 0 !important; color: #fff !important; text-transform: none !important; }
+.name-in { font: 600 16px/1.2 'Barlow', sans-serif !important; letter-spacing: 0 !important; color: #fff !important; min-height: 30px !important; padding: 2px 6px !important; margin-left: -6px; }
+.role-tag { justify-self: start; display: inline-flex; align-items: center; min-height: 0 !important; height: 28px; padding: 0 28px 0 12px !important; border-radius: 14px !important; border: 1px solid color-mix(in srgb, var(--c, #fff) 55%, transparent) !important; background-color: color-mix(in srgb, var(--c, #fff) 14%, #0d0d0d) !important; color: #fff !important; font: 700 11px/1 'Barlow', sans-serif !important; letter-spacing: .14em; text-transform: uppercase; cursor: pointer; background-position: right 10px center !important; }
+.role-tag.owner { padding: 0 12px !important; border-color: rgba(255, 255, 255, .5) !important; background: rgba(255, 255, 255, .1) !important; cursor: default; }
+.role-tag option { background: #111; color: #fff; text-transform: none; letter-spacing: 0; font-size: 14px; }
+.eyebrow { color: var(--muted) !important; }
+.rs i { color: var(--muted) !important; }
+.tag { color: #fff; background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .28); }
+@media (max-width: 640px) {
+  .row.tm { grid-template-columns: 40px minmax(0, 1fr) auto; grid-template-areas: 'img meta btn' 'img sel btn'; }
+  .row.tm .av { grid-area: img; }
+  .row.tm .role-tag { grid-area: sel; }
+}
+
+/* Firmantes de un contrato */
+.signers { margin: 0 0 16px; padding: 14px; border: 1px solid var(--line-2); border-radius: 8px; background: #0b0b0b; }
+.signers-head { display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 10px; }
+.signers-head b { color: #fff; font-size: 15px; }
+.signers-head .muted { font-size: 13px; font-weight: 500; }
+.signer { display: grid; grid-template-columns: 26px minmax(120px, 1fr) minmax(160px, 1.2fr) auto auto; align-items: center; gap: 10px; padding: 8px; border-radius: 6px; border: 1px solid transparent; }
+.signer.is-on { border-color: #ffd335; background: rgba(255, 211, 53, .07); }
+.sg-n { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #222; color: #fff; font-size: 12px; font-weight: 700; }
+.signer input { min-height: 36px !important; padding: 6px 10px !important; font-size: 14px; }
+.sg-txt { display: grid; } .sg-txt b { color: #fff; } .sg-txt span { color: var(--faint); font-size: 12px; }
+.sg-state { font-size: 12.5px; color: #ffd335; white-space: nowrap; }
+.sg-state.set { color: var(--muted); } .sg-state.ok { color: var(--ok); }
+.sg-btns { display: flex; gap: 6px; align-items: center; justify-content: flex-end; flex-wrap: wrap; }
+.pdf-box.is-active { border-color: #f5b800 !important; background: rgba(255, 211, 53, .22) !important; }
+.pdf-flag { position: absolute; left: 4px; top: 4px; padding: 3px 7px; border-radius: 3px; background: #ffd335; color: #000; font: 700 10px/1 Arial, sans-serif; letter-spacing: .05em; white-space: nowrap; }
+.pdf-box:not(.is-active):not(.is-signed) { border: 1px dashed #8a8f99 !important; background: rgba(140, 140, 140, .1) !important; }
+.pdf-box:not(.is-active):not(.is-signed) .pdf-flag { background: #c9ccd3; }
+@media (max-width: 900px) { .signer { grid-template-columns: 26px 1fr; } .signer .sg-state, .signer .sg-btns { grid-column: 2; justify-content: flex-start; } }

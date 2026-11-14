@@ -1481,14 +1481,14 @@
     return `
       <div class="head"><div><p class="eyebrow">Respuestas y enlaces</p><h1>FORMULARIOS <span class="count">${list.length}</span></h1></div>
         ${own ? '<button type="button" class="btn primary" data-act="form-new">+ Nuevo formulario</button>' : ''}</div>
-      <p class="info lead">${own ? 'Ordénalos con las flechas. Cada uno tiene su enlace público (si lo abres) y puede salir como botón en «Send your demo» de la web. Las respuestas solo las veis los owners y quien elijas en cada formulario.' : 'Los formularios a los que tienes acceso.'}</p>
+      <p class="info lead">${own ? 'Ordénalos con las flechas. «Editar» te enseña el formulario tal como sale en la web mientras lo cambias. Cada uno tiene su enlace público (si lo abres) y puede salir como botón en «Send your demo» de la web. Las respuestas solo las veis los owners y quien elijas en cada formulario.' : 'Los formularios a los que tienes acceso.'}</p>
       <ol class="list forms-list">${list.length ? list.map((f, i) => `
         <li class="row fm" data-form="${esc(f.id)}">
           ${own ? `<span class="ord"><button type="button" class="ic" data-act="form-up" aria-label="Subir" ${i ? '' : 'disabled'}>▲</button><button type="button" class="ic" data-act="form-down" aria-label="Bajar" ${i < list.length - 1 ? '' : 'disabled'}>▼</button></span>` : '<span></span>'}
           <span class="meta"><b>${esc(f.title)}</b><span>${f.public ? `<a href="${esc(publicUrl(f))}" target="_blank" rel="noopener">/forms/${esc(f.slug)}</a>` : `/forms/${esc(f.slug)}`}</span></span>
           <span class="badges">${f.public ? '<span class="tag">Abierto</span>' : '<span class="tag off">Cerrado</span>'}${f.on_site ? '<span class="tag">En la web</span>' : ''}</span>
           <span class="resp-n"><b>${f.total}</b> ${f.total === 1 ? 'respuesta' : 'respuestas'}${f.unseen ? ` <i>${f.unseen} ${f.unseen === 1 ? 'nueva' : 'nuevas'}</i>` : ''}</span>
-          <span class="fm-btns"><button type="button" class="btn ghost sm" data-act="form-resp">Respuestas</button>${own ? '<button type="button" class="btn ghost sm" data-act="form-edit">Editar</button>' : ''}</span>
+          <span class="fm-btns">${f.public ? `<a class="btn ghost sm" href="${esc(publicUrl(f))}" target="_blank" rel="noopener">Ver ↗</a>` : ''}<button type="button" class="btn ghost sm" data-act="form-resp">Respuestas</button>${own ? '<button type="button" class="btn primary sm" data-act="form-edit">Editar</button>' : ''}</span>
         </li>`).join('') : '<li class="empty">No hay formularios.</li>'}
       </ol>`;
   }
@@ -1578,27 +1578,31 @@
             <div class="field"><label for="fe-title">Título</label><input id="fe-title" name="title" value="${esc(d.title)}" maxlength="140" autocomplete="off"></div>
             <div class="field"><label for="fe-slug">Enlace</label><div class="slug-row"><span>${esc(location.host)}/forms/</span><input id="fe-slug" name="slug" value="${esc(d.slug)}" maxlength="60" placeholder="demo-submission" autocomplete="off" spellcheck="false"></div></div>
             <div class="field"><label for="fe-desc">Descripción</label><textarea id="fe-desc" name="description" rows="4" maxlength="4000">${esc(d.description || '')}</textarea></div>
+          <div class="fe-side">
+              <div class="fe-box">
+                <label class="switch"><input type="checkbox" name="public" ${d.public ? 'checked' : ''}><span></span><b>Link público</b></label>
+                <p class="info">Abierto: cualquiera con el enlace puede rellenarlo. Cerrado: nadie puede enviar respuestas.</p>
+                ${!isNew && d.public ? `<p class="copy-row"><a href="${esc(publicUrl(d))}" target="_blank" rel="noopener">${esc(publicUrl(d).replace(/^https?:\/\//, ''))}</a> <button type="button" class="btn ghost sm" data-act="copy-link">Copiar</button></p>` : ''}
+                <label class="switch"><input type="checkbox" name="on_site" ${d.on_site ? 'checked' : ''}><span></span><b>En la web</b></label>
+                <p class="info">Sale como botón en «Send your demo» de la portada (tiene que estar abierto).</p>
+                <div class="field"><label for="fe-btn">Texto del botón</label><input id="fe-btn" name="button" value="${esc(d.button || '')}" maxlength="60" placeholder="Submit via Form" autocomplete="off"></div>
+              </div>
+              <div class="fe-box">
+                <b class="fe-h">Quién puede ver las respuestas</b>
+                <p class="info">Los owners siempre. Además:</p>
+                ${!teamData ? '<p class="info">Cargando equipo…</p>' : `
+                ${roles.length ? `<p class="mini">Roles</p>${roles.map(r => `<label class="check sm"><input type="checkbox" name="acc-role" value="${esc(r.id)}" ${d.access.roles.includes(r.id) ? 'checked' : ''}><span>${esc(r.name)}</span></label>`).join('')}` : ''}
+                ${members.length ? `<p class="mini">Personas</p>${members.map(m => `<label class="check sm"><input type="checkbox" name="acc-email" value="${esc(m.email)}" ${d.access.emails.includes(m.email) ? 'checked' : ''}><span style="${m.color ? `color:${esc(m.color)}` : ''}">${esc(m.label || m.name || m.email)}</span></label>`).join('')}` : ''}
+                ${!roles.length && !members.length ? '<p class="info">Aún no hay equipo.</p>' : ''}`}
+              </div>
+            </div>
             <p class="group">Preguntas</p>
             <div class="qes">${d.fields.map((x, i) => questionEditor(x, i, d.fields.length)).join('')}</div>
             <div class="card-actions"><button type="button" class="btn ghost sm" data-act="q-add">+ Pregunta</button><button type="button" class="btn ghost sm" data-act="q-sec">+ Sección</button></div>
           </div>
-          <aside class="fe-side">
-            <div class="fe-box">
-              <label class="switch"><input type="checkbox" name="public" ${d.public ? 'checked' : ''}><span></span><b>Link público</b></label>
-              <p class="info">Abierto: cualquiera con el enlace puede rellenarlo. Cerrado: nadie puede enviar respuestas.</p>
-              ${!isNew && d.public ? `<p class="copy-row"><a href="${esc(publicUrl(d))}" target="_blank" rel="noopener">${esc(publicUrl(d).replace(/^https?:\/\//, ''))}</a> <button type="button" class="btn ghost sm" data-act="copy-link">Copiar</button></p>` : ''}
-              <label class="switch"><input type="checkbox" name="on_site" ${d.on_site ? 'checked' : ''}><span></span><b>En la web</b></label>
-              <p class="info">Sale como botón en «Send your demo» de la portada (tiene que estar abierto).</p>
-              <div class="field"><label for="fe-btn">Texto del botón</label><input id="fe-btn" name="button" value="${esc(d.button || '')}" maxlength="60" placeholder="Submit via Form" autocomplete="off"></div>
-            </div>
-            <div class="fe-box">
-              <b class="fe-h">Quién puede ver las respuestas</b>
-              <p class="info">Los owners siempre. Además:</p>
-              ${!teamData ? '<p class="info">Cargando equipo…</p>' : `
-              ${roles.length ? `<p class="mini">Roles</p>${roles.map(r => `<label class="check sm"><input type="checkbox" name="acc-role" value="${esc(r.id)}" ${d.access.roles.includes(r.id) ? 'checked' : ''}><span>${esc(r.name)}</span></label>`).join('')}` : ''}
-              ${members.length ? `<p class="mini">Personas</p>${members.map(m => `<label class="check sm"><input type="checkbox" name="acc-email" value="${esc(m.email)}" ${d.access.emails.includes(m.email) ? 'checked' : ''}><span style="${m.color ? `color:${esc(m.color)}` : ''}">${esc(m.label || m.name || m.email)}</span></label>`).join('')}` : ''}
-              ${!roles.length && !members.length ? '<p class="info">Aún no hay equipo.</p>' : ''}`}
-            </div>
+          <aside class="fe-prev">
+            <div class="prev-head"><b>Vista previa</b><span class="muted sm-txt">Así lo ve la gente en la web${d.public ? '' : ' (ahora está cerrado)'}</span>${!isNew && d.public ? `<a class="btn ghost sm" href="${esc(publicUrl(d))}" target="_blank" rel="noopener">Abrir ↗</a>` : ''}</div>
+            <iframe id="fe-prev" src="/form?preview=1" title="Vista previa del formulario"></iframe>
           </aside>
         </div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
@@ -1609,6 +1613,20 @@
         </div>
       </form>`;
   }
+  // vista previa en vivo: se manda el borrador a la página real del formulario (iframe)
+  let prevTimer = 0;
+  function sendPreview(focus) {
+    const fr = $('#fe-prev'), d = formOpen?.draft;
+    if (!fr?.contentWindow || !d) return;
+    fr.contentWindow.postMessage({ type: 'hz-form', form: { title: d.title, description: d.description, public: d.public, fields: d.fields }, focus }, location.origin);
+  }
+  window.addEventListener('message', e => { if (e.origin === location.origin && e.data?.type === 'hz-form-ready' && view === 'forms' && formOpen?.mode === 'edit') sendPreview(); });
+  document.addEventListener('input', e => {
+    if (view !== 'forms' || formOpen?.mode !== 'edit' || !e.target.closest('#form-ed')) return;
+    clearTimeout(prevTimer);
+    prevTimer = setTimeout(() => { syncDraft(); sendPreview(e.target.closest('.qe')?.dataset.id); }, 150);
+  });
+  document.addEventListener('focusin', e => { const q = view === 'forms' && e.target.closest?.('#form-ed .qe'); if (q) sendPreview(q.dataset.id); });
   async function formAction(fn, ok) {
     busy = true;
     try { await fn(); if (ok) toast(ok); }

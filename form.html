@@ -10,85 +10,129 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;500;600;700&display=swap">
 <style>
-  :root { --bg: #050505; --panel: #0d0d0d; --panel-2: #121212; --line: #1f1f1f; --line-2: #2a2a2a; --text: #e5e7eb; --muted: #8b8f98; --faint: #6b7280; --accent: #a78bfa; --accent-rgb: 167, 139, 250; --danger: #ff5a5f; }
+  :root { --bg: #050505; --card: #0c0c0c; --card-2: #111; --line: #1d1d1d; --line-2: #2c2c2c; --text: #e8e8e8; --muted: #8d8d8d; --faint: #5f5f5f; --white: #fff; --bad: #ff6b6b; }
   * { box-sizing: border-box; }
   html, body { margin: 0; }
-  body { min-height: 100vh; background: radial-gradient(1100px 560px at 80% -10%, rgba(var(--accent-rgb), .1), transparent 60%), var(--bg); color: var(--text); font: 400 16px/1.6 'Barlow', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-  main { width: min(760px, 100%); margin: 0 auto; padding: 48px 16px 96px; }
-  .home { display: inline-flex; align-items: center; gap: 12px; margin-bottom: 36px; color: #fff; text-decoration: none; }
-  .home img { height: 34px; }
-  .home span { font: 400 22px/1 'Bebas Neue', sans-serif; letter-spacing: .12em; }
-  h1 { margin: 0 0 14px; font: 400 clamp(42px, 8vw, 68px)/.95 'Bebas Neue', sans-serif; letter-spacing: .03em; color: #fff; }
-  .desc { margin: 0 0 34px; color: var(--muted); white-space: pre-line; }
-  .q { margin: 0 0 14px; padding: 20px 22px; border: 1px solid var(--line); border-radius: 10px; background: rgba(13, 13, 13, .85); }
-  .q.bad { border-color: rgba(255, 90, 95, .6); }
-  .q > label, .q > .lbl { display: block; margin-bottom: 4px; font-weight: 600; color: #fff; }
-  .req { color: var(--accent); margin-left: 4px; }
-  .help { margin: 0 0 12px; font-size: 14px; color: var(--muted); white-space: pre-line; }
-  .sec { margin: 34px 0 14px; }
-  .sec h2 { margin: 0; font: 400 32px/1 'Bebas Neue', sans-serif; letter-spacing: .05em; color: #fff; }
-  .sec p { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
-  input[type=text], input[type=email], input[type=url], textarea, select { width: 100%; min-height: 46px; padding: 11px 14px; border-radius: 6px; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--text); font: inherit; outline: none; }
-  textarea { min-height: 110px; resize: vertical; }
-  input:focus, textarea:focus, select:focus { border-color: rgba(var(--accent-rgb), .8); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .15); }
-  .opt { display: flex; align-items: center; gap: 12px; padding: 7px 0; cursor: pointer; }
-  .opt input[type=radio], .opt input[type=checkbox] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); flex: none; }
-  .opt input[type=text] { min-height: 38px; padding: 6px 10px; }
-  .err { margin: 10px 0 0; color: #ffb4b6; font-size: 14px; }
-  .send { display: inline-flex; align-items: center; justify-content: center; min-height: 52px; margin-top: 18px; padding: 0 40px; border: 0; border-radius: 3px; background: var(--accent); color: #000; font: 700 13px/1 'Barlow', sans-serif; letter-spacing: .2em; text-transform: uppercase; cursor: pointer; box-shadow: 0 0 24px rgba(var(--accent-rgb), .3); }
+  body { min-height: 100vh; background: var(--bg); color: var(--text); font: 400 16px/1.6 'Barlow', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  body::before { content: ''; position: fixed; inset: 0; pointer-events: none; background: radial-gradient(900px 480px at 50% -12%, rgba(255, 255, 255, .07), transparent 70%); }
+  .bar { position: fixed; top: 0; left: 0; z-index: 5; height: 2px; width: 0; background: var(--white); transition: width .3s ease; }
+  header.top { position: relative; display: flex; justify-content: center; padding: 28px 16px 0; }
+  .home { display: inline-flex; align-items: center; gap: 12px; color: #fff; text-decoration: none; }
+  .home img { height: 30px; }
+  .home span { font: 400 21px/1 'Bebas Neue', sans-serif; letter-spacing: .16em; }
+  main { position: relative; width: min(720px, 100%); margin: 0 auto; padding: 56px 16px 110px; }
+  .eyebrow { margin: 0 0 14px; font-size: 11px; font-weight: 700; letter-spacing: .32em; text-transform: uppercase; color: var(--muted); text-align: center; }
+  h1 { margin: 0 0 22px; font: 400 clamp(46px, 9vw, 84px)/.92 'Bebas Neue', sans-serif; letter-spacing: .02em; color: #fff; text-align: center; overflow-wrap: anywhere; }
+  .desc { margin: 0 auto 46px; max-width: 600px; color: #b9b9b9; white-space: pre-line; text-align: center; font-size: 16.5px; }
+  .desc a, .help a { color: #fff; }
+  .q { margin: 0 0 14px; padding: 24px 26px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(180deg, var(--card-2), var(--card)); transition: border-color .2s; }
+  .q:focus-within { border-color: #3a3a3a; }
+  .q.bad { border-color: rgba(255, 107, 107, .7); }
+  .q > label, .q > .lbl { display: block; margin-bottom: 4px; font-weight: 600; font-size: 17px; color: #fff; }
+  .req { color: var(--muted); margin-left: 4px; }
+  .help { margin: 0 0 14px; font-size: 14.5px; color: var(--muted); white-space: pre-line; }
+  .q > label + input, .q > label + textarea, .q > label + select { margin-top: 10px; }
+  .sec { margin: 54px 0 18px; padding-top: 6px; text-align: left; }
+  .sec h2 { margin: 0; font: 400 38px/1 'Bebas Neue', sans-serif; letter-spacing: .04em; color: #fff; }
+  .sec p { margin: 8px 0 0; color: var(--muted); font-size: 15px; white-space: pre-line; }
+  .sec::before { content: ''; display: block; width: 36px; height: 2px; margin-bottom: 16px; background: #fff; }
+  input[type=text], input[type=email], input[type=url], textarea, select { width: 100%; min-height: 50px; padding: 12px 0; border: 0; border-bottom: 1px solid var(--line-2); border-radius: 0; background: transparent; color: #fff; font: inherit; font-size: 16px; outline: none; transition: border-color .2s; }
+  textarea { min-height: 120px; resize: vertical; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 8px; }
+  select { padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 8px; background: #0a0a0a; }
+  input:focus, textarea:focus, select:focus { border-color: #fff; }
+  ::placeholder { color: var(--faint); }
+  .opts { display: grid; gap: 8px; margin-top: 6px; }
+  .opt { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 9px; cursor: pointer; transition: border-color .15s, background .15s; }
+  .opt:hover { border-color: #444; }
+  .opt:has(input:checked) { border-color: #fff; background: rgba(255, 255, 255, .05); }
+  .opt input[type=radio], .opt input[type=checkbox] { appearance: none; flex: none; width: 18px; height: 18px; margin: 0; border: 1.5px solid #666; border-radius: 50%; display: grid; place-items: center; cursor: pointer; }
+  .opt input[type=checkbox] { border-radius: 4px; }
+  .opt input:checked { border-color: #fff; background: #fff; box-shadow: inset 0 0 0 3px #0c0c0c; }
+  .opt input[type=checkbox]:checked { box-shadow: none; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='%23000' stroke-width='2.2'/%3E%3C/svg%3E") center/12px no-repeat; }
+  .opt input:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+  .opt input[type=text] { min-height: 32px; padding: 4px 0; }
+  .err { margin: 14px 0 0; color: #ffb3b3; font-size: 14.5px; }
+  .foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-top: 26px; }
+  .foot small { color: var(--faint); font-size: 13px; }
+  .send { display: inline-flex; align-items: center; justify-content: center; min-height: 54px; padding: 0 46px; border: 1px solid #fff; border-radius: 2px; background: #fff; color: #000; font: 700 13px/1 'Barlow', sans-serif; letter-spacing: .24em; text-transform: uppercase; cursor: pointer; transition: background .2s, color .2s; }
+  .send:hover { background: transparent; color: #fff; }
   .send:disabled { opacity: .5; cursor: default; }
   .hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
-  .done { padding: 40px 28px; border: 1px solid rgba(var(--accent-rgb), .45); border-radius: 12px; text-align: center; background: rgba(13, 13, 13, .85); }
-  .done h2 { margin: 0 0 8px; font: 400 44px/1 'Bebas Neue', sans-serif; color: #fff; }
+  .done { padding: 70px 28px; border: 1px solid var(--line-2); border-radius: 16px; text-align: center; background: linear-gradient(180deg, var(--card-2), var(--card)); }
+  .done h2 { margin: 0 0 10px; font: 400 60px/1 'Bebas Neue', sans-serif; color: #fff; letter-spacing: .03em; }
   .done p { margin: 0; color: var(--muted); }
-  .done a { display: inline-block; margin-top: 22px; color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; }
-  .msg { color: var(--muted); }
+  .done a { display: inline-block; margin-top: 30px; padding: 14px 30px; border: 1px solid #fff; color: #fff; font-size: 12px; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; text-decoration: none; }
+  .msg { color: var(--muted); text-align: center; }
+  .closed { display: inline-block; margin: 0 auto 30px; padding: 6px 14px; border: 1px solid var(--line-2); border-radius: 999px; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  footer.sig { position: relative; padding: 0 16px 40px; text-align: center; color: var(--faint); font-size: 12px; letter-spacing: .2em; text-transform: uppercase; }
+  @media (max-width: 560px) { .q { padding: 20px 18px; } main { padding-top: 40px; } .send { width: 100%; } }
+  html.preview .send { pointer-events: none; }
 </style>
 </head>
 <body>
+<div class="bar" id="bar" aria-hidden="true"></div>
+<header class="top"><a class="home" href="/"><img src="/assets/logo.png" alt=""><span>HORIZON RCRDS</span></a></header>
 <main>
-  <a class="home" href="/"><img src="/assets/logo.png" alt=""><span>HORIZON RCRDS</span></a>
   <div id="root"><p class="msg">Loading…</p></div>
 </main>
+<footer class="sig">© HORIZON RCRDS</footer>
 <script>
 (() => {
   const root = document.getElementById('root');
+  const PREVIEW = new URLSearchParams(location.search).has('preview');
+  if (PREVIEW) document.documentElement.classList.add('preview');
   const slug = (location.pathname.match(/^\/forms\/([a-z0-9-]+)/) || [])[1] || new URLSearchParams(location.search).get('f') || '';
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const linky = s => esc(s).replace(/https?:\/\/[^\s<>"']+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
   let form = null;
 
   function field(f) {
-    if (f.type === 'section') return `<div class="sec"><h2>${esc(f.label)}</h2>${f.help ? `<p>${esc(f.help)}</p>` : ''}</div>`;
+    if (f.type === 'section') return `<div class="sec"><h2>${esc(f.label)}</h2>${f.help ? `<p>${linky(f.help)}</p>` : ''}</div>`;
     const id = 'f-' + f.id, req = f.required ? '<span class="req" aria-hidden="true">*</span>' : '';
-    const help = f.help ? `<p class="help" id="${id}-h">${esc(f.help)}</p>` : '';
+    const help = f.help ? `<p class="help" id="${id}-h">${linky(f.help)}</p>` : '';
     const aria = `${f.required ? 'required aria-required="true"' : ''} ${f.help ? `aria-describedby="${id}-h"` : ''}`;
     let input;
-    if (f.type === 'textarea') input = `<textarea id="${id}" name="${esc(f.id)}" ${aria} maxlength="8000"></textarea>`;
+    if (f.type === 'textarea') input = `<textarea id="${id}" name="${esc(f.id)}" ${aria} maxlength="8000" placeholder="Your answer"></textarea>`;
     else if (f.type === 'select') input = `<select id="${id}" name="${esc(f.id)}" ${aria}><option value="">Choose…</option>${(f.options || []).map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
     else if (f.type === 'radio' || f.type === 'checkbox') {
-      input = `<div role="${f.type === 'radio' ? 'radiogroup' : 'group'}" aria-labelledby="${id}-l">${(f.options || []).map(o => `
+      input = `<div class="opts" role="${f.type === 'radio' ? 'radiogroup' : 'group'}" aria-labelledby="${id}-l">${(f.options || []).map(o => `
         <label class="opt"><input type="${f.type}" name="${esc(f.id)}" value="${esc(o)}"><span>${esc(o)}</span></label>`).join('')}
         ${f.other ? `<label class="opt"><input type="${f.type}" name="${esc(f.id)}" value="__other"><span>Other:</span><input type="text" data-other="${esc(f.id)}" maxlength="300" aria-label="Other"></label>` : ''}</div>`;
       return `<div class="q" data-q="${esc(f.id)}"><span class="lbl" id="${id}-l">${esc(f.label)}${req}</span>${help}${input}</div>`;
-    } else input = `<input id="${id}" name="${esc(f.id)}" type="${f.type === 'email' ? 'email' : f.type === 'url' ? 'url' : 'text'}" ${aria} maxlength="1000" autocomplete="${f.type === 'email' ? 'email' : 'off'}">`;
+    } else input = `<input id="${id}" name="${esc(f.id)}" type="${f.type === 'email' ? 'email' : f.type === 'url' ? 'url' : 'text'}" ${aria} maxlength="1000" autocomplete="${f.type === 'email' ? 'email' : 'off'}" placeholder="${f.type === 'url' ? 'https://' : f.type === 'email' ? 'name@email.com' : 'Your answer'}">`;
     return `<div class="q" data-q="${esc(f.id)}"><label for="${id}">${esc(f.label)}${req}</label>${help}${input}</div>`;
   }
-
+  function draw(closed) {
+    document.title = `${form.title || 'Form'} — HORIZON RCRDS`;
+    const hasReq = form.fields.some(x => x.required);
+    root.innerHTML = `<p class="eyebrow">HORIZON RCRDS</p><h1>${esc(form.title || 'Untitled form')}</h1>
+      ${closed ? '<p style="text-align:center"><span class="closed">Closed — preview</span></p>' : ''}
+      ${form.description ? `<p class="desc">${linky(form.description)}</p>` : ''}
+      <form id="f" novalidate>
+        ${form.fields.map(field).join('')}
+        <div class="hp" aria-hidden="true"><label>Leave empty <input name="_hp" tabindex="-1" autocomplete="off"></label></div>
+        <p class="err" id="err" role="alert" hidden></p>
+        <div class="foot"><button class="send" type="submit">Send</button>${hasReq ? '<small>* Required</small>' : ''}</div>
+      </form>`;
+    progress();
+  }
   async function load() {
     try {
       const r = await fetch('/api/public/forms/' + encodeURIComponent(slug), { cache: 'no-store' });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.message || 'This form is not available.');
-      form = j;
-      document.title = `${form.title} — HORIZON RCRDS`;
-      root.innerHTML = `<h1>${esc(form.title)}</h1>${form.description ? `<p class="desc">${esc(form.description)}</p>` : ''}
-        <form id="f" novalidate>
-          ${form.fields.map(field).join('')}
-          <div class="hp" aria-hidden="true"><label>Leave empty <input name="_hp" tabindex="-1" autocomplete="off"></label></div>
-          <p class="err" id="err" role="alert" hidden></p>
-          <button class="send" type="submit">Send</button>
-        </form>`;
+      form = j; draw(false);
     } catch (e) { root.innerHTML = `<h1>Not available</h1><p class="msg">${esc(e.message)}</p>`; }
+  }
+  // vista previa del panel: el formulario llega del editor (mismo sitio) y se redibuja al momento
+  if (PREVIEW) {
+    window.addEventListener('message', e => {
+      if (e.origin !== location.origin || e.data?.type !== 'hz-form') return;
+      const y = scrollY; form = e.data.form; draw(!e.data.form.public); scrollTo(0, y);
+      if (e.data.focus) document.querySelector(`[data-q="${CSS.escape(e.data.focus)}"]`)?.scrollIntoView({ block: 'center' });
+    });
+    root.innerHTML = '<p class="msg">Preview…</p>';
+    parent.postMessage({ type: 'hz-form-ready' }, location.origin);
   }
 
   function answers(f) {
@@ -104,9 +148,17 @@
     }
     return out;
   }
+  function progress() {
+    const f = document.getElementById('f'), bar = document.getElementById('bar');
+    if (!f || !form) return;
+    const qs = form.fields.filter(x => x.type !== 'section'), a = answers(f);
+    const n = qs.filter(x => Array.isArray(a[x.id]) ? a[x.id].length : a[x.id]).length;
+    bar.style.width = qs.length ? `${(n / qs.length) * 100}%` : '0';
+  }
 
   document.addEventListener('submit', async e => {
     e.preventDefault();
+    if (PREVIEW) return;
     const f = e.target, err = document.getElementById('err'), btn = f.querySelector('.send');
     const a = answers(f);
     f.querySelectorAll('.q.bad').forEach(q => q.classList.remove('bad'));
@@ -122,7 +174,8 @@
       const r = await fetch('/api/public/forms/' + encodeURIComponent(slug), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: a, _hp: f.elements._hp.value }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.message || 'Something went wrong. Please try again.');
-      root.innerHTML = `<div class="done"><h2>Thank you!</h2><p>Your answer has been sent to HORIZON RCRDS.</p><a href="/">Back to the website</a></div>`;
+      document.getElementById('bar').style.width = '100%';
+      root.innerHTML = `<div class="done"><h2>Thank you!</h2><p>Your answer has been sent to HORIZON RCRDS.<br>We’ll get back to you soon.</p><a href="/">Back to the website</a></div>`;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (x) { err.textContent = x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Send'; }
   });
@@ -130,8 +183,10 @@
     const o = e.target.closest('[data-other]');
     if (o && o.value) { const r = o.closest('.opt').querySelector('input[type=radio], input[type=checkbox]'); if (r) r.checked = true; }
     e.target.closest('.q')?.classList.remove('bad');
+    progress();
   });
-  load();
+  document.addEventListener('change', progress);
+  if (!PREVIEW) load();
 })();
 </script>
 </body>

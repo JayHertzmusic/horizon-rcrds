@@ -617,3 +617,14 @@ img.av { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; displ
 .who-pic img, .who-pic .who-ini { display: block; }
 .who-cam { position: absolute; right: -3px; bottom: -3px; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; background: #fff; color: #0a0a0a; font-size: 10px; opacity: 0; transition: opacity .15s; }
 .who-pic:hover .who-cam, .who-pic:focus-within .who-cam { opacity: 1; }
+
+/* Editor de formularios con vista previa en vivo */
+.fe-grid { grid-template-columns: minmax(0, 1fr) minmax(360px, 46%); gap: 28px; }
+.fe-side { position: static; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 6px 0 10px; }
+.fe-prev { position: sticky; top: 16px; display: flex; flex-direction: column; height: calc(100vh - 32px); border: 1px solid var(--line-2); border-radius: 12px; overflow: hidden; background: #050505; }
+.prev-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line-2); }
+.prev-head b { color: #fff; font-size: 14px; }
+.prev-head .btn { margin-left: auto; }
+.fe-prev iframe { flex: 1; width: 100%; border: 0; background: #050505; }
+@media (max-width: 1200px) { .fe-grid { grid-template-columns: 1fr; } .fe-prev { position: static; height: 80vh; } }
+@media (max-width: 700px) { .fe-side { grid-template-columns: 1fr; } }

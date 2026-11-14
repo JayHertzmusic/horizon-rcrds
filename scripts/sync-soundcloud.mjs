@@ -245,7 +245,10 @@ if (newRel.length) {
   const prefix = (String(releases[0].catalog || 'HRZ#').match(/^\D*/) || ['HRZ#'])[0] || 'HRZ#';
   for (const it of [...newRel].reverse()) {   // oldest first, so the newest gets the highest number
     n += 1;
-    const num = String(n).padStart(3, '0'), id = `${prefix.replace(/\W/g, '').toLowerCase()}${num}`;
+    const num = String(n).padStart(3, '0'), base = `${prefix.replace(/\W/g, '').toLowerCase()}${num}`;
+    // el id va en el enlace de la página del release: nunca se repite (los números se renumeraron una vez)
+    let id = base;
+    for (let k = 2; releases.some(r => r.id === id); k++) id = `${base}-${k}`;
     const { image, color } = await saveCover(it.image, id);
     const { stream, spotify: fromText } = links(it.text);
     const spotify = fromText || (stream && await spotifyFromSmartLink(stream));

@@ -711,3 +711,13 @@ a.lk.on:hover { color: #fff; background: rgba(255, 255, 255, .08); }
   .row.item .feat { display: none; }
   .row.item .btn { opacity: 1; }
 }
+
+/* Etiqueta de rol: limpia y bien centrada (punto de color + nombre) */
+.row.tm .role-tag {
+  justify-self: end; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  height: 28px; min-width: 104px; padding: 0 14px; box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, .12); border-radius: 999px; background: rgba(255, 255, 255, .03);
+  color: #e9e9e9; font: 600 12.5px/1 'Barlow', sans-serif; letter-spacing: .02em; text-transform: none; white-space: nowrap;
+}
+.row.tm .role-tag::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--c, #fff); }
+.row.tm .role-tag.owner { color: #fff; border-color: rgba(255, 255, 255, .22); }

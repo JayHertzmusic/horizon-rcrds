@@ -7,7 +7,7 @@
      workflow: no hay claves guardadas en ningún sitio. */
 import STATIC_FILES from './static-files.json';
 import { FORM_SCHEMA, FormError, formsApi, publicFormsApi, formsCount } from './forms.js';
-import { CONTRACT_SCHEMA, ContractError, contractsApi, signApi } from './contracts.js';
+import { CONTRACT_SCHEMA, CONTRACT_COLUMNS, ContractError, contractsApi, signApi } from './contracts.js';
 import { EmailMessage } from 'cloudflare:email';
 
 // Secciones del panel y lo que se puede hacer en cada una. Una sección nueva (p. ej. eventos) se añade aquí.
@@ -84,6 +84,7 @@ async function ensureSchema(env) {
   // nombre que le pone el owner a cada persona (columna añadida después)
   try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN label TEXT').run(); } catch { /* ya existe */ }
   try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN color TEXT').run(); } catch { /* ya existe */ }
+  for (const col of CONTRACT_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE contracts ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
   schemaReady = true;
 }
 const audit = (env, who, action, detail = '') => env.DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)')
@@ -490,7 +491,7 @@ async function api(req, env, p) {
     if (!EMAIL.test(email)) throw new HttpError(400, 'Email no válido.');
     return json(await startSession(env, { email, name: clean(b.name || email.split('@')[0], 80), picture: '' }, area(b.area)));
   }
-  if (p.startsWith('/api/public/sign/')) return json(await signApi(req, env, url, mailer(env)));   // firma de contratos (enlace privado)
+  if (p.startsWith('/api/public/sign/')) { const r = await signApi(req, env, url, mailer(env)); return r instanceof Response ? r : json(r); }   // firma de contratos (enlace privado)
   if (p.startsWith('/api/public/')) return json(await publicFormsApi(req, env, url));   // formularios públicos (sin sesión)
   const s = await session(req, env);
   if (p === '/api/auth/me' && req.method === 'GET') return json({ user: { ...userOut(s), formsCount: await formsCount(env, s) }, sections: SECTIONS });

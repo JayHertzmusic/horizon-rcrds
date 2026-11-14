@@ -1659,160 +1659,88 @@
     } catch { /* aviso ya mostrado */ }
   }, true);
 
-  /* ---------------- Contratos ---------------- */
-  // Plantillas (texto de cada tipo de contrato, con huecos {{artista}}…) y contratos (rellenados, se envían a firmar).
-  let ctData = null, ctTemplates = null, ctErr = '', ctLoading = false, ctTab = 'contracts', ctOpen = null;
+  /* ---------------- Contratos (PDF exacto del Google Doc) ---------------- */
+  // Cada contrato es el PDF descargado del Google Doc del sello, sin tocar. Aquí se sube, se marca dónde firma el
+  // artista, se crea el enlace de firma y se guarda/descarga el contrato firmado.
+  const CONTRACTS_DOC = 'https://docs.google.com/document/d/1rUCOAySY2XHqnmgFeH9fjF3xgXDa9cg0vy8qWJVN274/edit?authuser=contacthorizonids@gmail.com';
+  let ctData = null, ctErr = '', ctLoading = false, ctOpen = null;
   const CT_STATUS = { draft: ['Borrador', 'off'], sent: ['Enviado', ''], signed: ['Firmado', 'ok'], void: ['Anulado', 'off'] };
-  const COMMON_FIELDS = ['artista', 'nombre_legal', 'email', 'pais', 'tema', 'fecha', 'royalties'];
   const ctCanEdit = () => !!ctData?.canEdit && can('contracts', 'edit');
+  const signUrl = c => `${location.origin}/sign/${c.token}`;
   async function loadContracts() {
     if (ctLoading) return;
     ctLoading = true;
-    try {
-      const [c, t] = await Promise.all([api('GET', '/api/contracts'), api('GET', '/api/contracts/templates')]);
-      ctData = c; ctTemplates = t.templates; ctErr = '';
-    } catch (e) { ctErr = e.message; if (e.status === 401) { ctLoading = false; logout(e.message); return; } }
+    try { ctData = await api('GET', '/api/contracts'); ctErr = ''; }
+    catch (e) { ctErr = e.message; if (e.status === 401) { ctLoading = false; logout(e.message); return; } }
     ctLoading = false;
     if (view === 'contracts') render();
   }
-  /* Pegar desde Google Docs / Word: se queda con negritas, cursivas, subrayados, títulos, listas, tablas y centrado. */
-  const PASTE_PROPS = ['font-family', 'font-size', 'font-weight', 'font-style', 'text-decoration', 'color', 'background-color', 'text-align', 'line-height', 'text-indent', 'margin-left', 'margin-top', 'margin-bottom', 'padding-left', 'vertical-align', 'list-style-type'];
-  function cleanPaste(html) {
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const keep = new Set(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'ul', 'ol', 'li', 'table', 'tbody', 'tr', 'td', 'th', 'br', 'hr', 'b', 'strong', 'i', 'em', 'u', 's', 'sup', 'sub', 'span', 'div', 'img']);
-    const walk = n => {
-      if (n.nodeType === 3) return esc(n.textContent);
-      if (n.nodeType !== 1) return '';
-      const tag = n.tagName.toLowerCase();
-      if (['script', 'style', 'meta', 'title', 'svg', 'link'].includes(tag)) return '';
-      const inner = [...n.childNodes].map(walk).join('');
-      if (!keep.has(tag)) return inner;
-      const st = PASTE_PROPS.map(p => [p, n.style?.getPropertyValue(p)]).filter(([, v]) => v && !/url\(/i.test(v)).map(([p, v]) => `${p}:${v.replace(/"/g, "'")}`).join(';');
-      if (tag === 'img') return /^data:image\//.test(n.getAttribute('src') || '') ? `<img src="${n.getAttribute('src')}" style="width:${n.width || ''}px">` : '';
-      if (tag === 'br' || tag === 'hr') return `<${tag}>`;
-      return `<${tag}${st ? ` style="${st}"` : ''}>${inner}</${tag}>`;
-    };
-    return walk(doc.body);
+  async function authFetch(path, opts = {}) {
+    const r = await fetch(path, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${auth.token}` }, cache: 'no-store' });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new GhError(j.message || `Error ${r.status}`, r.status); }
+    return r;
   }
-  const RTE_FONTS = ['Arial', 'Lexend', 'Comfortaa', 'Impact', 'Times New Roman', 'Georgia', 'Verdana', 'Courier New', 'Montserrat', 'Roboto'];
-  const RTE_SIZES = [6, 7, 8, 9, 10, 10.5, 11, 12, 14, 15, 16, 18, 20, 24, 26, 31, 36, 48];
-  function richEditor(html, id = 'rte') {
-    return `
-      <div class="rte-bar" role="toolbar" aria-label="Formato">
-        <button type="button" data-cmd="undo" title="Deshacer (Ctrl+Z)">↶</button><button type="button" data-cmd="redo" title="Rehacer (Ctrl+Y)">↷</button>
-        <span class="sep"></span>
-        <select data-cmdsel="fontName" title="Fuente" aria-label="Fuente"><option value="">Fuente</option>${RTE_FONTS.map(f => `<option value="${f}" style="font-family:'${f}'">${f}</option>`).join('')}</select>
-        <select data-cmdsel="fontSize" title="Tamaño" aria-label="Tamaño"><option value="">Tamaño</option>${RTE_SIZES.map(s => `<option value="${s}">${s}</option>`).join('')}</select>
-        <select data-cmdsel="formatBlock" title="Estilo de párrafo" aria-label="Estilo"><option value="">Estilo</option><option value="p">Texto normal</option><option value="h1">Título 1</option><option value="h2">Título 2</option><option value="h3">Título 3</option></select>
-        <span class="sep"></span>
-        <button type="button" data-cmd="bold" title="Negrita (Ctrl+B)"><b>B</b></button><button type="button" data-cmd="italic" title="Cursiva (Ctrl+I)"><i>I</i></button><button type="button" data-cmd="underline" title="Subrayado (Ctrl+U)"><u>U</u></button><button type="button" data-cmd="strikeThrough" title="Tachado"><s>S</s></button>
-        <label class="rte-color" title="Color del texto">A<input type="color" data-cmdsel="foreColor" value="#000000"></label>
-        <label class="rte-color hl" title="Color de resaltado">▮<input type="color" data-cmdsel="hiliteColor" value="#ffff00"></label>
-        <span class="sep"></span>
-        <button type="button" data-cmd="justifyLeft" title="Alinear a la izquierda">⯇</button><button type="button" data-cmd="justifyCenter" title="Centrar">≡</button><button type="button" data-cmd="justifyRight" title="Alinear a la derecha">⯈</button><button type="button" data-cmd="justifyFull" title="Justificar">☰</button>
-        <span class="sep"></span>
-        <button type="button" data-cmd="insertOrderedList" title="Lista numerada">1.</button><button type="button" data-cmd="insertUnorderedList" title="Lista con viñetas">•</button>
-        <button type="button" data-cmd="outdent" title="Reducir sangría">⇤</button><button type="button" data-cmd="indent" title="Aumentar sangría">⇥</button>
-        <button type="button" data-cmd="insertHorizontalRule" title="Línea horizontal">—</button><button type="button" data-cmd="removeFormat" title="Quitar formato">Tx</button>
-      </div>
-      <div class="rte-page"><div class="rte doc-view" id="${id}" contenteditable="true" spellcheck="true">${html || '<div style="max-width:540pt;padding:72pt 36pt"><p><br></p></div>'}</div></div>`;
+  function gmailUrl(c) {
+    const body = `Hi ${c.artist || ''},\n\nHere is your contract with HORIZON RCRDS: ${c.title}.\nYou can read it and sign it online here:\n${signUrl(c)}\n\nIf you have any questions, just reply to this email.\n\nBest,\nHORIZON RCRDS`;
+    return `https://mail.google.com/mail/?authuser=contacthorizonids@gmail.com&view=cm&fs=1&to=${encodeURIComponent(c.email || '')}&su=${encodeURIComponent('HORIZON RCRDS — ' + c.title)}&body=${encodeURIComponent(body)}`;
   }
   function ctList() {
     const list = ctData.contracts, ed = ctCanEdit();
     return `
       <div class="head"><div><p class="eyebrow">Firmas</p><h1>CONTRATOS <span class="count">${list.length}</span></h1></div>
-        ${ed ? '<button type="button" class="btn primary" data-ct="new">+ Nuevo contrato</button>' : ''}</div>
-      <div class="subtabs"><button type="button" class="subtab is-on" data-ct="tab-contracts">Contratos</button><button type="button" class="subtab" data-ct="tab-templates">Plantillas <span class="count">${ctTemplates.length}</span></button></div>
+        <div class="head-btns"><a class="btn ghost" href="${CONTRACTS_DOC}" target="_blank" rel="noopener">Abrir contratos en Google Docs ↗</a>${ed ? '<button type="button" class="btn primary" data-ct="new">+ Nuevo contrato</button>' : ''}</div></div>
+      <p class="info lead">Los contratos se editan en vuestro Google Doc. Para cada artista: rellena sus datos en Docs → <b>Archivo → Descargar → PDF</b> → súbelo aquí con «Nuevo contrato». El artista firma exactamente ese PDF.</p>
       <ol class="list">${list.length ? list.map(c => `
         <li class="row ct" data-ctid="${esc(c.id)}">
           <span class="meta"><b>${esc(c.title)}</b><span>${esc(c.artist || '')}${c.email ? ' · ' + esc(c.email) : ''}</span></span>
           <span class="tag ${CT_STATUS[c.status]?.[1] || ''}">${CT_STATUS[c.status]?.[0] || c.status}</span>
-          <span class="muted sm-txt">${c.status === 'signed' ? 'Firmado ' + esc(fmtDate(c.signed_at)) : c.sent_at ? 'Enviado ' + esc(fmtDate(c.sent_at)) : 'Creado ' + esc(fmtDate(c.created_at))}</span>
+          <span class="muted sm-txt">${c.status === 'signed' ? 'Firmado ' + esc(fmtDate(c.signed_at)) : c.sent_at ? 'Enviado ' + esc(fmtDate(c.sent_at)) : !c.pdf ? 'Falta el PDF' : !c.box ? 'Falta marcar la firma' : 'Listo para enviar'}</span>
           <button type="button" class="btn ghost sm" data-ct="open">Abrir</button>
-        </li>`).join('') : '<li class="empty">Todavía no hay contratos. Crea uno a partir de una plantilla.</li>'}
+        </li>`).join('') : '<li class="empty">Todavía no hay contratos.</li>'}
       </ol>`;
-  }
-  function ctTemplatesList() {
-    const ed = ctCanEdit();
-    return `
-      <div class="head"><div><p class="eyebrow">Firmas</p><h1>CONTRATOS</h1></div>
-        ${ed ? '<button type="button" class="btn primary" data-ct="tpl-new">+ Nueva plantilla</button>' : ''}</div>
-      <div class="subtabs"><button type="button" class="subtab" data-ct="tab-contracts">Contratos <span class="count">${ctData.contracts.length}</span></button><button type="button" class="subtab is-on" data-ct="tab-templates">Plantillas</button></div>
-      <p class="info lead">Cada plantilla es el texto de un tipo de contrato. Pega el contrato desde Google Docs (se mantiene el formato) y pon huecos como <b>{{artista}}</b> o <b>{{tema}}</b> donde van los datos: al crear un contrato se rellenan.</p>
-      <ol class="list">${ctTemplates.length ? ctTemplates.map(t => `
-        <li class="row ct" data-tplid="${esc(t.id)}">
-          <span class="meta"><b>${esc(t.name)}</b><span>${t.fields.length ? t.fields.map(f => `{{${esc(f)}}}`).join(' ') : 'Sin huecos'}</span></span>
-          <span></span><span class="muted sm-txt">${esc(fmtDate(t.updated_at))}</span>
-          ${ed ? '<button type="button" class="btn ghost sm" data-ct="tpl-edit">Editar</button>' : '<span></span>'}
-        </li>`).join('') : '<li class="empty">Todavía no hay plantillas.</li>'}
-      </ol>`;
-  }
-  function tplEditor() {
-    const t = ctOpen.tpl;
-    return `
-      <form id="tpl-ed" class="editor ct-ed" novalidate>
-        <button type="button" class="back" data-ct="back">← Plantillas</button>
-        <h1>${t.id ? esc(t.name) : 'NUEVA PLANTILLA'}</h1>
-        <div class="field"><label for="tpl-name">Nombre</label><input id="tpl-name" name="name" value="${esc(t.name || '')}" maxlength="120" autocomplete="off" placeholder="p. ej. Release Contract"></div>
-        <p class="group">Texto del contrato</p>
-        <p class="info">Pega aquí el contrato (Ctrl+V) desde Google Docs. Para un dato que cambia en cada contrato, escribe un hueco entre llaves, o pulsa uno de estos:
-          ${COMMON_FIELDS.map(f => `<button type="button" class="chip on" data-ins="${f}">{{${f}}}</button>`).join(' ')}</p>
-        ${richEditor(t.html)}
-        <p class="ed-error" id="ed-error" role="alert" hidden></p>
-        <div class="ed-actions">
-          <button type="submit" class="btn primary">${t.id ? 'Guardar cambios' : 'Crear plantilla'}</button>
-          <button type="button" class="btn ghost" data-ct="back">Cancelar</button>
-          ${t.id ? '<button type="button" class="btn danger push" data-ct="tpl-del">Eliminar plantilla</button>' : ''}
-        </div>
-      </form>`;
   }
   function ctNew() {
-    const tpl = ctTemplates.find(t => t.id === ctOpen.template_id);
-    const fields = tpl ? tpl.fields : [];
     return `
       <form id="ct-new" class="editor ct-ed" novalidate>
         <button type="button" class="back" data-ct="back">← Contratos</button>
         <h1>NUEVO CONTRATO</h1>
-        <div class="field"><label for="ct-tpl">Plantilla</label><select id="ct-tpl" name="template_id"><option value="">En blanco</option>${ctTemplates.map(t => `<option value="${esc(t.id)}" ${t.id === ctOpen.template_id ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
-        <div class="row2 wide"><div class="field"><label for="ct-title">Título</label><input id="ct-title" name="title" value="${esc(ctOpen.title || '')}" maxlength="160" placeholder="p. ej. Release Contract — Artista — Tema" autocomplete="off"></div>
-          <div class="field"><label for="ct-artist">Artista</label><input id="ct-artist" name="artist" value="${esc(ctOpen.artist || '')}" maxlength="160" autocomplete="off"></div></div>
-        <div class="field"><label for="ct-email">Email del artista</label><input id="ct-email" name="email" type="email" value="${esc(ctOpen.email || '')}" maxlength="160" autocomplete="off"></div>
-        ${fields.length ? `<p class="group">Datos de la plantilla</p><div class="ct-vars">${fields.map(f => `<div class="field"><label>{{${esc(f)}}}</label><input name="var:${esc(f)}" value="${esc(ctOpen.vars?.[f] || '')}" maxlength="500" autocomplete="off"></div>`).join('')}</div>
-          <p class="info">Lo que dejes vacío se queda como {{hueco}} y lo puedes rellenar después en el texto.</p>` : ''}
+        <p class="info lead">En el Google Doc: rellena los datos del artista → <b>Archivo → Descargar → PDF</b>. Luego sube ese PDF aquí.</p>
+        <div class="field"><label for="ct-title">Título</label><input id="ct-title" name="title" maxlength="160" placeholder="p. ej. Release Contract — Artista — Tema" autocomplete="off"></div>
+        <div class="row2 wide"><div class="field"><label for="ct-artist">Artista</label><input id="ct-artist" name="artist" maxlength="160" autocomplete="off"></div>
+          <div class="field"><label for="ct-email">Email del artista</label><input id="ct-email" name="email" type="email" maxlength="160" autocomplete="off"></div></div>
+        <div class="field"><label for="ct-file">PDF del contrato (descargado de Google Docs)</label><input id="ct-file" name="file" type="file" accept="application/pdf"></div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions"><button type="submit" class="btn primary">Crear contrato</button><button type="button" class="btn ghost" data-ct="back">Cancelar</button></div>
       </form>`;
-  }
-  const signUrl = c => `${location.origin}/sign/${c.token}`;
-  function gmailUrl(c) {
-    const body = `Hi ${c.artist || ''},\n\nHere is your contract with HORIZON RCRDS: ${c.title}.\nYou can read it and sign it online here:\n${signUrl(c)}\n\nIf you have any questions, just reply to this email.\n\nBest,\nHORIZON RCRDS`;
-    return `https://mail.google.com/mail/?authuser=contacthorizonids@gmail.com&view=cm&fs=1&to=${encodeURIComponent(c.email || '')}&su=${encodeURIComponent('HORIZON RCRDS — ' + c.title)}&body=${encodeURIComponent(body)}`;
   }
   function ctDetail() {
     const c = ctOpen.contract;
     if (!c) return '<p class="info">Cargando…</p>';
     const ed = ctCanEdit(), signed = c.status === 'signed', st = CT_STATUS[c.status] || [c.status, ''];
-    const sig = signed && c.signature ? (c.signature.startsWith('typed:') ? `<div class="typed-sig">${esc(c.signature.slice(6))}</div>` : `<img class="sig-img" src="${esc(c.signature)}" alt="Firma">`) : '';
     return `
       <form id="ct-ed" class="editor ct-ed" novalidate>
         <button type="button" class="back" data-ct="back">← Contratos</button>
         <div class="head"><div><p class="eyebrow">Contrato</p><h1>${esc(c.title)}</h1></div><span class="tag big ${st[1]}">${st[0]}</span></div>
-        ${c.status === 'sent' || signed ? `<div class="ct-link"><b>Enlace de firma</b>${c.token ? `<a href="${esc(signUrl(c))}" target="_blank" rel="noopener">${esc(signUrl(c).replace(/^https?:\/\//, ''))}</a>
-          <button type="button" class="btn ghost sm" data-ct="copy">Copiar</button>${!signed ? `<a class="btn primary sm" href="${esc(gmailUrl(c))}" target="_blank" rel="noopener">Enviar por Gmail</a>` : ''}` : ''}</div>` : ''}
-        ${signed ? `<div class="ct-proof"><b>Firmado</b> por ${esc(c.signer_name || '—')} (${esc(c.signer_email || '—')}) el ${esc(fmtDate(c.signed_at))}${c.sign_ip ? ` · IP ${esc(c.sign_ip)}` : ''}${c.doc_hash ? `<br><span class="muted">Huella del texto (SHA-256): ${esc(c.doc_hash)}</span>` : ''}${c.file ? '<br>PDF firmado subido al archivo.' : ''}</div>` : ''}
+        ${c.token && (c.status === 'sent' || signed) ? `<div class="ct-link"><b>Enlace de firma</b><a href="${esc(signUrl(c))}" target="_blank" rel="noopener">${esc(signUrl(c).replace(/^https?:\/\//, ''))}</a>
+          <button type="button" class="btn ghost sm" data-ct="copy">Copiar</button>${!signed ? `<a class="btn primary sm" href="${esc(gmailUrl(c))}" target="_blank" rel="noopener">Enviar por Gmail</a>` : ''}</div>` : ''}
+        ${signed && c.signer_name ? `<div class="ct-proof"><b>Firmado</b> por ${esc(c.signer_name)} (${esc(c.signer_email)}) el ${esc(fmtDate(c.signed_at))}${c.sign_ip ? ` · IP ${esc(c.sign_ip)}` : ''}<br><span class="muted">Huella del PDF (SHA-256): ${esc(c.pdf_hash)}</span></div>` : ''}
         ${!signed && ed ? `
           <div class="row2 wide"><div class="field"><label for="c-title">Título</label><input id="c-title" name="title" value="${esc(c.title)}" maxlength="160" autocomplete="off"></div>
             <div class="field"><label for="c-artist">Artista</label><input id="c-artist" name="artist" value="${esc(c.artist)}" maxlength="160" autocomplete="off"></div></div>
-          <div class="field"><label for="c-email">Email del artista</label><input id="c-email" name="email" type="email" value="${esc(c.email)}" maxlength="160" autocomplete="off"></div>
-          <p class="group">Texto del contrato</p>${richEditor(c.html)}` : `<div class="doc-view ro">${c.html || '<p class="muted">(Contrato subido en PDF)</p>'}${sig ? `<div class="sigblock"><b>Firma</b>${sig}</div>` : ''}</div>`}
+          <div class="field"><label for="c-email">Email del artista</label><input id="c-email" name="email" type="email" value="${esc(c.email)}" maxlength="160" autocomplete="off"></div>` : ''}
+        ${c.pdf ? `
+          ${!signed && ed ? `<p class="ct-step ${c.box ? 'done' : ''}">${c.box ? '✓ Firma del artista colocada (página ' + (c.box.page + 1) + '). Para moverla, haz clic en otro sitio del documento.' : '<b>Haz clic en el documento donde debe firmar el artista</b> (sobre su línea de firma).'}</p>` : ''}
+          <div class="pdf-viewer" id="pdf-viewer"><p class="info">Cargando el PDF…</p></div>` : `<p class="ct-step">Sube el PDF del contrato (descargado de Google Docs).</p>`}
         <div class="field" style="margin-top:18px"><label for="c-notes">Notas internas (no las ve el artista)</label><textarea id="c-notes" name="notes" rows="2" maxlength="2000" ${ed ? '' : 'readonly'}>${esc(c.notes)}</textarea></div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions">
-          ${ed && !signed ? '<button type="submit" class="btn primary">Guardar</button>' : ''}
-          ${ed && !signed && c.status !== 'void' ? `<button type="button" class="btn ghost" data-ct="send">${c.token ? 'Actualizar enlace' : 'Preparar enlace de firma'}</button>` : ''}
-          ${c.token && signed ? `<a class="btn ghost" href="${esc(signUrl(c))}" target="_blank" rel="noopener">Ver / descargar copia firmada</a>` : ''}
-          ${c.file ? `<button type="button" class="btn ghost" data-ct="pdf">Ver PDF</button>` : ''}
-          ${ed ? `<label class="btn ghost" for="ct-pdf">${c.file ? 'Cambiar PDF' : 'Subir PDF firmado'}</label><input type="file" id="ct-pdf" class="sr-only" accept="application/pdf">` : ''}
+          ${ed ? '<button type="submit" class="btn primary">Guardar</button>' : ''}
+          ${ed && !signed ? `<label class="btn ghost" for="ct-pdf">${c.pdf ? 'Cambiar PDF' : 'Subir PDF'}</label><input type="file" id="ct-pdf" class="sr-only" accept="application/pdf">` : ''}
+          ${ed && !signed && c.status !== 'void' && c.pdf && c.box ? `<button type="button" class="btn ghost" data-ct="send">${c.token ? 'Enlace listo ✓' : 'Preparar enlace de firma'}</button>` : ''}
+          ${signed && c.signer_name ? '<button type="button" class="btn ghost" data-ct="dl-signed">Descargar PDF firmado</button>' : ''}
+          ${c.pdf ? '<button type="button" class="btn ghost" data-ct="dl-orig">Descargar PDF original</button>' : ''}
+          ${c.file ? '<button type="button" class="btn ghost" data-ct="dl-file">Ver PDF firmado (archivo)</button>' : ''}
+          ${ed && !signed ? `<label class="btn ghost" for="ct-arch" title="Para contratos que ya se firmaron fuera de la web">Subir PDF ya firmado</label><input type="file" id="ct-arch" class="sr-only" accept="application/pdf">` : ''}
           ${ed && !signed ? `<button type="button" class="btn ghost" data-ct="${c.status === 'void' ? 'unvoid' : 'void'}">${c.status === 'void' ? 'Reactivar' : 'Anular'}</button>` : ''}
           ${ed && (!signed || auth.user.owner) ? '<button type="button" class="btn danger push" data-ct="del">Eliminar</button>' : ''}
         </div>
@@ -1823,10 +1751,42 @@
       if (!ctErr) setTimeout(loadContracts, 0);
       return `<div class="head"><div><p class="eyebrow">Firmas</p><h1>CONTRATOS</h1></div></div>${ctErr ? `<p class="login-error" role="alert">${esc(ctErr)}</p>` : '<p class="info">Cargando…</p>'}`;
     }
-    if (ctOpen?.mode === 'tpl') return tplEditor();
     if (ctOpen?.mode === 'new') return ctNew();
-    if (ctOpen?.mode === 'contract') return ctDetail();
-    return ctTab === 'templates' ? ctTemplatesList() : ctList();
+    if (ctOpen?.mode === 'contract') { if (ctOpen.contract?.pdf) setTimeout(ctPaint, 0); return ctDetail(); }
+    return ctList();
+  }
+  // tras dibujar la ficha, se pinta el PDF (pdf.js) con el recuadro de la firma
+  async function ctPaint() {
+    const c = ctOpen?.contract, box = $('#pdf-viewer');
+    if (!c || !box || !c.pdf) return;
+    try {
+      if (!ctOpen.bytes) ctOpen.bytes = new Uint8Array(await (await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/pdf`)).arrayBuffer());
+      const signed = c.status === 'signed' && c.signer_name, ed = ctCanEdit() && c.status !== 'signed';
+      ctOpen.view = await HZPDF.render(box, ctOpen.bytes, {
+        box: c.box, maxWidth: 820,
+        sign: signed ? c.signature : null, signedLabel: signed ? `Signed electronically by ${c.signer_name}` : '',
+        onPage: ed ? (page, x, y) => placeBox(page, x, y) : null,
+      });
+    } catch (e) { box.innerHTML = `<p class="login-error">${esc(e.message)}</p>`; }
+  }
+  async function placeBox(page, x, y) {
+    const c = ctOpen.contract, old = c.box;
+    const w = old?.w || 0.32, h = old?.h || 0.075;
+    const b = { page, x: Math.min(Math.max(0, x - w / 2), 1 - w), y: Math.min(Math.max(0, y - h * 0.75), 1 - h), w, h };
+    c.box = b;
+    HZPDF.drawBox(ctOpen.view.pages, b);
+    try { await api('POST', `/api/contracts/${encodeURIComponent(c.id)}/box`, b); toast('Firma colocada'); const st = $('.ct-step'); if (st) { st.classList.add('done'); st.textContent = `✓ Firma del artista colocada (página ${page + 1}). Para moverla, haz clic en otro sitio del documento.`; } if (!$('[data-ct=send]')) { ctRefresh(); } }
+    catch (e) { toast(e.message); c.box = old; HZPDF.drawBox(ctOpen.view.pages, old); }
+  }
+  async function pdfInfo(file) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const pdf = await HZPDF.load(bytes);
+    return { bytes, hash: await HZPDF.sha256(bytes), pages: pdf.numPages };
+  }
+  async function uploadPdf(id, file) {
+    if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) throw new GhError('Sube un archivo PDF.');
+    const info = await pdfInfo(file);
+    await authFetch(`/api/contracts/${encodeURIComponent(id)}/pdf?hash=${info.hash}&pages=${info.pages}`, { method: 'POST', body: info.bytes });
   }
   async function openContract(id) {
     ctOpen = { mode: 'contract', id, contract: null };
@@ -1834,133 +1794,70 @@
     try { const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); if (ctOpen?.id === id) { ctOpen.contract = r.contract; render(); } }
     catch (e) { toast(e.message); ctOpen = null; render(); }
   }
+  async function ctRefresh() { const keep = ctOpen?.bytes; const id = ctOpen.id; const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); ctOpen = { mode: 'contract', id, contract: r.contract, bytes: keep }; render(); }
   async function ctAction(fn, ok) {
     busy = true;
     try { const r = await fn(); if (ok) toast(ok); return r; }
-    catch (e) { if (e.status === 401) { busy = false; logout(e.message); return; } const box = $('#ed-error'); if (box) { box.textContent = e.message; box.hidden = false; box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } else toast(e.message); throw e; }
+    catch (e) { if (e.status === 401) { busy = false; logout(e.message); return; } const b = $('#ed-error'); if (b) { b.textContent = e.message; b.hidden = false; b.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } else toast(e.message); throw e; }
     finally { busy = false; }
   }
-  const rteHtml = () => { const r = $('#rte'); return r ? r.innerHTML : undefined; };
   document.addEventListener('click', async e => {
     if (view !== 'contracts') return;
-    const ins = e.target.closest('[data-ins]');
-    if (ins) { rteApply('insertText', `{{${ins.dataset.ins}}}`); return; }
-    const cmd = e.target.closest('[data-cmd]');
-    if (cmd) {
-      e.preventDefault();
-      document.execCommand('styleWithCSS', false, true);
-      document.execCommand(cmd.dataset.cmd, false, null);
-      $('#rte')?.focus();
-      return;
-    }
     const t = e.target.closest('[data-ct]');
     if (!t || busy) return;
-    const a = t.dataset.ct;
-    if (a === 'tab-contracts' || a === 'tab-templates') { ctTab = a.slice(4); ctOpen = null; render(); }
-    else if (a === 'back') { const back = ctOpen?.mode === 'tpl' ? 'templates' : 'contracts'; ctOpen = null; ctTab = back; render(); loadContracts(); }
-    else if (a === 'new') { ctOpen = { mode: 'new', template_id: ctTemplates[0]?.id || '' }; render(); $('#ct-title')?.focus(); }
+    const a = t.dataset.ct, c = ctOpen?.contract;
+    if (a === 'back') { ctOpen = null; render(); loadContracts(); }
+    else if (a === 'new') { ctOpen = { mode: 'new' }; render(); $('#ct-title')?.focus(); }
     else if (a === 'open') openContract(t.closest('[data-ctid]').dataset.ctid);
-    else if (a === 'tpl-new') { ctOpen = { mode: 'tpl', tpl: { name: '', html: '' } }; render(); $('#tpl-name')?.focus(); }
-    else if (a === 'tpl-edit') { const tp = ctTemplates.find(x => x.id === t.closest('[data-tplid]').dataset.tplid); ctOpen = { mode: 'tpl', tpl: { ...tp } }; render(); }
-    else if (a === 'tpl-del') {
-      if (!await confirmBox(`¿Eliminar la plantilla «${ctOpen.tpl.name}»? Los contratos ya creados no cambian.`, 'Eliminar')) return;
-      try { await ctAction(() => api('DELETE', `/api/contracts/templates/${encodeURIComponent(ctOpen.tpl.id)}`), 'Plantilla eliminada'); ctOpen = null; ctTab = 'templates'; ctData = null; render(); } catch { /* aviso ya mostrado */ }
-    } else if (a === 'copy') { try { await navigator.clipboard.writeText(signUrl(ctOpen.contract)); toast('Enlace copiado'); } catch { toast(signUrl(ctOpen.contract)); } }
-    else if (a === 'send') {
-      const c = ctOpen.contract;
-      try {
-        await ctAction(() => api('POST', '/api/contracts', { id: c.id, title: $('#c-title').value, artist: $('#c-artist').value, email: $('#c-email').value, html: rteHtml(), notes: $('#c-notes').value, vars: c.vars }));
-        await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/send`), 'Enlace de firma listo');
-        openContract(c.id);
-      } catch { /* aviso ya mostrado */ }
-    } else if (a === 'void' || a === 'unvoid') {
+    else if (a === 'copy') { try { await navigator.clipboard.writeText(signUrl(c)); toast('Enlace copiado'); } catch { toast(signUrl(c)); } }
+    else if (a === 'send') { try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/send`), 'Enlace de firma listo'); ctRefresh(); } catch { /* aviso ya mostrado */ } }
+    else if (a === 'void' || a === 'unvoid') {
       if (a === 'void' && !await confirmBox('¿Anular este contrato? El enlace de firma dejará de funcionar.', 'Anular')) return;
-      try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(ctOpen.id)}/${a}`), a === 'void' ? 'Contrato anulado' : 'Contrato reactivado'); openContract(ctOpen.id); } catch { /* aviso ya mostrado */ }
+      try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/${a}`), a === 'void' ? 'Contrato anulado' : 'Contrato reactivado'); ctRefresh(); } catch { /* aviso ya mostrado */ }
     } else if (a === 'del') {
-      const c = ctOpen.contract;
-      if (!await confirmBox(`¿Eliminar «${c.title}»${c.status === 'signed' ? ' (FIRMADO)' : ''}? No se puede deshacer.`, 'Eliminar')) return;
+      if (!await confirmBox(`¿Eliminar «${c.title}»${c.status === 'signed' ? ' (FIRMADO)' : ''}? Se borra también su PDF. No se puede deshacer.`, 'Eliminar')) return;
       try { await ctAction(() => api('DELETE', `/api/contracts/${encodeURIComponent(c.id)}`), 'Contrato eliminado'); ctOpen = null; ctData = null; render(); } catch { /* aviso ya mostrado */ }
-    } else if (a === 'pdf') {
+    } else if (a === 'dl-orig') { HZPDF.download(ctOpen.bytes, `${c.title} (original).pdf`); }
+    else if (a === 'dl-file') { try { const r = await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/file`); HZPDF.download(new Uint8Array(await r.arrayBuffer()), `${c.title} (firmado).pdf`); } catch (err) { toast(err.message); } }
+    else if (a === 'dl-signed') {
       try {
-        const r = await fetch(`/api/contracts/${encodeURIComponent(ctOpen.id)}/file`, { headers: { Authorization: `Bearer ${auth.token}` }, cache: 'no-store' });
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || 'No se pudo abrir el PDF.');
-        window.open(URL.createObjectURL(await r.blob()), '_blank', 'noopener');
-      } catch (err) { toast(err.message); }
+        const out = await HZPDF.signed(ctOpen.bytes, { title: c.title, box: c.box, link: signUrl(c),
+          signed: { name: c.signer_name, email: c.signer_email, at: c.signed_at, ip: c.sign_ip, ua: c.sign_ua, signature: c.signature, hash: c.pdf_hash } });
+        HZPDF.download(out, `${c.title} (firmado).pdf`);
+      } catch (err) { toast('No se pudo crear el PDF firmado: ' + err.message); }
     }
-  });
-  let rteRange = null;
-  document.addEventListener('selectionchange', () => {
-    const sel = window.getSelection(), r = $('#rte');
-    if (r && sel.rangeCount && r.contains(sel.anchorNode)) rteRange = sel.getRangeAt(0).cloneRange();
-  });
-  document.addEventListener('mousedown', e => { if (e.target.closest('.rte-bar button')) e.preventDefault(); });
-  function rteApply(kind, val) {
-    const r = $('#rte');
-    if (!r || !val) return;
-    r.focus();
-    if (rteRange) { const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(rteRange); }
-    document.execCommand('styleWithCSS', false, true);
-    if (kind === 'fontSize') {
-      document.execCommand('fontSize', false, '7');
-      r.querySelectorAll('font[size="7"]').forEach(f => { f.removeAttribute('size'); f.style.fontSize = val + 'pt'; });
-      r.querySelectorAll('span[style*="xxx-large"]').forEach(sp => { sp.style.fontSize = val + 'pt'; });
-    } else if (kind === 'formatBlock') document.execCommand('formatBlock', false, val);
-    else document.execCommand(kind, false, val);
-  }
-  document.addEventListener('change', e => {
-    const s = e.target.closest?.('[data-cmdsel]');
-    if (!s) return;
-    rteApply(s.dataset.cmdsel, s.value);
-    if (s.tagName === 'SELECT') s.value = '';
-  });
-  document.addEventListener('paste', e => {
-    const r = e.target.closest?.('#rte');
-    if (!r) return;
-    const html = e.clipboardData?.getData('text/html');
-    if (!html) return;
-    e.preventDefault();
-    document.execCommand('insertHTML', false, cleanPaste(html));
   });
   document.addEventListener('change', async e => {
-    if (view !== 'contracts') return;
-    if (e.target.id === 'ct-tpl') {
-      const f = $('#ct-new');
-      ctOpen = { ...ctOpen, template_id: e.target.value, title: f.elements.title.value, artist: f.elements.artist.value, email: f.elements.email.value };
-      render();
+    if (view !== 'contracts' || busy) return;
+    const f = e.target.files?.[0];
+    if (!f) return;
+    const id = ctOpen?.contract?.id;
+    if (e.target.id === 'ct-pdf') {
+      e.target.value = '';
+      try { await ctAction(() => uploadPdf(id, f), 'PDF subido'); ctOpen.bytes = null; ctRefresh(); } catch { /* aviso ya mostrado */ }
     }
-    if (e.target.id === 'ct-pdf' && e.target.files[0]) {
-      const file = e.target.files[0]; e.target.value = '';
-      if (file.type !== 'application/pdf') { toast('Sube un archivo PDF.'); return; }
-      try {
-        await ctAction(async () => {
-          const r = await fetch(`/api/contracts/${encodeURIComponent(ctOpen.id)}/file`, { method: 'POST', headers: { Authorization: `Bearer ${auth.token}` }, body: file });
-          const j = await r.json().catch(() => ({}));
-          if (!r.ok) throw new GhError(j.message || 'No se pudo subir.', r.status);
-        }, 'PDF subido');
-        openContract(ctOpen.id);
-      } catch { /* aviso ya mostrado */ }
+    if (e.target.id === 'ct-arch') {
+      e.target.value = '';
+      if (!await confirmBox('¿Subir este PDF como contrato YA FIRMADO (firmado fuera de la web)? El contrato quedará como firmado.', 'Subir')) return;
+      try { await ctAction(() => authFetch(`/api/contracts/${encodeURIComponent(id)}/file`, { method: 'POST', body: f }), 'PDF firmado guardado'); ctRefresh(); } catch { /* aviso ya mostrado */ }
     }
   });
   document.addEventListener('submit', async e => {
     const f = e.target;
-    if (!['tpl-ed', 'ct-new', 'ct-ed'].includes(f.id)) return;
+    if (!['ct-new', 'ct-ed'].includes(f.id)) return;
     e.preventDefault(); e.stopImmediatePropagation();
     if (busy) return;
     try {
-      if (f.id === 'tpl-ed') {
-        await ctAction(() => api('POST', '/api/contracts/templates', { id: ctOpen.tpl.id, name: f.elements.name.value, html: rteHtml() }), ctOpen.tpl.id ? 'Plantilla guardada' : 'Plantilla creada');
-        ctOpen = null; ctTab = 'templates'; ctData = null; render();
-      } else if (f.id === 'ct-new') {
-        const vars = {};
-        for (const el of f.elements) if (el.name?.startsWith('var:')) vars[el.name.slice(4)] = el.value.trim();
-        if (!vars.artista && f.elements.artist.value) vars.artista = f.elements.artist.value.trim();
-        if (!vars.email && f.elements.email.value) vars.email = f.elements.email.value.trim();
-        const r = await ctAction(() => api('POST', '/api/contracts', { template_id: f.elements.template_id.value || undefined, title: f.elements.title.value, artist: f.elements.artist.value, email: f.elements.email.value, vars, html: '' }), 'Contrato creado');
-        ctData = null; openContract(r.id);
+      if (f.id === 'ct-new') {
+        const file = f.elements.file.files[0];
+        if (!file) { const b = $('#ed-error'); b.textContent = 'Elige el PDF del contrato.'; b.hidden = false; return; }
+        const r = await ctAction(() => api('POST', '/api/contracts', { title: f.elements.title.value, artist: f.elements.artist.value, email: f.elements.email.value }));
+        await ctAction(() => uploadPdf(r.id, file), 'Contrato creado');
+        openContract(r.id); loadContracts();
       } else {
         const c = ctOpen.contract;
-        await ctAction(() => api('POST', '/api/contracts', { id: c.id, title: f.elements.title.value, artist: f.elements.artist.value, email: f.elements.email.value, html: rteHtml(), notes: f.elements.notes.value, vars: c.vars }), 'Contrato guardado');
-        openContract(c.id);
+        await ctAction(() => api('POST', '/api/contracts', { id: c.id, title: f.elements.title?.value ?? c.title, artist: f.elements.artist?.value ?? c.artist, email: f.elements.email?.value ?? c.email, notes: f.elements.notes.value }), 'Guardado');
+        ctRefresh();
       }
     } catch { /* aviso ya mostrado */ }
   }, true);

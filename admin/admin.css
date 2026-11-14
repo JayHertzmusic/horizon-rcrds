@@ -504,3 +504,14 @@ select:focus { border-color: rgba(var(--accent-rgb), .7); }
 .typed-sig { font: italic 400 32px/1.2 'Brush Script MT', 'Segoe Script', cursive; }
 .chip[data-ins] { cursor: pointer; font-family: inherit; background: rgba(var(--accent-rgb), .08); }
 @media (max-width: 760px) { .row.ct { grid-template-columns: minmax(0, 1fr) auto; } .row.ct .sm-txt { display: none; } .row2.wide { grid-template-columns: 1fr; } }
+
+/* Contratos en PDF */
+.head-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.pdf-viewer { padding: 20px 12px; background: #2b2b2b; border: 1px solid var(--line-2); border-radius: 8px; max-height: 80vh; overflow: auto; }
+.pdf-box { border: 2px dashed rgba(var(--accent-rgb), .95); background: rgba(var(--accent-rgb), .14); border-radius: 3px; display: flex; flex-direction: column; justify-content: flex-end; }
+.pdf-box span { margin: auto; font: 700 11px/1 'Barlow', sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #6d4fd6; }
+.pdf-box.is-signed { border: 0; background: none; }
+.pdf-typed { font: italic 400 26px/1 'Brush Script MT', 'Segoe Script', cursive; color: #0d0d33; white-space: nowrap; overflow: hidden; }
+.pdf-sig-label { font: 400 8px/1.1 Arial, sans-serif; color: #444; }
+.ct-step { margin: 0 0 12px; padding: 12px 14px; border: 1px solid rgba(var(--accent-rgb), .45); border-radius: 6px; background: rgba(var(--accent-rgb), .07); font-size: 14px; }
+.ct-step.done { border-color: rgba(61, 220, 132, .4); background: rgba(61, 220, 132, .05); }

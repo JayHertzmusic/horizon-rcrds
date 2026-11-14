@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; base-uri 'none'; form-action 'none'">
 <title>Contract — HORIZON RCRDS</title>
 <link rel="icon" type="image/png" href="/assets/favicon_icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -16,7 +16,7 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; }
   body { background: var(--bg); color: var(--text); font: 400 16px/1.6 'Barlow', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-  main { width: min(860px, 100%); margin: 0 auto; padding: 40px 16px 96px; }
+  main { width: min(960px, 100%); margin: 0 auto; padding: 40px 16px 96px; }
   .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
   .home { display: inline-flex; align-items: center; gap: 12px; color: #fff; text-decoration: none; }
   .home img { height: 32px; }
@@ -64,6 +64,14 @@
     h1 { color: #111; font-size: 28px; }
     .doc { box-shadow: none; width: auto; }
   }
+  .viewer { margin: 0 -16px; padding: 18px 16px; background: #2b2b2b; border-radius: 8px; }
+  .pdf-box { border: 2px dashed rgba(167,139,250,.9); background: rgba(167,139,250,.12); border-radius: 3px; display: flex; flex-direction: column; justify-content: flex-end; }
+  .pdf-box span { margin: auto; font: 700 11px/1 'Barlow', sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #6d4fd6; }
+  .pdf-box.is-signed { border: 0; background: none; }
+  .pdf-typed { font: italic 400 26px/1 'Brush Script MT', 'Segoe Script', cursive; color: #0d0d33; white-space: nowrap; overflow: hidden; }
+  .pdf-sig-label { font: 400 8px/1.1 Arial, sans-serif; color: #444; }
+  .proof { margin-top: 14px; padding: 14px 16px; border: 1px solid rgba(61,220,132,.4); border-radius: 8px; font-size: 14px; color: var(--text); }
+  .proof code { font-size: 11px; color: var(--muted); word-break: break-all; }
 </style>
 </head>
 <body>
@@ -71,6 +79,9 @@
   <div class="top"><a class="home" href="/"><img src="/assets/logo.png" alt=""><span>HORIZON RCRDS</span></a><span id="status"></span></div>
   <div id="root"><p class="msg">Loading…</p></div>
 </main>
-<script src="/sign.js?v=2"></script>
+<script src="/assets/vendor/pdf/pdf.min.js"></script>
+<script src="/assets/vendor/pdf/pdf-lib.min.js"></script>
+<script src="/contract-pdf.js?v=2"></script>
+<script src="/sign.js?v=3"></script>
 </body>
 </html>

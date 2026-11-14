@@ -1695,7 +1695,7 @@
     return `
       <div class="head"><div><p class="eyebrow">Firmas</p><h1>CONTRATOS <span class="count">${list.length}</span></h1></div>
         <div class="head-btns"><a class="btn ghost" href="${CONTRACTS_DOC}" target="_blank" rel="noopener">Abrir contratos en Google Docs ↗</a>${ed ? '<button type="button" class="btn primary" data-ct="new">+ Nuevo contrato</button>' : ''}</div></div>
-      <p class="info lead">Los contratos se editan en vuestro Google Doc. Para cada artista: rellena sus datos en Docs → <b>Archivo → Descargar → PDF</b> → súbelo aquí con «Nuevo contrato». El artista firma exactamente ese PDF.</p>
+      <p class="info lead">Cada contrato está enlazado a su pestaña del Google Doc: ábrelo, pulsa <b>Editar texto</b> para cambiar nombres, track, fechas… aquí mismo, y luego <b>Generar PDF desde el Doc</b>. El artista firma exactamente ese PDF.</p>
       <ol class="list">${list.length ? list.map(c => `
         <li class="row ct" data-ctid="${esc(c.id)}">
           <span class="meta"><b>${esc(c.title)}</b><span>${esc(c.artist || '')}${c.email ? ' · ' + esc(c.email) : ''}</span></span>
@@ -1714,7 +1714,8 @@
         <div class="field"><label for="ct-title">Título</label><input id="ct-title" name="title" maxlength="160" placeholder="p. ej. Release Contract — Artista — Tema" autocomplete="off"></div>
         <div class="row2 wide"><div class="field"><label for="ct-artist">Artista</label><input id="ct-artist" name="artist" maxlength="160" autocomplete="off"></div>
           <div class="field"><label for="ct-email">Email del artista</label><input id="ct-email" name="email" type="email" maxlength="160" autocomplete="off"></div></div>
-        <div class="field"><label for="ct-file">PDF del contrato (descargado de Google Docs)</label><input id="ct-file" name="file" type="file" accept="application/pdf"></div>
+        <div class="field"><label for="ct-doc">Pestaña del Google Doc (recomendado)</label><input id="ct-doc" name="doc" placeholder="docs.google.com/document/d/…?tab=…" spellcheck="false" autocomplete="off"></div>
+        <div class="field"><label for="ct-file">…o el PDF ya descargado</label><input id="ct-file" name="file" type="file" accept="application/pdf"></div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions"><button type="submit" class="btn primary">Crear contrato</button><button type="button" class="btn ghost" data-ct="back">Cancelar</button></div>
       </form>`;
@@ -1731,6 +1732,7 @@
           <div class="row2 wide"><div class="field"><label for="c-title">Título</label><input id="c-title" name="title" value="${esc(c.title)}" maxlength="160" autocomplete="off"></div>
             <div class="field"><label for="c-artist">Artista</label><input id="c-artist" name="artist" value="${esc(c.artist)}" maxlength="160" autocomplete="off"></div></div>
           ` : ''}
+        ${docBlock(c, ed && !signed)}
         ${c.pdf ? signersBlock(c, ed && !signed) : ''}
         ${c.pdf ? `
           <div class="pdf-viewer" id="pdf-viewer"><p class="info">Cargando el PDF…</p></div>` : `<p class="ct-step">Sube el PDF del contrato (descargado de Google Docs).</p>`}
@@ -1748,6 +1750,40 @@
           ${ed && (!signed || auth.user.owner) ? '<button type="button" class="btn danger push" data-ct="del">Eliminar</button>' : ''}
         </div>
       </form>`;
+  }
+  /* El texto del contrato se edita en su pestaña del Google Doc, dentro del panel; el PDF lo genera Google. */
+  const docEditUrl = u => { try { const x = new URL(u); x.searchParams.set('authuser', 'contacthorizonids@gmail.com'); x.pathname = x.pathname.replace(/\/(edit|view|preview)?$/, '/edit'); return x.href; } catch { return ''; } };
+  function docBlock(c, ed) {
+    const open = !!ctOpen.docOpen;
+    if (!ed && !c.doc_url) return '';
+    return `
+      <div class="docbox">
+        <div class="docbox-head">
+          <b>Texto del contrato (Google Docs)</b>
+          ${ed ? `<input class="doc-url" value="${esc(c.doc_url)}" placeholder="Enlace de la pestaña del Google Doc (docs.google.com/document/d/…?tab=…)" aria-label="Enlace de la pestaña del Google Doc" spellcheck="false">` : `<span class="muted">${c.doc_url ? 'Enlazado a su pestaña del Doc' : ''}</span>`}
+          <span class="docbox-btns">
+            ${c.doc_url ? `<button type="button" class="btn ghost sm" data-ct="doc-toggle">${open ? 'Ocultar editor' : 'Editar texto'}</button><a class="btn ghost sm" href="${esc(docEditUrl(c.doc_url))}" target="_blank" rel="noopener">Abrir aparte ↗</a>` : ''}
+            ${ed && c.doc_url ? '<button type="button" class="btn primary sm" data-ct="doc-pdf">Generar PDF desde el Doc</button>' : ''}
+          </span>
+        </div>
+        ${open && c.doc_url ? `<div class="doc-frame"><iframe src="${esc(docEditUrl(c.doc_url))}" title="Editor de Google Docs" allow="clipboard-read; clipboard-write"></iframe>
+          <p class="info">Los cambios se guardan solos en vuestro Google Doc. Cuando termines, pulsa <b>Generar PDF desde el Doc</b> para que el contrato que firma el artista sea el nuevo. Si aquí te pide iniciar sesión, usa «Abrir aparte» (o permite las cookies de Google para horizonrcrds.com en el navegador).</p></div>` : ''}
+      </div>`;
+  }
+  // permiso de Google (solo lectura de Docs) pedido en el momento, con la cuenta de Horizon; no se guarda
+  let gToken = null;
+  async function googleToken() {
+    if (gToken && gToken.exp > Date.now() + 60e3) return gToken.value;
+    serverCfg = serverCfg || await api('GET', '/api/auth/config');
+    await loadGis();
+    return new Promise((ok, ko) => {
+      const client = google.accounts.oauth2.initTokenClient({
+        client_id: serverCfg.clientId, scope: 'https://www.googleapis.com/auth/drive.readonly', hint: 'contacthorizonids@gmail.com', prompt: '',
+        callback: r => { if (r.error || !r.access_token) return ko(new GhError('Google no ha dado permiso. Elige la cuenta de Horizon y acepta.')); gToken = { value: r.access_token, exp: Date.now() + (Number(r.expires_in) || 3000) * 1000 }; ok(r.access_token); },
+        error_callback: () => ko(new GhError('Se cerró la ventana de Google sin dar permiso.')),
+      });
+      client.requestAccessToken();
+    });
   }
   function signersBlock(c, ed) {
     const act = ctOpen.active ?? c.signers.findIndex(x => !x.box && !x.signed);
@@ -1790,6 +1826,19 @@
       ctOpen.view = await HZPDF.render(box, ctOpen.bytes, { marks: ctMarks(), maxWidth: 820, onPage: ed ? (page, x, y) => placeBox(page, x, y) : null });
     } catch (e) { box.innerHTML = `<p class="login-error">${esc(e.message)}</p>`; }
   }
+  // actualiza la lista de firmantes, los botones y los recuadros sin volver a pintar la página
+  function ctSoftUpdate() {
+    const c = ctOpen?.contract;
+    if (!c) return;
+    const ed = ctCanEdit() && c.status !== 'signed';
+    const keep = [...document.querySelectorAll('.signer')].map(el => ({ id: el.dataset.sg, label: el.querySelector('.sg-label')?.value, email: el.querySelector('.sg-email')?.value }));
+    for (const k of keep) { const x = c.signers.find(y => y.id === k.id); if (x && k.label !== undefined) { x.label = k.label; x.email = k.email; } }
+    const el = $('.signers');
+    if (el) el.outerHTML = signersBlock(c, ed);
+    if (ctOpen.view) HZPDF.drawMarks(ctOpen.view.pages, ctMarks());
+    const send = $('[data-ct=send]'), canSend = ed && c.status !== 'void' && c.pdf && c.signers.every(x => x.box) && c.signers.some(x => !x.token);
+    if (canSend && !send) $('.ed-actions')?.insertAdjacentHTML('afterbegin', '<button type="button" class="btn ghost" data-ct="send">Preparar enlaces de firma</button>');
+  }
   function ctMarks() {
     const c = ctOpen.contract, act = ctOpen.active ?? c.signers.findIndex(x => !x.box && !x.signed);
     return c.signers.map((x, i) => x.signed
@@ -1811,7 +1860,7 @@
       toast(`Firma de ${sg.label || 'firmante'} colocada`);
       const next = c.signers.findIndex(s => !s.box && !s.signed);
       ctOpen.active = next >= 0 ? next : act;
-      ctRefresh();
+      ctSoftUpdate();   // sin redibujar la página ni el PDF (no se pierde la posición)
     } catch (e) { toast(e.message); sg.box = old; HZPDF.drawMarks(ctOpen.view.pages, ctMarks()); }
   }
   async function pdfInfo(file) {
@@ -1845,7 +1894,17 @@
     if (a === 'back') { ctOpen = null; render(); loadContracts(); }
     else if (a === 'new') { ctOpen = { mode: 'new' }; render(); $('#ct-title')?.focus(); }
     else if (a === 'open') openContract(t.closest('[data-ctid]').dataset.ctid);
-    else if (a === 'sg-pick') { ctOpen.active = Number(t.closest('[data-i]').dataset.i); render(); toast('Haz clic en el documento donde firma'); }
+    else if (a === 'doc-toggle') { ctOpen.docOpen = !ctOpen.docOpen; const el = $('.docbox'); if (el) el.outerHTML = docBlock(c, ctCanEdit() && c.status !== 'signed'); }
+    else if (a === 'doc-pdf') {
+      try {
+        const tok = await googleToken();
+        const r = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/from-doc`, { token: tok }), 'PDF actualizado desde el Doc');
+        ctOpen.bytes = null;
+        if (r?.changedPages) toast('El número de páginas ha cambiado: vuelve a colocar las firmas.');
+        ctRefresh();
+      } catch (err) { toast(err.message); }
+    }
+    else if (a === 'sg-pick') { ctOpen.active = Number(t.closest('[data-i]').dataset.i); ctSoftUpdate(); toast('Haz clic en el documento donde firma'); }
     else if (a === 'sg-copy') { const sg = c.signers[Number(t.closest('[data-i]').dataset.i)]; try { await navigator.clipboard.writeText(signerUrl(sg)); toast('Enlace copiado'); } catch { toast(signerUrl(sg)); } }
     else if (a === 'sg-add') { try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/signers`, { action: 'add' }), 'Firmante añadido'); ctOpen.active = c.signers.length; ctRefresh(); } catch { /* aviso ya mostrado */ } }
     else if (a === 'sg-del') {
@@ -1872,6 +1931,11 @@
   });
   document.addEventListener('change', async e => {
     if (view !== 'contracts' || busy) return;
+    if (e.target.classList?.contains('doc-url')) {
+      const c = ctOpen?.contract;
+      try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/doc`, { url: e.target.value.trim() }), 'Enlace del Doc guardado'); c.doc_url = e.target.value.trim(); const el = $('.docbox'); if (el) el.outerHTML = docBlock(c, true); } catch { /* aviso ya mostrado */ }
+      return;
+    }
     const f = e.target.files?.[0];
     if (!f) return;
     const id = ctOpen?.contract?.id;
@@ -1892,10 +1956,12 @@
     if (busy) return;
     try {
       if (f.id === 'ct-new') {
-        const file = f.elements.file.files[0];
-        if (!file) { const b = $('#ed-error'); b.textContent = 'Elige el PDF del contrato.'; b.hidden = false; return; }
+        const file = f.elements.file.files[0], doc = f.elements.doc.value.trim();
+        if (!file && !doc) { const b = $('#ed-error'); b.textContent = 'Pega el enlace de la pestaña del Google Doc o elige el PDF.'; b.hidden = false; return; }
         const r = await ctAction(() => api('POST', '/api/contracts', { title: f.elements.title.value, artist: f.elements.artist.value, email: f.elements.email.value }));
-        await ctAction(() => uploadPdf(r.id, file), 'Contrato creado');
+        if (doc) await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/doc`, { url: doc }));
+        if (file) await ctAction(() => uploadPdf(r.id, file), 'Contrato creado');
+        else { try { const tok = await googleToken(); await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, { token: tok }), 'Contrato creado desde el Doc'); } catch (err) { toast(err.message); } }
         openContract(r.id); loadContracts();
       } else {
         const c = ctOpen.contract;

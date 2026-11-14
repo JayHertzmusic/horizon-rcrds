@@ -27,7 +27,7 @@ export const CONTRACT_SCHEMA = [
   `CREATE INDEX IF NOT EXISTS contract_signers_c ON contract_signers (contract_id, idx)`,
 ];
 // columnas del PDF (añadidas después: si ya existen, no pasa nada)
-export const CONTRACT_COLUMNS = ['pdf TEXT', 'pdf_hash TEXT', 'pdf_pages INTEGER', 'pdf_size INTEGER', 'sign_box TEXT'];
+export const CONTRACT_COLUMNS = ['pdf TEXT', 'pdf_hash TEXT', 'pdf_pages INTEGER', 'pdf_size INTEGER', 'sign_box TEXT', 'doc_url TEXT'];
 
 function box(v) {
   const b = typeof v === 'string' ? parse(v) : v;
@@ -42,7 +42,7 @@ const signerOut = (r, full) => ({
 });
 const out = (c, signers, full) => ({
   id: c.id, title: c.title, artist: c.artist || '', email: c.email || '', status: c.status, notes: c.notes || '',
-  pdf: !!c.pdf, pdf_hash: c.pdf_hash || '', pdf_pages: c.pdf_pages || 0, pdf_size: c.pdf_size || 0, file: !!c.file,
+  pdf: !!c.pdf, pdf_hash: c.pdf_hash || '', pdf_pages: c.pdf_pages || 0, pdf_size: c.pdf_size || 0, file: !!c.file, doc_url: c.doc_url || '',
   created_at: c.created_at, updated_at: c.updated_at, sent_at: c.sent_at, signed_at: c.signed_at,
   signers: signers.map(r => signerOut(r, full)),
 });
@@ -59,6 +59,12 @@ async function signersOf(env, c) {
   return rows;
 }
 
+function parseDoc(u) {
+  const m = String(u).match(/^https:\/\/docs\.google\.com\/document\/(?:u\/\d+\/)?d\/([\w-]{20,})/);
+  if (!m) return null;
+  const t = String(u).match(/[?&#]tab=(t\.[\w]+)/);
+  return { id: m[1], tab: t ? t[1] : '' };
+}
 async function pdfBody(req) {
   const buf = await req.arrayBuffer();
   if (!buf.byteLength || buf.byteLength > MAX_PDF) throw new ContractError(400, 'El PDF no es válido o pesa más de 20 MB.');
@@ -110,7 +116,7 @@ export async function contractsApi(req, env, s, url, can, audit) {
     await audit(`Creó el contrato «${title}»`);
     return { ok: true, id };
   }
-  const mm = p.match(/^\/api\/contracts\/([\w-]+)(?:\/(pdf|box|signers|send|void|unvoid|file))?$/);
+  const mm = p.match(/^\/api\/contracts\/([\w-]+)(?:\/(pdf|box|signers|send|void|unvoid|file|doc|from-doc))?$/);
   if (!mm) throw new ContractError(404, 'No encontrado.');
   const c = await DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(mm[1]).first();
   if (!c) throw new ContractError(404, 'Ese contrato ya no existe.');
@@ -142,6 +148,39 @@ export async function contractsApi(req, env, s, url, can, audit) {
     if (!(c.pdf_pages && c.pdf_pages === pages)) await DB.prepare('UPDATE contract_signers SET box = NULL WHERE contract_id = ?').bind(c.id).run();
     await audit(`Subió el PDF del contrato «${c.title}» (${pages} páginas)`);
     return { ok: true };
+  }
+  if (mm[2] === 'doc' && m === 'POST') {
+    // pestaña del Google Doc de la que sale este contrato
+    edit();
+    const u = String((parse(await req.text()) || {}).url || '').trim();
+    if (u && !parseDoc(u)) throw new ContractError(400, 'Pega el enlace de la pestaña del Google Doc (docs.google.com/document/d/…?tab=…).');
+    await DB.prepare('UPDATE contracts SET doc_url = ?, updated_at = ? WHERE id = ?').bind(u || null, now(), c.id).run();
+    return { ok: true };
+  }
+  if (mm[2] === 'from-doc' && m === 'POST') {
+    // el PDF lo genera Google desde la pestaña del Doc (idéntico). El token de Google lo da el navegador del owner
+    // en ese momento (no se guarda).
+    edit();
+    if (signed || anySigned) throw new ContractError(409, 'Alguien ya ha firmado este contrato: el PDF no se puede cambiar.');
+    const d = parseDoc(c.doc_url || '');
+    if (!d) throw new ContractError(400, 'Este contrato no está enlazado a ninguna pestaña del Google Doc.');
+    const tk = String((parse(await req.text()) || {}).token || '');
+    if (!/^[\w.\-~+/=]{20,4096}$/.test(tk)) throw new ContractError(400, 'Falta el permiso de Google.');
+    const r = await fetch(`https://docs.google.com/document/d/${d.id}/export?format=pdf${d.tab ? '&tab=' + d.tab : ''}`, { headers: { Authorization: `Bearer ${tk}` } });
+    if (r.status === 401 || r.status === 403) throw new ContractError(403, 'Google no ha dado permiso para leer ese Doc. Vuelve a conectar con la cuenta de Horizon.');
+    if (!r.ok) throw new ContractError(502, `Google no ha podido generar el PDF (${r.status}).`);
+    const buf = await r.arrayBuffer();
+    if (new TextDecoder().decode(buf.slice(0, 5)) !== '%PDF-') throw new ContractError(502, 'Google no ha devuelto un PDF. Revisa el enlace de la pestaña.');
+    if (buf.byteLength > MAX_PDF) throw new ContractError(400, 'El PDF pesa más de 20 MB.');
+    const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map(b => b.toString(16).padStart(2, '0')).join('');
+    const pages = Math.max(1, (new TextDecoder('latin1').decode(buf).match(/\/Type\s*\/Page[^s]/g) || []).length);
+    const key = `contracts/${c.id}-${hash.slice(0, 12)}.pdf`;
+    await env.FILES.put(key, buf, { metadata: { type: 'application/pdf', at: now() } });
+    if (c.pdf && c.pdf !== key) await env.FILES.delete(c.pdf);
+    await DB.prepare('UPDATE contracts SET pdf = ?, pdf_hash = ?, pdf_pages = ?, pdf_size = ?, updated_at = ? WHERE id = ?').bind(key, hash, pages, buf.byteLength, now(), c.id).run();
+    if (!(c.pdf_pages && c.pdf_pages === pages)) await DB.prepare('UPDATE contract_signers SET box = NULL WHERE contract_id = ?').bind(c.id).run();
+    await audit(`Generó el PDF de «${c.title}» desde el Google Doc (${pages} páginas)`);
+    return { ok: true, pages, changedPages: !(c.pdf_pages && c.pdf_pages === pages) };
   }
   if (mm[2] === 'pdf' && m === 'GET') {
     if (!c.pdf) throw new ContractError(404, 'Este contrato aún no tiene PDF.');

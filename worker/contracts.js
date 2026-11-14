@@ -68,8 +68,8 @@ function parseDoc(u) {
 }
 async function pdfBody(req) {
   const buf = await req.arrayBuffer();
-  if (!buf.byteLength || buf.byteLength > MAX_PDF) throw new ContractError(400, 'El PDF no es válido o pesa más de 20 MB.');
-  if (new TextDecoder().decode(buf.slice(0, 5)) !== '%PDF-') throw new ContractError(400, 'Sube un archivo PDF.');
+  if (!buf.byteLength || buf.byteLength > MAX_PDF) throw new ContractError(400, 'The PDF is not valid or is larger than 20 MB.');
+  if (new TextDecoder().decode(buf.slice(0, 5)) !== '%PDF-') throw new ContractError(400, 'Upload a PDF file.');
   return buf;
 }
 const pdfResponse = (buf, name) => new Response(buf, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${name}"`, 'Cache-Control': 'no-store' } });
@@ -77,8 +77,8 @@ const pdfResponse = (buf, name) => new Response(buf, { headers: { 'Content-Type'
 /* Panel (con sesión). can(act) = permiso «contracts» del rol; audit(texto) apunta en el historial. */
 export async function contractsApi(req, env, s, url, can, audit) {
   const DB = env.DB, m = req.method, p = url.pathname;
-  if (!can('view')) throw new ContractError(403, 'Tu rol no tiene Contratos.');
-  const edit = () => { if (!can('edit') || s.sync) throw new ContractError(403, 'Tu rol solo puede ver los contratos.'); };
+  if (!can('view')) throw new ContractError(403, 'Your role has no Contracts access.');
+  const edit = () => { if (!can('edit') || s.sync) throw new ContractError(403, 'Your role can only view contracts.'); };
 
   if (p === '/api/contracts' && m === 'GET') {
     const rows = (await DB.prepare('SELECT * FROM contracts ORDER BY created_at DESC').all()).results;
@@ -89,12 +89,12 @@ export async function contractsApi(req, env, s, url, can, audit) {
     edit();
     const b = parse(await req.text()) || {};
     const title = clean(b.title, 160);
-    if (!title) throw new ContractError(400, 'Ponle un título al contrato.');
+    if (!title) throw new ContractError(400, 'Give the contract a title.');
     const email = clean(b.email, 160).toLowerCase();
-    if (email && !EMAIL.test(email)) throw new ContractError(400, 'El email del artista no es válido.');
+    if (email && !EMAIL.test(email)) throw new ContractError(400, 'The artist email is not valid.');
     if (b.id) {
       const c = await DB.prepare('SELECT status FROM contracts WHERE id = ?').bind(String(b.id)).first();
-      if (!c) throw new ContractError(404, 'Ese contrato ya no existe.');
+      if (!c) throw new ContractError(404, 'That contract no longer exists.');
       if (c.status === 'signed') {   // firmado: solo las notas internas
         await DB.prepare('UPDATE contracts SET notes = ?, updated_at = ? WHERE id = ?').bind(clean(b.notes, 2000), now(), String(b.id)).run();
         return { ok: true, id: b.id };
@@ -104,18 +104,18 @@ export async function contractsApi(req, env, s, url, can, audit) {
       // datos de cada firmante (nombre del hueco y email)
       if (Array.isArray(b.signers)) for (const x of b.signers.slice(0, MAX_SIGNERS)) {
         const em = clean(x?.email, 160).toLowerCase();
-        if (em && !EMAIL.test(em)) throw new ContractError(400, `El email de «${clean(x?.label, 60) || 'firmante'}» no es válido.`);
+        if (em && !EMAIL.test(em)) throw new ContractError(400, `The email of “${clean(x?.label, 60) || 'signer'}” is not valid.`);
         await DB.prepare('UPDATE contract_signers SET label = ?, email = ? WHERE id = ? AND contract_id = ? AND signed_at IS NULL').bind(clean(x?.label, 60) || null, em || null, String(x?.id || ''), String(b.id)).run();
       }
       if (b.vars && typeof b.vars === 'object') { const v = {}; for (const [k, x] of Object.entries(b.vars).slice(0, 60)) v[clean(k, 60)] = clean(x, 500); await DB.prepare('UPDATE contracts SET vars = ? WHERE id = ?').bind(JSON.stringify(v), String(b.id)).run(); }
-      await audit(`Editó los datos del contrato «${title}»`);
+      await audit(`Edited the details of contract “${title}”`);
       return { ok: true, id: b.id };
     }
     const id = 'c_' + crypto.randomUUID().slice(0, 10);
     const kind = b.kind === 'template' ? 'template' : null;
     // contrato a partir de una plantilla: hereda sus firmantes (nombre del hueco y dónde firma)
     const tpl = b.template ? await DB.prepare(`SELECT * FROM contracts WHERE id = ? AND kind = 'template'`).bind(String(b.template)).first() : null;
-    if (b.template && !tpl) throw new ContractError(404, 'Esa plantilla ya no existe.');
+    if (b.template && !tpl) throw new ContractError(404, 'That template no longer exists.');
     const vars = {};
     if (b.vars && typeof b.vars === 'object') for (const [k, v] of Object.entries(b.vars).slice(0, 60)) vars[clean(k, 60)] = clean(v, 500);
     await DB.prepare('INSERT INTO contracts (id, title, artist, email, status, notes, created_by, created_at, updated_at, kind, template_id, vars, pdf_pages) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
@@ -127,13 +127,13 @@ export async function contractsApi(req, env, s, url, can, audit) {
     } else {
       await DB.prepare('INSERT INTO contract_signers (id, contract_id, idx, label, email) VALUES (?, ?, 0, ?, ?)').bind('s_' + crypto.randomUUID().slice(0, 10), id, 'Artista', kind ? null : email || null).run();
     }
-    await audit(kind ? `Creó la plantilla «${title}»` : `Creó el contrato «${title}»${tpl ? ` desde la plantilla «${tpl.title}»` : ''}`);
+    await audit(kind ? `Created the template “${title}”` : `Created the contract “${title}”${tpl ? ` from the template “${tpl.title}”` : ''}`);
     return { ok: true, id };
   }
   const mm = p.match(/^\/api\/contracts\/([\w-]+)(?:\/(pdf|box|signers|send|void|unvoid|file|doc|from-doc))?$/);
-  if (!mm) throw new ContractError(404, 'No encontrado.');
+  if (!mm) throw new ContractError(404, 'Not found.');
   const c = await DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(mm[1]).first();
-  if (!c) throw new ContractError(404, 'Ese contrato ya no existe.');
+  if (!c) throw new ContractError(404, 'That contract no longer exists.');
   const signed = c.status === 'signed';
   const sg = await signersOf(env, c);
   const anySigned = sg.some(r => r.signed_at);
@@ -141,33 +141,33 @@ export async function contractsApi(req, env, s, url, can, audit) {
   if (!mm[2] && m === 'GET') return { contract: out(c, sg, true) };
   if (!mm[2] && m === 'DELETE') {
     edit();
-    if ((signed || anySigned) && !s.owner) throw new ContractError(403, 'Solo los owners pueden borrar un contrato firmado.');
+    if ((signed || anySigned) && !s.owner) throw new ContractError(403, 'Only owners can delete a signed contract.');
     await DB.batch([DB.prepare('DELETE FROM contract_signers WHERE contract_id = ?').bind(c.id), DB.prepare('DELETE FROM contracts WHERE id = ?').bind(c.id)]);
     for (const k of [c.pdf, c.file]) if (k) await env.FILES.delete(k);
-    await audit(`Eliminó el contrato «${c.title}»${signed ? ' (firmado)' : ''}`);
+    await audit(`Deleted the contract “${c.title}”${signed ? ' (signed)' : ''}`);
     return { ok: true };
   }
   if (mm[2] === 'pdf' && m === 'POST') {
     // el PDF exacto exportado de Google Docs. La huella SHA-256 la calcula el navegador del owner al subirlo.
     edit();
-    if (signed || anySigned) throw new ContractError(409, 'Alguien ya ha firmado este contrato: el PDF no se puede cambiar.');
+    if (signed || anySigned) throw new ContractError(409, 'Someone already signed this contract: the PDF can’t be changed.');
     const hash = String(url.searchParams.get('hash') || '');
     const pages = Math.max(1, Math.min(500, Number(url.searchParams.get('pages')) || 1));
-    if (!HASH.test(hash)) throw new ContractError(400, 'Falta la huella del PDF.');
+    if (!HASH.test(hash)) throw new ContractError(400, 'PDF fingerprint missing.');
     const buf = await pdfBody(req);
     const key = `contracts/${c.id}-${hash.slice(0, 12)}.pdf`;
     await env.FILES.put(key, buf, { metadata: { type: 'application/pdf', at: now() } });
     if (c.pdf && c.pdf !== key) await env.FILES.delete(c.pdf);
     await DB.prepare('UPDATE contracts SET pdf = ?, pdf_hash = ?, pdf_pages = ?, pdf_size = ?, updated_at = ? WHERE id = ?').bind(key, hash, pages, buf.byteLength, now(), c.id).run();
     if (!(c.pdf_pages && c.pdf_pages === pages)) await DB.prepare('UPDATE contract_signers SET box = NULL WHERE contract_id = ?').bind(c.id).run();
-    await audit(`Subió el PDF del contrato «${c.title}» (${pages} páginas)`);
+    await audit(`Uploaded the PDF of contract “${c.title}” (${pages} pages)`);
     return { ok: true };
   }
   if (mm[2] === 'doc' && m === 'POST') {
     // pestaña del Google Doc de la que sale este contrato
     edit();
     const u = String((parse(await req.text()) || {}).url || '').trim();
-    if (u && !parseDoc(u)) throw new ContractError(400, 'Pega el enlace de la pestaña del Google Doc (docs.google.com/document/d/…?tab=…).');
+    if (u && !parseDoc(u)) throw new ContractError(400, 'Paste the Google Doc tab link (docs.google.com/document/d/…?tab=…).');
     await DB.prepare('UPDATE contracts SET doc_url = ?, updated_at = ? WHERE id = ?').bind(u || null, now(), c.id).run();
     return { ok: true };
   }
@@ -175,17 +175,17 @@ export async function contractsApi(req, env, s, url, can, audit) {
     // el PDF lo genera Google desde la pestaña del Doc (idéntico). El token de Google lo da el navegador del owner
     // en ese momento (no se guarda).
     edit();
-    if (signed || anySigned) throw new ContractError(409, 'Alguien ya ha firmado este contrato: el PDF no se puede cambiar.');
+    if (signed || anySigned) throw new ContractError(409, 'Someone already signed this contract: the PDF can’t be changed.');
     const d = parseDoc(c.doc_url || '');
-    if (!d) throw new ContractError(400, 'Este contrato no está enlazado a ninguna pestaña del Google Doc.');
+    if (!d) throw new ContractError(400, 'This contract is not linked to a Google Doc tab.');
     const tk = String((parse(await req.text()) || {}).token || '');
-    if (!/^[\w.\-~+/=]{20,4096}$/.test(tk)) throw new ContractError(400, 'Falta el permiso de Google.');
+    if (!/^[\w.\-~+/=]{20,4096}$/.test(tk)) throw new ContractError(400, 'Google permission missing.');
     const r = await fetch(`https://docs.google.com/document/d/${d.id}/export?format=pdf${d.tab ? '&tab=' + d.tab : ''}`, { headers: { Authorization: `Bearer ${tk}` } });
-    if (r.status === 401 || r.status === 403) throw new ContractError(403, 'Google no ha dado permiso para leer ese Doc. Vuelve a conectar con la cuenta de Horizon.');
-    if (!r.ok) throw new ContractError(502, `Google no ha podido generar el PDF (${r.status}).`);
+    if (r.status === 401 || r.status === 403) throw new ContractError(403, 'Google did not allow reading that Doc. Connect again with the Horizon account.');
+    if (!r.ok) throw new ContractError(502, `Google could not generate the PDF (${r.status}).`);
     const buf = await r.arrayBuffer();
-    if (new TextDecoder().decode(buf.slice(0, 5)) !== '%PDF-') throw new ContractError(502, 'Google no ha devuelto un PDF. Revisa el enlace de la pestaña.');
-    if (buf.byteLength > MAX_PDF) throw new ContractError(400, 'El PDF pesa más de 20 MB.');
+    if (new TextDecoder().decode(buf.slice(0, 5)) !== '%PDF-') throw new ContractError(502, 'Google did not return a PDF. Check the tab link.');
+    if (buf.byteLength > MAX_PDF) throw new ContractError(400, 'The PDF is larger than 20 MB.');
     const hash = [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map(b => b.toString(16).padStart(2, '0')).join('');
     const pages = Math.max(1, (new TextDecoder('latin1').decode(buf).match(/\/Type\s*\/Page[^s]/g) || []).length);
     const key = `contracts/${c.id}-${hash.slice(0, 12)}.pdf`;
@@ -193,32 +193,32 @@ export async function contractsApi(req, env, s, url, can, audit) {
     if (c.pdf && c.pdf !== key) await env.FILES.delete(c.pdf);
     await DB.prepare('UPDATE contracts SET pdf = ?, pdf_hash = ?, pdf_pages = ?, pdf_size = ?, updated_at = ? WHERE id = ?').bind(key, hash, pages, buf.byteLength, now(), c.id).run();
     if (!(c.pdf_pages && c.pdf_pages === pages)) await DB.prepare('UPDATE contract_signers SET box = NULL WHERE contract_id = ?').bind(c.id).run();
-    await audit(`Generó el PDF de «${c.title}» desde el Google Doc (${pages} páginas)`);
+    await audit(`Generated the PDF of “${c.title}” from the Google Doc (${pages} pages)`);
     return { ok: true, pages, changedPages: !(c.pdf_pages && c.pdf_pages === pages) };
   }
   if (mm[2] === 'pdf' && m === 'GET') {
-    if (!c.pdf) throw new ContractError(404, 'Este contrato aún no tiene PDF.');
+    if (!c.pdf) throw new ContractError(404, 'This contract has no PDF yet.');
     const f = await env.FILES.get(c.pdf, { type: 'arrayBuffer' });
-    if (!f) throw new ContractError(404, 'No se encuentra el PDF.');
+    if (!f) throw new ContractError(404, 'PDF not found.');
     return pdfResponse(f, `${c.id}.pdf`);
   }
   if (mm[2] === 'box' && m === 'POST') {
     edit();
     const body = parse(await req.text()) || {};
     const r = sg.find(x => x.id === String(body.signer || '')) || (sg.length === 1 ? sg[0] : null);
-    if (!r) throw new ContractError(400, 'Elige de quién es la firma.');
-    if (r.signed_at) throw new ContractError(409, 'Esa persona ya ha firmado.');
+    if (!r) throw new ContractError(400, 'Choose whose signature it is.');
+    if (r.signed_at) throw new ContractError(409, 'That person has already signed.');
     const b = box(body.box || body);
-    if (!b || b.page >= (c.pdf_pages || 1)) throw new ContractError(400, 'Lugar de firma no válido.');
+    if (!b || b.page >= (c.pdf_pages || 1)) throw new ContractError(400, 'Invalid signature position.');
     await DB.prepare('UPDATE contract_signers SET box = ? WHERE id = ?').bind(JSON.stringify(b), r.id).run();
     return { ok: true, box: b };
   }
   if (mm[2] === 'signers' && m === 'POST') {
     edit();
-    if (signed) throw new ContractError(409, 'Este contrato ya está firmado.');
+    if (signed) throw new ContractError(409, 'This contract is already signed.');
     const body = parse(await req.text()) || {};
     if (body.action === 'add') {
-      if (sg.length >= MAX_SIGNERS) throw new ContractError(400, `Máximo ${MAX_SIGNERS} firmantes.`);
+      if (sg.length >= MAX_SIGNERS) throw new ContractError(400, `Maximum ${MAX_SIGNERS} signers.`);
       const idx = sg.length ? Math.max(...sg.map(r => r.idx)) + 1 : 0;
       await DB.prepare('INSERT INTO contract_signers (id, contract_id, idx, label) VALUES (?, ?, ?, ?)').bind('s_' + crypto.randomUUID().slice(0, 10), c.id, idx, clean(body.label, 60) || `Artista ${idx + 1}`).run();
       if (sg.length === 1 && sg[0].label === 'Artista') await DB.prepare('UPDATE contract_signers SET label = ? WHERE id = ?').bind('Artista 1', sg[0].id).run();
@@ -226,32 +226,32 @@ export async function contractsApi(req, env, s, url, can, audit) {
     }
     if (body.action === 'remove') {
       const r = sg.find(x => x.id === String(body.signer || ''));
-      if (!r) throw new ContractError(404, 'Ese firmante ya no existe.');
-      if (r.signed_at) throw new ContractError(409, 'Esa persona ya ha firmado: no se puede quitar.');
-      if (sg.length <= 1) throw new ContractError(400, 'Un contrato necesita al menos un firmante.');
+      if (!r) throw new ContractError(404, 'That signer no longer exists.');
+      if (r.signed_at) throw new ContractError(409, 'That person has already signed: they can’t be removed.');
+      if (sg.length <= 1) throw new ContractError(400, 'A contract needs at least one signer.');
       await DB.prepare('DELETE FROM contract_signers WHERE id = ?').bind(r.id).run();
       return { ok: true };
     }
-    throw new ContractError(400, 'Acción no válida.');
+    throw new ContractError(400, 'Invalid action.');
   }
-  if (c.kind === 'template' && ['send', 'void', 'unvoid', 'file'].includes(mm[2]) && m === 'POST') throw new ContractError(400, 'Una plantilla no se envía: crea un contrato con ella.');
+  if (c.kind === 'template' && ['send', 'void', 'unvoid', 'file'].includes(mm[2]) && m === 'POST') throw new ContractError(400, 'A template isn’t sent: create a contract from it.');
   if (mm[2] === 'send' && m === 'POST') {
     edit();
-    if (signed) throw new ContractError(409, 'Este contrato ya está firmado.');
-    if (!c.pdf) throw new ContractError(400, 'Sube primero el PDF del contrato.');
+    if (signed) throw new ContractError(409, 'This contract is already signed.');
+    if (!c.pdf) throw new ContractError(400, 'Upload the contract PDF first.');
     const missing = sg.filter(r => !r.box);
-    if (missing.length) throw new ContractError(400, `Falta marcar dónde firma: ${missing.map(r => r.label || `Artista ${r.idx + 1}`).join(', ')}.`);
+    if (missing.length) throw new ContractError(400, `Signature spot not set for: ${missing.map(r => r.label || `Artist ${r.idx + 1}`).join(', ')}.`);
     for (const r of sg) if (!r.token) await DB.prepare('UPDATE contract_signers SET token = ? WHERE id = ?').bind(token(), r.id).run();
     await DB.prepare('UPDATE contracts SET status = ?, sent_at = COALESCE(sent_at, ?), updated_at = ? WHERE id = ?').bind('sent', now(), now(), c.id).run();
-    await audit(`Preparó los enlaces de firma de «${c.title}»`);
+    await audit(`Created the signing links of “${c.title}”`);
     return { ok: true };
   }
   if ((mm[2] === 'void' || mm[2] === 'unvoid') && m === 'POST') {
     edit();
-    if (signed) throw new ContractError(409, 'Un contrato firmado no se puede anular desde aquí.');
+    if (signed) throw new ContractError(409, 'A signed contract can’t be voided from here.');
     const st = mm[2] === 'void' ? 'void' : (sg.some(r => r.token) ? 'sent' : 'draft');
     await DB.prepare('UPDATE contracts SET status = ?, updated_at = ? WHERE id = ?').bind(st, now(), c.id).run();
-    await audit(`${mm[2] === 'void' ? 'Anuló' : 'Reactivó'} el contrato «${c.title}»`);
+    await audit(`${mm[2] === 'void' ? 'Voided' : 'Reactivated'} the contract “${c.title}”`);
     return { ok: true };
   }
   if (mm[2] === 'file' && m === 'POST') {
@@ -261,16 +261,16 @@ export async function contractsApi(req, env, s, url, can, audit) {
     const key = `contracts/${c.id}-firmado.pdf`;
     await env.FILES.put(key, buf, { metadata: { type: 'application/pdf', at: now() } });
     await DB.prepare(`UPDATE contracts SET file = ?, status = 'signed', signed_at = COALESCE(signed_at, ?), updated_at = ? WHERE id = ?`).bind(key, now(), now(), c.id).run();
-    await audit(`Subió el PDF firmado de «${c.title}»`);
+    await audit(`Uploaded the signed PDF of “${c.title}”`);
     return { ok: true };
   }
   if (mm[2] === 'file' && m === 'GET') {
-    if (!c.file) throw new ContractError(404, 'Este contrato no tiene PDF firmado subido.');
+    if (!c.file) throw new ContractError(404, 'This contract has no uploaded signed PDF.');
     const f = await env.FILES.get(c.file, { type: 'arrayBuffer' });
-    if (!f) throw new ContractError(404, 'No se encuentra el PDF.');
+    if (!f) throw new ContractError(404, 'PDF not found.');
     return pdfResponse(f, `${c.id}-firmado.pdf`);
   }
-  throw new ContractError(404, 'No encontrado.');
+  throw new ContractError(404, 'Not found.');
 }
 
 /* Firma (pública, con el enlace privado de cada firmante). */
@@ -318,7 +318,7 @@ export async function signApi(req, env, url, mail) {
   if (all) await DB.prepare(`UPDATE contracts SET status = 'signed', signed_at = ?, doc_hash = ?, updated_at = ? WHERE id = ?`).bind(at, c.pdf_hash, at, c.id).run();
   c = { ...c, status: all ? 'signed' : c.status };
   me = sg.find(x => x.id === me.id);
-  await DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)').bind(at, email, name, `Firmó el contrato «${c.title}»${sg.length > 1 ? ` (${me.label || 'firmante'})` : ''}`, `IP ${ip}`).run();
+  await DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)').bind(at, email, name, `Signed the contract “${c.title}”${sg.length > 1 ? ` (${me.label || 'signer'})` : ''}`, `IP ${ip}`).run();
   if (mail) {
     try {
       const left = sg.filter(x => !x.signed_at).map(x => x.label || 'firmante');

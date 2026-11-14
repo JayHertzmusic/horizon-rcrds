@@ -15,8 +15,9 @@ const SECTIONS = [
   { id: 'releases', label: 'Releases', actions: ['view', 'edit', 'delete'] },
   { id: 'radio', label: 'Mixtapes', actions: ['view', 'edit', 'delete'] },
   { id: 'playlists', label: 'Playlists', actions: ['view', 'edit', 'delete'] },
-  { id: 'player', label: 'Reproductor', actions: ['view', 'edit'] },
-  { id: 'contracts', label: 'Contratos', actions: ['view', 'edit'] },
+  { id: 'player', label: 'Player', actions: ['view', 'edit'] },
+  { id: 'forms', label: 'Forms', actions: ['view', 'edit', 'delete'] },
+  { id: 'contracts', label: 'Contracts', actions: ['view', 'edit'] },
 ];
 // Datos de la web: nombre en la API → archivo público y sección del panel
 const DATA = {
@@ -77,6 +78,7 @@ async function ensureSchema(env) {
     `CREATE INDEX IF NOT EXISTS panel_sessions_email ON panel_sessions (email)`,
     `CREATE TABLE IF NOT EXISTS chat_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, email TEXT NOT NULL, name TEXT, picture TEXT, text TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)`,
     `CREATE TABLE IF NOT EXISTS panel_profiles (email TEXT PRIMARY KEY, avatar TEXT, updated_at INTEGER)`,
+    `CREATE TABLE IF NOT EXISTS panel_settings (key TEXT PRIMARY KEY, value TEXT)`,
     `CREATE TABLE IF NOT EXISTS panel_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, email TEXT, name TEXT, action TEXT NOT NULL, detail TEXT)`,
     `INSERT OR IGNORE INTO site_meta (k, v) VALUES ('version', 0)`,
     ...FORM_SCHEMA,
@@ -85,6 +87,7 @@ async function ensureSchema(env) {
   // nombre que le pone el owner a cada persona (columna añadida después)
   try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN label TEXT').run(); } catch { /* ya existe */ }
   try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN color TEXT').run(); } catch { /* ya existe */ }
+  try { await env.DB.prepare('ALTER TABLE panel_profiles ADD COLUMN color TEXT').run(); } catch { /* ya existe */ }
   for (const col of CONTRACT_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE contracts ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
   schemaReady = true;
 }
@@ -92,6 +95,13 @@ const audit = (env, who, action, detail = '') => env.DB.prepare('INSERT INTO pan
   .bind(now(), who.email, who.name || '', clean(action, 300), clean(detail, 300)).run();
 
 /* ---------------- Permisos ---------------- */
+// orden de las secciones (lo eligen los owners): menú del panel y ventana de roles
+async function sections(env) {
+  const row = await env.DB.prepare("SELECT value FROM panel_settings WHERE key = 'section_order'").first().catch(() => null);
+  const order = parse(row?.value) || [];
+  const at = id => { const i = order.indexOf(id); return i < 0 ? 99 + SECTIONS.findIndex(x => x.id === id) : i; };
+  return [...SECTIONS].sort((a, b) => at(a.id) - at(b.id));
+}
 function normPerms(p) {
   const out = {};
   for (const s of SECTIONS) {
@@ -114,8 +124,8 @@ const anyCan = (s, act) => s.owner || SECTIONS.some(x => s.perms?.[x.id]?.[act])
 function need(s, sec, act) {
   if (can(s, sec, act)) return;
   const label = SECTIONS.find(x => x.id === sec)?.label || sec;
-  const what = { view: 'ver', edit: 'editar', delete: 'eliminar o excluir' }[act] || act;
-  throw new HttpError(403, `Tu rol no tiene permiso para ${what} en ${label}.`);
+  const what = { view: 'view', edit: 'edit', delete: 'delete or exclude' }[act] || act;
+  throw new HttpError(403, `Your role is not allowed to ${what} in ${label}.`);
 }
 
 /* ---------------- Firmas (Google y GitHub) ---------------- */
@@ -124,7 +134,7 @@ async function jwks(url, force) {
   const c = jwksCache.get(url);
   if (!force && c && now() - c.at < 3600e3) return c.keys;
   const r = await fetch(url);
-  if (!r.ok) throw new HttpError(502, 'No se pudo comprobar la firma. Inténtalo otra vez.');
+  if (!r.ok) throw new HttpError(502, 'Could not verify the signature. Please try again.');
   const keys = (await r.json()).keys || [];
   jwksCache.set(url, { at: now(), keys });
   return keys;
@@ -146,16 +156,16 @@ async function verifyJwt(token, jwksUrl, bad) {
   return p;
 }
 async function verifyGoogle(token, env) {
-  if (!env.GOOGLE_CLIENT_ID) throw new HttpError(500, 'Falta el ID de cliente de Google en el servidor.');
-  const bad = new HttpError(401, 'No se pudo comprobar tu cuenta de Google. Vuelve a intentarlo.');
+  if (!env.GOOGLE_CLIENT_ID) throw new HttpError(500, 'The Google client ID is missing on the server.');
+  const bad = new HttpError(401, 'Could not verify your Google account. Please try again.');
   const p = await verifyJwt(token, 'https://www.googleapis.com/oauth2/v3/certs', bad);
   if (!['accounts.google.com', 'https://accounts.google.com'].includes(p.iss) || p.aud !== env.GOOGLE_CLIENT_ID) throw bad;
-  if (p.email_verified !== true && p.email_verified !== 'true') throw new HttpError(403, 'Tu email de Google no está verificado.');
+  if (p.email_verified !== true && p.email_verified !== 'true') throw new HttpError(403, 'Your Google email is not verified.');
   return { email: String(p.email || '').toLowerCase(), name: clean(p.name, 80), picture: /^https:\/\/[\w.-]+\.googleusercontent\.com\//.test(p.picture || '') ? p.picture : '' };
 }
 // Token OIDC del workflow de sincronización (solo ese archivo, en la rama main del repositorio de la web)
 async function verifyGithubSync(token, env) {
-  const bad = new HttpError(401, 'Sincronización no autorizada.');
+  const bad = new HttpError(401, 'Sync not authorised.');
   const p = await verifyJwt(token, 'https://token.actions.githubusercontent.com/.well-known/jwks', bad);
   const repo = String(env.SYNC_REPO || '');
   if (p.iss !== 'https://token.actions.githubusercontent.com' || p.aud !== 'horizon-web') throw bad;
@@ -167,56 +177,63 @@ async function verifyGithubSync(token, env) {
 /* ---------------- Sesiones ---------------- */
 async function startSession(env, g, area) {
   const who = await resolve(env, g.email);
-  if (!who) throw new HttpError(403, `La cuenta ${g.email} no tiene acceso. Pide a un owner que te añada al equipo.`);
-  if (area === 'admin' && !who.owner) throw new HttpError(403, 'Esta zona es solo para los owners. Entra en horizonrcrds.com/team');
+  if (!who) throw new HttpError(403, `The account ${g.email} has no access. Ask an owner to add you to the team.`);
+  if (area === 'admin' && !who.owner) throw new HttpError(403, 'This area is for owners only. Go to horizonrcrds.com/team');
   const token = randomToken(), hash = await sha256(token), t = now();
   await env.DB.batch([
     env.DB.prepare('DELETE FROM panel_sessions WHERE expires_at < ?').bind(t),
     env.DB.prepare('INSERT INTO panel_sessions (hash, email, area, name, picture, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(hash, g.email, area, g.name, g.picture, t, t + SESSION_MS),
     env.DB.prepare('UPDATE panel_members SET name = ?, picture = ?, last_login = ? WHERE email = ?').bind(g.name, g.picture, t, g.email),
   ]);
-  await audit(env, g, `Entró en /${area}`);
-  return { token, user: { email: g.email, name: who.label || g.name, picture: g.picture, ...who, formsCount: await formsCount(env, { ...who, email: g.email }) }, sections: SECTIONS };
+  await audit(env, g, `Signed in to /${area}`);
+  return { token, user: { email: g.email, name: who.label || g.name, picture: g.picture, ...who, formsCount: await formsCount(env, { ...who, email: g.email }) }, sections: await sections(env) };
 }
 async function session(req, env) {
   const m = (req.headers.get('Authorization') || '').match(/^Bearer\s+(\S+)$/);
-  if (!m) throw new HttpError(401, 'Tienes que iniciar sesión.');
+  if (!m) throw new HttpError(401, 'You need to sign in.');
   if (m[1].includes('.')) return verifyGithubSync(m[1], env);
   const hash = await sha256(m[1]);
   const s = await env.DB.prepare('SELECT * FROM panel_sessions WHERE hash = ?').bind(hash).first();
-  if (!s || s.expires_at < now()) throw new HttpError(401, 'Tu sesión ha caducado. Vuelve a entrar.');
+  if (!s || s.expires_at < now()) throw new HttpError(401, 'Your session expired. Sign in again.');
   const who = await resolve(env, s.email);
   if (!who || (s.area === 'admin' && !who.owner)) {
     await env.DB.prepare('DELETE FROM panel_sessions WHERE hash = ?').bind(hash).run();
-    throw new HttpError(401, 'Ya no tienes acceso a este panel.');
+    throw new HttpError(401, 'You no longer have access to this panel.');
   }
-  const pf = await env.DB.prepare('SELECT avatar FROM panel_profiles WHERE email = ?').bind(s.email).first();
-  return { hash, area: s.area, email: s.email, picture: pf?.avatar ? avatarUrl(pf.avatar) : s.picture || '', ...who, name: who.label || s.name || '' };
+  const pf = await env.DB.prepare('SELECT p.avatar, COALESCE(p.color, m.color) AS color FROM (SELECT ? AS email) e LEFT JOIN panel_profiles p ON p.email = e.email LEFT JOIN panel_members m ON m.email = e.email').bind(s.email).first();
+  return { hash, area: s.area, email: s.email, picture: pf?.avatar ? avatarUrl(pf.avatar) : s.picture || '', color: pf?.color || '', ...who, name: who.label || s.name || '' };
 }
 const avatarUrl = id => `/api/public/avatar/${id}`;
 const AVATAR_SQL = `CASE WHEN p.avatar IS NOT NULL THEN '/api/public/avatar/' || p.avatar END`;
 /* Foto de perfil: cada uno sube la suya (JPEG/PNG/WebP pequeño, ya recortado en el navegador). */
 async function avatarApi(req, env, s) {
-  if (s.sync) throw new HttpError(403, 'No disponible.');
+  if (s.sync) throw new HttpError(403, 'Not available.');
   const DB = env.DB;
   const old = await DB.prepare('SELECT avatar FROM panel_profiles WHERE email = ?').bind(s.email).first();
   if (req.method === 'DELETE') {
     if (old?.avatar) await env.FILES.delete('avatars/' + old.avatar);
-    await DB.prepare('DELETE FROM panel_profiles WHERE email = ?').bind(s.email).run();
+    await DB.prepare('UPDATE panel_profiles SET avatar = NULL WHERE email = ?').bind(s.email).run();
     return { ok: true, picture: '' };
   }
-  if (req.method !== 'POST') throw new HttpError(405, 'No permitido.');
+  if (req.method !== 'POST') throw new HttpError(405, 'Not allowed.');
   const type = (req.headers.get('Content-Type') || '').split(';')[0];
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(type)) throw new HttpError(400, 'Sube una imagen (JPG, PNG o WebP).');
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(type)) throw new HttpError(400, 'Upload an image (JPG, PNG or WebP).');
   const buf = await req.arrayBuffer();
-  if (!buf.byteLength || buf.byteLength > 400 * 1024) throw new HttpError(400, 'La imagen es demasiado grande.');
+  if (!buf.byteLength || buf.byteLength > 400 * 1024) throw new HttpError(400, 'The image is too big.');
   const id = crypto.randomUUID().replace(/-/g, '');
   await env.FILES.put('avatars/' + id, buf, { metadata: { type } });
   if (old?.avatar) await env.FILES.delete('avatars/' + old.avatar);
   await DB.prepare('INSERT INTO panel_profiles (email, avatar, updated_at) VALUES (?, ?, ?) ON CONFLICT(email) DO UPDATE SET avatar = excluded.avatar, updated_at = excluded.updated_at').bind(s.email, id, now()).run();
   return { ok: true, picture: avatarUrl(id) };
 }
-const userOut = s => ({ email: s.email, name: s.name, picture: s.picture, owner: s.owner, role: s.role, perms: s.perms });
+async function colorApi(req, env, s) {
+  if (s.sync || req.method !== 'POST') throw new HttpError(405, 'Not allowed.');
+  const c = String((parse(await req.text()) || {}).color || '').toLowerCase();
+  if (!/^#[0-9a-f]{6}$/.test(c)) throw new HttpError(400, 'Pick a valid colour.');
+  await env.DB.prepare('INSERT INTO panel_profiles (email, color, updated_at) VALUES (?, ?, ?) ON CONFLICT(email) DO UPDATE SET color = excluded.color, updated_at = excluded.updated_at').bind(s.email, c, now()).run();
+  return { ok: true, color: c };
+}
+const userOut = s => ({ email: s.email, name: s.name, picture: s.picture, color: s.color, owner: s.owner, role: s.role, perms: s.perms });
 
 /* ---------------- Datos y archivos de la web ---------------- */
 async function readData(env) {
@@ -302,39 +319,39 @@ function checkChange(s, old, next, uploads, removes) {
   for (const f of uploads) {
     if (PROTECTED[f]) { need(s, PROTECTED[f], 'edit'); continue; }
     const secs = [...(newRefs.get(f) || [])];
-    if (!secs.length) throw new HttpError(403, `Tu rol no puede subir ${f}.`);
+    if (!secs.length) throw new HttpError(403, `Your role can’t upload ${f}.`);
     if (!secs.some(sec => can(s, sec, 'edit'))) need(s, secs[0], 'edit');
   }
   for (const f of removes) {
     const secs = [...(oldRefs.get(f) || [])];
-    if (PROTECTED[f] || !secs.length || newRefs.has(f)) throw new HttpError(403, `Tu rol no puede borrar ${f}.`);
+    if (PROTECTED[f] || !secs.length || newRefs.has(f)) throw new HttpError(403, `Your role can’t delete ${f}.`);
     if (!secs.some(sec => can(s, sec, 'edit') || can(s, sec, 'delete'))) need(s, secs[0], 'delete');
   }
 }
 
 /* Publicar: un cambio = listas nuevas + archivos subidos + archivos que ya no se usan. */
 async function publish(req, env, s) {
-  if (!s.sync && !anyCan(s, 'edit') && !anyCan(s, 'delete')) throw new HttpError(403, 'Tu rol solo puede ver.');
+  if (!s.sync && !anyCan(s, 'edit') && !anyCan(s, 'delete')) throw new HttpError(403, 'Your role can only view.');
   let form;
-  try { form = await req.formData(); } catch { throw new HttpError(400, 'Petición no válida.'); }
+  try { form = await req.formData(); } catch { throw new HttpError(400, 'Invalid request.'); }
   const meta = parse(form.get('meta')) || {};
   const old = await readData(env);
-  if (Number(meta.base) !== old.version) throw new HttpError(409, 'Alguien ha publicado a la vez. Vuelve a intentarlo.');
+  if (Number(meta.base) !== old.version) throw new HttpError(409, 'Someone published at the same time. Try again.');
   const next = { ...old }, changed = [];
   for (const k of Object.keys(DATA)) {
     if (!(meta.lists && k in meta.lists)) continue;
     const v = meta.lists[k];
-    if (!Array.isArray(v) || v.some(x => !x || typeof x !== 'object' || Array.isArray(x))) throw new HttpError(400, `${DATA[k].file} no es una lista válida.`);
-    if (JSON.stringify(v).length > 1_000_000) throw new HttpError(400, `${DATA[k].file} es demasiado grande.`);
+    if (!Array.isArray(v) || v.some(x => !x || typeof x !== 'object' || Array.isArray(x))) throw new HttpError(400, `${DATA[k].file} is not a valid list.`);
+    if (JSON.stringify(v).length > 1_000_000) throw new HttpError(400, `${DATA[k].file} is too big.`);
     if (JSON.stringify(v) !== JSON.stringify(old[k])) { next[k] = v; changed.push(k); }
   }
-  if (!next.releases.length) throw new HttpError(400, 'La web necesita al menos un lanzamiento.');
+  if (!next.releases.length) throw new HttpError(400, 'The site needs at least one release.');
   const uploads = [];
   for (const [field, f] of form.entries()) {
     if (!field.startsWith('file:') || typeof f === 'string') continue;
     const name = field.slice(5), ext = name.split('.').pop().toLowerCase();
-    if (!FILE_NAME.test(name) || !TYPES[ext]) throw new HttpError(400, `Nombre de archivo no válido: ${name}`);
-    if (f.size > MAX_FILE) throw new HttpError(400, `${name} pesa demasiado (máx. 25 MB).`);
+    if (!FILE_NAME.test(name) || !TYPES[ext]) throw new HttpError(400, `Invalid file name: ${name}`);
+    if (f.size > MAX_FILE) throw new HttpError(400, `${name} is too big (max 25 MB).`);
     uploads.push({ name, type: TYPES[ext], data: await f.arrayBuffer() });
   }
   const files = await fileList(env);
@@ -360,24 +377,24 @@ async function publish(req, env, s) {
 
 /* ---------------- Equipo (solo owners) ---------------- */
 async function team(req, env, s, p) {
-  if (!s.owner || s.sync) throw new HttpError(403, 'Solo los owners pueden gestionar el equipo.');
+  if (!s.owner || s.sync) throw new HttpError(403, 'Only owners can manage the team.');
   const m = req.method, url = new URL(req.url), DB = env.DB;
   const body = m === 'POST' ? parse(await req.text()) || {} : null;
   if (p === '/api/team' && m === 'GET') {
     const [members, roles] = await Promise.all([
-      DB.prepare(`SELECT m.email, m.role_id, m.label, m.color, m.name, COALESCE(${AVATAR_SQL}, m.picture) AS picture, m.added_at, m.last_login FROM panel_members m LEFT JOIN panel_profiles p ON p.email = m.email ORDER BY m.added_at`).all(),
+      DB.prepare(`SELECT m.email, m.role_id, m.label, COALESCE(p.color, m.color) AS color, m.name, COALESCE(${AVATAR_SQL}, m.picture) AS picture, m.added_at, m.last_login FROM panel_members m LEFT JOIN panel_profiles p ON p.email = m.email ORDER BY m.added_at`).all(),
       DB.prepare('SELECT id, name, perms FROM panel_roles ORDER BY created_at').all(),
     ]);
-    const pics = Object.fromEntries((await DB.prepare(`SELECT p.email, ${AVATAR_SQL} AS picture FROM panel_profiles p`).all()).results.map(r => [r.email, r.picture]));
-    return json({ owners: owners(env), ownerPics: Object.fromEntries(owners(env).map(e => [e, pics[e] || ''])), sections: SECTIONS, members: members.results, roles: roles.results.map(r => ({ id: r.id, name: r.name, perms: normPerms(parse(r.perms)) })) });
+    const profs = (await DB.prepare(`SELECT p.email, ${AVATAR_SQL} AS picture, p.color FROM panel_profiles p`).all()).results, pics = Object.fromEntries(profs.map(r => [r.email, r.picture])), cols = Object.fromEntries(profs.map(r => [r.email, r.color]));
+    return json({ owners: owners(env), ownerPics: Object.fromEntries(owners(env).map(e => [e, pics[e] || ''])), ownerColors: Object.fromEntries(owners(env).map(e => [e, cols[e] || ''])), sections: await sections(env), members: members.results, roles: roles.results.map(r => ({ id: r.id, name: r.name, perms: normPerms(parse(r.perms)) })) });
   }
   if (p === '/api/team/audit' && m === 'GET') {
     // historial completo, de 100 en 100 (before = id del último que ya se ve), de todos o de una persona
     const email = String(url.searchParams.get('email') || '').toLowerCase();
     const before = Number(url.searchParams.get('before')) || 9e15;
     const rows = email
-      ? (await DB.prepare('SELECT a.id, a.at, a.email, COALESCE(m.label, a.name) AS name, m.color, a.action, a.detail FROM panel_audit a LEFT JOIN panel_members m ON m.email = a.email WHERE a.email = ? AND a.id < ? ORDER BY a.id DESC LIMIT 101').bind(email, before).all()).results
-      : (await DB.prepare('SELECT a.id, a.at, a.email, COALESCE(m.label, a.name) AS name, m.color, a.action, a.detail FROM panel_audit a LEFT JOIN panel_members m ON m.email = a.email WHERE a.id < ? ORDER BY a.id DESC LIMIT 101').bind(before).all()).results;
+      ? (await DB.prepare('SELECT a.id, a.at, a.email, COALESCE(m.label, a.name) AS name, COALESCE(p.color, m.color) AS color, a.action, a.detail FROM panel_audit a LEFT JOIN panel_members m ON m.email = a.email LEFT JOIN panel_profiles p ON p.email = a.email WHERE a.email = ? AND a.id < ? ORDER BY a.id DESC LIMIT 101').bind(email, before).all()).results
+      : (await DB.prepare('SELECT a.id, a.at, a.email, COALESCE(m.label, a.name) AS name, COALESCE(p.color, m.color) AS color, a.action, a.detail FROM panel_audit a LEFT JOIN panel_members m ON m.email = a.email LEFT JOIN panel_profiles p ON p.email = a.email WHERE a.id < ? ORDER BY a.id DESC LIMIT 101').bind(before).all()).results;
     // todo el equipo (owners y miembros, hayan entrado o no) + quien aparezca en el registro
     const members = (await DB.prepare('SELECT email, COALESCE(label, name) AS name FROM panel_members').all()).results;
     const seen = (await DB.prepare('SELECT a.email, (SELECT name FROM panel_audit x WHERE x.email = a.email ORDER BY x.id DESC LIMIT 1) AS name FROM panel_audit a GROUP BY a.email').all()).results;
@@ -391,58 +408,63 @@ async function team(req, env, s, p) {
   }
   if (p === '/api/team/members' && m === 'POST') {
     const email = String(body.email || '').trim().toLowerCase();
-    if (!EMAIL.test(email) || email.length > 120) throw new HttpError(400, 'Ese email no es válido.');
-    if (owners(env).includes(email)) throw new HttpError(400, 'Esa cuenta ya es owner.');
+    if (!EMAIL.test(email) || email.length > 120) throw new HttpError(400, 'That email is not valid.');
+    if (owners(env).includes(email)) throw new HttpError(400, 'That account is already an owner.');
     const exists = await DB.prepare('SELECT email FROM panel_members WHERE email = ?').bind(email).first();
     const label = 'label' in body ? clean(body.label, 40) : undefined;
     const color = /^#[0-9a-f]{6}$/i.test(body.color || '') ? body.color.toLowerCase() : null;
     // solo cambiar el nombre o el color
     if (exists && !body.role_id) {
       if (label !== undefined) await DB.prepare('UPDATE panel_members SET label = ? WHERE email = ?').bind(label || null, email).run();
-      if (color) await DB.prepare('UPDATE panel_members SET color = ? WHERE email = ?').bind(color, email).run();
+      if (color) await DB.batch([DB.prepare('UPDATE panel_members SET color = ? WHERE email = ?').bind(color, email), DB.prepare('UPDATE panel_profiles SET color = ? WHERE email = ?').bind(color, email)]);
       return json({ ok: true });
     }
     const role = await DB.prepare('SELECT id, name FROM panel_roles WHERE id = ?').bind(String(body.role_id || '')).first();
-    if (!role) throw new HttpError(400, 'Elige un rol.');
+    if (!role) throw new HttpError(400, 'Choose a role.');
     if (exists) await DB.prepare('UPDATE panel_members SET role_id = ?' + (label !== undefined ? ', label = ?' : '') + ' WHERE email = ?').bind(...(label !== undefined ? [role.id, label || null, email] : [role.id, email])).run();
     else await DB.prepare('INSERT INTO panel_members (email, role_id, label, color, added_by, added_at) VALUES (?, ?, ?, ?, ?, ?)').bind(email, role.id, label || null, color, s.email, now()).run();
-    await audit(env, s, exists ? `Cambió el rol de ${email} a ${role.name}` : `Añadió a ${email}${label ? ' (' + label + ')' : ''} como ${role.name}`);
+    await audit(env, s, exists ? `Changed the role of ${email} to ${role.name}` : `Added ${email}${label ? ' (' + label + ')' : ''} as ${role.name}`);
     return json({ ok: true });
   }
   if (p === '/api/team/members' && m === 'DELETE') {
     const email = String(url.searchParams.get('email') || '').toLowerCase();
     const r = await DB.prepare('DELETE FROM panel_members WHERE email = ?').bind(email).run();
-    if (!r.meta.changes) throw new HttpError(404, 'Esa persona ya no estaba en el equipo.');
+    if (!r.meta.changes) throw new HttpError(404, 'That person was no longer on the team.');
     await DB.prepare('DELETE FROM panel_sessions WHERE email = ?').bind(email).run();
-    await audit(env, s, `Quitó a ${email} del equipo`);
+    await audit(env, s, `Removed ${email} from the team`);
     return json({ ok: true });
   }
   if (p === '/api/team/roles' && m === 'POST') {
     const name = clean(body.name, 40);
-    if (!name) throw new HttpError(400, 'Ponle un nombre al rol.');
-    if (/^owner$/i.test(name)) throw new HttpError(400, '«Owner» está reservado.');
+    if (!name) throw new HttpError(400, 'Give the role a name.');
+    if (/^owner$/i.test(name)) throw new HttpError(400, '“Owner” is reserved.');
     const id = body.id ? String(body.id) : 'r_' + randomToken().slice(0, 10);
     const dup = await DB.prepare('SELECT id FROM panel_roles WHERE lower(name) = lower(?) AND id != ?').bind(name, id).first();
-    if (dup) throw new HttpError(400, `Ya hay un rol llamado ${name}.`);
+    if (dup) throw new HttpError(400, `There is already a role called ${name}.`);
     const perms = JSON.stringify(normPerms(body.perms));
     if (body.id) {
       const r = await DB.prepare('UPDATE panel_roles SET name = ?, perms = ?, updated_at = ? WHERE id = ?').bind(name, perms, now(), id).run();
-      if (!r.meta.changes) throw new HttpError(404, 'Ese rol ya no existe.');
+      if (!r.meta.changes) throw new HttpError(404, 'That role no longer exists.');
     } else await DB.prepare('INSERT INTO panel_roles (id, name, perms, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').bind(id, name, perms, now(), now()).run();
-    await audit(env, s, `${body.id ? 'Cambió' : 'Creó'} el rol ${name}`);
+    await audit(env, s, `${body.id ? 'Changed' : 'Created'} the role ${name}`);
     return json({ ok: true, id });
+  }
+  if (p === '/api/team/sections' && m === 'POST') {
+    const ids = (Array.isArray(body.ids) ? body.ids : []).map(String).filter(id => SECTIONS.some(x => x.id === id));
+    await DB.prepare("INSERT INTO panel_settings (key, value) VALUES ('section_order', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify(ids)).run();
+    return json({ ok: true, sections: await sections(env) });
   }
   if (p === '/api/team/roles' && m === 'DELETE') {
     const id = String(url.searchParams.get('id') || '');
     const used = await DB.prepare('SELECT COUNT(*) AS n FROM panel_members WHERE role_id = ?').bind(id).first();
-    if (used?.n) throw new HttpError(409, `Hay ${used.n} ${used.n === 1 ? 'persona' : 'personas'} con este rol. Cámbiales el rol antes de eliminarlo.`);
+    if (used?.n) throw new HttpError(409, `${used.n} ${used.n === 1 ? 'person has' : 'people have'} this role. Change their role before deleting it.`);
     const role = await DB.prepare('SELECT name FROM panel_roles WHERE id = ?').bind(id).first();
-    if (!role) throw new HttpError(404, 'Ese rol ya no existe.');
+    if (!role) throw new HttpError(404, 'That role no longer exists.');
     await DB.prepare('DELETE FROM panel_roles WHERE id = ?').bind(id).run();
-    await audit(env, s, `Eliminó el rol ${role.name}`);
+    await audit(env, s, `Deleted the role ${role.name}`);
     return json({ ok: true });
   }
-  throw new HttpError(404, 'No encontrado.');
+  throw new HttpError(404, 'Not found.');
 }
 
 /* ---------------- Correo (aviso al Gmail de Horizon) ----------------
@@ -464,13 +486,13 @@ function mailer(env) {
 
 /* ---------------- Chat del equipo ---------------- */
 async function chat(req, env, s, url) {
-  if (s.sync) throw new HttpError(403, 'No permitido.');   // todo el equipo tiene el chat
+  if (s.sync) throw new HttpError(403, 'Not allowed.');   // todo el equipo tiene el chat
   const DB = env.DB;
   if (req.method === 'GET') {
     const after = Math.max(0, Number(url.searchParams.get('after')) || 0);
     const rows = after
-      ? (await DB.prepare(`SELECT c.id, c.at, c.email, COALESCE(m.label, c.name) AS name, m.color, COALESCE(${AVATAR_SQL}, c.picture) AS picture, c.text, c.deleted FROM chat_messages c LEFT JOIN panel_members m ON m.email = c.email LEFT JOIN panel_profiles p ON p.email = c.email WHERE c.id > ? ORDER BY c.id LIMIT 200`).bind(after).all()).results
-      : (await DB.prepare(`SELECT * FROM (SELECT c.id, c.at, c.email, COALESCE(m.label, c.name) AS name, m.color, COALESCE(${AVATAR_SQL}, c.picture) AS picture, c.text, c.deleted FROM chat_messages c LEFT JOIN panel_members m ON m.email = c.email LEFT JOIN panel_profiles p ON p.email = c.email ORDER BY c.id DESC LIMIT 150) ORDER BY id`).all()).results;
+      ? (await DB.prepare(`SELECT c.id, c.at, c.email, COALESCE(m.label, c.name) AS name, COALESCE(p.color, m.color) AS color, COALESCE(${AVATAR_SQL}, c.picture) AS picture, c.text, c.deleted FROM chat_messages c LEFT JOIN panel_members m ON m.email = c.email LEFT JOIN panel_profiles p ON p.email = c.email WHERE c.id > ? ORDER BY c.id LIMIT 200`).bind(after).all()).results
+      : (await DB.prepare(`SELECT * FROM (SELECT c.id, c.at, c.email, COALESCE(m.label, c.name) AS name, COALESCE(p.color, m.color) AS color, COALESCE(${AVATAR_SQL}, c.picture) AS picture, c.text, c.deleted FROM chat_messages c LEFT JOIN panel_members m ON m.email = c.email LEFT JOIN panel_profiles p ON p.email = c.email ORDER BY c.id DESC LIMIT 150) ORDER BY id`).all()).results;
     // borrados recientes (para quitarlos de la pantalla de quien ya los tenía)
     const gone = after ? (await DB.prepare('SELECT id FROM chat_messages WHERE deleted = 1 AND id <= ? AND id > ? - 300').bind(after, after).all()).results.map(r => r.id) : [];
     return json({ me: s.email, owner: !!s.owner, messages: rows.filter(r => !r.deleted).map(({ deleted, ...r }) => r), gone });
@@ -478,22 +500,22 @@ async function chat(req, env, s, url) {
   if (req.method === 'POST') {
     const b = parse(await req.text()) || {};
     const text = String(b.text ?? '').replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b-\u001f]/g, '').trim().slice(0, 1000);
-    if (!text) throw new HttpError(400, 'Escribe algo.');
+    if (!text) throw new HttpError(400, 'Write something.');
     const r = await DB.prepare('INSERT INTO chat_messages (at, email, name, picture, text) VALUES (?, ?, ?, ?, ?)').bind(now(), s.email, s.name || '', s.picture || '', text).run();
     return json({ id: r.meta.last_row_id });
   }
   if (req.method === 'DELETE') {
     const id = Number(url.searchParams.get('id')) || 0;
     const m = await DB.prepare('SELECT email, name, text, deleted FROM chat_messages WHERE id = ?').bind(id).first();
-    if (!m || m.deleted) throw new HttpError(404, 'Ese mensaje ya no existe.');
-    if (m.email !== s.email && !s.owner) throw new HttpError(403, 'Solo puedes borrar tus mensajes.');
+    if (!m || m.deleted) throw new HttpError(404, 'That message no longer exists.');
+    if (m.email !== s.email && !s.owner) throw new HttpError(403, 'You can only delete your own messages.');
     // se oculta del chat pero el texto queda guardado y apuntado en el historial
     await DB.prepare('UPDATE chat_messages SET deleted = 1 WHERE id = ?').bind(id).run();
-    const author = m.email === s.email ? 'suyo' : `de ${m.name || m.email}`;
-    await audit(env, s, `Borró un mensaje ${author} del chat: «${String(m.text).replace(/\s+/g, ' ').slice(0, 220)}»`);
+    const author = m.email === s.email ? 'their own' : `by ${m.name || m.email}`;
+    await audit(env, s, `Deleted a chat message (${author}): “${String(m.text).replace(/\s+/g, ' ').slice(0, 220)}”`);
     return json({ ok: true });
   }
-  throw new HttpError(405, 'No permitido.');
+  throw new HttpError(405, 'Not allowed.');
 }
 
 /* ---------------- API ---------------- */
@@ -501,7 +523,7 @@ async function api(req, env, p) {
   const url = new URL(req.url);
   // Mismo origen siempre (la web y el panel están en el mismo dominio): se rechazan peticiones de otras webs
   const origin = req.headers.get('Origin');
-  if (origin && origin !== new URL(req.url).origin && !(env.DEV_LOGIN === '1' && isDevOrigin(origin))) throw new HttpError(403, 'Origen no permitido.');
+  if (origin && origin !== new URL(req.url).origin && !(env.DEV_LOGIN === '1' && isDevOrigin(origin))) throw new HttpError(403, 'Origin not allowed.');
   if (p === '/api/auth/config' && req.method === 'GET') return json({ clientId: env.GOOGLE_CLIENT_ID || '', dev: env.DEV_LOGIN === '1' });
   await ensureSchema(env);
   const area = a => (a === 'admin' ? 'admin' : 'team');
@@ -511,33 +533,34 @@ async function api(req, env, p) {
   }
   // Solo para probar en el ordenador (wrangler dev con DEV_LOGIN=1): entrar sin Google
   if (p === '/api/auth/dev' && req.method === 'POST') {
-    if (env.DEV_LOGIN !== '1') throw new HttpError(404, 'No encontrado.');   // DEV_LOGIN solo existe en .dev.vars (local)
+    if (env.DEV_LOGIN !== '1') throw new HttpError(404, 'Not found.');   // DEV_LOGIN solo existe en .dev.vars (local)
     const b = parse(await req.text()) || {};
     const email = String(b.email || '').trim().toLowerCase();
-    if (!EMAIL.test(email)) throw new HttpError(400, 'Email no válido.');
+    if (!EMAIL.test(email)) throw new HttpError(400, 'Invalid email.');
     return json(await startSession(env, { email, name: clean(b.name || email.split('@')[0], 80), picture: '' }, area(b.area)));
   }
   if (p.startsWith('/api/public/sign/')) { const r = await signApi(req, env, url, mailer(env)); return r instanceof Response ? r : json(r); }   // firma de contratos (enlace privado)
   const av = p.match(/^\/api\/public\/avatar\/([a-f0-9]{32})$/);
   if (av) {
     const f = await env.FILES.getWithMetadata('avatars/' + av[1], { type: 'arrayBuffer' });
-    if (!f.value) throw new HttpError(404, 'No encontrada.');
+    if (!f.value) throw new HttpError(404, 'Not found.');
     return new Response(f.value, { headers: { 'Content-Type': f.metadata?.type || 'image/jpeg', 'Cache-Control': 'public, max-age=31536000, immutable' } });
   }
   if (p.startsWith('/api/public/')) return json(await publicFormsApi(req, env, url));   // formularios públicos (sin sesión)
   const s = await session(req, env);
-  if (p === '/api/auth/me' && req.method === 'GET') return json({ user: { ...userOut(s), formsCount: await formsCount(env, s) }, sections: SECTIONS });
+  if (p === '/api/auth/me' && req.method === 'GET') return json({ user: { ...userOut(s), formsCount: await formsCount(env, s) }, sections: await sections(env) });
   if (p === '/api/auth/logout' && req.method === 'POST') {
     if (!s.sync) await env.DB.prepare('DELETE FROM panel_sessions WHERE hash = ?').bind(s.hash).run();
     return json({ ok: true });
   }
   if (p === '/api/data' && req.method === 'GET') {
-    if (!s.sync && !anyCan(s, 'view')) throw new HttpError(403, 'Tu rol todavía no tiene secciones.');
+    if (!s.sync && !anyCan(s, 'view')) throw new HttpError(403, 'Your role has no sections yet.');
     return json({ ...await readData(env), files: await fileList(env) });
   }
   if (p === '/api/publish' && req.method === 'POST') return publish(req, env, s);
   if (p === '/api/chat') return chat(req, env, s, url);
   if (p === '/api/me/avatar') return json(await avatarApi(req, env, s));
+  if (p === '/api/me/color') return json(await colorApi(req, env, s));
   if (p === '/api/contracts' || p.startsWith('/api/contracts/')) {
     const r = await contractsApi(req, env, s, url, act => can(s, 'contracts', act), action => audit(env, s, action));
     return r instanceof Response ? r : json(r);
@@ -547,7 +570,7 @@ async function api(req, env, p) {
     return r instanceof Response ? r : json(r);
   }
   if (p === '/api/team' || p.startsWith('/api/team/')) return team(req, env, s, p);
-  throw new HttpError(404, 'No encontrado.');
+  throw new HttpError(404, 'Not found.');
 }
 
 export default {
@@ -569,7 +592,7 @@ export default {
     } catch (e) {
       if (e instanceof HttpError || e instanceof FormError || e instanceof ContractError) return fail(e.status, e.message);
       console.error(e);
-      return fail(500, 'Error del servidor. Inténtalo otra vez.');
+      return fail(500, 'Server error. Please try again.');
     }
   },
 };

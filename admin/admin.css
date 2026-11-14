@@ -525,9 +525,6 @@ label.av input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .row.tm .meta span { font-size: 12.5px; color: var(--faint); }
 .who-name { font: 600 16px/1.2 'Barlow', sans-serif !important; letter-spacing: 0 !important; color: #fff !important; text-transform: none !important; }
 .name-in { font: 600 16px/1.2 'Barlow', sans-serif !important; letter-spacing: 0 !important; color: #fff !important; min-height: 30px !important; padding: 2px 6px !important; margin-left: -6px; }
-.role-tag { justify-self: start; display: inline-flex; align-items: center; min-height: 0 !important; height: 28px; padding: 0 28px 0 12px !important; border-radius: 14px !important; border: 1px solid color-mix(in srgb, var(--c, #fff) 55%, transparent) !important; background-color: color-mix(in srgb, var(--c, #fff) 14%, #0d0d0d) !important; color: #fff !important; font: 700 11px/1 'Barlow', sans-serif !important; letter-spacing: .14em; text-transform: uppercase; cursor: pointer; background-position: right 10px center !important; }
-.role-tag.owner { padding: 0 12px !important; border-color: rgba(255, 255, 255, .5) !important; background: rgba(255, 255, 255, .1) !important; cursor: default; }
-.role-tag option { background: #111; color: #fff; text-transform: none; letter-spacing: 0; font-size: 14px; }
 .eyebrow { color: var(--muted) !important; }
 .rs i { color: var(--muted) !important; }
 .tag { color: #fff; background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .28); }
@@ -585,7 +582,7 @@ label.av input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .row.tm { grid-template-columns: 40px minmax(0, 1fr) auto 84px; gap: 16px; padding: 10px 8px; }
 .row.tm .meta b { font-size: 16px; }
 img.av { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; display: block; }
-.role-tag { padding: 4px 12px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--c, #fff) 55%, transparent); background: color-mix(in srgb, var(--c, #fff) 14%, transparent); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; }
+.role-tag { justify-self: center; display: inline-flex; align-items: center; justify-content: center; height: 26px; min-width: 84px; padding: 0 12px; box-sizing: border-box; line-height: 1; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--c, #fff) 55%, transparent); background: color-mix(in srgb, var(--c, #fff) 14%, transparent); color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; white-space: nowrap; }
 .roles { border-top: 1px solid var(--line); }
 .role-line { grid-template-columns: minmax(0, 1fr) auto auto; padding: 10px 8px; gap: 16px; }
 .role-line > b { font-size: 19px; }
@@ -628,3 +625,49 @@ img.av { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; displ
 .fe-prev iframe { flex: 1; width: 100%; border: 0; background: #050505; }
 @media (max-width: 1200px) { .fe-grid { grid-template-columns: 1fr; } .fe-prev { position: static; height: 80vh; } }
 @media (max-width: 700px) { .fe-side { grid-template-columns: 1fr; } }
+
+.role-tag.owner { --c: #ffffff; }
+
+/* Tu perfil */
+button.who-pic { padding: 0; border: 2px solid var(--c, #fff); background: none; box-shadow: none; min-height: 0; }
+.perm-list + .sm-txt, .sheet .sm-txt { white-space: normal; overflow: visible; text-overflow: clip; }
+.me-top { display: flex; gap: 18px; align-items: center; margin-bottom: 22px; }
+.me-top > div { display: grid; gap: 4px; min-width: 0; }
+.me-name { font: 600 20px/1.1 'Barlow', sans-serif; }
+.av.xl { width: 84px; height: 84px; font-size: 32px; flex: none; }
+img.av.xl { width: 84px; height: 84px; }
+.me-btns { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 12px; }
+.sw { position: relative; width: 34px; height: 34px; min-height: 0; padding: 0; border-radius: 50%; border: 2px solid transparent; background: var(--c); box-shadow: inset 0 0 0 2px #0d0d0d; cursor: pointer; display: grid; place-items: center; }
+.sw.on { border-color: #fff; }
+.sw.custom { background: conic-gradient(#ff5a5f, #ffd23f, #3ddc84, #4fc3f7, #b388ff, #ff5a5f); }
+.sw.custom.on { background: var(--c); }
+.sw.custom span { color: #0a0a0a; font-weight: 700; font-size: 16px; text-shadow: 0 0 3px #fff; }
+.sw.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+
+/* Botones (rediseño): redondeados, limpios, sin brillo */
+.btn {
+  min-height: 40px; padding: 0 18px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(255, 255, 255, .04); color: #f2f2f2;
+  font: 600 13.5px/1 'Barlow', system-ui, sans-serif; letter-spacing: .01em; text-transform: none;
+  box-shadow: none;
+}
+.btn:hover { background: rgba(255, 255, 255, .09); border-color: rgba(255, 255, 255, .24); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.btn.primary { background: #fff; color: #0a0a0a; border-color: #fff; box-shadow: none; }
+.btn.primary:hover { background: #dcdcdc; border-color: #dcdcdc; box-shadow: none; }
+.btn.ghost { background: rgba(255, 255, 255, .04); border-color: rgba(255, 255, 255, .12); color: #f2f2f2; }
+.btn.ghost:hover { background: rgba(255, 255, 255, .09); border-color: rgba(255, 255, 255, .24); }
+.btn.danger { background: rgba(255, 90, 95, .06); border-color: rgba(255, 90, 95, .3); color: #ff6b70; }
+.btn.danger:hover { background: rgba(255, 90, 95, .14); border-color: rgba(255, 90, 95, .6); }
+.btn.sm { min-height: 32px; padding: 0 12px; border-radius: 8px; font-size: 12.5px; }
+.btn.big { min-height: 48px; padding: 0 24px; font-size: 15px; }
+.confirm-actions, .ed-actions { gap: 10px; }
+.ic { width: 30px; height: 30px; border-radius: 8px; border-color: rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .04); font-size: 11px; }
+.ic:hover:not(:disabled) { background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .3); }
+.sheet-head .ic { width: 32px; height: 32px; font-size: 13px; }
+.perm-name { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; }
+.perm-name .ord { display: inline-flex; gap: 2px; }
+.perm-name .ord .ic { width: 22px; height: 22px; font-size: 9px; border-radius: 6px; }
+.perm-row:first-child [data-act="sec-up"], .perm-row:last-child [data-act="sec-down"] { opacity: .25; pointer-events: none; }

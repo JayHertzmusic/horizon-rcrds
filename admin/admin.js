@@ -50,10 +50,10 @@
         headers: { ...(auth?.token ? { Authorization: `Bearer ${auth.token}` } : {}), ...(body && !form ? { 'Content-Type': 'application/json' } : {}) },
         body: body ? (form ? body : JSON.stringify(body)) : undefined,
       });
-    } catch { throw new GhError('Sin conexión con el servidor. Revisa tu internet y vuelve a intentarlo.'); }
+    } catch { throw new GhError('No connection to the server. Check your connection and try again.'); }
     const j = await res.json().catch(() => ({}));
     if (res.ok) return j;
-    throw new GhError(j.message || `Error del servidor (${res.status}).`, res.status);
+    throw new GhError(j.message || `Server error (${res.status}).`, res.status);
   }
   /* Permisos del rol (el servidor los vuelve a comprobar en cada cambio) */
   // «Probar rol» (owners en /admin): el panel se ve con los permisos de ese rol y no se puede guardar nada
@@ -70,7 +70,7 @@
   /* Un «Publicar» = un cambio en el servidor. Las listas se recalculan sobre la versión más reciente
      (si alguien publicó a la vez, se reintenta sin pisar su cambio). Sale en la web al momento. */
   async function publish(message, uploads, build) {
-    if (preview) throw new Error(`Estás probando el rol ${preview.name}: los cambios no se guardan. Sal de la prueba para publicar.`);
+    if (preview) throw new Error(`You are testing the role ${preview.name}: changes are not saved. Leave the test to publish.`);
     for (let attempt = 0; ; attempt++) {
       const fresh = await loadRepo();
       const out = build ? build(fresh) : {};
@@ -95,7 +95,7 @@
   function watchSite(probes) {
     clearTimeout(watchTimer);
     const id = ++watchId, start = Date.now();
-    deploy('Publicando en la web…', 'busy');
+    deploy('Publishing to the site…', 'busy');
     const tick = async () => {
       if (id !== watchId) return;
       let ok = true;
@@ -107,8 +107,8 @@
         if (!ok) break;
       }
       if (id !== watchId) return;
-      if (ok) { deploy('✓ Ya está en la web', 'ok'); watchTimer = setTimeout(() => id === watchId && deploy(), 5000); return; }
-      if (Date.now() - start > 2 * 60e3) { deploy('Aún no se ve el cambio. Recarga la web en un momento.', 'warn'); watchTimer = setTimeout(() => id === watchId && deploy(), 15000); return; }
+      if (ok) { deploy('✓ Live on the site', 'ok'); watchTimer = setTimeout(() => id === watchId && deploy(), 5000); return; }
+      if (Date.now() - start > 2 * 60e3) { deploy('The change isn’t visible yet. Reload the site in a moment.', 'warn'); watchTimer = setTimeout(() => id === watchId && deploy(), 15000); return; }
       watchTimer = setTimeout(tick, 2000);
     };
     watchTimer = setTimeout(tick, 400);
@@ -129,7 +129,7 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => { el.classList.add('is-out'); toastTimer = setTimeout(() => { el.hidden = true; }, 250); }, 3200);
   }
-  function confirmBox(msg, okLabel = 'Eliminar') {
+  function confirmBox(msg, okLabel = 'Delete') {
     const d = $('#confirm');
     $('#confirm-msg').textContent = msg; $('#confirm-ok').textContent = okLabel;
     d.returnValue = '';
@@ -237,14 +237,14 @@
     return '#' + [r, g, b].map(v => Math.round(Math.min(1, v) * 255).toString(16).padStart(2, '0')).join('');
   }
   async function processCover(file, n) {
-    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('Usa una imagen JPG, PNG o WebP.');
-    if (file.size > MAX_IMAGE_IN) throw new Error('La imagen pesa demasiado (máx. 30 MB).');
+    if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error('Use a JPG, PNG or WebP image.');
+    if (file.size > MAX_IMAGE_IN) throw new Error('The image is too big (max 30 MB).');
     const img = await decodeImage(file).catch(() => null);
     const w = img?.width || img?.naturalWidth, h = img?.height || img?.naturalHeight;
-    if (!w || !h) throw new Error('No se pudo leer la imagen. Prueba con otro archivo.');
+    if (!w || !h) throw new Error('Could not read the image. Try another file.');
     const canvas = square(img, w, h, n);
     const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', .9));
-    if (!blob) throw new Error('No se pudo preparar la imagen.');
+    if (!blob) throw new Error('Could not prepare the image.');
     return { blob, url: URL.createObjectURL(blob), w, h, color: pickColor(canvas), small: Math.min(w, h) < n };
   }
 
@@ -253,8 +253,8 @@
   function text(form, name, label, { max = 120, missing = '' } = {}) {
     const v = String(form.elements[name]?.value ?? '').replace(/\s+/g, ' ').trim();
     if (missing && !v) throw new FieldError(name, missing);
-    if (/[<>]/.test(v)) throw new FieldError(name, `${label}: no uses los signos < ni > (la web los interpreta como código).`);
-    if (v.length > max) throw new FieldError(name, `${label}: máximo ${max} caracteres.`);
+    if (/[<>]/.test(v)) throw new FieldError(name, `${label}: don’t use the characters < ni > (the site reads them as code).`);
+    if (v.length > max) throw new FieldError(name, `${label}: maximum ${max} characters.`);
     return v;
   }
   const HOSTS = {
@@ -266,15 +266,15 @@
     const v = String(form.elements[name]?.value ?? '').trim();
     if (!v) { if (missing) throw new FieldError(name, missing); return ''; }
     let u;
-    try { u = new URL(v); } catch { throw new FieldError(name, `${label}: no es un enlace válido.`); }
+    try { u = new URL(v); } catch { throw new FieldError(name, `${label}: not a valid link.`); }
     if (u.protocol !== 'https:') throw new FieldError(name, `${label}: debe empezar por https://`);
-    if (/["'<>\s\\`]/.test(v)) throw new FieldError(name, `${label}: el enlace tiene caracteres no válidos.`);
-    if (hosts && !hosts.some(h => h.test(u.hostname))) throw new FieldError(name, `${label}: no parece un enlace de ${label}.`);
+    if (/["'<>\s\\`]/.test(v)) throw new FieldError(name, `${label}: the link has invalid characters.`);
+    if (hosts && !hosts.some(h => h.test(u.hostname))) throw new FieldError(name, `${label}: doesn’t look like a ${label} link.`);
     return v;
   }
   function position(form, max) {
     const n = Number(form.elements.position?.value);
-    if (!Number.isInteger(n) || n < 1) throw new FieldError('position', 'Posición: escribe un número desde 1.');
+    if (!Number.isInteger(n) || n < 1) throw new FieldError('position', 'Position: enter a number from 1.');
     return Math.min(n, max);
   }
   function showError(err) {
@@ -297,7 +297,7 @@
       const s = document.createElement('script');
       s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
       s.onload = ok;
-      s.onerror = () => { gisLoad = null; ko(new Error('No se pudo cargar el botón de Google. Revisa tu internet o desactiva el bloqueador de anuncios en esta página.')); };
+      s.onerror = () => { gisLoad = null; ko(new Error('Could not load the Google button. Check your connection or disable the ad blocker on this page.')); };
       document.head.appendChild(s);
     });
     return gisLoad;
@@ -307,20 +307,20 @@
     if (el) { el.textContent = msg || ''; el.hidden = !msg; }
   }
   async function loginView(message = '') {
-    document.title = MODE === 'team' ? 'Equipo — HORIZON RCRDS' : 'Panel — HORIZON RCRDS';
+    document.title = MODE === 'team' ? 'Team — HORIZON RCRDS' : 'Panel — HORIZON RCRDS';
     app.innerHTML = `
       <main class="login">
         <div class="login-card">
           <img class="login-logo" src="${SITE}assets/logo.png" alt="">
           <h1>HORIZON <span>RCRDS</span></h1>
-          <p class="login-sub">${MODE === 'team' ? 'Equipo' : 'Panel · Owners'}</p>
-          <p class="login-text">${MODE === 'team' ? 'Entra con la cuenta de Google con la que te han dado de alta en el equipo.' : 'Solo para los owners. Entra con tu cuenta de Google.'}</p>
+          <p class="login-sub">${MODE === 'team' ? 'Team' : 'Panel · Owners'}</p>
+          <p class="login-text">${MODE === 'team' ? 'Sign in with the Google account you were added to the team with.' : 'Owners only. Sign in with your Google account.'}</p>
           <div id="g-btn" class="g-btn"></div>
           <form id="dev-login" class="dev-login" hidden novalidate>
-            <div class="field"><label for="dev-email">Prueba local · email</label><input id="dev-email" name="email" type="email" autocomplete="off" spellcheck="false"></div>
+            <div class="field"><label for="dev-email">Local test · email</label><input id="dev-email" name="email" type="email" autocomplete="off" spellcheck="false"></div>
             <button class="btn ghost wide" type="submit">Entrar (prueba local)</button>
           </form>
-          <label class="check"><input type="checkbox" id="remember" checked><span>Recordar en este navegador</span></label>
+          <label class="check"><input type="checkbox" id="remember" checked><span>Remember on this browser</span></label>
           <p class="login-error" role="alert" ${message ? '' : 'hidden'}>${esc(message)}</p>
         </div>
       </main>`;
@@ -331,13 +331,16 @@
         await loadGis();
         if (!$('#g-btn')) return;
         google.accounts.id.initialize({ client_id: serverCfg.clientId, callback: r => login({ credential: r.credential }), auto_select: false, cancel_on_tap_outside: true });
-        google.accounts.id.renderButton($('#g-btn'), { theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', locale: 'es', width: 280 });
-      } else if (!serverCfg.dev) throw new Error('El panel aún no está configurado: falta el ID de cliente de Google en el servidor.');
+        google.accounts.id.renderButton($('#g-btn'), { theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', locale: 'en', width: 280 });
+      } else if (!serverCfg.dev) throw new Error('The panel is not set up yet: the Google client ID is missing on the server.');
     } catch (e) { serverCfg = null; loginError(e.message); }
   }
 
   const VIEWS = ['releases', 'radio', 'playlists', 'player'];
-  const firstView = () => VIEWS.find(v => can(v)) || (showForms() ? 'forms' : MODE === 'admin' && auth?.user?.owner && !preview ? 'team' : 'none');
+  // secciones en el orden que eligen los owners
+  const ORDER = () => (auth?.sections || []).map(x => x.id).concat(['releases', 'radio', 'playlists', 'player', 'forms', 'contracts']).filter((v, i, a) => a.indexOf(v) === i);
+  const canTab = v => v === 'forms' ? showForms() : can(v);
+  const firstView = () => ORDER().find(canTab) || (showForms() ? 'forms' : MODE === 'admin' && auth?.user?.owner && !preview ? 'team' : 'none');
   const emptyRepo = () => ({ head: '', treeSha: '', files: new Map(), truncated: false, releases: [], mixtapes: [], playlists: [], ignore: [] });
   function useSession(res) {
     auth = { token: res.token || auth?.token, user: res.user, sections: res.sections };
@@ -369,37 +372,37 @@
 
   function shell(inner) {
     const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}</button>`;
-    const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Reproductor' };
+    const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', forms: 'Forms', contracts: 'Contracts' };
     const initials = (u.name || u.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
     return `
       <header class="top">
-        <a class="brand" href="${SITE}" target="_blank" rel="noopener" aria-label="Abrir la web">
+        <a class="brand" href="${SITE}" target="_blank" rel="noopener" aria-label="Open the site">
           <img src="${SITE}assets/logo.png" alt="">
           <span class="word">HORIZON<small>RCRDS</small></span>
         </a>
-        <nav class="tabs" aria-label="Secciones">
-          ${VIEWS.filter(v => can(v)).map(v => tab(v, names[v])).join('')}${showForms() ? tab('forms', 'Formularios') : ''}${can('contracts') ? tab('contracts', 'Contratos') : ''}${MODE === 'admin' && u.owner && !preview ? tab('team', 'Equipo') + tab('log', 'Historial') : ''}
+        <nav class="tabs" aria-label="Sections">
+          ${ORDER().filter(canTab).map(v => tab(v, names[v])).join('')}${MODE === 'admin' && u.owner && !preview ? tab('team', 'Team') + tab('log', 'History') : ''}
         </nav>
         <div class="top-end">
           <span class="who" title="${esc(u.email)}">
-            <label class="who-pic" title="Cambiar tu foto">${u.picture ? `<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="who-ini">${esc(initials)}</span>`}<span class="who-cam" aria-hidden="true">✎</span><input type="file" id="me-photo" accept="image/*" class="sr-only" aria-label="Cambiar tu foto"></label>
-            <span class="who-txt"><b>${esc(u.name || u.email.split('@')[0])}</b><small>${esc(preview ? 'Probando: ' + preview.name : u.owner ? 'Owner' : u.role?.name || 'Sin rol')}</small></span>
+            <button type="button" class="who-pic" data-act="me" title="Your profile" aria-label="Your profile" style="--c:${esc(u.color || '#ffffff')}">${u.picture ? `<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="who-ini">${esc(initials)}</span>`}<span class="who-cam" aria-hidden="true">✎</span></button>
+            <span class="who-txt"><b>${esc(u.name || u.email.split('@')[0])}</b><small>${esc(preview ? 'Testing: ' + preview.name : u.owner ? 'Owner' : u.role?.name || 'No role')}</small></span>
           </span>
-          <a class="link" href="${SITE}" target="_blank" rel="noopener">Ver web ↗</a>
-          <button type="button" class="link" data-act="logout">Salir</button>
+          <a class="link" href="${SITE}" target="_blank" rel="noopener">View site ↗</a>
+          <button type="button" class="link" data-act="logout">Sign out</button>
         </div>
       </header>
-      <main id="main" class="main" tabindex="-1">${preview ? `<div class="preview-bar" role="status"><span>Estás viendo el panel como <b>${esc(preview.name)}</b>. Los cambios no se guardan.</span><button type="button" class="btn primary sm" data-act="preview-off">Salir de la prueba</button></div>` : ''}${inner}</main>`;
+      <main id="main" class="main" tabindex="-1">${preview ? `<div class="preview-bar" role="status"><span>You are viewing the panel as <b>${esc(preview.name)}</b>. Changes are not saved.</span><button type="button" class="btn primary sm" data-act="preview-off">Leave test</button></div>` : ''}${inner}</main>`;
   }
   function noAccessView() {
-    return `<div class="head"><div><p class="eyebrow">Equipo</p><h1>SIN SECCIONES</h1></div></div>
-      <p class="info">Tu rol (${esc(preview ? preview.name : auth.user.role?.name || 'sin rol')}) todavía no tiene ninguna sección. Cuando un owner te dé acceso, sal y vuelve a entrar.</p>`;
+    return `<div class="head"><div><p class="eyebrow">Team</p><h1>NO SECTIONS</h1></div></div>
+      <p class="info">Your role (${esc(preview ? preview.name : auth.user.role?.name || 'no role')}) has no sections yet. When an owner gives you access, sign out and back in.</p>`;
   }
 
   /* ---------------- Equipo y roles (solo owners, en /admin) ---------------- */
   let teamData = null, teamErr = '', teamLoading = false;
-  const ACTIONS = { view: 'Ver', edit: 'Editar', delete: 'Eliminar' };
-  const fmtDate = t => t ? new Date(t).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : '';
+  const ACTIONS = { view: 'View', edit: 'Edit', delete: 'Delete' };
+  const fmtDate = t => t ? new Date(t).toLocaleString('en-GB', { dateStyle: 'short', timeStyle: 'short' }) : '';
   async function loadTeam() {
     if (teamLoading) return;
     teamLoading = true;
@@ -422,25 +425,25 @@
     return d;
   }
   const closeSheet = () => { const d = $('#sheet'); if (d?.open) d.close(); };
-  const LEVELS = [['', 'Nada'], ['view', 'Ver'], ['edit', 'Editar'], ['delete', 'Todo']];
+  const LEVELS = [['', 'None'], ['view', 'View'], ['edit', 'Edit'], ['delete', 'All']];
   const levelOf = (r, sec) => sec.actions.includes('delete') && r.perms?.[sec.id]?.delete ? 'delete' : r.perms?.[sec.id]?.edit ? 'edit' : r.perms?.[sec.id]?.view ? 'view' : '';
   function roleSummary(r) {
     const n = teamData.sections.filter(sec => levelOf(r, sec)).length;
-    return n ? `${n} ${n === 1 ? 'sección' : 'secciones'}` : 'Sin secciones';
+    return n ? `${n} ${n === 1 ? 'section' : 'sections'}` : 'No sections';
   }
   function roleSheet(r) {
     const isNew = !r.id;
     return sheet(`
       <form class="role-form" data-role="${esc(r.id || '')}" novalidate>
-        <div class="sheet-head"><h2>${isNew ? 'Nuevo rol' : 'Editar rol'}</h2><button type="button" class="ic" data-act="sheet-close" aria-label="Cerrar">✕</button></div>
-        <input name="name" class="role-name" value="${esc(r.name || '')}" maxlength="40" placeholder="Nombre del rol (p. ej. A&R)" aria-label="Nombre del rol" autocomplete="off">
+        <div class="sheet-head"><h2>${isNew ? 'New role' : 'Edit role'}</h2><button type="button" class="ic" data-act="sheet-close" aria-label="Close">✕</button></div>
+        <input name="name" class="role-name" value="${esc(r.name || '')}" maxlength="40" placeholder="Role name (e.g. A&R)" aria-label="Role name" autocomplete="off">
         <div class="perm-list">${teamData.sections.map(sec => { const lv = levelOf(r, sec); return `
-          <div class="perm-row"><span>${esc(sec.label)}</span><span class="seg" role="radiogroup" aria-label="${esc(sec.label)}">${LEVELS.filter(([v]) => !v || sec.actions.includes(v)).map(([v, l]) => `
+          <div class="perm-row" data-sec="${esc(sec.id)}"><span class="perm-name"><span class="ord"><button type="button" class="ic" data-act="sec-up" aria-label="Move up">▲</button><button type="button" class="ic" data-act="sec-down" aria-label="Move down">▼</button></span>${esc(sec.label)}</span><span class="seg" role="radiogroup" aria-label="${esc(sec.label)}">${LEVELS.filter(([v]) => !v || sec.actions.includes(v)).map(([v, l]) => `
             <label><input type="radio" name="${esc(sec.id)}" value="${v}" ${v === lv ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>`; }).join('')}
         </div>
-        <p class="info sm-txt">«Editar» incluye crear. «Todo» incluye borrar. Los owners siempre lo tienen todo.</p>
+        <p class="info sm-txt">“Edit” includes creating. “All” includes deleting. Owners always have everything.</p>
         <p class="ed-error" role="alert" hidden></p>
-        <div class="confirm-actions">${isNew ? '' : '<button type="button" class="btn danger push-l" data-act="delete-role">Eliminar rol</button>'}<button type="submit" class="btn primary">${isNew ? 'Crear rol' : 'Guardar'}</button></div>
+        <div class="confirm-actions">${isNew ? '' : '<button type="button" class="btn danger push-l" data-act="delete-role">Delete role</button>'}<button type="submit" class="btn primary">${isNew ? 'Create role' : 'Save'}</button></div>
       </form>`);
   }
   function memberSheet(m) {
@@ -448,52 +451,78 @@
     m = m || { email: '', label: '', color: '#4fc3f7', role_id: roles[0]?.id };
     return sheet(`
       <form class="member-form" data-email="${esc(m.email)}" novalidate>
-        <div class="sheet-head"><h2>${isNew ? 'Añadir persona' : esc(m.label || m.name || m.email)}</h2><button type="button" class="ic" data-act="sheet-close" aria-label="Cerrar">✕</button></div>
-        ${isNew ? `<div class="field"><label for="m-email">Email de Google</label><input id="m-email" name="email" type="email" autocomplete="off" spellcheck="false" placeholder="nombre@gmail.com"></div>` : `<p class="muted sm-txt">${esc(m.email)}</p>`}
+        <div class="sheet-head"><h2>${isNew ? 'Add person' : esc(m.label || m.name || m.email)}</h2><button type="button" class="ic" data-act="sheet-close" aria-label="Close">✕</button></div>
+        ${isNew ? `<div class="field"><label for="m-email">Google email</label><input id="m-email" name="email" type="email" autocomplete="off" spellcheck="false" placeholder="name@gmail.com"></div>` : `<p class="muted sm-txt">${esc(m.email)}</p>`}
         <div class="m-grid">
-          <div class="field"><label for="m-label">Nombre</label><input id="m-label" name="label" value="${esc(m.label || '')}" maxlength="40" placeholder="${esc(m.name || 'p. ej. Kris m')}" autocomplete="off"></div>
-          <div class="field"><label for="m-color">Color</label><label class="color-dot big" style="--c:${esc(m.color || '#ffffff')}"><input id="m-color" type="color" name="color" value="${esc(m.color || '#ffffff')}"></label></div>
+          <div class="field"><label for="m-label">Name</label><input id="m-label" name="label" value="${esc(m.label || '')}" maxlength="40" placeholder="${esc(m.name || 'e.g. Kris m')}" autocomplete="off"></div>
+          <div class="field"><label for="m-color">Colour</label><label class="color-dot big" style="--c:${esc(m.color || '#ffffff')}"><input id="m-color" type="color" name="color" value="${esc(m.color || '#ffffff')}"></label></div>
         </div>
-        <div class="field"><label for="m-role">Rol</label>${roles.length ? `<select id="m-role" name="role_id">${roles.map(r => `<option value="${esc(r.id)}" ${r.id === m.role_id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>` : '<p class="info">Crea primero un rol.</p>'}</div>
+        <div class="field"><label for="m-role">Role</label>${roles.length ? `<select id="m-role" name="role_id">${roles.map(r => `<option value="${esc(r.id)}" ${r.id === m.role_id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>` : '<p class="info">Create a role first.</p>'}</div>
         <p class="ed-error" role="alert" hidden></p>
-        <div class="confirm-actions">${isNew ? '' : '<button type="button" class="btn danger push-l" data-act="remove-member">Quitar del equipo</button>'}<button type="submit" class="btn primary" ${roles.length ? '' : 'disabled'}>${isNew ? 'Añadir' : 'Guardar'}</button></div>
+        <div class="confirm-actions">${isNew ? '' : '<button type="button" class="btn danger push-l" data-act="remove-member">Remove from team</button>'}<button type="submit" class="btn primary" ${roles.length ? '' : 'disabled'}>${isNew ? 'Add' : 'Save'}</button></div>
       </form>`);
+  }
+  // tu perfil: foto y color (cada uno el suyo)
+  const SWATCHES = ['#ffffff', '#ff5a5f', '#ff9f1c', '#ffd23f', '#3ddc84', '#2ec4b6', '#4fc3f7', '#5b7cfa', '#b388ff', '#ff6ec7'];
+  function meSheet() {
+    const u = auth.user, col = u.color || '#ffffff', nm = u.name || u.email.split('@')[0];
+    return sheet(`
+      <div class="me-form">
+        <div class="sheet-head"><h2>Your profile</h2><button type="button" class="ic" data-act="sheet-close" aria-label="Close">✕</button></div>
+        <div class="me-top">${avatar(u.picture, nm, col).replace('class="av"', 'class="av xl"')}
+          <div><b class="me-name" style="color:${esc(col)}">${esc(nm)}</b><span class="muted sm-txt">${esc(u.email)}</span>
+            <div class="me-btns"><label class="btn ghost sm" for="me-photo">${u.picture ? 'Change photo' : 'Upload photo'}</label><input type="file" id="me-photo" accept="image/*" class="sr-only">${u.picture ? '<button type="button" class="btn ghost sm" data-act="me-nophoto">Remove</button>' : ''}</div></div></div>
+        <p class="mini">Your colour</p>
+        <div class="swatches">${SWATCHES.map(c => `<button type="button" class="sw${c === col ? ' on' : ''}" data-act="me-color" data-c="${c}" style="--c:${c}" aria-label="${c}"></button>`).join('')}
+          <label class="sw custom${SWATCHES.includes(col) ? '' : ' on'}" style="--c:${esc(col)}" title="Custom colour"><input type="color" id="me-color" value="${esc(col)}"><span>+</span></label></div>
+        <p class="info sm-txt">Your name shows in this colour in the team, the chat and the history.</p>
+      </div>`);
+  }
+  async function setMyColor(c) {
+    try {
+      const r = await api('POST', '/api/me/color', { color: c });
+      auth.user.color = r.color; saveMe({ color: r.color });
+      teamData = null; render(); meSheet(); toast('Colour saved');
+    } catch (e) { toast(e.message); }
+  }
+  function saveMe(patch) {
+    for (const st of [localStorage, sessionStorage]) { try { const saved = JSON.parse(st.getItem(AUTH_KEY) || 'null'); if (saved?.user) { Object.assign(saved.user, patch); st.setItem(AUTH_KEY, JSON.stringify(saved)); } } catch { /* nada */ } }
   }
   const avatar = (pic, name, color) => pic
     ? `<img class="av" src="${esc(pic)}" alt="" referrerpolicy="no-referrer">`
     : `<span class="av" style="--c:${esc(color || '#ffffff')}">${esc((name || '?')[0].toUpperCase())}</span>`;
   function teamView() {
-    const head = `<div class="head"><div><p class="eyebrow">Accesos</p><h1>EQUIPO${teamData ? ` <span class="count">${teamData.owners.length + teamData.members.length}</span>` : ''}</h1></div>
-      ${teamData ? '<div class="head-btns"><button type="button" class="btn ghost" data-act="add-member">+ Añadir persona</button></div>' : ''}</div>`;
+    const head = `<div class="head"><div><p class="eyebrow">Access</p><h1>TEAM${teamData ? ` <span class="count">${teamData.owners.length + teamData.members.length}</span>` : ''}</h1></div>
+      ${teamData ? '<div class="head-btns"><button type="button" class="btn ghost" data-act="add-member">+ Add person</button></div>' : ''}</div>`;
     if (!teamData) {
       if (!teamErr) setTimeout(loadTeam, 0);
-      return head + (teamErr ? `<p class="login-error" role="alert">${esc(teamErr)}</p><button type="button" class="btn ghost" data-act="team-retry">Reintentar</button>` : '<p class="info">Cargando…</p>');
+      return head + (teamErr ? `<p class="login-error" role="alert">${esc(teamErr)}</p><button type="button" class="btn ghost" data-act="team-retry">Retry</button>` : '<p class="info">Loading…</p>');
     }
     const { owners, members, roles } = teamData, pics = teamData.ownerPics || {};
     const roleOf = m => roles.find(r => r.id === m.role_id);
     return `${head}
       <ol class="list team-list">
-        ${owners.map(e => { const me = e === auth.user.email; const nm = me ? auth.user.name || e.split('@')[0] : e.split('@')[0]; return `<li class="row tm">
-            ${avatar(me ? auth.user.picture : pics[e], nm, '#ffffff')}
-            <span class="meta"><b>${esc(nm)}</b><span>${esc(e)}</span></span>
+        ${owners.map(e => { const me = e === auth.user.email; const nm = me ? auth.user.name || e.split('@')[0] : e.split('@')[0], oc = (teamData.ownerColors || {})[e] || '#ffffff'; return `<li class="row tm">
+            ${avatar(me ? auth.user.picture : pics[e], nm, oc)}
+            <span class="meta"><b style="color:${esc(oc)}">${esc(nm)}</b><span>${esc(e)}</span></span>
             <span class="role-tag owner">Owner</span><span></span></li>`; }).join('')}
         ${members.map(m => { const r = roleOf(m), nm = m.label || m.name || m.email.split('@')[0]; return `
           <li class="row tm" data-email="${esc(m.email)}">
             ${avatar(m.picture, nm, m.color)}
-            <span class="meta"><b style="color:${esc(m.color || '#ffffff')}">${esc(nm)}</b><span>${esc(m.email)}${m.last_login ? ' · entró ' + esc(fmtDate(m.last_login)) : ' · aún no ha entrado'}</span></span>
-            <span class="role-tag" style="--c:${esc(m.color || '#ffffff')}">${esc(r?.name || 'Sin rol')}</span>
-            <button type="button" class="btn ghost sm" data-act="edit-member">Editar</button>
+            <span class="meta"><b style="color:${esc(m.color || '#ffffff')}">${esc(nm)}</b><span>${esc(m.email)}${m.last_login ? ' · signed in ' + esc(fmtDate(m.last_login)) : ' · never signed in'}</span></span>
+            <span class="role-tag" style="--c:${esc(m.color || '#ffffff')}">${esc(r?.name || 'No role')}</span>
+            <button type="button" class="btn ghost sm" data-act="edit-member">Edit</button>
           </li>`; }).join('')}
       </ol>
 
-      <div class="head sub"><div><p class="eyebrow">Permisos</p><h2>ROLES <span class="count">${roles.length}</span></h2></div>
-        <div class="head-btns"><button type="button" class="btn ghost" data-act="new-role">+ Nuevo rol</button></div></div>
+      <div class="head sub"><div><p class="eyebrow">Permissions</p><h2>ROLES <span class="count">${roles.length}</span></h2></div>
+        <div class="head-btns"><button type="button" class="btn ghost" data-act="new-role">+ New role</button></div></div>
       <div class="roles">${roles.map(r => { const n = members.filter(m => m.role_id === r.id).length; return `
         <div class="role-line" data-role="${esc(r.id)}">
           <b>${esc(r.name)}</b>
-          <span class="muted sm-txt">${roleSummary(r)} · ${n} ${n === 1 ? 'persona' : 'personas'}</span>
-          <span class="role-btns"><button type="button" class="btn ghost sm" data-act="preview-role" title="Ver el panel como este rol">Probar</button><button type="button" class="btn ghost sm" data-act="open-role">Editar</button></span>
-        </div>`; }).join('')}${!roles.length ? '<p class="info">Todavía no hay roles.</p>' : ''}</div>`;
+          <span class="muted sm-txt">${roleSummary(r)} · ${n} ${n === 1 ? 'person' : 'people'}</span>
+          <span class="role-btns"><button type="button" class="btn ghost sm" data-act="preview-role" title="View the panel as this role">Test</button><button type="button" class="btn ghost sm" data-act="open-role">Edit</button></span>
+        </div>`; }).join('')}${!roles.length ? '<p class="info">No roles yet.</p>' : ''}</div>`;
   }
   /* ---------------- Historial (solo owners) ---------------- */
   const logState = { who: '', items: [], more: false, people: [], loading: false, err: '', loaded: false };
@@ -519,17 +548,17 @@
     let day = '';
     const rows = logState.items.map(x => {
       const d = new Date(x.at), k = d.toDateString();
-      const head = k !== day ? `<li class="log-day">${esc(d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</li>` : '';
+      const head = k !== day ? `<li class="log-day">${esc(d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</li>` : '';
       day = k;
-      const kind = /^Entró/.test(x.action) ? 'in' : /(Añadió|Quitó|rol)/.test(x.action) ? 'team' : 'web';
-      return `${head}<li class="row lg ${kind}"><span class="muted">${esc(d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }))}</span><b style="${x.color ? `color:${esc(x.color)}` : ''}" title="${esc(x.email)}">${esc(x.name || x.email)}</b><span>${esc(x.action)}</span></li>`;
+      const kind = /^(Entró|Signed in)/.test(x.action) ? 'in' : /(Añadió|Quitó|rol|Added|Removed|role)/.test(x.action) ? 'team' : 'web';
+      return `${head}<li class="row lg ${kind}"><span class="muted">${esc(d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }))}</span><b style="${x.color ? `color:${esc(x.color)}` : ''}" title="${esc(x.email)}">${esc(x.name || x.email)}</b><span>${esc(x.action)}</span></li>`;
     }).join('');
-    return `<div class="head"><div><p class="eyebrow">Quién hizo qué</p><h1>HISTORIAL</h1></div>
-        <select class="log-who" aria-label="Ver el historial de"><option value="">Todo el equipo</option>${opts}</select></div>
-      <p class="info lead">Todo lo que pasa en el panel: quién entra, qué publica, qué borra y los cambios del equipo. Solo lo veis los owners.</p>
+    return `<div class="head"><div><p class="eyebrow">Who did what</p><h1>HISTORY</h1></div>
+        <select class="log-who" aria-label="View history of"><option value="">Whole team</option>${opts}</select></div>
+      <p class="info lead">Everything that happens in the panel: who signs in, what they publish, what they delete and team changes. Only owners can see it.</p>
       ${logState.err ? `<p class="login-error" role="alert">${esc(logState.err)}</p>` : ''}
-      <ol class="list log">${rows || `<li class="empty">${logState.loading || !logState.loaded ? 'Cargando…' : 'Nada todavía.'}</li>`}</ol>
-      ${logState.more ? `<button type="button" class="btn ghost log-more" data-act="log-more"${logState.loading ? ' disabled' : ''}>Ver más</button>` : ''}`;
+      <ol class="list log">${rows || `<li class="empty">${logState.loading || !logState.loaded ? 'Loading…' : 'Nothing yet.'}</li>`}</ol>
+      ${logState.more ? `<button type="button" class="btn ghost log-more" data-act="log-more"${logState.loading ? ' disabled' : ''}>Show more</button>` : ''}`;
   }
 
   function rolePerms(form) {
@@ -544,16 +573,15 @@
   // tu foto de perfil: se recorta cuadrada (256 px) en el navegador y se sube
   async function setMyPhoto(file) {
     try {
-      if (!/^image\//.test(file.type)) throw new GhError('Elige una imagen.');
+      if (!/^image\//.test(file.type)) throw new GhError('Choose an image.');
       const img = await createImageBitmap(file);
       const side = Math.min(img.width, img.height), c = document.createElement('canvas');
       c.width = c.height = 256;
       c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 256, 256);
       const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.88));
       const r = await (await authFetch('/api/me/avatar', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob })).json();
-      auth.user.picture = r.picture;
-      for (const st of [localStorage, sessionStorage]) { try { const saved = JSON.parse(st.getItem(AUTH_KEY) || 'null'); if (saved?.user) { saved.user.picture = r.picture; st.setItem(AUTH_KEY, JSON.stringify(saved)); } } catch { /* nada */ } }
-      toast('Foto actualizada'); teamData = null; render();
+      auth.user.picture = r.picture; saveMe({ picture: r.picture });
+      toast('Photo updated'); teamData = null; render(); if ($('#sheet')?.open) meSheet();
     } catch (e) { toast(e.message); }
   }
   async function teamAction(fn, okMsg, errBox) {
@@ -570,32 +598,32 @@
   const CHIP_SHORT = { spotify_link: 'SP', soundcloud_link: 'SC', youtube_link: 'YT', stream_link: 'LINK' };
   const linkChips = (x, keys) => `<span class="links">${keys.map(k => x[k]
     ? `<a class="chip on" href="${esc(x[k])}" target="_blank" rel="noopener" title="${CHIP[k]}">${CHIP_SHORT[k]}</a>`
-    : `<span class="chip" title="Sin ${CHIP[k]}">${CHIP_SHORT[k]}</span>`).join('')}</span>`;
+    : `<span class="chip" title="No ${CHIP[k]}">${CHIP_SHORT[k]}</span>`).join('')}</span>`;
 
   /* Releases */
   function releaseRows() {
     const q = filter.trim().toLowerCase();
     const rows = repo.releases.map((r, i) => ({ r, i })).filter(({ r }) => !q || [r.title, r.artist, catOf(r)].join(' ').toLowerCase().includes(q));
-    if (!rows.length) return `<li class="empty">Nada coincide con «${esc(filter)}».</li>`;
+    if (!rows.length) return `<li class="empty">Nothing matches “${esc(filter)}”.</li>`;
     return rows.map(({ r, i }) => `
       <li class="row">
         <span class="pos">${i + 1}</span>
         ${imgTag(r.image, 'thumb')}
-        <span class="meta"><b>${esc(r.title || 'Sin título')}</b><span>${esc(r.artist || '')}</span></span>
+        <span class="meta"><b>${esc(r.title || 'Untitled')}</b><span>${esc(r.artist || '')}</span></span>
         <span class="cat">${esc(catOf(r))}</span>
         ${linkChips(r, ['spotify_link', 'soundcloud_link', 'youtube_link', 'stream_link'])}
         <span class="swatch" style="--c:${esc(hex6(r.color) || '#ffffff')}" title="${esc(r.color || '')}"></span>
-        ${i === 0 ? '<span class="tag">Portada</span>' : '<span></span>'}
-        ${can('releases', 'edit') ? `<button type="button" class="btn ghost sm" data-act="edit-release" data-key="${esc(keyOf(r))}">Editar</button>` : '<span></span>'}
+        ${i === 0 ? '<span class="tag">Cover</span>' : '<span></span>'}
+        ${can('releases', 'edit') ? `<button type="button" class="btn ghost sm" data-act="edit-release" data-key="${esc(keyOf(r))}">Edit</button>` : '<span></span>'}
       </li>`).join('');
   }
   function releasesView() {
     return `
       <div class="head">
         <div><p class="eyebrow">Discography</p><h1>RELEASES <span class="count">${repo.releases.length}</span></h1></div>
-        ${can('releases', 'edit') ? '<button type="button" class="btn primary" data-act="new-release">+ Nuevo lanzamiento</button>' : ''}
+        ${can('releases', 'edit') ? '<button type="button" class="btn primary" data-act="new-release">+ New release</button>' : ''}
       </div>
-      <input class="search" type="search" id="rel-filter" placeholder="Buscar" aria-label="Buscar lanzamientos" value="${esc(filter)}">
+      <input class="search" type="search" id="rel-filter" placeholder="Search" aria-label="Search releases" value="${esc(filter)}">
       <ol class="list" id="rel-list">${releaseRows()}</ol>
       ${excludedHtml('release')}`;
   }
@@ -607,40 +635,40 @@
     return `
       <form id="ed" class="editor" novalidate>
         <button type="button" class="back" data-act="back">← Releases</button>
-        <h1>${isNew ? 'NUEVO LANZAMIENTO' : esc(r.title || 'Sin título')}</h1>
+        <h1>${isNew ? 'NEW RELEASE' : esc(r.title || 'Untitled')}</h1>
         <div class="ed-grid">
           <div class="ed-side">
-            ${coverDrop(cover, r.image && !editing.cover ? P('assets/' + r.image) : '', 'Portada')}
+            ${coverDrop(cover, r.image && !editing.cover ? P('assets/' + r.image) : '', 'Cover')}
             <p class="info" id="ed-cover-info">${coverInfo()}</p>
             <div class="field">
-              <label for="f-color">Color</label>
+              <label for="f-color">Colour</label>
               <div class="color-row">
-                <input type="color" id="f-color-pick" value="${esc(color)}" aria-label="Elegir color">
+                <input type="color" id="f-color-pick" value="${esc(color)}" aria-label="Pick colour">
                 <input id="f-color" name="color" value="${esc(color)}" maxlength="7" spellcheck="false" autocomplete="off">
                 <span class="badge-prev" id="color-prev" style="--c:${esc(color)}">${esc(catOf(r) || nextCatalog(repo.releases))}</span>
               </div>
             </div>
           </div>
           <div class="ed-main">
-            <div class="field"><label for="f-title">Título</label><input id="f-title" name="title" value="${esc(r.title || '')}" maxlength="120" autocomplete="off"></div>
-            <div class="field"><label for="f-artist">Artistas</label><input id="f-artist" name="artist" value="${esc(r.artist || '')}" maxlength="160" autocomplete="off"></div>
+            <div class="field"><label for="f-title">Title</label><input id="f-title" name="title" value="${esc(r.title || '')}" maxlength="120" autocomplete="off"></div>
+            <div class="field"><label for="f-artist">Artists</label><input id="f-artist" name="artist" value="${esc(r.artist || '')}" maxlength="160" autocomplete="off"></div>
             <div class="row2">
-              <div class="field"><label for="f-catalog">Nº de catálogo</label><input id="f-catalog" name="catalog" value="${esc(catOf(r) || nextCatalog(repo.releases))}" maxlength="20" autocomplete="off" spellcheck="false"></div>
-              <div class="field"><label for="f-position">Posición</label><input id="f-position" name="position" type="number" min="1" max="${isNew ? n + 1 : n}" value="${isNew ? 1 : editing.index + 1}" inputmode="numeric"></div>
+              <div class="field"><label for="f-catalog">Catalogue no.</label><input id="f-catalog" name="catalog" value="${esc(catOf(r) || nextCatalog(repo.releases))}" maxlength="20" autocomplete="off" spellcheck="false"></div>
+              <div class="field"><label for="f-position">Position</label><input id="f-position" name="position" type="number" min="1" max="${isNew ? n + 1 : n}" value="${isNew ? 1 : editing.index + 1}" inputmode="numeric"></div>
             </div>
-            <p class="group">Enlaces</p>
+            <p class="group">Links</p>
             <div class="field"><label for="f-stream">Stream (smart link)</label><input id="f-stream" name="stream_link" type="url" value="${esc(r.stream_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://"></div>
             <div class="field"><label for="f-spotify">Spotify</label><input id="f-spotify" name="spotify_link" type="url" value="${esc(r.spotify_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://open.spotify.com/…"></div>
             <div class="field"><label for="f-soundcloud">SoundCloud</label><input id="f-soundcloud" name="soundcloud_link" type="url" value="${esc(r.soundcloud_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://soundcloud.com/…"></div>
             <div class="field"><label for="f-youtube">YouTube</label><input id="f-youtube" name="youtube_link" type="url" value="${esc(r.youtube_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…"></div>
-            <div class="field"><label for="f-desc">Descripción</label><textarea id="f-desc" name="description" rows="3" maxlength="400">${esc(r.description || '')}</textarea></div>
+            <div class="field"><label for="f-desc">Description</label><textarea id="f-desc" name="description" rows="3" maxlength="400">${esc(r.description || '')}</textarea></div>
           </div>
         </div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions">
-          <button type="submit" class="btn primary">${isNew ? 'Publicar' : 'Guardar cambios'}</button>
-          <button type="button" class="btn ghost" data-act="back">Cancelar</button>
-          ${isNew || !can('releases', 'delete') ? '' : `${r.soundcloud_link ? '<button type="button" class="btn ghost push" data-act="exclude-release">Excluir</button>' : ''}<button type="button" class="btn danger${r.soundcloud_link ? '' : ' push'}" data-act="delete-release">Eliminar</button>`}
+          <button type="submit" class="btn primary">${isNew ? 'Publish' : 'Save changes'}</button>
+          <button type="button" class="btn ghost" data-act="back">Cancel</button>
+          ${isNew || !can('releases', 'delete') ? '' : `${r.soundcloud_link ? '<button type="button" class="btn ghost push" data-act="exclude-release">Exclude</button>' : ''}<button type="button" class="btn danger${r.soundcloud_link ? '' : ' push'}" data-act="delete-release">Delete</button>`}
         </div>
       </form>`;
   }
@@ -650,7 +678,7 @@
         <input type="file" id="ed-file" class="sr-only" accept="image/jpeg,image/png,image/webp">
         <label for="ed-file" class="drop-in">
           ${src ? `<img src="${esc(src)}" ${repoPath ? `data-repo="${esc(repoPath)}"` : ''} alt="">` : ''}
-          <span class="drop-hint">${src ? 'Cambiar ' + label.toLowerCase() : `${label}<small>Arrastra o pulsa · JPG, PNG o WebP</small>`}</span>
+          <span class="drop-hint">${src ? 'Change ' + label.toLowerCase() : `${label}<small>Drag or click · JPG, PNG or WebP</small>`}</span>
         </label>
       </div>`;
   }
@@ -658,27 +686,27 @@
     const c = editing?.cover;
     if (!c) return '';
     const parts = [`${c.w}×${c.h} → ${Math.min(c.w, c.h, editing.px)}×${Math.min(c.w, c.h, editing.px)}`];
-    if (c.w !== c.h) parts.push('recortada al centro');
-    if (c.small) parts.push(`<span class="warn">pequeña: mejor ${editing.px} px o más</span>`);
+    if (c.w !== c.h) parts.push('cropped to centre');
+    if (c.small) parts.push(`<span class="warn">small: ${editing.px} px or more is better</span>`);
     return parts.join(' · ');
   }
 
   async function saveRelease(form) {
     const isNew = !editing.key, orig = editing.orig || {};
     const v = {
-      title: text(form, 'title', 'Título', { missing: 'Falta el título.' }),
-      artist: text(form, 'artist', 'Artistas', { max: 160, missing: 'Faltan los artistas.' }),
-      catalog: text(form, 'catalog', 'Nº de catálogo', { max: 20, missing: 'Falta el nº de catálogo.' }),
+      title: text(form, 'title', 'Title', { missing: 'Title missing.' }),
+      artist: text(form, 'artist', 'Artistas', { max: 160, missing: 'Artists missing.' }),
+      catalog: text(form, 'catalog', 'Catalogue no.', { max: 20, missing: 'Catalogue number missing.' }),
       stream_link: link(form, 'stream_link', 'Stream', null),
       spotify_link: link(form, 'spotify_link', 'Spotify', HOSTS.spotify),
       soundcloud_link: link(form, 'soundcloud_link', 'SoundCloud', HOSTS.soundcloud),
       youtube_link: link(form, 'youtube_link', 'YouTube', HOSTS.youtube),
-      description: text(form, 'description', 'Descripción', { max: 400 }),
+      description: text(form, 'description', 'Description', { max: 400 }),
     };
     const color = hex6(form.elements.color.value);
-    if (!color) throw new FieldError('color', 'Color: escribe un color como #ff68b2.');
-    if (!v.stream_link && !v.spotify_link && !v.soundcloud_link) throw new FieldError('stream_link', 'Pon al menos un enlace.');
-    if (isNew && !editing.cover) throw new Error('Falta la portada.');
+    if (!color) throw new FieldError('color', 'Colour: enter a colour like #ff68b2.');
+    if (!v.stream_link && !v.spotify_link && !v.soundcloud_link) throw new FieldError('stream_link', 'Add at least one link.');
+    if (isNew && !editing.cover) throw new Error('Cover missing.');
     const pos = position(form, isNew ? repo.releases.length + 1 : repo.releases.length);
 
     const baseId = isNew ? (normCat(v.catalog) || v.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'release') : null;
@@ -691,8 +719,8 @@
     const build = fresh => {
       const list = fresh.releases.slice();
       const idx = isNew ? -1 : list.findIndex(r => keyOf(r) === editing.key);
-      if (!isNew && idx < 0) throw new Error('Este lanzamiento ya no está en la web (lo han borrado desde otro sitio). Vuelve a la lista.');
-      if (list.some((r, i) => i !== idx && normCat(catOf(r)) === normCat(v.catalog))) throw new FieldError('catalog', `Ya hay un lanzamiento con el nº ${v.catalog}.`);
+      if (!isNew && idx < 0) throw new Error('This release is no longer on the site (deleted elsewhere). Go back to the list.');
+      if (list.some((r, i) => i !== idx && normCat(catOf(r)) === normCat(v.catalog))) throw new FieldError('catalog', `There is already a release with no. ${v.catalog}.`);
       let entry;
       if (isNew) {
         let id = baseId, k = 2;
@@ -712,12 +740,12 @@
       return { releases: list, remove };
     };
     const res = await publish(`${isNew ? 'Add' : 'Update'} release ${v.catalog} — ${v.title}`, uploads, build);
-    afterPublish(res, isNew ? 'Lanzamiento publicado' : 'Cambios guardados', [jsonProbe('releases.json', res.out.releases), ...uploads.map(u => fileProbe(image, u.blob))]);
+    afterPublish(res, isNew ? 'Release published' : 'Changes saved', [jsonProbe('releases.json', res.out.releases), ...uploads.map(u => fileProbe(image, u.blob))]);
     go('releases');
   }
   /* «Eliminar» only takes it off the site: if it is still on SoundCloud, the sync adds it again.
      «Excluir» also writes it to sync-ignore.json, so the SoundCloud sync (scripts/sync-soundcloud.mjs)
-     never adds it again; «Permitir de nuevo» in the Excluidos list undoes that. */
+     never adds it again; «Allow again» in the Excluidos list undoes that. */
   const ignoreEntry = (fresh, item, name, kind) => item?.soundcloud_link
     ? [...fresh.ignore.filter(x => x.soundcloud_link !== item.soundcloud_link), { soundcloud_link: item.soundcloud_link, title: name, kind, removed: new Date().toISOString().slice(0, 10) }]
     : undefined;
@@ -727,12 +755,12 @@
     if (!list.length) return '';
     return `
       <section class="excluded">
-        <h2>Excluidos <span class="count">${list.length}</span></h2>
+        <h2>Excluded <span class="count">${list.length}</span></h2>
         <ol class="list">${list.map(x => `
           <li class="row ex">
-            <span class="meta"><b>${esc(x.title || x.soundcloud_link)}</b><span>${esc(x.removed ? 'Excluido el ' + x.removed : '')}</span></span>
+            <span class="meta"><b>${esc(x.title || x.soundcloud_link)}</b><span>${esc(x.removed ? 'Excluded on ' + x.removed : '')}</span></span>
             <a class="link" href="${esc(x.soundcloud_link)}" target="_blank" rel="noopener">SoundCloud ↗</a>
-            ${can(kind === 'mixtape' ? 'radio' : 'releases', 'delete') ? `<button type="button" class="btn ghost sm" data-act="unexclude" data-link="${esc(x.soundcloud_link)}">Permitir de nuevo</button>` : '<span></span>'}
+            ${can(kind === 'mixtape' ? 'radio' : 'releases', 'delete') ? `<button type="button" class="btn ghost sm" data-act="unexclude" data-link="${esc(x.soundcloud_link)}">Allow again</button>` : '<span></span>'}
           </li>`).join('')}
         </ol>
       </section>`;
@@ -740,26 +768,26 @@
   async function unexclude(link) {
     const x = (repo.ignore || []).find(i => i.soundcloud_link === link);
     if (!x) return;
-    if (!await confirmBox(`¿Permitir de nuevo «${x.title || link}»? Si sigue en SoundCloud, la sincronización lo volverá a añadir a la web.`, 'Permitir')) return;
+    if (!await confirmBox(`Allow “${x.title || link}” again? If it is still on SoundCloud, the sync will add it back to the site.`, 'Allow')) return;
     const res = await publish(`Allow again from SoundCloud — ${x.title || link}`, [], fresh => {
       const ignore = fresh.ignore.filter(i => i.soundcloud_link !== link);
-      if (ignore.length === fresh.ignore.length) throw new Error('Ya no estaba excluido.');
+      if (ignore.length === fresh.ignore.length) throw new Error('It was no longer excluded.');
       return { ignore };
     });
-    if (res.unchanged) toast('No había nada que cambiar'); else toast('Permitido de nuevo');
+    if (res.unchanged) toast('Nothing to change'); else toast('Allowed again');
     render();
   }
   async function deleteRelease(exclude) {
     const r = editing.orig;
-    if (repo.releases.length <= 1) throw new Error('La web necesita al menos un lanzamiento.');
+    if (repo.releases.length <= 1) throw new Error('The site needs at least one release.');
     const ask = exclude
-      ? `¿Excluir «${r.title || catOf(r)}»? Se quita de la web y la sincronización con SoundCloud no lo volverá a añadir (se puede deshacer en «Excluidos»).`
-      : `¿Eliminar «${r.title || catOf(r)}» de la web? También se borra su portada.${r.soundcloud_link ? ' Si sigue en SoundCloud, volverá en la próxima sincronización (para que no vuelva, usa «Excluir»).' : ''}`;
-    if (!await confirmBox(ask, exclude ? 'Excluir' : 'Eliminar')) return false;
+      ? `Exclude “${r.title || catOf(r)}”? It is removed from the site and the SoundCloud sync won’t add it again (undo it in “Excluded”).`
+      : `Delete “${r.title || catOf(r)}” from the site? Its cover is deleted too.${r.soundcloud_link ? ' If it is still on SoundCloud it will come back on the next sync (use “Exclude” to stop that).' : ''}`;
+    if (!await confirmBox(ask, exclude ? 'Exclude' : 'Delete')) return false;
     const res = await publish(`${exclude ? 'Exclude' : 'Remove'} release ${catOf(r)} — ${r.title || ''}`, [], fresh => {
       const list = fresh.releases.filter(x => keyOf(x) !== editing.key);
-      if (list.length === fresh.releases.length) throw new Error('Este lanzamiento ya no estaba en la web.');
-      if (!list.length) throw new Error('La web necesita al menos un lanzamiento.');
+      if (list.length === fresh.releases.length) throw new Error('This release was no longer on the site.');
+      if (!list.length) throw new Error('The site needs at least one release.');
       const item = fresh.releases.find(x => keyOf(x) === editing.key), gone = item?.image;
       return {
         releases: list,
@@ -767,7 +795,7 @@
         ignore: exclude ? ignoreEntry(fresh, item, `${item?.artist || ''} - ${item?.title || ''}`, 'release') : undefined,
       };
     });
-    afterPublish(res, exclude ? 'Lanzamiento excluido' : 'Lanzamiento eliminado', [jsonProbe('releases.json', res.out.releases)]);
+    afterPublish(res, exclude ? 'Release excluded' : 'Release deleted', [jsonProbe('releases.json', res.out.releases)]);
     go('releases');
     return true;
   }
@@ -778,19 +806,19 @@
     return `
       <div class="head">
         <div><p class="eyebrow">Horizon Mixtapes</p><h1>MIXTAPES <span class="count">${list.length}</span></h1></div>
-        ${can('radio', 'edit') ? '<button type="button" class="btn primary" data-act="new-mixtape">+ Nuevo mixtape</button>' : ''}
+        ${can('radio', 'edit') ? '<button type="button" class="btn primary" data-act="new-mixtape">+ New mixtape</button>' : ''}
       </div>
       <ol class="list">${list.length ? list.map((m, i) => `
         <li class="row">
           <span class="pos">${i + 1}</span>
           ${imgTag(m.image, 'thumb')}
-          <span class="meta"><b>${esc(m.number ? 'Horizon Mixtape ' + m.number : m.title || 'Sin título')}</b><span>${esc(m.artist || '')}</span></span>
-          <span class="cat">${m.preview ? '♪ Audio' : '<span class="muted">Sin audio</span>'}</span>
+          <span class="meta"><b>${esc(m.number ? 'Horizon Mixtape ' + m.number : m.title || 'Untitled')}</b><span>${esc(m.artist || '')}</span></span>
+          <span class="cat">${m.preview ? '♪ Audio' : '<span class="muted">No audio</span>'}</span>
           ${linkChips(m, ['soundcloud_link', 'youtube_link'])}
           <span class="swatch" style="--c:${esc(hex6(m.color) || '#ffffff')}"></span>
-          ${i === 0 ? '<span class="tag">Portada</span>' : '<span></span>'}
-          ${can('radio', 'edit') ? `<button type="button" class="btn ghost sm" data-act="edit-mixtape" data-key="${esc(keyOf(m))}">Editar</button>` : '<span></span>'}
-        </li>`).join('') : '<li class="empty">Todavía no hay mixtapes.</li>'}
+          ${i === 0 ? '<span class="tag">Cover</span>' : '<span></span>'}
+          ${can('radio', 'edit') ? `<button type="button" class="btn ghost sm" data-act="edit-mixtape" data-key="${esc(keyOf(m))}">Edit</button>` : '<span></span>'}
+        </li>`).join('') : '<li class="empty">No mixtapes yet.</li>'}
       </ol>
       ${excludedHtml('mixtape')}`;
   }
@@ -811,12 +839,12 @@
         <h1>${isNew ? 'NUEVO MIXTAPE' : esc('Horizon Mixtape ' + (m.number || ''))}</h1>
         <div class="ed-grid">
           <div class="ed-side">
-            ${coverDrop(cover, m.image && !editing.cover ? P('assets/' + m.image) : '', 'Portada')}
+            ${coverDrop(cover, m.image && !editing.cover ? P('assets/' + m.image) : '', 'Cover')}
             <p class="info" id="ed-cover-info">${coverInfo()}</p>
             <div class="field">
-              <label for="f-color">Color</label>
+              <label for="f-color">Colour</label>
               <div class="color-row">
-                <input type="color" id="f-color-pick" value="${esc(color)}" aria-label="Elegir color">
+                <input type="color" id="f-color-pick" value="${esc(color)}" aria-label="Pick colour">
                 <input id="f-color" name="color" value="${esc(color)}" maxlength="7" spellcheck="false" autocomplete="off">
                 <span class="badge-prev" id="color-prev" style="--c:${esc(color)}">RADIO</span>
               </div>
@@ -824,31 +852,31 @@
           </div>
           <div class="ed-main">
             <div class="field">
-              <label for="f-sc">Enlace de SoundCloud</label>
+              <label for="f-sc">SoundCloud link</label>
               <div class="sc-row">
                 <input id="f-sc" name="soundcloud_link" type="url" value="${esc(m.soundcloud_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://soundcloud.com/horizonirecords/…">
-                <button type="button" class="btn ghost" data-act="sc-fill">Rellenar</button>
+                <button type="button" class="btn ghost" data-act="sc-fill">Fill in</button>
               </div>
               <p class="info sc-info" id="sc-info"></p>
             </div>
-            <div class="field"><label for="f-yt">Enlace de YouTube</label><input id="f-yt" name="youtube_link" type="url" value="${esc(m.youtube_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…"></div>
+            <div class="field"><label for="f-yt">YouTube link</label><input id="f-yt" name="youtube_link" type="url" value="${esc(m.youtube_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…"></div>
             <div class="row2">
-              <div class="field"><label for="f-title">Título</label><input id="f-title" name="title" value="${esc(m.title || 'HORIZON RCRDS Mixtape ' + number)}" maxlength="120" autocomplete="off"></div>
+              <div class="field"><label for="f-title">Title</label><input id="f-title" name="title" value="${esc(m.title || 'HORIZON RCRDS Mixtape ' + number)}" maxlength="120" autocomplete="off"></div>
               <div class="field"><label for="f-number">Nº</label><input id="f-number" name="number" value="${esc(number)}" maxlength="12" autocomplete="off" spellcheck="false"></div>
             </div>
             <div class="row2">
-              <div class="field"><label for="f-artist">Artista invitado</label><input id="f-artist" name="artist" value="${esc(m.artist || '')}" maxlength="120" autocomplete="off"></div>
-              <div class="field"><label for="f-position">Posición</label><input id="f-position" name="position" type="number" min="1" max="${isNew ? n + 1 : n}" value="${isNew ? 1 : editing.index + 1}" inputmode="numeric"></div>
+              <div class="field"><label for="f-artist">Guest artist</label><input id="f-artist" name="artist" value="${esc(m.artist || '')}" maxlength="120" autocomplete="off"></div>
+              <div class="field"><label for="f-position">Position</label><input id="f-position" name="position" type="number" min="1" max="${isNew ? n + 1 : n}" value="${isNew ? 1 : editing.index + 1}" inputmode="numeric"></div>
             </div>
-            <p class="group">Fragmento de audio</p>
+            <p class="group">Audio snippet</p>
             <div class="mx-audio" id="mx-audio">${mixAudioHtml()}</div>
           </div>
         </div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions">
-          <button type="submit" class="btn primary">${isNew ? 'Publicar' : 'Guardar cambios'}</button>
-          <button type="button" class="btn ghost" data-act="back">Cancelar</button>
-          ${isNew || !can('radio', 'delete') ? '' : `${m.soundcloud_link ? '<button type="button" class="btn ghost push" data-act="exclude-mixtape">Excluir</button>' : ''}<button type="button" class="btn danger${m.soundcloud_link ? '' : ' push'}" data-act="delete-mixtape">Eliminar</button>`}
+          <button type="submit" class="btn primary">${isNew ? 'Publish' : 'Save changes'}</button>
+          <button type="button" class="btn ghost" data-act="back">Cancel</button>
+          ${isNew || !can('radio', 'delete') ? '' : `${m.soundcloud_link ? '<button type="button" class="btn ghost push" data-act="exclude-mixtape">Exclude</button>' : ''}<button type="button" class="btn danger${m.soundcloud_link ? '' : ' push'}" data-act="delete-mixtape">Delete</button>`}
         </div>
       </form>`;
   }
@@ -857,11 +885,11 @@
     const src = a?.url || (cur ? assetSrc(cur) : '');
     return `
       ${src ? `<audio controls preload="metadata" src="${esc(src)}"></audio>` : ''}
-      ${a ? `<p class="info">${esc(a.name)} · ${(a.blob.size / 1048576).toFixed(1)} MB</p>` : src ? '' : '<p class="info">Sin fragmento: en la web el botón abre el mix en SoundCloud.</p>'}
+      ${a ? `<p class="info">${esc(a.name)} · ${(a.blob.size / 1048576).toFixed(1)} MB</p>` : src ? '' : '<p class="info">No snippet: on the site the button opens the mix on SoundCloud.</p>'}
       <div class="card-actions">
         <input type="file" id="mx-file" class="sr-only" accept="audio/mpeg,.mp3">
-        <label for="mx-file" class="btn ghost sm">${src ? 'Cambiar MP3' : 'Elegir MP3'}</label>
-        ${src ? '<button type="button" class="btn ghost sm" data-act="mx-remove-audio">Quitar</button>' : ''}
+        <label for="mx-file" class="btn ghost sm">${src ? 'Change MP3' : 'Choose MP3'}</label>
+        ${src ? '<button type="button" class="btn ghost sm" data-act="mx-remove-audio">Remove</button>' : ''}
       </div>`;
   }
   async function setMixAudio(file) {
@@ -880,13 +908,13 @@
     const input = $('#f-sc'), info = $('#sc-info');
     if (!input || !editing) return;
     let u;
-    try { u = new URL(input.value.trim()); } catch { if (force) showError(new FieldError('soundcloud_link', 'Pega primero el enlace de SoundCloud del mixtape.')); return; }
-    if (!HOSTS.soundcloud.some(h => h.test(u.hostname))) { if (force) showError(new FieldError('soundcloud_link', 'Ese enlace no es de SoundCloud.')); return; }
+    try { u = new URL(input.value.trim()); } catch { if (force) showError(new FieldError('soundcloud_link', 'Paste the mixtape’s SoundCloud link first.')); return; }
+    if (!HOSTS.soundcloud.some(h => h.test(u.hostname))) { if (force) showError(new FieldError('soundcloud_link', 'That is not a SoundCloud link.')); return; }
     const id = ++scSeq;
     info.textContent = 'Leyendo SoundCloud…';
     try {
       const res = await fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(u.href)}`).catch(() => null);
-      if (!res?.ok) throw new Error('SoundCloud no encuentra ese enlace (¿es público?).');
+      if (!res?.ok) throw new Error('SoundCloud can’t find that link (is it public?).');
       const o = await res.json();
       if (id !== scSeq || !editing) return;
       let title = String(o.title || '').trim();
@@ -916,7 +944,7 @@
           }
         }
       }
-      info.textContent = gotCover || !force ? '✓ Datos de SoundCloud' : '✓ Datos de SoundCloud (sin portada: súbela a mano)';
+      info.textContent = gotCover || !force ? '✓ SoundCloud details' : '✓ SoundCloud details (no cover: upload it manually)';
     } catch (e) {
       if (id === scSeq) info.textContent = e.message;
     }
@@ -924,15 +952,15 @@
   async function saveMixtape(form) {
     const isNew = !editing.key, orig = editing.orig || {};
     const v = {
-      soundcloud_link: link(form, 'soundcloud_link', 'SoundCloud', HOSTS.soundcloud, 'Falta el enlace de SoundCloud.'),
-      title: text(form, 'title', 'Título', { missing: 'Falta el título.' }),
-      number: normNumber(text(form, 'number', 'Nº', { max: 12, missing: 'Falta el número.' })),
-      artist: text(form, 'artist', 'Artista invitado', { max: 120 }),
+      soundcloud_link: link(form, 'soundcloud_link', 'SoundCloud', HOSTS.soundcloud, 'SoundCloud link missing.'),
+      title: text(form, 'title', 'Title', { missing: 'Title missing.' }),
+      number: normNumber(text(form, 'number', 'Nº', { max: 12, missing: 'Number missing.' })),
+      artist: text(form, 'artist', 'Guest artist', { max: 120 }),
       youtube_link: link(form, 'youtube_link', 'YouTube', HOSTS.youtube),
     };
     const color = hex6(form.elements.color.value);
-    if (!color) throw new FieldError('color', 'Color: escribe un color como #ff68b2.');
-    if (isNew && !editing.cover) throw new Error('Falta la portada (pega el enlace de SoundCloud o súbela).');
+    if (!color) throw new FieldError('color', 'Colour: enter a colour like #ff68b2.');
+    if (isNew && !editing.cover) throw new Error('Cover missing (paste the SoundCloud link or upload it).');
     const pos = position(form, isNew ? repo.mixtapes.length + 1 : repo.mixtapes.length);
     const base = 'mix' + (normCat(v.number) || 'tape');
     let image = orig.image, preview = editing.removeAudio ? undefined : orig.preview;
@@ -942,8 +970,8 @@
     const res = await publish(`${isNew ? 'Add' : 'Update'} mixtape ${v.number}${v.artist ? ' — ' + v.artist : ''}`, uploads, fresh => {
       const list = fresh.mixtapes.slice();
       const idx = isNew ? -1 : list.findIndex(m => keyOf(m) === editing.key);
-      if (!isNew && idx < 0) throw new Error('Este mixtape ya no está en la web (lo han borrado desde otro sitio). Vuelve a la lista.');
-      if (list.some((m, i) => i !== idx && m.number && normCat(m.number) === normCat(v.number))) throw new FieldError('number', `Ya hay un mixtape ${v.number}.`);
+      if (!isNew && idx < 0) throw new Error('This mixtape is no longer on the site (deleted elsewhere). Go back to the list.');
+      if (list.some((m, i) => i !== idx && m.number && normCat(m.number) === normCat(v.number))) throw new FieldError('number', `There is already a mixtape ${v.number}.`);
       let entry;
       if (isNew) {
         let id = base, k = 2;
@@ -963,18 +991,18 @@
         .filter(f => f && safeFile(f) && !used(f)).map(f => P('assets/' + f));
       return { mixtapes: list, remove };
     });
-    afterPublish(res, isNew ? 'Mixtape publicado' : 'Cambios guardados', [jsonProbe('mixtapes.json', res.out.mixtapes), ...uploads.map(u => fileProbe(u.path.split('/').pop(), u.blob))]);
+    afterPublish(res, isNew ? 'Mixtape publicado' : 'Changes saved', [jsonProbe('mixtapes.json', res.out.mixtapes), ...uploads.map(u => fileProbe(u.path.split('/').pop(), u.blob))]);
     go('radio');
   }
   async function deleteMixtape(exclude) {
     const m = editing.orig;
     const ask = exclude
-      ? `¿Excluir «Horizon Mixtape ${m.number || ''}»? Se quita de la web y la sincronización con SoundCloud no lo volverá a añadir (se puede deshacer en «Excluidos»).`
-      : `¿Eliminar «Horizon Mixtape ${m.number || ''}» de la web? También se borran su portada y su audio.${m.soundcloud_link ? ' Si sigue en SoundCloud, volverá en la próxima sincronización (para que no vuelva, usa «Excluir»).' : ''}`;
-    if (!await confirmBox(ask, exclude ? 'Excluir' : 'Eliminar')) return false;
+      ? `Exclude “Horizon Mixtape ${m.number || ''}”? It is removed from the site and the SoundCloud sync won’t add it again (undo it in “Excluded”).`
+      : `Delete “Horizon Mixtape ${m.number || ''}” from the site? Its cover and audio are deleted too.${m.soundcloud_link ? ' If it is still on SoundCloud it will come back on the next sync (use “Exclude” to stop that).' : ''}`;
+    if (!await confirmBox(ask, exclude ? 'Exclude' : 'Delete')) return false;
     const res = await publish(`${exclude ? 'Exclude' : 'Remove'} mixtape ${m.number || ''}`, [], fresh => {
       const list = fresh.mixtapes.filter(x => keyOf(x) !== editing.key);
-      if (list.length === fresh.mixtapes.length) throw new Error('Este mixtape ya no estaba en la web.');
+      if (list.length === fresh.mixtapes.length) throw new Error('This mixtape was no longer on the site.');
       const gone = fresh.mixtapes.find(x => keyOf(x) === editing.key);
       const used = f => list.some(x => x.image === f || x.preview === f) || fresh.releases.some(r => r.image === f);
       return {
@@ -994,15 +1022,15 @@
     return `
       <div class="head">
         <div><p class="eyebrow">Curated</p><h1>PLAYLISTS <span class="count">${list.length}</span></h1></div>
-        ${can('playlists', 'edit') ? '<button type="button" class="btn primary" data-act="new-playlist">+ Nueva playlist</button>' : ''}
+        ${can('playlists', 'edit') ? '<button type="button" class="btn primary" data-act="new-playlist">+ New playlist</button>' : ''}
       </div>
       <ol class="list">${list.length ? list.map((p, i) => `
         <li class="row pl">
           <span class="pos">${i + 1}</span>
           ${imgTag(p.image, 'thumb')}
-          <span class="meta"><b>${esc(p.title || 'Sin título')}</b><span>${esc(p.description || '')}</span></span>
-          ${can('playlists', 'edit') ? `<button type="button" class="btn ghost sm" data-act="edit-playlist" data-index="${i}">Editar</button>` : '<span></span>'}
-        </li>`).join('') : '<li class="empty">Todavía no hay playlists.</li>'}
+          <span class="meta"><b>${esc(p.title || 'Untitled')}</b><span>${esc(p.description || '')}</span></span>
+          ${can('playlists', 'edit') ? `<button type="button" class="btn ghost sm" data-act="edit-playlist" data-index="${i}">Edit</button>` : '<span></span>'}
+        </li>`).join('') : '<li class="empty">No playlists yet.</li>'}
       </ol>`;
   }
   function playlistEditor() {
@@ -1011,24 +1039,24 @@
     return `
       <form id="ed" class="editor" novalidate>
         <button type="button" class="back" data-act="back">← Playlists</button>
-        <h1>${isNew ? 'NUEVA PLAYLIST' : esc(p.title || 'Sin título')}</h1>
+        <h1>${isNew ? 'NEW PLAYLIST' : esc(p.title || 'Untitled')}</h1>
         <div class="ed-grid">
           <div class="ed-side">
-            ${coverDrop(cover, p.image && !editing.cover ? P('assets/' + p.image) : '', 'Portada')}
+            ${coverDrop(cover, p.image && !editing.cover ? P('assets/' + p.image) : '', 'Cover')}
             <p class="info" id="ed-cover-info">${coverInfo()}</p>
           </div>
           <div class="ed-main">
-            <div class="field"><label for="f-title">Título</label><input id="f-title" name="title" value="${esc(p.title || '')}" maxlength="80" autocomplete="off"></div>
-            <div class="field"><label for="f-desc">Descripción</label><textarea id="f-desc" name="description" rows="3" maxlength="300">${esc(p.description || '')}</textarea></div>
-            <div class="field"><label for="f-link">Enlace</label><input id="f-link" name="link" type="url" value="${esc(p.link || '')}" autocomplete="off" spellcheck="false" placeholder="https://open.spotify.com/playlist/…"></div>
-            <div class="field narrow"><label for="f-position">Posición</label><input id="f-position" name="position" type="number" min="1" max="${isNew ? n + 1 : n}" value="${isNew ? n + 1 : editing.index + 1}" inputmode="numeric"></div>
+            <div class="field"><label for="f-title">Title</label><input id="f-title" name="title" value="${esc(p.title || '')}" maxlength="80" autocomplete="off"></div>
+            <div class="field"><label for="f-desc">Description</label><textarea id="f-desc" name="description" rows="3" maxlength="300">${esc(p.description || '')}</textarea></div>
+            <div class="field"><label for="f-link">Link</label><input id="f-link" name="link" type="url" value="${esc(p.link || '')}" autocomplete="off" spellcheck="false" placeholder="https://open.spotify.com/playlist/…"></div>
+            <div class="field narrow"><label for="f-position">Position</label><input id="f-position" name="position" type="number" min="1" max="${isNew ? n + 1 : n}" value="${isNew ? n + 1 : editing.index + 1}" inputmode="numeric"></div>
           </div>
         </div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions">
-          <button type="submit" class="btn primary">${isNew ? 'Publicar' : 'Guardar cambios'}</button>
-          <button type="button" class="btn ghost" data-act="back">Cancelar</button>
-          ${isNew || !can('playlists', 'delete') ? '' : '<button type="button" class="btn danger push" data-act="delete-playlist">Eliminar</button>'}
+          <button type="submit" class="btn primary">${isNew ? 'Publish' : 'Save changes'}</button>
+          <button type="button" class="btn ghost" data-act="back">Cancel</button>
+          ${isNew || !can('playlists', 'delete') ? '' : '<button type="button" class="btn danger push" data-act="delete-playlist">Delete</button>'}
         </div>
       </form>`;
   }
@@ -1036,7 +1064,7 @@
   function findPlaylist(list) {
     if (same(list[editing.index], editing.orig)) return editing.index;
     const i = list.findIndex(p => same(p, editing.orig));
-    if (i < 0) throw new Error('Esta playlist ha cambiado desde otro sitio. Vuelve a la lista y ábrela otra vez.');
+    if (i < 0) throw new Error('This playlist changed somewhere else. Go back to the list and open it again.');
     return i;
   }
   function nextPlaylistImage() {
@@ -1050,11 +1078,11 @@
   async function savePlaylist(form) {
     const isNew = editing.index < 0, orig = editing.orig || {};
     const v = {
-      title: text(form, 'title', 'Título', { max: 80, missing: 'Falta el título.' }),
-      description: text(form, 'description', 'Descripción', { max: 300 }),
-      link: link(form, 'link', 'Enlace', null, 'Falta el enlace.'),
+      title: text(form, 'title', 'Title', { max: 80, missing: 'Title missing.' }),
+      description: text(form, 'description', 'Description', { max: 300 }),
+      link: link(form, 'link', 'Link', null, 'Link missing.'),
     };
-    if (isNew && !editing.cover) throw new Error('Falta la portada.');
+    if (isNew && !editing.cover) throw new Error('Cover missing.');
     const pos = position(form, isNew ? repo.playlists.length + 1 : repo.playlists.length);
     let image = orig.image;
     const uploads = [];
@@ -1069,12 +1097,12 @@
       const old = idx >= 0 ? fresh.playlists[idx].image : null;
       return { playlists: list, remove: old && old !== image && safeFile(old) && !list.some(p => p.image === old) && !fresh.releases.some(r => r.image === old) ? [P('assets/' + old)] : [] };
     });
-    afterPublish(res, isNew ? 'Playlist publicada' : 'Cambios guardados', [jsonProbe('playlists.json', res.out.playlists), ...uploads.map(u => fileProbe(image, u.blob))]);
+    afterPublish(res, isNew ? 'Playlist publicada' : 'Changes saved', [jsonProbe('playlists.json', res.out.playlists), ...uploads.map(u => fileProbe(image, u.blob))]);
     go('playlists');
   }
   async function deletePlaylist() {
     const p = editing.orig;
-    if (!await confirmBox(`¿Eliminar la playlist «${p.title || ''}» de la web?`)) return false;
+    if (!await confirmBox(`Delete the playlist “${p.title || ''}” from the site?`)) return false;
     const res = await publish(`Remove playlist — ${p.title || ''}`, [], fresh => {
       const list = fresh.playlists.slice(), idx = findPlaylist(list);
       const [gone] = list.splice(idx, 1);
@@ -1087,25 +1115,25 @@
 
   /* Reproductor y logo: archivos que se sustituyen tal cual */
   const FILES = {
-    player: [{ file: 'release_preview.mp3', title: 'Audio del reproductor', kind: 'audio', accept: 'audio/mpeg,.mp3' }],
+    player: [{ file: 'release_preview.mp3', title: 'Player audio', kind: 'audio', accept: 'audio/mpeg,.mp3' }],
   };
   const pending = new Map();   // archivo → { blob, url }
   function fileCard(f, editable) {
     const path = P('assets/' + f.file), has = repo.files.has(path) || previews.has(path), nw = pending.get(f.file);
     const src = nw?.url || (has ? assetSrc(f.file) : '');
     const media = f.kind === 'audio'
-      ? (src ? `<audio controls preload="metadata" src="${esc(src)}"></audio>` : '<p class="info">Todavía no hay audio.</p>')
-      : `<div class="logo-prev">${src ? `<img src="${esc(src)}" ${nw ? '' : `data-repo="${esc(path)}"`} alt="">` : '<span class="info">Sin imagen</span>'}</div>`;
+      ? (src ? `<audio controls preload="metadata" src="${esc(src)}"></audio>` : '<p class="info">No audio yet.</p>')
+      : `<div class="logo-prev">${src ? `<img src="${esc(src)}" ${nw ? '' : `data-repo="${esc(path)}"`} alt="">` : '<span class="info">No image</span>'}</div>`;
     return `
       <section class="card" data-file="${esc(f.file)}">
-        <h2>${esc(f.title)}${nw ? ' <span class="tag">Nuevo, sin publicar</span>' : ''}</h2>
+        <h2>${esc(f.title)}${nw ? ' <span class="tag">New, not published</span>' : ''}</h2>
         ${media}
         ${nw ? `<p class="info">${esc(nw.name)} · ${(nw.blob.size / 1048576).toFixed(1)} MB</p>` : ''}
         ${editable ? `<div class="card-actions">
           <input type="file" id="file-${esc(f.file)}" class="sr-only" accept="${esc(f.accept)}" data-pick="${esc(f.file)}">
-          <label for="file-${esc(f.file)}" class="btn ghost">${nw ? 'Elegir otro' : f.kind === 'audio' ? 'Cambiar audio' : 'Cambiar imagen'}</label>
-          ${nw ? `<button type="button" class="btn primary" data-act="publish-file" data-file="${esc(f.file)}">Publicar</button>
-                  <button type="button" class="btn ghost" data-act="discard-file" data-file="${esc(f.file)}">Descartar</button>` : ''}
+          <label for="file-${esc(f.file)}" class="btn ghost">${nw ? 'Choose another' : f.kind === 'audio' ? 'Change audio' : 'Change image'}</label>
+          ${nw ? `<button type="button" class="btn primary" data-act="publish-file" data-file="${esc(f.file)}">Publish</button>
+                  <button type="button" class="btn ghost" data-act="discard-file" data-file="${esc(f.file)}">Discard</button>` : ''}
         </div>` : ''}
         <p class="ed-error" role="alert" hidden></p>
       </section>`;
@@ -1122,9 +1150,9 @@
       if (f.kind === 'audio') {
         await checkMp3(file);
       } else {
-        if (file.type !== 'image/png') throw new Error('Usa una imagen PNG (con fondo transparente si lo tiene el actual).');
-        if (file.size > 3 * 1048576) throw new Error('La imagen pesa demasiado (máx. 3 MB).');
-        if (!await decodeImage(file).catch(() => null)) throw new Error('No se pudo leer la imagen.');
+        if (file.type !== 'image/png') throw new Error('Use a PNG image (with a transparent background if the current one has one).');
+        if (file.size > 3 * 1048576) throw new Error('The image is too big (max 3 MB).');
+        if (!await decodeImage(file).catch(() => null)) throw new Error('Could not read the image.');
       }
       const old = pending.get(name); if (old) URL.revokeObjectURL(old.url);
       pending.set(name, { blob: file, url: URL.createObjectURL(file), name: file.name });
@@ -1135,11 +1163,11 @@
     }
   }
   async function checkMp3(file) {
-    if (!(file.type === 'audio/mpeg' || /\.mp3$/i.test(file.name))) throw new Error('Usa un archivo MP3.');
-    if (file.size > MAX_AUDIO) throw new Error('El audio pesa demasiado (máx. 25 MB).');
+    if (!(file.type === 'audio/mpeg' || /\.mp3$/i.test(file.name))) throw new Error('Use an MP3 file.');
+    if (file.size > MAX_AUDIO) throw new Error('The audio is too big (max 25 MB).');
     await new Promise((ok, ko) => {
       const a = new Audio(), u = URL.createObjectURL(file), t = setTimeout(() => done(ko), 10000);
-      const done = fn => { clearTimeout(t); a.removeAttribute('src'); a.load(); URL.revokeObjectURL(u); fn(new Error('Este archivo no se puede reproducir. Prueba con otro MP3.')); };
+      const done = fn => { clearTimeout(t); a.removeAttribute('src'); a.load(); URL.revokeObjectURL(u); fn(new Error('This file can’t be played. Try another MP3.')); };
       a.onloadedmetadata = () => { clearTimeout(t); URL.revokeObjectURL(u); ok(); };
       a.onerror = () => done(ko);
       a.preload = 'metadata'; a.src = u;
@@ -1153,7 +1181,7 @@
     try {
       const res = await publish(`Update ${name}`, [{ path: P('assets/' + name), blob: nw.blob }]);
       URL.revokeObjectURL(nw.url); pending.delete(name);
-      afterPublish(res, 'Publicado', [fileProbe(name, nw.blob)]);
+      afterPublish(res, 'Published', [fileProbe(name, nw.blob)]);
       render();
     } catch (e) {
       busyOff(card);
@@ -1163,7 +1191,7 @@
   }
 
   function afterPublish(res, msg, probes) {
-    if (res.unchanged) { toast('No había nada que cambiar'); return; }
+    if (res.unchanged) { toast('Nothing to change'); return; }
     toast(msg); accent(); watchSite(probes);
   }
 
@@ -1178,7 +1206,7 @@
   const isDirty = () => !!(editing && dirtyBase !== null && formState() !== dirtyBase) || pending.size > 0;
   async function leaveOk() {
     if (!isDirty()) return true;
-    const ok = await confirmBox('Hay cambios sin publicar. ¿Salir sin publicarlos?', 'Salir sin publicar');
+    const ok = await confirmBox('There are unpublished changes. Leave without publishing?', 'Leave without publishing');
     if (ok) { for (const p of pending.values()) URL.revokeObjectURL(p.url); pending.clear(); }
     return ok;
   }
@@ -1213,8 +1241,8 @@
     else inner = releasesView();
     app.innerHTML = shell(inner);
     chatStart();
-    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Reproductor', team: 'Equipo', log: 'Historial', forms: 'Formularios', contracts: 'Contratos', none: 'Equipo' };
-    document.title = `${editing ? (editing.orig?.title || 'Nuevo') + ' · ' : ''}${names[view] || ''} — Panel HORIZON RCRDS`;
+    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', team: 'Team', log: 'History', forms: 'Forms', contracts: 'Contracts', none: 'Team' };
+    document.title = `${editing ? (editing.orig?.title || 'New') + ' · ' : ''}${names[view] || ''} — Panel HORIZON RCRDS`;
   }
   function busyOn(scope, btn, label) {
     busy = true;
@@ -1242,7 +1270,7 @@
       drop.querySelector('img')?.remove();
       const img = document.createElement('img'); img.src = c.url; img.alt = '';
       drop.prepend(img);
-      drop.querySelector('.drop-hint').textContent = 'Cambiar portada';
+      drop.querySelector('.drop-hint').textContent = 'Change cover';
       if (info) info.innerHTML = coverInfo();
       if (editing.view !== 'playlists') setColor(c.color);
       $('#ed-error').hidden = true;
@@ -1260,6 +1288,15 @@
   }
 
   /* ---------------- Eventos ---------------- */
+  // «Atrás» del navegador no saca del panel: vuelve a la primera sección (Releases)
+  try { history.replaceState({ hz: 0 }, ''); history.pushState({ hz: 1 }, ''); } catch { /* nada */ }
+  window.addEventListener('popstate', async () => {
+    history.pushState({ hz: 1 }, '');
+    if (!auth || !repo) return;
+    if ($('#sheet')?.open) { closeSheet(); return; }
+    if (!await leaveOk()) return;
+    filter = ''; go(firstView());
+  });
   document.addEventListener('click', async e => {
     const t = e.target.closest('[data-act], [data-view]');
     if (!t || busy) return;
@@ -1273,7 +1310,7 @@
     const needs = { 'new-release': ['releases', 'edit'], 'edit-release': ['releases', 'edit'], 'delete-release': ['releases', 'delete'], 'exclude-release': ['releases', 'delete'],
       'new-mixtape': ['radio', 'edit'], 'edit-mixtape': ['radio', 'edit'], 'delete-mixtape': ['radio', 'delete'], 'exclude-mixtape': ['radio', 'delete'],
       'new-playlist': ['playlists', 'edit'], 'edit-playlist': ['playlists', 'edit'], 'delete-playlist': ['playlists', 'delete'] }[t.dataset.act];
-    if (needs && !can(...needs)) { toast('Tu rol no tiene permiso para esto.'); return; }
+    if (needs && !can(...needs)) { toast('Your role doesn’t have permission for this.'); return; }
     switch (t.dataset.act) {
       case 'team-retry': teamErr = ''; render(); break;
       case 'log-more': loadLog(true); break;
@@ -1288,20 +1325,35 @@
       case 'open-role': { const r = teamData.roles.find(x => x.id === t.closest('[data-role]').dataset.role); if (r) roleSheet(r); break; }
       case 'new-role': roleSheet({ perms: {} }); break;
       case 'sheet-close': closeSheet(); break;
+      case 'me': meSheet(); break;
+      case 'sec-up': case 'sec-down': {
+        const row = t.closest('.perm-row'), list = row.parentElement;
+        const up = t.dataset.act === 'sec-up', sib = up ? row.previousElementSibling : row.nextElementSibling;
+        if (!sib) break;
+        if (up) list.insertBefore(row, sib); else list.insertBefore(sib, row);
+        const ids = [...list.querySelectorAll('.perm-row')].map(x => x.dataset.sec);
+        try {
+          const r = await api('POST', '/api/team/sections', { ids });
+          teamData.sections = r.sections; auth.sections = r.sections; for (const st of [localStorage, sessionStorage]) { try { const sv = JSON.parse(st.getItem(AUTH_KEY) || 'null'); if (sv) { sv.sections = r.sections; st.setItem(AUTH_KEY, JSON.stringify(sv)); } } catch { /* nada */ } } render();
+        } catch (err) { toast(err.message); }
+        break;
+      }
+      case 'me-color': setMyColor(t.dataset.c); break;
+      case 'me-nophoto': try { await authFetch('/api/me/avatar', { method: 'DELETE' }); auth.user.picture = ''; saveMe({ picture: '' }); teamData = null; render(); meSheet(); } catch (err) { toast(err.message); } break;
       case 'add-member': memberSheet(null); break;
       case 'edit-member': { const m = teamData.members.find(x => x.email === t.closest('[data-email]').dataset.email); if (m) memberSheet(m); break; }
       case 'delete-role': {
         const form = t.closest('.role-form'), r = teamData.roles.find(x => x.id === form.dataset.role);
         closeSheet();
-        if (!r || !await confirmBox(`¿Eliminar el rol «${r.name}»?`)) { if (r) roleSheet(r); return; }
-        teamAction(() => api('DELETE', `/api/team/roles?id=${encodeURIComponent(r.id)}`), 'Rol eliminado');
+        if (!r || !await confirmBox(`Delete the role “${r.name}”?`)) { if (r) roleSheet(r); return; }
+        teamAction(() => api('DELETE', `/api/team/roles?id=${encodeURIComponent(r.id)}`), 'Role deleted');
         break;
       }
       case 'remove-member': {
         const email = t.closest('.member-form').dataset.email;
         closeSheet();
-        if (!await confirmBox(`¿Quitar a ${email} del equipo? Dejará de poder entrar en /team al momento.`, 'Quitar')) return;
-        teamAction(() => api('DELETE', `/api/team/members?email=${encodeURIComponent(email)}`), 'Quitado del equipo');
+        if (!await confirmBox(`Remove ${email} from the team? They will lose access to /team immediately.`, 'Remove')) return;
+        teamAction(() => api('DELETE', `/api/team/members?email=${encodeURIComponent(email)}`), 'Removed from the team');
         break;
       }
       case 'logout':
@@ -1381,16 +1433,16 @@
       const box = form.querySelector('.ed-error'); box.hidden = true;
       const isNew = !form.dataset.email;
       const email = isNew ? form.elements.email.value.trim().toLowerCase() : form.dataset.email;
-      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) { box.textContent = 'Escribe un email válido.'; box.hidden = false; form.elements.email.focus(); return; }
-      teamAction(() => api('POST', '/api/team/members', { email, label: form.elements.label.value.trim(), color: form.elements.color.value, role_id: form.elements.role_id?.value }), isNew ? `${email} añadido al equipo` : 'Guardado', box);
+      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) { box.textContent = 'Enter a valid email.'; box.hidden = false; form.elements.email.focus(); return; }
+      teamAction(() => api('POST', '/api/team/members', { email, label: form.elements.label.value.trim(), color: form.elements.color.value, role_id: form.elements.role_id?.value }), isNew ? `${email} added to the team` : 'Saved', box);
       return;
     }
     if (form.classList.contains('role-form')) {
       const box = form.querySelector('.ed-error'); box.hidden = true;
       const name = form.elements.name.value.trim();
-      if (!name) { box.textContent = 'Ponle un nombre al rol.'; box.hidden = false; form.elements.name.focus(); return; }
+      if (!name) { box.textContent = 'Give the role a name.'; box.hidden = false; form.elements.name.focus(); return; }
       const id = form.dataset.role || undefined;
-      teamAction(() => api('POST', '/api/team/roles', { id, name, perms: rolePerms(form) }), id ? 'Rol guardado' : 'Rol creado', box);
+      teamAction(() => api('POST', '/api/team/roles', { id, name, perms: rolePerms(form) }), id ? 'Role saved' : 'Role created', box);
       return;
     }
     if (form.id !== 'ed' || busy) return;
@@ -1419,12 +1471,13 @@
     const t = e.target;
     if (t.id === 'ed-file' && t.files[0]) { setCover(t.files[0]); t.value = ''; }
     if (t.id === 'me-photo' && t.files[0]) { setMyPhoto(t.files[0]); t.value = ''; }
+    if (t.id === 'me-color') setMyColor(t.value);
     if (t.id === 'mx-file' && t.files[0]) { setMixAudio(t.files[0]); t.value = ''; }
     if (t.id === 'f-sc') scFill(!editing?.key);
     if (t.classList.contains('log-who')) { logState.who = t.value; logState.items = []; logState.loaded = false; loadLog(false); render(); }
     if (t.classList.contains('color-in') && !busy) teamAction(() => api('POST', '/api/team/members', { email: t.dataset.member, color: t.value }), 'Color guardado');
-    if (t.classList.contains('name-in') && !busy) teamAction(() => api('POST', '/api/team/members', { email: t.dataset.member, label: t.value.trim() }), 'Nombre guardado');
-    if (t.classList.contains('role-sel') && t.value && !busy) teamAction(() => api('POST', '/api/team/members', { email: t.dataset.member, role_id: t.value }), 'Rol cambiado');
+    if (t.classList.contains('name-in') && !busy) teamAction(() => api('POST', '/api/team/members', { email: t.dataset.member, label: t.value.trim() }), 'Name saved');
+    if (t.classList.contains('role-sel') && t.value && !busy) teamAction(() => api('POST', '/api/team/members', { email: t.dataset.member, role_id: t.value }), 'Role changed');
     // Editar o Eliminar llevan Ver; sin Ver no hay nada más
     const pm = t.closest?.('.perm-table') && t.name?.match(/^(.+)\.(view|edit|delete)$/);
     if (pm) {
@@ -1455,12 +1508,12 @@
   window.addEventListener('beforeunload', e => { if (isDirty() || busy) e.preventDefault(); });
 
   /* ---------------- Formularios ---------------- */
-  // Los owners los ven todos; el resto, solo los que tengan su rol o su email en «Quién puede ver las respuestas».
+  // Los owners los ven todos; el resto, solo los que tengan su rol o su email en «Who can see the responses».
   let formsData = null, formsErr = '', formsLoading = false, formOpen = null;
-  const FTYPES = { text: 'Texto corto', textarea: 'Texto largo', email: 'Email', url: 'Enlace', radio: 'Una opción', checkbox: 'Varias opciones', select: 'Desplegable', section: 'Sección (título)' };
+  const FTYPES = { text: 'Short text', textarea: 'Long text', email: 'Email', url: 'Link', radio: 'Single choice', checkbox: 'Varias opciones', select: 'Dropdown', section: 'Section (title)' };
   const isOwnerNow = () => !!auth?.user?.owner && !preview;
-  const visibleForms = () => (formsData?.forms || []).filter(f => !preview || f.access?.roles?.includes(preview.id));
-  const showForms = () => preview ? visibleForms().length > 0 : !!(auth?.user?.owner || auth?.user?.formsCount > 0);
+  const visibleForms = () => (formsData?.forms || []).filter(f => !preview || preview.perms?.forms?.view || f.access?.roles?.includes(preview.id));
+  const showForms = () => can('forms') || (preview ? visibleForms().length > 0 : auth?.user?.formsCount > 0);
   async function loadForms() {
     if (formsLoading) return;
     formsLoading = true;
@@ -1473,23 +1526,23 @@
   function formsPage() {
     if (!formsData) {
       if (!formsErr) setTimeout(loadForms, 0);
-      return `<div class="head"><div><p class="eyebrow">Formularios</p><h1>FORMULARIOS</h1></div></div>${formsErr ? `<p class="login-error" role="alert">${esc(formsErr)}</p>` : '<p class="info">Cargando…</p>'}`;
+      return `<div class="head"><div><p class="eyebrow">Forms</p><h1>FORMS</h1></div></div>${formsErr ? `<p class="login-error" role="alert">${esc(formsErr)}</p>` : '<p class="info">Loading…</p>'}`;
     }
     if (formOpen?.mode === 'edit') return formEditor();
     if (formOpen?.mode === 'responses') return formResponses();
-    const list = visibleForms(), own = isOwnerNow();
+    const list = visibleForms(), own = can('forms', 'edit');
     return `
-      <div class="head"><div><p class="eyebrow">Respuestas y enlaces</p><h1>FORMULARIOS <span class="count">${list.length}</span></h1></div>
-        ${own ? '<button type="button" class="btn primary" data-act="form-new">+ Nuevo formulario</button>' : ''}</div>
-      <p class="info lead">${own ? 'Ordénalos con las flechas. «Editar» te enseña el formulario tal como sale en la web mientras lo cambias. Cada uno tiene su enlace público (si lo abres) y puede salir como botón en «Send your demo» de la web. Las respuestas solo las veis los owners y quien elijas en cada formulario.' : 'Los formularios a los que tienes acceso.'}</p>
+      <div class="head"><div><p class="eyebrow">Responses and links</p><h1>FORMULARIOS <span class="count">${list.length}</span></h1></div>
+        ${own ? '<button type="button" class="btn primary" data-act="form-new">+ New form</button>' : ''}</div>
+      <p class="info lead">${own ? 'Reorder them with the arrows. “Edit” shows the form exactly as it looks on the site while you change it. Each form has its own public link (when open) and can appear as a button in “Send your demo” on the site.' : 'The forms you have access to.'}</p>
       <ol class="list forms-list">${list.length ? list.map((f, i) => `
         <li class="row fm" data-form="${esc(f.id)}">
-          ${own ? `<span class="ord"><button type="button" class="ic" data-act="form-up" aria-label="Subir" ${i ? '' : 'disabled'}>▲</button><button type="button" class="ic" data-act="form-down" aria-label="Bajar" ${i < list.length - 1 ? '' : 'disabled'}>▼</button></span>` : '<span></span>'}
+          ${own ? `<span class="ord"><button type="button" class="ic" data-act="form-up" aria-label="Move up" ${i ? '' : 'disabled'}>▲</button><button type="button" class="ic" data-act="form-down" aria-label="Move down" ${i < list.length - 1 ? '' : 'disabled'}>▼</button></span>` : '<span></span>'}
           <span class="meta"><b>${esc(f.title)}</b><span>${f.public ? `<a href="${esc(publicUrl(f))}" target="_blank" rel="noopener">/forms/${esc(f.slug)}</a>` : `/forms/${esc(f.slug)}`}</span></span>
-          <span class="badges">${f.public ? '<span class="tag">Abierto</span>' : '<span class="tag off">Cerrado</span>'}${f.on_site ? '<span class="tag">En la web</span>' : ''}</span>
+          <span class="badges">${f.public ? '<span class="tag">Open</span>' : '<span class="tag off">Closed</span>'}${f.on_site ? '<span class="tag">On the site</span>' : ''}</span>
           <span class="resp-n"><b>${f.total}</b> ${f.total === 1 ? 'respuesta' : 'respuestas'}${f.unseen ? ` <i>${f.unseen} ${f.unseen === 1 ? 'nueva' : 'nuevas'}</i>` : ''}</span>
-          <span class="fm-btns">${f.public ? `<a class="btn ghost sm" href="${esc(publicUrl(f))}" target="_blank" rel="noopener">Ver ↗</a>` : ''}<button type="button" class="btn ghost sm" data-act="form-resp">Respuestas</button>${own ? '<button type="button" class="btn primary sm" data-act="form-edit">Editar</button>' : ''}</span>
-        </li>`).join('') : '<li class="empty">No hay formularios.</li>'}
+          <span class="fm-btns">${f.public ? `<a class="btn ghost sm" href="${esc(publicUrl(f))}" target="_blank" rel="noopener">View ↗</a>` : ''}<button type="button" class="btn ghost sm" data-act="form-resp">Responses</button>${own ? '<button type="button" class="btn primary sm" data-act="form-edit">Edit</button>' : ''}</span>
+        </li>`).join('') : '<li class="empty">No forms.</li>'}
       </ol>`;
   }
   /* Respuestas */
@@ -1512,25 +1565,25 @@
   function formResponses() {
     const f = formsData.forms.find(x => x.id === formOpen.id);
     if (!f) { formOpen = null; return formsPage(); }
-    const qs = f.fields.filter(x => x.type !== 'section'), own = isOwnerNow();
+    const qs = f.fields.filter(x => x.type !== 'section'), own = can('forms', 'delete');
     const rs = formOpen.responses;
     return `
-      <button type="button" class="back" data-act="form-back">← Formularios</button>
-      <div class="head"><div><p class="eyebrow">Respuestas</p><h1>${esc(f.title)} <span class="count">${f.total}</span></h1></div>
-        ${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Descargar (Excel / CSV)</button>' : ''}</div>
+      <button type="button" class="back" data-act="form-back">← Forms</button>
+      <div class="head"><div><p class="eyebrow">Responses</p><h1>${esc(f.title)} <span class="count">${f.total}</span></h1></div>
+        ${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Download (Excel / CSV)</button>' : ''}</div>
       ${formOpen.err ? `<p class="login-error" role="alert">${esc(formOpen.err)}</p>` : ''}
-      ${!rs ? '<p class="info">Cargando…</p>' : rs.length ? `<div class="resps">${rs.map(r => `
+      ${!rs ? '<p class="info">Loading…</p>' : rs.length ? `<div class="resps">${rs.map(r => `
         <article class="resp${r.seen ? '' : ' is-new'}" data-resp="${r.id}">
-          <header><b>${esc(fmtDate(r.at))}</b>${r.seen ? '' : '<span class="tag">Nueva</span>'}${own ? '<button type="button" class="btn ghost sm push" data-act="resp-del">Borrar</button>' : ''}</header>
+          <header><b>${esc(fmtDate(r.at))}</b>${r.seen ? '' : '<span class="tag">New</span>'}${own ? '<button type="button" class="btn ghost sm push" data-act="resp-del">Delete</button>' : ''}</header>
           <dl>${qs.map(q => `<dt>${esc(q.label)}</dt><dd>${answerHtml(r.data[q.id])}</dd>`).join('')}</dl>
         </article>`).join('')}</div>
-        ${formOpen.more ? '<button type="button" class="btn ghost log-more" data-act="resp-more">Ver más</button>' : ''}` : '<p class="info">Todavía no hay respuestas.</p>'}`;
+        ${formOpen.more ? '<button type="button" class="btn ghost log-more" data-act="resp-more">Show more</button>' : ''}` : '<p class="info">No responses yet.</p>'}`;
   }
   /* Editor (owners) */
   function openEditor(f) {
     formOpen = { mode: 'edit', id: f?.id || null, draft: f ? JSON.parse(JSON.stringify({ title: f.title, slug: f.slug, description: f.description, public: f.public, on_site: f.on_site, button: f.button, access: f.access || { roles: [], emails: [] }, fields: f.fields }))
       : { title: '', slug: '', description: '', public: false, on_site: false, button: '', access: { roles: [], emails: [] }, fields: [{ id: 'q1', type: 'text', label: '', help: '', required: true }] } };
-    if (!teamData) loadTeam().then(() => view === 'forms' && formOpen?.mode === 'edit' && (syncDraft(), render()));
+    if (!teamData && isOwnerNow()) loadTeam().then(() => view === 'forms' && formOpen?.mode === 'edit' && (syncDraft(), render()));
     render();
     $('#fe-title')?.focus();
   }
@@ -1556,14 +1609,14 @@
     return `
       <div class="qe${x.type === 'section' ? ' is-sec' : ''}" data-id="${esc(x.id)}">
         <div class="qe-top">
-          <select name="type" aria-label="Tipo de pregunta">${Object.entries(FTYPES).map(([k, v]) => `<option value="${k}" ${k === x.type ? 'selected' : ''}>${v}</option>`).join('')}</select>
-          ${x.type === 'section' ? '' : `<label class="check sm"><input type="checkbox" name="required" ${x.required ? 'checked' : ''}><span>Obligatoria</span></label>`}
-          <span class="qe-btns"><button type="button" class="ic" data-act="q-up" aria-label="Subir" ${i ? '' : 'disabled'}>▲</button><button type="button" class="ic" data-act="q-down" aria-label="Bajar" ${i < n - 1 ? '' : 'disabled'}>▼</button><button type="button" class="ic danger" data-act="q-del" aria-label="Quitar pregunta">✕</button></span>
+          <select name="type" aria-label="Question type">${Object.entries(FTYPES).map(([k, v]) => `<option value="${k}" ${k === x.type ? 'selected' : ''}>${v}</option>`).join('')}</select>
+          ${x.type === 'section' ? '' : `<label class="check sm"><input type="checkbox" name="required" ${x.required ? 'checked' : ''}><span>Required</span></label>`}
+          <span class="qe-btns"><button type="button" class="ic" data-act="q-up" aria-label="Move up" ${i ? '' : 'disabled'}>▲</button><button type="button" class="ic" data-act="q-down" aria-label="Move down" ${i < n - 1 ? '' : 'disabled'}>▼</button><button type="button" class="ic danger" data-act="q-del" aria-label="Remove question">✕</button></span>
         </div>
-        <input name="label" value="${esc(x.label)}" placeholder="${x.type === 'section' ? 'Título de la sección' : 'Pregunta'}" maxlength="300" aria-label="Texto de la pregunta">
-        <input name="help" value="${esc(x.help || '')}" placeholder="Explicación (opcional)" maxlength="600" aria-label="Explicación">
-        ${choice ? `<textarea name="options" rows="${Math.max(2, (x.options || []).length)}" placeholder="Una opción por línea" aria-label="Opciones">${esc((x.options || []).join('\n'))}</textarea>
-          ${x.type !== 'select' ? `<label class="check sm"><input type="checkbox" name="other" ${x.other ? 'checked' : ''}><span>Añadir opción «Other» con texto libre</span></label>` : ''}` : ''}
+        <input name="label" value="${esc(x.label)}" placeholder="${x.type === 'section' ? 'Section title' : 'Question'}" maxlength="300" aria-label="Question text">
+        <input name="help" value="${esc(x.help || '')}" placeholder="Help text (optional)" maxlength="600" aria-label="Help text">
+        ${choice ? `<textarea name="options" rows="${Math.max(2, (x.options || []).length)}" placeholder="One option per line" aria-label="Options">${esc((x.options || []).join('\n'))}</textarea>
+          ${x.type !== 'select' ? `<label class="check sm"><input type="checkbox" name="other" ${x.other ? 'checked' : ''}><span>Add an “Other” option with free text</span></label>` : ''}` : ''}
       </div>`;
   }
   function formEditor() {
@@ -1571,45 +1624,45 @@
     const roles = teamData?.roles || [], members = teamData?.members || [];
     return `
       <form id="form-ed" class="editor fe" novalidate>
-        <button type="button" class="back" data-act="form-back">← Formularios</button>
+        <button type="button" class="back" data-act="form-back">← Forms</button>
         <h1>${isNew ? 'NUEVO FORMULARIO' : esc(d.title || 'Formulario')}</h1>
         <div class="fe-grid">
           <div class="fe-main">
-            <div class="field"><label for="fe-title">Título</label><input id="fe-title" name="title" value="${esc(d.title)}" maxlength="140" autocomplete="off"></div>
-            <div class="field"><label for="fe-slug">Enlace</label><div class="slug-row"><span>${esc(location.host)}/forms/</span><input id="fe-slug" name="slug" value="${esc(d.slug)}" maxlength="60" placeholder="demo-submission" autocomplete="off" spellcheck="false"></div></div>
-            <div class="field"><label for="fe-desc">Descripción</label><textarea id="fe-desc" name="description" rows="4" maxlength="4000">${esc(d.description || '')}</textarea></div>
+            <div class="field"><label for="fe-title">Title</label><input id="fe-title" name="title" value="${esc(d.title)}" maxlength="140" autocomplete="off"></div>
+            <div class="field"><label for="fe-slug">Link</label><div class="slug-row"><span>${esc(location.host)}/forms/</span><input id="fe-slug" name="slug" value="${esc(d.slug)}" maxlength="60" placeholder="demo-submission" autocomplete="off" spellcheck="false"></div></div>
+            <div class="field"><label for="fe-desc">Description</label><textarea id="fe-desc" name="description" rows="4" maxlength="4000">${esc(d.description || '')}</textarea></div>
           <div class="fe-side">
               <div class="fe-box">
-                <label class="switch"><input type="checkbox" name="public" ${d.public ? 'checked' : ''}><span></span><b>Link público</b></label>
-                <p class="info">Abierto: cualquiera con el enlace puede rellenarlo. Cerrado: nadie puede enviar respuestas.</p>
-                ${!isNew && d.public ? `<p class="copy-row"><a href="${esc(publicUrl(d))}" target="_blank" rel="noopener">${esc(publicUrl(d).replace(/^https?:\/\//, ''))}</a> <button type="button" class="btn ghost sm" data-act="copy-link">Copiar</button></p>` : ''}
-                <label class="switch"><input type="checkbox" name="on_site" ${d.on_site ? 'checked' : ''}><span></span><b>En la web</b></label>
-                <p class="info">Sale como botón en «Send your demo» de la portada (tiene que estar abierto).</p>
-                <div class="field"><label for="fe-btn">Texto del botón</label><input id="fe-btn" name="button" value="${esc(d.button || '')}" maxlength="60" placeholder="Submit via Form" autocomplete="off"></div>
+                <label class="switch"><input type="checkbox" name="public" ${d.public ? 'checked' : ''}><span></span><b>Public link</b></label>
+                <p class="info">Open: anyone with the link can fill it in. Closed: nobody can send responses.</p>
+                ${!isNew && d.public ? `<p class="copy-row"><a href="${esc(publicUrl(d))}" target="_blank" rel="noopener">${esc(publicUrl(d).replace(/^https?:\/\//, ''))}</a> <button type="button" class="btn ghost sm" data-act="copy-link">Copy</button></p>` : ''}
+                <label class="switch"><input type="checkbox" name="on_site" ${d.on_site ? 'checked' : ''}><span></span><b>On the site</b></label>
+                <p class="info">Shows as a button in “Send your demo” on the homepage (it has to be open).</p>
+                <div class="field"><label for="fe-btn">Button text</label><input id="fe-btn" name="button" value="${esc(d.button || '')}" maxlength="60" placeholder="Submit via Form" autocomplete="off"></div>
               </div>
-              <div class="fe-box">
-                <b class="fe-h">Quién puede ver las respuestas</b>
-                <p class="info">Los owners siempre. Además:</p>
-                ${!teamData ? '<p class="info">Cargando equipo…</p>' : `
+              ${isOwnerNow() ? `<div class="fe-box">
+                <b class="fe-h">Who can see the responses</b>
+                <p class="info">Owners always. Also:</p>
+                ${!teamData ? '<p class="info">Loading team…</p>' : `
                 ${roles.length ? `<p class="mini">Roles</p>${roles.map(r => `<label class="check sm"><input type="checkbox" name="acc-role" value="${esc(r.id)}" ${d.access.roles.includes(r.id) ? 'checked' : ''}><span>${esc(r.name)}</span></label>`).join('')}` : ''}
-                ${members.length ? `<p class="mini">Personas</p>${members.map(m => `<label class="check sm"><input type="checkbox" name="acc-email" value="${esc(m.email)}" ${d.access.emails.includes(m.email) ? 'checked' : ''}><span style="${m.color ? `color:${esc(m.color)}` : ''}">${esc(m.label || m.name || m.email)}</span></label>`).join('')}` : ''}
-                ${!roles.length && !members.length ? '<p class="info">Aún no hay equipo.</p>' : ''}`}
-              </div>
+                ${members.length ? `<p class="mini">People</p>${members.map(m => `<label class="check sm"><input type="checkbox" name="acc-email" value="${esc(m.email)}" ${d.access.emails.includes(m.email) ? 'checked' : ''}><span style="${m.color ? `color:${esc(m.color)}` : ''}">${esc(m.label || m.name || m.email)}</span></label>`).join('')}` : ''}
+                ${!roles.length && !members.length ? '<p class="info">No team yet.</p>' : ''}`}
+              </div>` : ''}
             </div>
-            <p class="group">Preguntas</p>
+            <p class="group">Questions</p>
             <div class="qes">${d.fields.map((x, i) => questionEditor(x, i, d.fields.length)).join('')}</div>
-            <div class="card-actions"><button type="button" class="btn ghost sm" data-act="q-add">+ Pregunta</button><button type="button" class="btn ghost sm" data-act="q-sec">+ Sección</button></div>
+            <div class="card-actions"><button type="button" class="btn ghost sm" data-act="q-add">+ Question</button><button type="button" class="btn ghost sm" data-act="q-sec">+ Section</button></div>
           </div>
           <aside class="fe-prev">
-            <div class="prev-head"><b>Vista previa</b><span class="muted sm-txt">Así lo ve la gente en la web${d.public ? '' : ' (ahora está cerrado)'}</span>${!isNew && d.public ? `<a class="btn ghost sm" href="${esc(publicUrl(d))}" target="_blank" rel="noopener">Abrir ↗</a>` : ''}</div>
-            <iframe id="fe-prev" src="/form?preview=1" title="Vista previa del formulario"></iframe>
+            <div class="prev-head"><b>Preview</b><span class="muted sm-txt">How people see it on the site${d.public ? '' : ' (closed right now)'}</span>${!isNew && d.public ? `<a class="btn ghost sm" href="${esc(publicUrl(d))}" target="_blank" rel="noopener">Open ↗</a>` : ''}</div>
+            <iframe id="fe-prev" src="/form?preview=1" title="Form preview"></iframe>
           </aside>
         </div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions">
-          <button type="submit" class="btn primary">${isNew ? 'Crear formulario' : 'Guardar cambios'}</button>
-          <button type="button" class="btn ghost" data-act="form-back">Cancelar</button>
-          ${isNew ? '' : '<button type="button" class="btn danger push" data-act="form-del">Eliminar formulario</button>'}
+          <button type="submit" class="btn primary">${isNew ? 'Create form' : 'Save changes'}</button>
+          <button type="button" class="btn ghost" data-act="form-back">Cancel</button>
+          ${isNew || !can('forms', 'delete') ? '' : '<button type="button" class="btn danger push" data-act="form-del">Delete form</button>'}
         </div>
       </form>`;
   }
@@ -1653,7 +1706,7 @@
       const f = formsData.forms.find(x => x.id === formOpen.id);
       try {
         const r = await fetch(`/api/forms/${encodeURIComponent(f.id)}/csv`, { headers: { Authorization: `Bearer ${auth.token}` }, cache: 'no-store' });
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || 'No se pudo descargar.');
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || 'Could not download.');
         const a = document.createElement('a'); a.href = URL.createObjectURL(await r.blob()); a.download = `${f.slug}.csv`; a.click();
         setTimeout(() => URL.revokeObjectURL(a.href), 2000);
       } catch (err) { toast(err.message); }
@@ -1662,10 +1715,10 @@
       try { const r = await api('GET', `/api/forms/${encodeURIComponent(formOpen.id)}/responses?before=${last}`); formOpen.responses.push(...r.responses); formOpen.more = r.more; render(); } catch (err) { toast(err.message); }
     } else if (act === 'resp-del') {
       const rid = Number(t.closest('[data-resp]').dataset.resp);
-      if (!await confirmBox('¿Borrar esta respuesta? No se puede deshacer.', 'Borrar')) return;
-      try { await formAction(() => api('DELETE', `/api/forms/${encodeURIComponent(formOpen.id)}/responses/${rid}`), 'Respuesta borrada'); formOpen.responses = formOpen.responses.filter(r => r.id !== rid); const f = formsData.forms.find(x => x.id === formOpen.id); if (f) f.total--; render(); } catch { /* aviso ya mostrado */ }
+      if (!await confirmBox('Delete this response? This can’t be undone.', 'Delete')) return;
+      try { await formAction(() => api('DELETE', `/api/forms/${encodeURIComponent(formOpen.id)}/responses/${rid}`), 'Response deleted'); formOpen.responses = formOpen.responses.filter(r => r.id !== rid); const f = formsData.forms.find(x => x.id === formOpen.id); if (f) f.total--; render(); } catch { /* aviso ya mostrado */ }
     } else if (act === 'copy-link') {
-      try { await navigator.clipboard.writeText(publicUrl(formOpen.draft)); toast('Enlace copiado'); } catch { toast(publicUrl(formOpen.draft)); }
+      try { await navigator.clipboard.writeText(publicUrl(formOpen.draft)); toast('Link copied'); } catch { toast(publicUrl(formOpen.draft)); }
     } else if (['q-add', 'q-sec', 'q-up', 'q-down', 'q-del'].includes(act)) {
       syncDraft();
       const fs = formOpen.draft.fields, qi = fs.findIndex(x => x.id === t.closest('.qe')?.dataset.id);
@@ -1679,8 +1732,8 @@
       if (act === 'q-add' || act === 'q-sec') $$('.qe').at(-1)?.querySelector('[name=label]')?.focus();
     } else if (act === 'form-del') {
       const f = formsData.forms.find(x => x.id === formOpen.id);
-      if (!await confirmBox(`¿Eliminar «${f?.title}» y sus ${f?.total || 0} respuestas? No se puede deshacer.`, 'Eliminar')) return;
-      try { await formAction(() => api('DELETE', `/api/forms/${encodeURIComponent(formOpen.id)}`), 'Formulario eliminado'); formOpen = null; formsData = null; render(); } catch { /* aviso ya mostrado */ }
+      if (!await confirmBox(`Delete “${f?.title}” and its ${f?.total || 0} responses? This can’t be undone.`, 'Delete')) return;
+      try { await formAction(() => api('DELETE', `/api/forms/${encodeURIComponent(formOpen.id)}`), 'Form deleted'); formOpen = null; formsData = null; render(); } catch { /* aviso ya mostrado */ }
     }
   });
   document.addEventListener('change', e => {
@@ -1705,7 +1758,7 @@
   // artista, se crea el enlace de firma y se guarda/descarga el contrato firmado.
   const CONTRACTS_DOC = 'https://docs.google.com/document/d/1rUCOAySY2XHqnmgFeH9fjF3xgXDa9cg0vy8qWJVN274/edit?authuser=contacthorizonids@gmail.com';
   let ctData = null, ctErr = '', ctLoading = false, ctOpen = null, ctTab = 'contracts';
-  const CT_STATUS = { draft: ['Borrador', 'off'], sent: ['Enviado', ''], signed: ['Firmado', 'ok'], void: ['Anulado', 'off'] };
+  const CT_STATUS = { draft: ['Draft', 'off'], sent: ['Sent', ''], signed: ['Signed', 'ok'], void: ['Voided', 'off'] };
   const ctCanEdit = () => !!ctData?.canEdit && can('contracts', 'edit');
   const signUrl = c => `${location.origin}/sign/${c.signers?.[0]?.token || c.token}`;
   async function loadContracts() {
@@ -1732,20 +1785,20 @@
     const tpls = all.filter(isTpl), list = all.filter(c => !isTpl(c));
     const rows = tab === 'templates' ? tpls : list;
     return `
-      <div class="head"><div><p class="eyebrow">Firmas</p><h1>CONTRATOS</h1></div>
-        <div class="head-btns">${ed ? (tab === 'templates' ? '<button type="button" class="btn primary" data-ct="new-tpl">+ Nueva plantilla</button>' : '<button type="button" class="btn primary" data-ct="new">+ Nuevo contrato</button>') : ''}</div></div>
+      <div class="head"><div><p class="eyebrow">Signatures</p><h1>CONTRACTS</h1></div>
+        <div class="head-btns">${ed ? (tab === 'templates' ? '<button type="button" class="btn primary" data-ct="new-tpl">+ New template</button>' : '<button type="button" class="btn primary" data-ct="new">+ New contract</button>') : ''}</div></div>
       <div class="ct-tabs" role="tablist">
-        <button type="button" role="tab" class="${tab !== 'templates' ? 'on' : ''}" data-ct="tab-contracts">Contratos <span>${list.length}</span></button>
-        <button type="button" role="tab" class="${tab === 'templates' ? 'on' : ''}" data-ct="tab-templates">Plantillas <span>${tpls.length}</span></button>
+        <button type="button" role="tab" class="${tab !== 'templates' ? 'on' : ''}" data-ct="tab-contracts">Contracts <span>${list.length}</span></button>
+        <button type="button" role="tab" class="${tab === 'templates' ? 'on' : ''}" data-ct="tab-templates">Templates <span>${tpls.length}</span></button>
       </div>
-      ${tab === 'templates' ? `<p class="info lead">Las plantillas son vuestros contratos de Google Docs. Donde va un dato del artista, escribe en el Doc su nombre entre llaves dobles: <b>{{Nombre real}}</b>, <b>{{Nombre artístico}}</b>, <b>{{Track}}</b>, <b>{{Fecha}}</b>… Al crear un contrato, el panel te pide esos datos y Google los pone en su sitio (el texto se recoloca solo, igual que si lo escribieras tú).</p>` : ''}
+      ${tab === 'templates' ? `<p class="info lead">Templates are your Google Docs contracts. The panel finds the artist details by itself (names, track, date…), or write a name between double braces in the Doc: <b>{{Nombre real}}</b>, <b>{{Nombre artístico}}</b>, <b>{{Track}}</b>, <b>{{Fecha}}</b>… When you create a contract the panel asks for those details and Google puts them in place (the text reflows by itself).</p>` : ''}
       <ol class="list">${rows.length ? rows.map(c => `
         <li class="row ct" data-ctid="${esc(c.id)}">
-          <span class="meta"><b>${esc(c.title)}</b><span>${isTpl(c) ? `${c.signers.length} firmante${c.signers.length > 1 ? 's' : ''}` : esc(c.artist || '') + (c.email ? ' · ' + esc(c.email) : '')}</span></span>
-          ${isTpl(c) ? '<span class="tag off">Plantilla</span>' : `<span class="tag ${CT_STATUS[c.status]?.[1] || ''}">${CT_STATUS[c.status]?.[0] || c.status}</span>`}
-          <span class="muted sm-txt">${isTpl(c) ? (!c.pdf ? 'Falta el PDF' : !c.doc_url ? 'Sin Google Doc' : c.signers.some(x => !x.box) ? 'Falta marcar firmas' : 'Lista') : c.status === 'signed' ? 'Firmado ' + esc(fmtDate(c.signed_at)) : !c.pdf ? 'Falta el PDF' : c.signers.some(x => !x.box) ? 'Falta marcar firmas' : c.sent_at ? `Firmado ${c.signers.filter(x => x.signed).length} de ${c.signers.length}` : 'Listo para enviar'}</span>
-          <span class="row-btns">${isTpl(c) && ed && c.pdf && c.doc_url ? '<button type="button" class="btn primary sm" data-ct="use">Usar</button>' : ''}<button type="button" class="btn ghost sm" data-ct="open">Abrir</button></span>
-        </li>`).join('') : `<li class="empty">${tab === 'templates' ? 'Todavía no hay plantillas.' : 'Todavía no hay contratos.'}</li>`}
+          <span class="meta"><b>${esc(c.title)}</b><span>${isTpl(c) ? `${c.signers.length} signer${c.signers.length > 1 ? 's' : ''}` : esc(c.artist || '') + (c.email ? ' · ' + esc(c.email) : '')}</span></span>
+          ${isTpl(c) ? '<span class="tag off">Template</span>' : `<span class="tag ${CT_STATUS[c.status]?.[1] || ''}">${CT_STATUS[c.status]?.[0] || c.status}</span>`}
+          <span class="muted sm-txt">${isTpl(c) ? (!c.pdf ? 'PDF missing' : !c.doc_url ? 'No Google Doc' : c.signers.some(x => !x.box) ? 'Signatures not placed' : 'Ready') : c.status === 'signed' ? 'Signed ' + esc(fmtDate(c.signed_at)) : !c.pdf ? 'PDF missing' : c.signers.some(x => !x.box) ? 'Signatures not placed' : c.sent_at ? `Signed ${c.signers.filter(x => x.signed).length} of ${c.signers.length}` : 'Ready to send'}</span>
+          <span class="row-btns">${isTpl(c) && ed && c.pdf && c.doc_url ? '<button type="button" class="btn primary sm" data-ct="use">Use</button>' : ''}<button type="button" class="btn ghost sm" data-ct="open">Open</button></span>
+        </li>`).join('') : `<li class="empty">${tab === 'templates' ? 'No templates yet.' : 'No contracts yet.'}</li>`}
       </ol>`;
   }
   // elegir plantilla para un contrato nuevo
@@ -1753,37 +1806,37 @@
     const tpls = ctData.contracts.filter(c => isTpl(c) && c.pdf && c.doc_url);
     return `
       <div class="editor ct-ed">
-        <button type="button" class="back" data-ct="back">← Contratos</button>
-        <h1>NUEVO CONTRATO</h1>
-        <p class="info lead">Elige la plantilla:</p>
+        <button type="button" class="back" data-ct="back">← Contracts</button>
+        <h1>NEW CONTRACT</h1>
+        <p class="info lead">Choose the template:</p>
         <ol class="list">${tpls.length ? tpls.map(c => `
           <li class="row ct" data-ctid="${esc(c.id)}"><span class="meta"><b>${esc(c.title)}</b><span>${c.signers.map(x => esc(x.label)).join(' · ')}</span></span><span></span><span></span>
-            <span class="row-btns"><button type="button" class="btn primary sm" data-ct="use">Usar</button></span></li>`).join('') : '<li class="empty">No hay plantillas listas (con su Google Doc y su PDF).</li>'}
+            <span class="row-btns"><button type="button" class="btn primary sm" data-ct="use">Use</button></span></li>`).join('') : '<li class="empty">No templates ready (with Google Doc and PDF).</li>'}
         </ol>
-        <details class="ct-other"><summary>…o subir un PDF ya hecho</summary>${ctNewForm()}</details>
+        <details class="ct-other"><summary>…or upload a finished PDF</summary>${ctNewForm()}</details>
       </div>`;
   }
   function ctNewForm() {
     return `
       <form id="ct-new" class="ct-new" novalidate>
-        <div class="field"><label for="ct-title">Título</label><input id="ct-title" name="title" maxlength="160" placeholder="p. ej. Release Contract — Artista — Tema" autocomplete="off"></div>
-        <div class="row2 wide"><div class="field"><label for="ct-artist">Artista</label><input id="ct-artist" name="artist" maxlength="160" autocomplete="off"></div>
-          <div class="field"><label for="ct-email">Email del artista</label><input id="ct-email" name="email" type="email" maxlength="160" autocomplete="off"></div></div>
-        <div class="field"><label for="ct-file">PDF del contrato</label><input id="ct-file" name="file" type="file" accept="application/pdf"></div>
+        <div class="field"><label for="ct-title">Title</label><input id="ct-title" name="title" maxlength="160" placeholder="e.g. Release Contract — Artist — Track" autocomplete="off"></div>
+        <div class="row2 wide"><div class="field"><label for="ct-artist">Artist</label><input id="ct-artist" name="artist" maxlength="160" autocomplete="off"></div>
+          <div class="field"><label for="ct-email">Artist email</label><input id="ct-email" name="email" type="email" maxlength="160" autocomplete="off"></div></div>
+        <div class="field"><label for="ct-file">Contract PDF</label><input id="ct-file" name="file" type="file" accept="application/pdf"></div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
-        <div class="ed-actions"><button type="submit" class="btn primary">Crear contrato</button></div>
+        <div class="ed-actions"><button type="submit" class="btn primary">Create contract</button></div>
       </form>`;
   }
   function ctNewTpl() {
     return `
       <form id="ct-tpl" class="editor ct-ed" novalidate>
-        <button type="button" class="back" data-ct="back">← Plantillas</button>
-        <h1>NUEVA PLANTILLA</h1>
-        <p class="info lead">Crea una pestaña nueva en vuestro Google Doc de contratos con el texto de la plantilla y pega aquí su enlace (con la pestaña abierta, copia la dirección del navegador).</p>
-        <div class="field"><label for="tp-title">Nombre de la plantilla</label><input id="tp-title" name="title" maxlength="160" placeholder="p. ej. Release — 1 artista" autocomplete="off"></div>
-        <div class="field"><label for="tp-doc">Enlace de la pestaña del Google Doc</label><input id="tp-doc" name="doc" placeholder="https://docs.google.com/document/d/…/edit?tab=t.…" spellcheck="false" autocomplete="off"></div>
+        <button type="button" class="back" data-ct="back">← Templates</button>
+        <h1>NEW TEMPLATE</h1>
+        <p class="info lead">Create a new tab in your contracts Google Doc with the template text and paste its link here (with the tab open, copy the browser address).</p>
+        <div class="field"><label for="tp-title">Template name</label><input id="tp-title" name="title" maxlength="160" placeholder="e.g. Release — 1 artist" autocomplete="off"></div>
+        <div class="field"><label for="tp-doc">Google Doc tab link</label><input id="tp-doc" name="doc" placeholder="https://docs.google.com/document/d/…/edit?tab=t.…" spellcheck="false" autocomplete="off"></div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
-        <div class="ed-actions"><button type="submit" class="btn primary">Crear plantilla</button><a class="btn ghost" href="${CONTRACTS_DOC}" target="_blank" rel="noopener">Abrir el Google Doc ↗</a></div>
+        <div class="ed-actions"><button type="submit" class="btn primary">Create template</button><a class="btn ghost" href="${CONTRACTS_DOC}" target="_blank" rel="noopener">Open the Google Doc ↗</a></div>
       </form>`;
   }
   // rellenar los datos de un contrato nuevo a partir de una plantilla
@@ -1791,51 +1844,52 @@
     const t = ctOpen.tpl, fields = ctOpen.fields;
     return `
       <form id="ct-use" class="editor ct-ed" novalidate>
-        <button type="button" class="back" data-ct="back">← Contratos</button>
-        <p class="eyebrow">Nuevo contrato · plantilla «${esc(t.title)}»</p>
-        <h1>DATOS DEL CONTRATO</h1>
-        <div class="row2 wide"><div class="field"><label for="u-title">Título del contrato</label><input id="u-title" name="title" maxlength="160" value="${esc(t.title)} — " autocomplete="off"></div>
-          <div class="field"><label for="u-artist">Artista</label><input id="u-artist" name="artist" maxlength="160" autocomplete="off"></div></div>
-        ${t.signers.map((x, i) => `<div class="field"><label for="u-em${i}">Email de ${esc(x.label)}</label><input id="u-em${i}" name="em${i}" type="email" maxlength="160" autocomplete="off"></div>`).join('')}
-        <h2 class="ct-sub">Datos que van en el contrato</h2>
-        ${!fields ? '<p class="info">Leyendo la plantilla…</p>' : fields.length ? `<div class="ct-fields">${fields.map((f, i) => `
-          <div class="field"><label for="u-f${i}">${esc(f.name)}</label><input id="u-f${i}" name="f${i}" maxlength="500" autocomplete="off"></div>`).join('')}</div>`
-          : '<p class="info">Esta plantilla aún no tiene huecos con llaves dobles ({{Nombre real}}, {{Track}}…). El contrato saldrá igual que la plantilla; podrás cambiar el texto en su propio Google Doc.</p>'}
+        <button type="button" class="back" data-ct="back">← Contracts</button>
+        <p class="eyebrow">New contract · template “${esc(t.title)}”</p>
+        <h1>CONTRACT DETAILS</h1>
+        <div class="row2 wide"><div class="field"><label for="u-title">Contract title</label><input id="u-title" name="title" maxlength="160" value="${esc(t.title)} — " autocomplete="off"></div>
+          <div class="field"><label for="u-artist">Artist</label><input id="u-artist" name="artist" maxlength="160" autocomplete="off"></div></div>
+        ${t.signers.map((x, i) => `<div class="field"><label for="u-em${i}">${esc(x.label)} email</label><input id="u-em${i}" name="em${i}" type="email" maxlength="160" autocomplete="off"></div>`).join('')}
+        <h2 class="ct-sub">Details that go in the contract</h2>
+        ${!fields ? '<p class="info">Reading the template…</p>' : fields.length ? `<div class="ct-fields">${fields.map((f, i) => `
+          <div class="field"><label for="u-f${i}">${esc(f.name)}</label><input id="u-f${i}" name="f${i}" maxlength="500" value="${esc(f.current)}" autocomplete="off"></div>`).join('')}</div>
+          <p class="info">Everything above goes into the contract in every place it appears. A field left empty keeps what the template says.</p>`
+          : '<p class="info">No details found in this template. The contract will be an exact copy; you can change its text in its own Google Doc.</p>'}
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
-        <div class="ed-actions"><button type="submit" class="btn primary" ${fields ? '' : 'disabled'}>Crear contrato</button><button type="button" class="btn ghost" data-ct="back">Cancelar</button></div>
-        <p class="info">Se crea una copia de la plantilla en vuestro Google Drive con estos datos, y de ella sale el PDF que firma el artista. Cada contrato tiene su propio Doc por si quieres retocar algo.</p>
+        <div class="ed-actions"><button type="submit" class="btn primary" ${fields ? '' : 'disabled'}>Create contract</button><button type="button" class="btn ghost" data-ct="back">Cancel</button></div>
+        <p class="info">A copy of the template is made in your Google Drive with these details, and the PDF the artist signs comes from it. Each contract has its own Doc in case you want to tweak something.</p>
       </form>`;
   }
   function ctDetail() {
     const c = ctOpen.contract;
-    if (!c) return '<p class="info">Cargando…</p>';
+    if (!c) return '<p class="info">Loading…</p>';
     const ed = ctCanEdit(), signed = c.status === 'signed', st = CT_STATUS[c.status] || [c.status, ''], tpl = isTpl(c);
     const vars = Object.entries(c.vars || {});
     return `
       <form id="ct-ed" class="editor ct-ed" novalidate>
-        <button type="button" class="back" data-ct="back">← ${tpl ? 'Plantillas' : 'Contratos'}</button>
-        <div class="head"><div><p class="eyebrow">${tpl ? 'Plantilla' : 'Contrato'}</p><h1>${esc(c.title)}</h1></div>${tpl ? (ed && c.pdf && c.doc_url ? '<button type="button" class="btn primary" data-ct="use">Crear contrato con esta plantilla</button>' : '') : `<span class="tag big ${st[1]}">${st[0]}</span>`}</div>
+        <button type="button" class="back" data-ct="back">← ${tpl ? 'Templates' : 'Contracts'}</button>
+        <div class="head"><div><p class="eyebrow">${tpl ? 'Template' : 'Contract'}</p><h1>${esc(c.title)}</h1></div>${tpl ? (ed && c.pdf && c.doc_url ? '<button type="button" class="btn primary" data-ct="use">Create contract from this template</button>' : '') : `<span class="tag big ${st[1]}">${st[0]}</span>`}</div>
         ${!signed && ed ? `
-          <div class="row2 wide"><div class="field"><label for="c-title">${tpl ? 'Nombre de la plantilla' : 'Título'}</label><input id="c-title" name="title" value="${esc(c.title)}" maxlength="160" autocomplete="off"></div>
-            ${tpl ? '' : `<div class="field"><label for="c-artist">Artista</label><input id="c-artist" name="artist" value="${esc(c.artist)}" maxlength="160" autocomplete="off"></div>`}</div>
+          <div class="row2 wide"><div class="field"><label for="c-title">${tpl ? 'Template name' : 'Title'}</label><input id="c-title" name="title" value="${esc(c.title)}" maxlength="160" autocomplete="off"></div>
+            ${tpl ? '' : `<div class="field"><label for="c-artist">Artist</label><input id="c-artist" name="artist" value="${esc(c.artist)}" maxlength="160" autocomplete="off"></div>`}</div>
           ` : ''}
         ${!tpl && vars.length ? `<div class="ct-vars">${vars.map(([k, v]) => `<span><b>${esc(k)}</b>${esc(v)}</span>`).join('')}</div>` : ''}
         ${docBlock(c, ed && !signed)}
         ${c.pdf ? signersBlock(c, ed && !signed) : ''}
         ${c.pdf ? `
-          <div class="pdf-viewer" id="pdf-viewer"><p class="info">Cargando el PDF…</p></div>` : `<p class="ct-step">Sube el PDF del contrato (descargado de Google Docs).</p>`}
-        <div class="field" style="margin-top:18px"><label for="c-notes">Notas internas (no las ve el artista)</label><textarea id="c-notes" name="notes" rows="2" maxlength="2000" ${ed ? '' : 'readonly'}>${esc(c.notes)}</textarea></div>
+          <div class="pdf-viewer" id="pdf-viewer"><p class="info">Loading PDF…</p></div>` : `<p class="ct-step">Upload the contract PDF (downloaded from Google Docs).</p>`}
+        <div class="field" style="margin-top:18px"><label for="c-notes">Internal notes (the artist can’t see them)</label><textarea id="c-notes" name="notes" rows="2" maxlength="2000" ${ed ? '' : 'readonly'}>${esc(c.notes)}</textarea></div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions">
-          ${ed ? '<button type="submit" class="btn primary">Guardar</button>' : ''}
-          ${ed && !signed ? `<label class="btn ghost" for="ct-pdf">${c.pdf ? 'Cambiar PDF a mano' : 'Subir PDF'}</label><input type="file" id="ct-pdf" class="sr-only" accept="application/pdf">` : ''}
-          ${!tpl && ed && !signed && c.status !== 'void' && c.pdf && c.signers.every(x => x.box) && c.signers.some(x => !x.token) ? '<button type="button" class="btn ghost" data-ct="send">Preparar enlaces de firma</button>' : ''}
-          ${c.signers.some(x => x.signed) ? `<button type="button" class="btn ghost" data-ct="dl-signed">${signed ? 'Descargar PDF firmado' : 'Descargar con las firmas que hay'}</button>` : ''}
-          ${c.pdf ? '<button type="button" class="btn ghost" data-ct="dl-orig">Descargar PDF original</button>' : ''}
-          ${c.file ? '<button type="button" class="btn ghost" data-ct="dl-file">Ver PDF firmado (archivo)</button>' : ''}
-          ${!tpl && ed && !signed ? `<label class="btn ghost" for="ct-arch" title="Para contratos que ya se firmaron fuera de la web">Subir PDF ya firmado</label><input type="file" id="ct-arch" class="sr-only" accept="application/pdf">` : ''}
+          ${ed ? '<button type="submit" class="btn primary">Save</button>' : ''}
+          ${ed && !signed ? `<label class="btn ghost" for="ct-pdf">${c.pdf ? 'Replace PDF manually' : 'Upload PDF'}</label><input type="file" id="ct-pdf" class="sr-only" accept="application/pdf">` : ''}
+          ${!tpl && ed && !signed && c.status !== 'void' && c.pdf && c.signers.every(x => x.box) && c.signers.some(x => !x.token) ? '<button type="button" class="btn ghost" data-ct="send">Create signing links</button>' : ''}
+          ${c.signers.some(x => x.signed) ? `<button type="button" class="btn ghost" data-ct="dl-signed">${signed ? 'Download signed PDF' : 'Download with current signatures'}</button>` : ''}
+          ${c.pdf ? '<button type="button" class="btn ghost" data-ct="dl-orig">Download original PDF</button>' : ''}
+          ${c.file ? '<button type="button" class="btn ghost" data-ct="dl-file">View signed PDF (file)</button>' : ''}
+          ${!tpl && ed && !signed ? `<label class="btn ghost" for="ct-arch" title="For contracts already signed outside the site">Upload signed PDF</label><input type="file" id="ct-arch" class="sr-only" accept="application/pdf">` : ''}
           ${!tpl && ed && !signed ? `<button type="button" class="btn ghost" data-ct="${c.status === 'void' ? 'unvoid' : 'void'}">${c.status === 'void' ? 'Reactivar' : 'Anular'}</button>` : ''}
-          ${ed && (!signed || auth.user.owner) ? '<button type="button" class="btn danger push" data-ct="del">Eliminar</button>' : ''}
+          ${ed && (!signed || auth.user.owner) ? '<button type="button" class="btn danger push" data-ct="del">Delete</button>' : ''}
         </div>
       </form>`;
   }
@@ -1847,36 +1901,80 @@
     return `
       <div class="docbox">
         <div class="docbox-head">
-          <b>${tpl ? 'Texto de la plantilla' : 'Texto del contrato'}</b>
-          ${ed ? `<input class="doc-url" value="${esc(c.doc_url)}" placeholder="Enlace de la pestaña del Google Doc (docs.google.com/document/d/…?tab=…)" aria-label="Enlace de la pestaña del Google Doc" spellcheck="false">` : '<span></span>'}
+          <b>${tpl ? 'Template text' : 'Contract text'}</b>
+          ${ed ? `<input class="doc-url" value="${esc(c.doc_url)}" placeholder="Google Doc tab link (docs.google.com/document/d/…?tab=…)" aria-label="Google Doc tab link" spellcheck="false">` : '<span></span>'}
           <span class="docbox-btns">
-            ${c.doc_url ? '<button type="button" class="btn ghost sm" data-ct="doc-open">Editar en Google Docs ↗</button>' : ''}
-            ${ed && c.doc_url ? '<button type="button" class="btn primary sm" data-ct="doc-pdf">Actualizar PDF desde el Doc</button>' : ''}
+            ${c.doc_url ? '<button type="button" class="btn ghost sm" data-ct="doc-open">Edit in Google Docs ↗</button>' : ''}
+            ${ed && c.doc_url ? '<button type="button" class="btn primary sm" data-ct="doc-pdf">Update PDF from Doc</button>' : ''}
           </span>
         </div>
-        ${tpl ? `<div class="tpl-fields">${tplFieldsHtml(ctOpen.fields)}</div>` : c.doc_url && ed ? '<p class="info">Edita el texto en Google Docs (se abre a pantalla completa) y luego pulsa <b>Actualizar PDF desde el Doc</b>: el artista firma ese PDF.</p>' : ''}
+        ${tpl ? `<div class="tpl-fields">${tplFieldsHtml(ctOpen.fields)}</div>` : c.doc_url && ed ? '<p class="info">Edit the text in Google Docs (opens full screen), then press <b>Update PDF from Doc</b>: the artist signs that PDF.</p>' : ''}
       </div>`;
   }
   function tplFieldsHtml(fields) {
-    if (!fields) return '<p class="info">Buscando los huecos {{…}} de la plantilla…</p>';
+    if (!fields) return '<p class="info">Reading the template…</p>';
     return fields.length
-      ? `<p class="info">Huecos que se piden al crear cada contrato:</p><div class="chips">${fields.map(f => `<span class="chip">${esc(f.name)}</span>`).join('')}</div><p class="info">Para añadir o cambiar huecos, edita el Doc (p. ej. escribe <b>{{Fecha}}</b> donde va la fecha) y pulsa <b>Actualizar PDF desde el Doc</b>.</p>`
-      : '<p class="info">Esta plantilla aún no tiene huecos. En el Doc, cambia los datos del artista por su nombre entre llaves dobles — <b>{{Nombre real}}</b>, <b>{{Nombre artístico}}</b>, <b>{{Track}}</b>, <b>{{Fecha}}</b>… — y pulsa <b>Actualizar PDF desde el Doc</b>.</p>';
+      ? `<p class="info">When you create a contract from this template you fill in:</p><div class="chips">${fields.map(f => `<span class="chip" title="${esc(f.current)}">${esc(f.name)}</span>`).join('')}</div>`
+      : '<p class="info">No details found in this template. Write <b>{{Name}}</b> in the Doc where a detail goes and press <b>Update PDF from Doc</b>.</p>';
   }
-  // huecos {{…}} de una plantilla, leídos de su PDF
-  async function pdfFields(bytes) {
-    const pdf = await HZPDF.load(bytes), map = new Map();
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const t = await (await pdf.getPage(i)).getTextContent();
-      const txt = t.items.map(x => x.str + (x.hasEOL ? ' ' : '')).join('');
-      for (const m of txt.matchAll(/\{\{\s*([^{}]{1,60}?)\s*\}\}/g)) {
-        const name = m[1].replace(/\s+/g, ' ').trim();
-        if (!map.has(name)) map.set(name, new Set([`{{${name}}}`, `{{ ${name} }}`]));
-        map.get(name).add(m[0]);
-      }
+
+  /* Datos de una plantilla: se reconocen solos en el texto (XXXXXXXX, ____, o lo que ya ponga) y cada contrato los cambia */
+  const DATA_NAMES = { 'artist name': 'Artist name', 'legal name': 'Legal name', 'e-mail address': 'Email', 'age': 'Age', 'street address, zip code': 'Address & zip code', 'city, country': 'City & country' };
+  const BLANK_RULES = [
+    [/(\{\{\s*([^{}]{1,60}?)\s*\}\})/gd, m => [[1, m[2].replace(/\s+/g, ' ').trim()]]],
+    [/represented herein by\s+(.+?),\s*and hereinafter referred to as the\s*[“"]Label/gd, () => [[1, 'Label representative']]],
+    [/(?:^|\n|\.\s)\s*(?:\d+\.\d+\.\s*)?([^\n:.]+?),\s*also known as\s+(.+?),\s*and hereinafter referred to as the\s*[“"]Artists?[”"]/gd, () => [[1, 'Artist name'], [2, 'Legal name']]],
+    [/Artist (\d):\s*(.+?)\s+also known as\s+(.+?)\.(?=\s|$)/gd, m => [[2, `Artist ${m[1]} name`], [3, `Artist ${m[1]} legal name`]]],
+    [/musical work titled\s*["“]\s*(.+?)\s*["”]\s*recorded/gd, () => [[1, 'Track']]],
+    [/sound recording titled\s*["“](.+?)["”]/gd, () => [[1, 'Track']]],
+    [/AUTHORIZATION\s*[–-]\s*["“](.+?)["”]/gd, () => [[1, 'Header title']]],
+    [/Title:\s*["“](.+?)["”]/gd, () => [[1, 'Remix title']]],
+    [/Remixer:\s*["“](.+?)["”]/gd, () => [[1, 'Remixer']]],
+    [/(?:^|\n|\s)Artist:\s*(.+?)(?=\s*(?:\n|This Authorization))/gd, () => [[1, 'Artist name']]],
+    [/entered into on\s+(\d\d\.\d\d\.\d{4}|XX\.XX\.XXXX)/gd, () => [[1, 'Date']]],
+    [/entered into by the parties on\s+(\d\d\.\d\d\.\d{4}|XX\.XX\.XXXX)/gd, () => [[1, 'Original agreement date']]],
+    [/EFFECTIVE DATE\s+(\d\d\.\d\d\.\d{4}|XX\.XX\.XXXX)/gd, () => [[1, 'Date']]],
+    [/Signed By HORIZON RCRDS\s*\((.+?)\)/gd, () => [[1, 'Label signatory']]],
+    [/(Artist (\d) Name|Artist Name|Legal Name|E-Mail Address|Age|Street Address, Zip Code|City, Country):\s*(_{6,})/gd, (m, ctx) => {
+      if (m[2]) { ctx.who = `Artist ${m[2]} `; return [[3, `Artist ${m[2]} name`]]; }
+      const n = DATA_NAMES[m[1].toLowerCase()];
+      return [[3, ctx.who ? ctx.who + n.toLowerCase().replace(/^email$/, 'email') : n]];
+    }],
+  ];
+  const isBlank = v => /^(X{3,}|XX\.XX\.XXXX|_+)$/.test(v.trim());
+  function findBlanks(text) {
+    const out = [], ctx = {};
+    for (const [re, fn] of BLANK_RULES) for (const m of text.matchAll(re)) for (const [g, name] of fn(m, ctx)) {
+      const [start, end] = m.indices[g] || [];
+      if (start == null || end <= start || !name || out.some(b => start < b.end && end > b.start)) continue;
+      out.push({ name, start, end, value: m[g] });
     }
-    return [...map].map(([name, raws]) => ({ name, raws: [...raws] }));
+    return out.sort((a, b) => a.start - b.start);
   }
+  // los datos de una plantilla, leídos de su PDF (nombre + lo que pone ahora, si no es un hueco)
+  async function pdfFields(bytes) {
+    const pdf = await HZPDF.load(bytes);
+    let txt = '';
+    for (let i = 1; i <= pdf.numPages; i++) txt += (await (await pdf.getPage(i)).getTextContent()).items.map(x => x.str + (x.hasEOL ? ' ' : '')).join('') + ' ';
+    const map = new Map();
+    for (const b of findBlanks(txt.replace(/[ \t]+/g, ' '))) {
+      const v = b.value.replace(/\s+/g, ' ').trim();
+      if (!map.has(b.name)) map.set(b.name, { name: b.name, current: '' });
+      if (!map.get(b.name).current && !isBlank(v) && !/^\{\{/.test(v)) map.get(b.name).current = v;
+    }
+    return [...map.values()];
+  }
+  // texto de una pestaña del Doc con el índice de Google de cada carácter
+  function docText(content) {
+    let text = ''; const idx = [];
+    const walk = els => { for (const el of els || []) {
+      if (el.paragraph) for (const pe of el.paragraph.elements || []) { const t = pe.textRun?.content; if (t) for (let k = 0; k < t.length; k++) { text += t[k]; idx.push(pe.startIndex + k); } }
+      if (el.table) for (const row of el.table.tableRows || []) for (const cell of row.tableCells || []) walk(cell.content);
+    } };
+    walk(content);
+    return { text, idx };
+  }
+  const findTab = (tabs, id) => { for (const t of tabs || []) { if (t.tabProperties?.tabId === id) return t; const c = findTab(t.childTabs, id); if (c) return c; } return null; };
   const docParts = u => { const m = String(u).match(/docs\.google\.com\/document\/(?:u\/\d+\/)?d\/([\w-]{20,})/), t = String(u).match(/[?&#]tab=(t\.[\w]+)/); return m ? { id: m[1], tab: t ? t[1] : '' } : null; };
   async function gapi(tok, url, body) {
     const r = await fetch(url, { method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${tok}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
@@ -1884,7 +1982,7 @@
     if (!r.ok) {
       const msg = j.error?.message || `Error ${r.status}`;
       if (r.status === 401) gToken = null;
-      throw new GhError(/has not been used|is disabled|not been enabled/i.test(msg) ? 'Falta activar la API de Google Docs/Drive en el proyecto de Google del panel.' : `Google: ${msg}`);
+      throw new GhError(/has not been used|is disabled|not been enabled/i.test(msg) ? 'The Google Docs/Drive API is not enabled in the panel’s Google project.' : `Google: ${msg}`);
     }
     return j;
   }
@@ -1892,18 +1990,28 @@
   // copia la plantilla en el Drive de Horizon, pone los datos en sus huecos y devuelve el enlace de la pestaña de la copia
   async function docFromTemplate(tok, tpl, fields, values, title) {
     const d = docParts(tpl.doc_url);
-    if (!d) throw new GhError('La plantilla no tiene bien el enlace de su Google Doc.');
+    if (!d) throw new GhError('The template’s Google Doc link is not valid.');
     const copy = await gapi(tok, `https://www.googleapis.com/drive/v3/files/${d.id}/copy?fields=id&supportsAllDrives=true`, { name: `HORIZON RCRDS — ${title}` });
-    const requests = [];
-    for (const f of fields) for (const raw of f.raws) requests.push({ replaceAllText: { containsText: { text: raw, matchCase: true }, replaceText: values[f.name] ?? '' } });
-    if (requests.length) await gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}:batchUpdate`, { requests });
     let tab = d.tab;
+    const q = '?includeTabsContent=true&fields=tabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index))))';
     if (tab) {
-      const q = '?includeTabsContent=true&fields=tabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index))))';
       const [a, b] = await Promise.all([gapi(tok, `https://docs.googleapis.com/v1/documents/${d.id}${q}`), gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}${q}`)]);
       const ta = flatTabs(a.tabs), tb = flatTabs(b.tabs);
       if (!tb.some(t => t.tabId === tab)) tab = tb[ta.findIndex(t => t.tabId === tab)]?.tabId || '';
     }
+    const full = await gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}?includeTabsContent=true`);
+    const tabObj = tab ? findTab(full.tabs, tab) : full.tabs?.[0];
+    if (!tabObj) throw new GhError('Could not find the template tab in the copy.');
+    tab = tabObj.tabProperties.tabId;
+    const { text, idx } = docText(tabObj.documentTab?.body?.content);
+    const requests = [];
+    for (const b of findBlanks(text).reverse()) {
+      const v = values[b.name];
+      if (!v) continue;
+      const startIndex = idx[b.start], endIndex = idx[b.end - 1] + 1;
+      requests.push({ deleteContentRange: { range: { startIndex, endIndex, tabId: tab } } }, { insertText: { location: { index: startIndex, tabId: tab }, text: v } });
+    }
+    if (requests.length) await gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}:batchUpdate`, { requests });
     return `https://docs.google.com/document/d/${copy.id}/edit${tab ? '?tab=' + tab : ''}`;
   }
   // permiso de Google (solo lectura de Docs) pedido en el momento, con la cuenta de Horizon; no se guarda
@@ -1915,8 +2023,8 @@
     return new Promise((ok, ko) => {
       const client = google.accounts.oauth2.initTokenClient({
         client_id: serverCfg.clientId, scope: 'https://www.googleapis.com/auth/drive', hint: 'contacthorizonids@gmail.com', prompt: '',
-        callback: r => { if (r.error || !r.access_token) return ko(new GhError('Google no ha dado permiso. Elige la cuenta de Horizon y acepta.')); gToken = { value: r.access_token, exp: Date.now() + (Number(r.expires_in) || 3000) * 1000 }; ok(r.access_token); },
-        error_callback: () => ko(new GhError('Se cerró la ventana de Google sin dar permiso.')),
+        callback: r => { if (r.error || !r.access_token) return ko(new GhError('Google did not grant access. Choose the Horizon account and accept.')); gToken = { value: r.access_token, exp: Date.now() + (Number(r.expires_in) || 3000) * 1000 }; ok(r.access_token); },
+        error_callback: () => ko(new GhError('The Google window was closed without granting access.')),
       });
       client.requestAccessToken();
     });
@@ -1925,28 +2033,28 @@
     const act = ctOpen.active ?? c.signers.findIndex(x => !x.box && !x.signed);
     return `
       <div class="signers">
-        <div class="signers-head"><b>Firmantes</b><span class="muted">${ed ? 'Elige un firmante y haz clic en el documento donde firma. Cada uno recibe su propio enlace.' : ''}</span></div>
+        <div class="signers-head"><b>Signers</b><span class="muted">${ed ? 'Pick a signer and click on the document where they sign. Each one gets their own link.' : ''}</span></div>
         ${c.signers.map((x, i) => `
           <div class="signer${i === act && ed && !x.signed ? ' is-on' : ''}" data-sg="${esc(x.id)}" data-i="${i}">
             <span class="sg-n">${i + 1}</span>
-            ${ed && !x.signed ? `<input class="sg-label" value="${esc(x.label)}" maxlength="60" aria-label="Nombre del firmante ${i + 1}" placeholder="Artista ${i + 1}">
-              ${isTpl(c) ? '<span></span>' : `<input class="sg-email" type="email" value="${esc(x.email)}" maxlength="160" aria-label="Email del firmante ${i + 1}" placeholder="email del artista">`}`
+            ${ed && !x.signed ? `<input class="sg-label" value="${esc(x.label)}" maxlength="60" aria-label="Signer ${i + 1} name" placeholder="Artist ${i + 1}">
+              ${isTpl(c) ? '<span></span>' : `<input class="sg-email" type="email" value="${esc(x.email)}" maxlength="160" aria-label="Signer ${i + 1} email" placeholder="artist email">`}`
               : `<span class="sg-txt"><b>${esc(x.label)}</b><span>${esc(x.email || '')}</span></span><span></span>`}
-            <span class="sg-state ${x.signed ? 'ok' : x.box ? 'set' : ''}">${x.signed ? `✓ Firmado · ${esc(x.name)} · ${esc(fmtDate(x.signed_at))}` : x.box ? `Firma en pág. ${x.box.page + 1}` : 'Falta marcar dónde firma'}</span>
+            <span class="sg-state ${x.signed ? 'ok' : x.box ? 'set' : ''}">${x.signed ? `✓ Signed · ${esc(x.name)} · ${esc(fmtDate(x.signed_at))}` : x.box ? `Signs on page ${x.box.page + 1}` : 'Signature spot not set'}</span>
             <span class="sg-btns">
-              ${ed && !x.signed ? `<button type="button" class="btn ghost sm" data-ct="sg-pick">${i === act ? 'Colocando…' : 'Colocar firma'}</button>` : ''}
-              ${x.token && !x.signed && c.status !== 'void' ? `<button type="button" class="btn ghost sm" data-ct="sg-copy" title="${esc(signerUrl(x))}">Copiar enlace</button><a class="btn primary sm" href="${esc(gmailUrl(c, x))}" target="_blank" rel="noopener">Enviar por Gmail</a>` : ''}
-              ${x.signed && x.token ? `<a class="btn ghost sm" href="${esc(signerUrl(x))}" target="_blank" rel="noopener">Ver</a>` : ''}
-              ${ed && !x.signed && c.signers.length > 1 ? '<button type="button" class="ic danger" data-ct="sg-del" aria-label="Quitar firmante">✕</button>' : ''}
+              ${ed && !x.signed ? `<button type="button" class="btn ghost sm" data-ct="sg-pick">${i === act ? 'Placing…' : 'Place signature'}</button>` : ''}
+              ${x.token && !x.signed && c.status !== 'void' ? `<button type="button" class="btn ghost sm" data-ct="sg-copy" title="${esc(signerUrl(x))}">Copy link</button><a class="btn primary sm" href="${esc(gmailUrl(c, x))}" target="_blank" rel="noopener">Send via Gmail</a>` : ''}
+              ${x.signed && x.token ? `<a class="btn ghost sm" href="${esc(signerUrl(x))}" target="_blank" rel="noopener">View</a>` : ''}
+              ${ed && !x.signed && c.signers.length > 1 ? '<button type="button" class="ic danger" data-ct="sg-del" aria-label="Remove signer">✕</button>' : ''}
             </span>
           </div>`).join('')}
-        ${ed ? '<button type="button" class="btn ghost sm" data-ct="sg-add">+ Añadir firmante</button>' : ''}
+        ${ed ? '<button type="button" class="btn ghost sm" data-ct="sg-add">+ Add signer</button>' : ''}
       </div>`;
   }
   function contractsPage() {
     if (!ctData) {
       if (!ctErr) setTimeout(loadContracts, 0);
-      return `<div class="head"><div><p class="eyebrow">Firmas</p><h1>CONTRATOS</h1></div></div>${ctErr ? `<p class="login-error" role="alert">${esc(ctErr)}</p>` : '<p class="info">Cargando…</p>'}`;
+      return `<div class="head"><div><p class="eyebrow">Signatures</p><h1>CONTRACTS</h1></div></div>${ctErr ? `<p class="login-error" role="alert">${esc(ctErr)}</p>` : '<p class="info">Loading…</p>'}`;
     }
     if (ctOpen?.mode === 'new') return ctPick();
     if (ctOpen?.mode === 'new-tpl') return ctNewTpl();
@@ -1976,19 +2084,19 @@
     if (el) el.outerHTML = signersBlock(c, ed);
     if (ctOpen.view) HZPDF.drawMarks(ctOpen.view.pages, ctMarks());
     const send = $('[data-ct=send]'), canSend = ed && c.status !== 'void' && c.pdf && c.signers.every(x => x.box) && c.signers.some(x => !x.token);
-    if (canSend && !send) $('.ed-actions')?.insertAdjacentHTML('afterbegin', '<button type="button" class="btn ghost" data-ct="send">Preparar enlaces de firma</button>');
+    if (canSend && !send) $('.ed-actions')?.insertAdjacentHTML('afterbegin', '<button type="button" class="btn ghost" data-ct="send">Create signing links</button>');
   }
   function ctMarks() {
     const c = ctOpen.contract, act = ctOpen.active ?? c.signers.findIndex(x => !x.box && !x.signed);
     return c.signers.map((x, i) => x.signed
       ? { box: x.box, sign: x.signature, label: `Signed electronically by ${x.name}` }
-      : { box: x.box, title: x.label || `Artista ${i + 1}`, active: i === act });
+      : { box: x.box, title: x.label || `Artist ${i + 1}`, active: i === act });
   }
   async function placeBox(page, x, y) {
     const c = ctOpen.contract;
     const act = ctOpen.active ?? c.signers.findIndex(s => !s.box && !s.signed);
     const sg = c.signers[act >= 0 ? act : 0];
-    if (!sg || sg.signed) { toast('Elige primero un firmante («Colocar firma»).'); return; }
+    if (!sg || sg.signed) { toast('Pick a signer first (“Place signature”).'); return; }
     const old = sg.box;
     const w = old?.w || (c.signers.length > 2 ? 0.24 : 0.3), h = old?.h || 0.07;
     const b = { page, x: Math.min(Math.max(0, x - w / 2), 1 - w), y: Math.min(Math.max(0, y - h * 0.75), 1 - h), w, h };
@@ -2008,7 +2116,7 @@
     return { bytes, hash: await HZPDF.sha256(bytes), pages: pdf.numPages };
   }
   async function uploadPdf(id, file) {
-    if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) throw new GhError('Sube un archivo PDF.');
+    if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) throw new GhError('Upload a PDF file.');
     const info = await pdfInfo(file);
     await authFetch(`/api/contracts/${encodeURIComponent(id)}/pdf?hash=${info.hash}&pages=${info.pages}`, { method: 'POST', body: info.bytes });
   }
@@ -2054,27 +2162,27 @@
     else if (a === 'doc-pdf') {
       try {
         const tok = await googleToken();
-        const r = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/from-doc`, { token: tok }), 'PDF actualizado desde el Doc');
+        const r = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/from-doc`, { token: tok }), 'PDF updated from the Doc');
         ctOpen.bytes = null; ctOpen.fields = null;
-        if (r?.changedPages) toast('El número de páginas ha cambiado: vuelve a colocar las firmas.');
+        if (r?.changedPages) toast('The page count changed: place the signatures again.');
         ctRefresh();
       } catch (err) { toast(err.message); }
     }
-    else if (a === 'sg-pick') { ctOpen.active = Number(t.closest('[data-i]').dataset.i); ctSoftUpdate(); toast('Haz clic en el documento donde firma'); }
-    else if (a === 'sg-copy') { const sg = c.signers[Number(t.closest('[data-i]').dataset.i)]; try { await navigator.clipboard.writeText(signerUrl(sg)); toast('Enlace copiado'); } catch { toast(signerUrl(sg)); } }
-    else if (a === 'sg-add') { try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/signers`, { action: 'add' }), 'Firmante añadido'); ctOpen.active = c.signers.length; ctRefresh(); } catch { /* aviso ya mostrado */ } }
+    else if (a === 'sg-pick') { ctOpen.active = Number(t.closest('[data-i]').dataset.i); ctSoftUpdate(); toast('Click on the document where they sign'); }
+    else if (a === 'sg-copy') { const sg = c.signers[Number(t.closest('[data-i]').dataset.i)]; try { await navigator.clipboard.writeText(signerUrl(sg)); toast('Link copied'); } catch { toast(signerUrl(sg)); } }
+    else if (a === 'sg-add') { try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/signers`, { action: 'add' }), 'Signer added'); ctOpen.active = c.signers.length; ctRefresh(); } catch { /* aviso ya mostrado */ } }
     else if (a === 'sg-del') {
       const sg = c.signers[Number(t.closest('[data-i]').dataset.i)];
-      if (!await confirmBox(`¿Quitar a ${sg.label || 'este firmante'}?`, 'Quitar')) return;
-      try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/signers`, { action: 'remove', signer: sg.id }), 'Firmante quitado'); ctOpen.active = null; ctRefresh(); } catch { /* aviso ya mostrado */ }
+      if (!await confirmBox(`Remove ${sg.label || 'this signer'}?`, 'Remove')) return;
+      try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/signers`, { action: 'remove', signer: sg.id }), 'Signer removed'); ctOpen.active = null; ctRefresh(); } catch { /* aviso ya mostrado */ }
     }
-    else if (a === 'send') { try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/send`), 'Enlace de firma listo'); ctRefresh(); } catch { /* aviso ya mostrado */ } }
+    else if (a === 'send') { try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/send`), 'Signing link ready'); ctRefresh(); } catch { /* aviso ya mostrado */ } }
     else if (a === 'void' || a === 'unvoid') {
-      if (a === 'void' && !await confirmBox('¿Anular este contrato? El enlace de firma dejará de funcionar.', 'Anular')) return;
-      try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/${a}`), a === 'void' ? 'Contrato anulado' : 'Contrato reactivado'); ctRefresh(); } catch { /* aviso ya mostrado */ }
+      if (a === 'void' && !await confirmBox('Void this contract? The signing link will stop working.', 'Anular')) return;
+      try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/${a}`), a === 'void' ? 'Contract voided' : 'Contract reactivated'); ctRefresh(); } catch { /* aviso ya mostrado */ }
     } else if (a === 'del') {
-      if (!await confirmBox(`¿Eliminar «${c.title}»${c.status === 'signed' ? ' (FIRMADO)' : ''}? Se borra también su PDF. No se puede deshacer.`, 'Eliminar')) return;
-      try { await ctAction(() => api('DELETE', `/api/contracts/${encodeURIComponent(c.id)}`), 'Contrato eliminado'); ctOpen = null; ctData = null; render(); } catch { /* aviso ya mostrado */ }
+      if (!await confirmBox(`Delete “${c.title}”${c.status === 'signed' ? ' (SIGNED)' : ''}? Its PDF is deleted too. This can’t be undone.`, 'Delete')) return;
+      try { await ctAction(() => api('DELETE', `/api/contracts/${encodeURIComponent(c.id)}`), 'Contract deleted'); ctOpen = null; ctData = null; render(); } catch { /* aviso ya mostrado */ }
     } else if (a === 'dl-orig') { HZPDF.download(ctOpen.bytes, `${c.title} (original).pdf`); }
     else if (a === 'dl-file') { try { const r = await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/file`); HZPDF.download(new Uint8Array(await r.arrayBuffer()), `${c.title} (firmado).pdf`); } catch (err) { toast(err.message); } }
     else if (a === 'dl-signed') {
@@ -2082,14 +2190,14 @@
         const out = await HZPDF.signed(ctOpen.bytes, { title: c.title, hash: c.pdf_hash, link: signUrl(c),
           signers: c.signers.map(x => ({ label: x.label, box: x.box, signed: x.signed ? { name: x.name, email: x.signer_email, at: x.signed_at, ip: x.ip, ua: x.ua, signature: x.signature, hash: c.pdf_hash } : null })) });
         HZPDF.download(out, `${c.title} (firmado).pdf`);
-      } catch (err) { toast('No se pudo crear el PDF firmado: ' + err.message); }
+      } catch (err) { toast('Could not create the signed PDF: ' + err.message); }
     }
   });
   document.addEventListener('change', async e => {
     if (view !== 'contracts' || busy) return;
     if (e.target.classList?.contains('doc-url')) {
       const c = ctOpen?.contract;
-      try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/doc`, { url: e.target.value.trim() }), 'Enlace del Doc guardado'); c.doc_url = e.target.value.trim(); const el = $('.docbox'); if (el) el.outerHTML = docBlock(c, true); } catch { /* aviso ya mostrado */ }
+      try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/doc`, { url: e.target.value.trim() }), 'Doc link saved'); c.doc_url = e.target.value.trim(); const el = $('.docbox'); if (el) el.outerHTML = docBlock(c, true); } catch { /* aviso ya mostrado */ }
       return;
     }
     const f = e.target.files?.[0];
@@ -2097,12 +2205,12 @@
     const id = ctOpen?.contract?.id;
     if (e.target.id === 'ct-pdf') {
       e.target.value = '';
-      try { await ctAction(() => uploadPdf(id, f), 'PDF subido'); ctOpen.bytes = null; ctRefresh(); } catch { /* aviso ya mostrado */ }
+      try { await ctAction(() => uploadPdf(id, f), 'PDF uploaded'); ctOpen.bytes = null; ctRefresh(); } catch { /* aviso ya mostrado */ }
     }
     if (e.target.id === 'ct-arch') {
       e.target.value = '';
-      if (!await confirmBox('¿Subir este PDF como contrato YA FIRMADO (firmado fuera de la web)? El contrato quedará como firmado.', 'Subir')) return;
-      try { await ctAction(() => authFetch(`/api/contracts/${encodeURIComponent(id)}/file`, { method: 'POST', body: f }), 'PDF firmado guardado'); ctRefresh(); } catch { /* aviso ya mostrado */ }
+      if (!await confirmBox('Upload this PDF as an ALREADY SIGNED contract (signed outside the site)? The contract will be marked as signed.', 'Move up')) return;
+      try { await ctAction(() => authFetch(`/api/contracts/${encodeURIComponent(id)}/file`, { method: 'POST', body: f }), 'Signed PDF saved'); ctRefresh(); } catch { /* aviso ya mostrado */ }
     }
   });
   document.addEventListener('submit', async e => {
@@ -2114,26 +2222,24 @@
       const fail = m => { const b = $('#ed-error', f) || $('#ed-error'); b.textContent = m; b.hidden = false; };
       if (f.id === 'ct-new') {
         const file = f.elements.file.files[0];
-        if (!file) return fail('Elige el PDF del contrato.');
+        if (!file) return fail('Choose the contract PDF.');
         const r = await ctAction(() => api('POST', '/api/contracts', { title: f.elements.title.value, artist: f.elements.artist.value, email: f.elements.email.value }));
-        await ctAction(() => uploadPdf(r.id, file), 'Contrato creado');
+        await ctAction(() => uploadPdf(r.id, file), 'Contract created');
         openContract(r.id); loadContracts();
       } else if (f.id === 'ct-tpl') {
         const doc = f.elements.doc.value.trim();
-        if (!f.elements.title.value.trim()) return fail('Ponle nombre a la plantilla.');
-        if (!docParts(doc)) return fail('Pega el enlace de la pestaña del Google Doc.');
+        if (!f.elements.title.value.trim()) return fail('Give the template a name.');
+        if (!docParts(doc)) return fail('Paste the Google Doc tab link.');
         const tok = await googleToken();
         const r = await ctAction(() => api('POST', '/api/contracts', { kind: 'template', title: f.elements.title.value }));
         await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/doc`, { url: doc }));
-        try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, { token: tok }), 'Plantilla creada'); } catch { /* aviso ya mostrado */ }
+        try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, { token: tok }), 'Template created'); } catch { /* aviso ya mostrado */ }
         ctTab = 'templates'; ctData = null; openContract(r.id); loadContracts();
       } else if (f.id === 'ct-use') {
         const tpl = ctOpen.tpl, fields = ctOpen.fields || [];
         const title = f.elements.title.value.trim();
-        if (!title || /—\s*$/.test(title)) return fail('Completa el título del contrato.');
+        if (!title || /—\s*$/.test(title)) return fail('Complete the contract title.');
         const values = {}; fields.forEach((x, i) => { values[x.name] = f.elements['f' + i].value.trim(); });
-        const empty = fields.filter(x => !values[x.name]);
-        if (empty.length && !await confirmBox(`Hay datos sin rellenar: ${empty.map(x => x.name).join(', ')}. ¿Crear el contrato igualmente?`, 'Crear')) return;
         const btn = $('button[type=submit]', f); btn.disabled = true; btn.textContent = 'Creando… (Google)';
         try {
           const tok = await googleToken();
@@ -2145,20 +2251,20 @@
             const full = await api('GET', `/api/contracts/${encodeURIComponent(r.id)}`);
             await ctAction(() => api('POST', '/api/contracts', { id: r.id, title, artist: f.elements.artist.value, email: emails[0], signers: full.contract.signers.map((x, i) => ({ id: x.id, label: x.label, email: emails[i] || '' })) }));
           }
-          const g = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, { token: tok }), 'Contrato creado');
-          if (g?.changedPages) toast('Con estos datos el contrato tiene otro número de páginas: revisa dónde firma cada uno.');
+          const g = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, { token: tok }), 'Contract created');
+          if (g?.changedPages) toast('With these details the contract has a different page count: check where each person signs.');
           ctTab = 'contracts'; ctData = null; openContract(r.id); loadContracts();
-        } catch (err) { if (!$('#ed-error:not([hidden])')) fail(err.message); btn.disabled = false; btn.textContent = 'Crear contrato'; }
+        } catch (err) { if (!$('#ed-error:not([hidden])')) fail(err.message); btn.disabled = false; btn.textContent = 'Create contract'; }
       } else {
         const c = ctOpen.contract;
         const signers = $$('.signer', f).map(el => ({ id: el.dataset.sg, label: el.querySelector('.sg-label')?.value, email: el.querySelector('.sg-email')?.value })).filter(x => x.label !== undefined);
-        await ctAction(() => api('POST', '/api/contracts', { id: c.id, title: f.elements.title?.value ?? c.title, artist: f.elements.artist?.value ?? c.artist, email: signers[0]?.email ?? c.email, notes: f.elements.notes.value, signers }), 'Guardado');
+        await ctAction(() => api('POST', '/api/contracts', { id: c.id, title: f.elements.title?.value ?? c.title, artist: f.elements.artist?.value ?? c.artist, email: signers[0]?.email ?? c.email, notes: f.elements.notes.value, signers }), 'Saved');
         ctRefresh();
       }
     } catch { /* aviso ya mostrado */ }
   }, true);
 
-  /* ---------------- Chat del equipo (burbuja abajo a la derecha) ---------------- */
+  /* ---------------- Team chat (burbuja abajo a la derecha) ---------------- */
   const CHAT_SEEN = 'hz_chat_seen';
   const chatState = { on: false, open: false, timer: 0, last: 0, msgs: new Map(), me: '', owner: false, loading: false, seen: 0 };
   try { chatState.seen = Number(localStorage.getItem(CHAT_SEEN)) || 0; } catch { /* nada */ }
@@ -2169,16 +2275,16 @@
     el = document.createElement('div');
     el.id = 'chat'; el.className = 'chat';
     el.innerHTML = `
-      <button type="button" class="chat-fab" data-chat="toggle" aria-label="Chat del equipo" aria-expanded="false">
+      <button type="button" class="chat-fab" data-chat="toggle" aria-label="Team chat" aria-expanded="false">
         <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path fill="currentColor" d="M12 3C6.5 3 2 6.9 2 11.6c0 2.6 1.4 4.9 3.6 6.5L5 22l4-2.2c.9.2 1.9.4 3 .4 5.5 0 10-3.9 10-8.6S17.5 3 12 3z"/></svg>
         <span class="chat-badge" hidden></span>
       </button>
-      <section class="chat-box" hidden aria-label="Chat del equipo">
-        <header class="chat-head"><b>Chat del equipo</b><button type="button" class="chat-x" data-chat="toggle" aria-label="Cerrar">×</button></header>
+      <section class="chat-box" hidden aria-label="Team chat">
+        <header class="chat-head"><b>Team chat</b><button type="button" class="chat-x" data-chat="toggle" aria-label="Close">×</button></header>
         <ol class="chat-list" aria-live="polite"></ol>
         <form class="chat-form" novalidate>
-          <textarea name="text" rows="1" maxlength="1000" placeholder="Escribe un mensaje…" aria-label="Mensaje"></textarea>
-          <button type="submit" class="chat-send" aria-label="Enviar"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3 20.5 21 12 3 3.5 3 10l12 2-12 2z"/></svg></button>
+          <textarea name="text" rows="1" maxlength="1000" placeholder="Write a message…" aria-label="Message"></textarea>
+          <button type="submit" class="chat-send" aria-label="Send"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M3 20.5 21 12 3 3.5 3 10l12 2-12 2z"/></svg></button>
         </form>
       </section>`;
     document.body.appendChild(el);
@@ -2202,17 +2308,17 @@
       const day = !prev || new Date(prev.at).toDateString() !== d.toDateString();
       prev = m;
       const who = m.name || m.email.split('@')[0];
-      return `${day ? `<li class="chat-day">${esc(d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' }))}</li>` : ''}
+      return `${day ? `<li class="chat-day">${esc(d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' }))}</li>` : ''}
         <li class="chat-msg${mine ? ' mine' : ''}${same ? ' cont' : ''}" data-id="${m.id}">
           ${same || mine ? '' : `<span class="chat-av">${m.picture ? `<img src="${esc(m.picture)}" alt="" referrerpolicy="no-referrer">` : esc(who[0].toUpperCase())}</span>`}
           <div class="chat-bubble">
             ${same || mine ? '' : `<b style="${m.color ? `color:${esc(m.color)}` : ''}">${esc(who)}</b>`}
             <p>${linkify(m.text)}</p>
-            <time>${esc(d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }))}</time>
-            ${mine || chatState.owner ? '<button type="button" class="chat-del" data-chat="del" aria-label="Borrar mensaje">×</button>' : ''}
+            <time>${esc(d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }))}</time>
+            ${mine || chatState.owner ? '<button type="button" class="chat-del" data-chat="del" aria-label="Delete message">×</button>' : ''}
           </div>
         </li>`;
-    }).join('') : '<li class="chat-empty">Aún no hay mensajes. ¡Escribe el primero!</li>';
+    }).join('') : '<li class="chat-empty">No messages yet. Write the first one!</li>';
     if (stick || near) list.scrollTop = list.scrollHeight;
   }
   async function chatPoll() {
@@ -2274,7 +2380,7 @@
     if (t.dataset.chat === 'toggle') chatToggle();
     if (t.dataset.chat === 'del') {
       const id = Number(t.closest('.chat-msg')?.dataset.id);
-      if (!id || !await confirmBox('¿Borrar este mensaje?', 'Borrar')) return;
+      if (!id || !await confirmBox('Delete this message?', 'Delete')) return;
       try { await api('DELETE', `/api/chat?id=${id}`); chatState.msgs.delete(id); chatRender(false); } catch (err) { toast(err.message); }
     }
   });
@@ -2298,7 +2404,7 @@
   async function boot() {
     auth = readAuth();
     if (!auth) { loginView(); return; }
-    app.innerHTML = '<p class="boot">Cargando…</p>';
+    app.innerHTML = '<p class="boot">Loading…</p>';
     try {
       useSession(await api('GET', '/api/auth/me'));   // el rol puede haber cambiado desde la última vez
       const remembered = (() => { try { return !!localStorage.getItem(AUTH_KEY); } catch { return false; } })();
@@ -2308,8 +2414,8 @@
     } catch (e) {
       if (e.status === 401 || e.status === 403 || e.status === 404) { logout(e.message); return; }
       app.innerHTML = `<main class="login"><div class="login-card"><p class="login-error" role="alert">${esc(e.message)}</p>
-        <button type="button" class="btn primary wide" id="retry">Reintentar</button>
-        <button type="button" class="btn ghost wide" data-act="logout">Salir</button></div></main>`;
+        <button type="button" class="btn primary wide" id="retry">Retry</button>
+        <button type="button" class="btn ghost wide" data-act="logout">Sign out</button></div></main>`;
       $('#retry').addEventListener('click', boot);
     }
   }

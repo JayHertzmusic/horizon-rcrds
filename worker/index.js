@@ -76,6 +76,7 @@ async function ensureSchema(env) {
     `CREATE TABLE IF NOT EXISTS panel_sessions (hash TEXT PRIMARY KEY, email TEXT NOT NULL, area TEXT NOT NULL, name TEXT, picture TEXT, created_at INTEGER, expires_at INTEGER NOT NULL)`,
     `CREATE INDEX IF NOT EXISTS panel_sessions_email ON panel_sessions (email)`,
     `CREATE TABLE IF NOT EXISTS chat_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, email TEXT NOT NULL, name TEXT, picture TEXT, text TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)`,
+    `CREATE TABLE IF NOT EXISTS panel_profiles (email TEXT PRIMARY KEY, avatar TEXT, updated_at INTEGER)`,
     `CREATE TABLE IF NOT EXISTS panel_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, email TEXT, name TEXT, action TEXT NOT NULL, detail TEXT)`,
     `INSERT OR IGNORE INTO site_meta (k, v) VALUES ('version', 0)`,
     ...FORM_SCHEMA,
@@ -189,7 +190,31 @@ async function session(req, env) {
     await env.DB.prepare('DELETE FROM panel_sessions WHERE hash = ?').bind(hash).run();
     throw new HttpError(401, 'Ya no tienes acceso a este panel.');
   }
-  return { hash, area: s.area, email: s.email, picture: s.picture || '', ...who, name: who.label || s.name || '' };
+  const pf = await env.DB.prepare('SELECT avatar FROM panel_profiles WHERE email = ?').bind(s.email).first();
+  return { hash, area: s.area, email: s.email, picture: pf?.avatar ? avatarUrl(pf.avatar) : s.picture || '', ...who, name: who.label || s.name || '' };
+}
+const avatarUrl = id => `/api/public/avatar/${id}`;
+const AVATAR_SQL = `CASE WHEN p.avatar IS NOT NULL THEN '/api/public/avatar/' || p.avatar END`;
+/* Foto de perfil: cada uno sube la suya (JPEG/PNG/WebP pequeño, ya recortado en el navegador). */
+async function avatarApi(req, env, s) {
+  if (s.sync) throw new HttpError(403, 'No disponible.');
+  const DB = env.DB;
+  const old = await DB.prepare('SELECT avatar FROM panel_profiles WHERE email = ?').bind(s.email).first();
+  if (req.method === 'DELETE') {
+    if (old?.avatar) await env.FILES.delete('avatars/' + old.avatar);
+    await DB.prepare('DELETE FROM panel_profiles WHERE email = ?').bind(s.email).run();
+    return { ok: true, picture: '' };
+  }
+  if (req.method !== 'POST') throw new HttpError(405, 'No permitido.');
+  const type = (req.headers.get('Content-Type') || '').split(';')[0];
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(type)) throw new HttpError(400, 'Sube una imagen (JPG, PNG o WebP).');
+  const buf = await req.arrayBuffer();
+  if (!buf.byteLength || buf.byteLength > 400 * 1024) throw new HttpError(400, 'La imagen es demasiado grande.');
+  const id = crypto.randomUUID().replace(/-/g, '');
+  await env.FILES.put('avatars/' + id, buf, { metadata: { type } });
+  if (old?.avatar) await env.FILES.delete('avatars/' + old.avatar);
+  await DB.prepare('INSERT INTO panel_profiles (email, avatar, updated_at) VALUES (?, ?, ?) ON CONFLICT(email) DO UPDATE SET avatar = excluded.avatar, updated_at = excluded.updated_at').bind(s.email, id, now()).run();
+  return { ok: true, picture: avatarUrl(id) };
 }
 const userOut = s => ({ email: s.email, name: s.name, picture: s.picture, owner: s.owner, role: s.role, perms: s.perms });
 
@@ -340,10 +365,11 @@ async function team(req, env, s, p) {
   const body = m === 'POST' ? parse(await req.text()) || {} : null;
   if (p === '/api/team' && m === 'GET') {
     const [members, roles] = await Promise.all([
-      DB.prepare('SELECT email, role_id, label, color, name, picture, added_at, last_login FROM panel_members ORDER BY added_at').all(),
+      DB.prepare(`SELECT m.email, m.role_id, m.label, m.color, m.name, COALESCE(${AVATAR_SQL}, m.picture) AS picture, m.added_at, m.last_login FROM panel_members m LEFT JOIN panel_profiles p ON p.email = m.email ORDER BY m.added_at`).all(),
       DB.prepare('SELECT id, name, perms FROM panel_roles ORDER BY created_at').all(),
     ]);
-    return json({ owners: owners(env), sections: SECTIONS, members: members.results, roles: roles.results.map(r => ({ id: r.id, name: r.name, perms: normPerms(parse(r.perms)) })) });
+    const pics = Object.fromEntries((await DB.prepare(`SELECT p.email, ${AVATAR_SQL} AS picture FROM panel_profiles p`).all()).results.map(r => [r.email, r.picture]));
+    return json({ owners: owners(env), ownerPics: Object.fromEntries(owners(env).map(e => [e, pics[e] || ''])), sections: SECTIONS, members: members.results, roles: roles.results.map(r => ({ id: r.id, name: r.name, perms: normPerms(parse(r.perms)) })) });
   }
   if (p === '/api/team/audit' && m === 'GET') {
     // historial completo, de 100 en 100 (before = id del último que ya se ve), de todos o de una persona
@@ -443,8 +469,8 @@ async function chat(req, env, s, url) {
   if (req.method === 'GET') {
     const after = Math.max(0, Number(url.searchParams.get('after')) || 0);
     const rows = after
-      ? (await DB.prepare('SELECT c.id, c.at, c.email, COALESCE(m.label, c.name) AS name, m.color, c.picture, c.text, c.deleted FROM chat_messages c LEFT JOIN panel_members m ON m.email = c.email WHERE c.id > ? ORDER BY c.id LIMIT 200').bind(after).all()).results
-      : (await DB.prepare('SELECT * FROM (SELECT c.id, c.at, c.email, COALESCE(m.label, c.name) AS name, m.color, c.picture, c.text, c.deleted FROM chat_messages c LEFT JOIN panel_members m ON m.email = c.email ORDER BY c.id DESC LIMIT 150) ORDER BY id').all()).results;
+      ? (await DB.prepare(`SELECT c.id, c.at, c.email, COALESCE(m.label, c.name) AS name, m.color, COALESCE(${AVATAR_SQL}, c.picture) AS picture, c.text, c.deleted FROM chat_messages c LEFT JOIN panel_members m ON m.email = c.email LEFT JOIN panel_profiles p ON p.email = c.email WHERE c.id > ? ORDER BY c.id LIMIT 200`).bind(after).all()).results
+      : (await DB.prepare(`SELECT * FROM (SELECT c.id, c.at, c.email, COALESCE(m.label, c.name) AS name, m.color, COALESCE(${AVATAR_SQL}, c.picture) AS picture, c.text, c.deleted FROM chat_messages c LEFT JOIN panel_members m ON m.email = c.email LEFT JOIN panel_profiles p ON p.email = c.email ORDER BY c.id DESC LIMIT 150) ORDER BY id`).all()).results;
     // borrados recientes (para quitarlos de la pantalla de quien ya los tenía)
     const gone = after ? (await DB.prepare('SELECT id FROM chat_messages WHERE deleted = 1 AND id <= ? AND id > ? - 300').bind(after, after).all()).results.map(r => r.id) : [];
     return json({ me: s.email, owner: !!s.owner, messages: rows.filter(r => !r.deleted).map(({ deleted, ...r }) => r), gone });
@@ -492,6 +518,12 @@ async function api(req, env, p) {
     return json(await startSession(env, { email, name: clean(b.name || email.split('@')[0], 80), picture: '' }, area(b.area)));
   }
   if (p.startsWith('/api/public/sign/')) { const r = await signApi(req, env, url, mailer(env)); return r instanceof Response ? r : json(r); }   // firma de contratos (enlace privado)
+  const av = p.match(/^\/api\/public\/avatar\/([a-f0-9]{32})$/);
+  if (av) {
+    const f = await env.FILES.getWithMetadata('avatars/' + av[1], { type: 'arrayBuffer' });
+    if (!f.value) throw new HttpError(404, 'No encontrada.');
+    return new Response(f.value, { headers: { 'Content-Type': f.metadata?.type || 'image/jpeg', 'Cache-Control': 'public, max-age=31536000, immutable' } });
+  }
   if (p.startsWith('/api/public/')) return json(await publicFormsApi(req, env, url));   // formularios públicos (sin sesión)
   const s = await session(req, env);
   if (p === '/api/auth/me' && req.method === 'GET') return json({ user: { ...userOut(s), formsCount: await formsCount(env, s) }, sections: SECTIONS });
@@ -505,6 +537,7 @@ async function api(req, env, p) {
   }
   if (p === '/api/publish' && req.method === 'POST') return publish(req, env, s);
   if (p === '/api/chat') return chat(req, env, s, url);
+  if (p === '/api/me/avatar') return json(await avatarApi(req, env, s));
   if (p === '/api/contracts' || p.startsWith('/api/contracts/')) {
     const r = await contractsApi(req, env, s, url, act => can(s, 'contracts', act), action => audit(env, s, action));
     return r instanceof Response ? r : json(r);

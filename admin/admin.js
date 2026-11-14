@@ -382,7 +382,7 @@
         </nav>
         <div class="top-end">
           <span class="who" title="${esc(u.email)}">
-            ${u.picture ? `<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="who-ini">${esc(initials)}</span>`}
+            <label class="who-pic" title="Cambiar tu foto">${u.picture ? `<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="who-ini">${esc(initials)}</span>`}<span class="who-cam" aria-hidden="true">✎</span><input type="file" id="me-photo" accept="image/*" class="sr-only" aria-label="Cambiar tu foto"></label>
             <span class="who-txt"><b>${esc(u.name || u.email.split('@')[0])}</b><small>${esc(preview ? 'Probando: ' + preview.name : u.owner ? 'Owner' : u.role?.name || 'Sin rol')}</small></span>
           </span>
           <a class="link" href="${SITE}" target="_blank" rel="noopener">Ver web ↗</a>
@@ -397,7 +397,7 @@
   }
 
   /* ---------------- Equipo y roles (solo owners, en /admin) ---------------- */
-  let teamData = null, teamErr = '', teamLoading = false, newRole = false;
+  let teamData = null, teamErr = '', teamLoading = false;
   const ACTIONS = { view: 'Ver', edit: 'Editar', delete: 'Eliminar' };
   const fmtDate = t => t ? new Date(t).toLocaleString('es-ES', { dateStyle: 'short', timeStyle: 'short' }) : '';
   async function loadTeam() {
@@ -412,91 +412,88 @@
     teamLoading = false;
     if (view === 'team' && !editing) render();
   }
-  let openRole = null;   // rol desplegado para editar
+  /* Ventana (para añadir/editar personas y roles): así la página del equipo queda limpia */
+  function sheet(html) {
+    let d = $('#sheet');
+    if (!d) { d = document.createElement('dialog'); d.id = 'sheet'; d.className = 'confirm sheet'; document.body.appendChild(d); d.addEventListener('click', e => { if (e.target === d) d.close(); }); }
+    d.innerHTML = html;
+    if (!d.open) d.showModal();
+    d.querySelector('input:not([type=hidden]):not([type=color]), select')?.focus();
+    return d;
+  }
+  const closeSheet = () => { const d = $('#sheet'); if (d?.open) d.close(); };
+  const LEVELS = [['', 'Nada'], ['view', 'Ver'], ['edit', 'Editar'], ['delete', 'Todo']];
+  const levelOf = (r, sec) => sec.actions.includes('delete') && r.perms?.[sec.id]?.delete ? 'delete' : r.perms?.[sec.id]?.edit ? 'edit' : r.perms?.[sec.id]?.view ? 'view' : '';
   function roleSummary(r) {
-    const parts = teamData.sections.map(s => {
-      const acts = s.actions.filter(a => r.perms?.[s.id]?.[a]);
-      if (!acts.length) return '';
-      const word = acts.includes('delete') ? 'todo' : acts.includes('edit') ? 'editar' : 'ver';
-      return `<span class="rs">${esc(s.label)} <i>${word}</i></span>`;
-    }).filter(Boolean);
-    return parts.length ? parts.join('') : '<span class="muted">Sin secciones todavía</span>';
+    const n = teamData.sections.filter(sec => levelOf(r, sec)).length;
+    return n ? `${n} ${n === 1 ? 'sección' : 'secciones'}` : 'Sin secciones';
   }
-  function roleCard(r) {
+  function roleSheet(r) {
     const isNew = !r.id;
-    if (!isNew && openRole !== r.id) {
-      const n = teamData.members.filter(m => m.role_id === r.id).length;
-      return `
-      <div class="role-line" data-role="${esc(r.id)}">
-        <b>${esc(r.name)}</b>
-        <span class="role-sum">${roleSummary(r)}</span>
-        <span class="muted sm-txt">${n} ${n === 1 ? 'persona' : 'personas'}</span>
-        <span class="role-btns">
-          <button type="button" class="btn ghost sm" data-act="preview-role" title="Ver el panel como este rol">Probar</button>
-          <button type="button" class="btn ghost sm" data-act="open-role">Editar</button>
-        </span>
-      </div>`;
-    }
-    return `
-      <form class="role-card" data-role="${esc(r.id || '')}" novalidate>
-        <div class="role-top">
-          <input name="name" value="${esc(r.name || '')}" maxlength="40" placeholder="Nombre del rol (p. ej. A&R, Mod)" aria-label="Nombre del rol" autocomplete="off">
-          <button type="submit" class="btn primary sm">${isNew ? 'Crear rol' : 'Guardar'}</button>
-          ${isNew ? '<button type="button" class="btn ghost sm" data-act="cancel-role">Cancelar</button>' : '<button type="button" class="btn ghost sm" data-act="close-role">Cerrar</button><button type="button" class="btn danger sm" data-act="delete-role">Eliminar</button>'}
+    return sheet(`
+      <form class="role-form" data-role="${esc(r.id || '')}" novalidate>
+        <div class="sheet-head"><h2>${isNew ? 'Nuevo rol' : 'Editar rol'}</h2><button type="button" class="ic" data-act="sheet-close" aria-label="Cerrar">✕</button></div>
+        <input name="name" class="role-name" value="${esc(r.name || '')}" maxlength="40" placeholder="Nombre del rol (p. ej. A&R)" aria-label="Nombre del rol" autocomplete="off">
+        <div class="perm-list">${teamData.sections.map(sec => { const lv = levelOf(r, sec); return `
+          <div class="perm-row"><span>${esc(sec.label)}</span><span class="seg" role="radiogroup" aria-label="${esc(sec.label)}">${LEVELS.filter(([v]) => !v || sec.actions.includes(v)).map(([v, l]) => `
+            <label><input type="radio" name="${esc(sec.id)}" value="${v}" ${v === lv ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>`; }).join('')}
         </div>
-        <table class="perm-table">
-          <thead><tr><th scope="col">Sección</th>${Object.values(ACTIONS).map(a => `<th scope="col">${a}</th>`).join('')}</tr></thead>
-          <tbody>${teamData.sections.map(s => `
-            <tr><th scope="row">${esc(s.label)}</th>${Object.keys(ACTIONS).map(a => `<td>${s.actions.includes(a)
-              ? `<label class="perm"><input type="checkbox" name="${esc(s.id)}.${a}" ${r.perms?.[s.id]?.[a] ? 'checked' : ''} aria-label="${esc(s.label)}: ${ACTIONS[a]}"><span></span></label>`
-              : '<span class="muted">—</span>'}</td>`).join('')}</tr>`).join('')}
-          </tbody>
-        </table>
+        <p class="info sm-txt">«Editar» incluye crear. «Todo» incluye borrar. Los owners siempre lo tienen todo.</p>
         <p class="ed-error" role="alert" hidden></p>
-      </form>`;
+        <div class="confirm-actions">${isNew ? '' : '<button type="button" class="btn danger push-l" data-act="delete-role">Eliminar rol</button>'}<button type="submit" class="btn primary">${isNew ? 'Crear rol' : 'Guardar'}</button></div>
+      </form>`);
   }
+  function memberSheet(m) {
+    const roles = teamData.roles, isNew = !m;
+    m = m || { email: '', label: '', color: '#4fc3f7', role_id: roles[0]?.id };
+    return sheet(`
+      <form class="member-form" data-email="${esc(m.email)}" novalidate>
+        <div class="sheet-head"><h2>${isNew ? 'Añadir persona' : esc(m.label || m.name || m.email)}</h2><button type="button" class="ic" data-act="sheet-close" aria-label="Cerrar">✕</button></div>
+        ${isNew ? `<div class="field"><label for="m-email">Email de Google</label><input id="m-email" name="email" type="email" autocomplete="off" spellcheck="false" placeholder="nombre@gmail.com"></div>` : `<p class="muted sm-txt">${esc(m.email)}</p>`}
+        <div class="m-grid">
+          <div class="field"><label for="m-label">Nombre</label><input id="m-label" name="label" value="${esc(m.label || '')}" maxlength="40" placeholder="${esc(m.name || 'p. ej. Kris m')}" autocomplete="off"></div>
+          <div class="field"><label for="m-color">Color</label><label class="color-dot big" style="--c:${esc(m.color || '#ffffff')}"><input id="m-color" type="color" name="color" value="${esc(m.color || '#ffffff')}"></label></div>
+        </div>
+        <div class="field"><label for="m-role">Rol</label>${roles.length ? `<select id="m-role" name="role_id">${roles.map(r => `<option value="${esc(r.id)}" ${r.id === m.role_id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>` : '<p class="info">Crea primero un rol.</p>'}</div>
+        <p class="ed-error" role="alert" hidden></p>
+        <div class="confirm-actions">${isNew ? '' : '<button type="button" class="btn danger push-l" data-act="remove-member">Quitar del equipo</button>'}<button type="submit" class="btn primary" ${roles.length ? '' : 'disabled'}>${isNew ? 'Añadir' : 'Guardar'}</button></div>
+      </form>`);
+  }
+  const avatar = (pic, name, color) => pic
+    ? `<img class="av" src="${esc(pic)}" alt="" referrerpolicy="no-referrer">`
+    : `<span class="av" style="--c:${esc(color || '#ffffff')}">${esc((name || '?')[0].toUpperCase())}</span>`;
   function teamView() {
-    const head = `<div class="head"><div><p class="eyebrow">Accesos</p><h1>EQUIPO${teamData ? ` <span class="count">${teamData.owners.length + teamData.members.length}</span>` : ''}</h1></div></div>`;
+    const head = `<div class="head"><div><p class="eyebrow">Accesos</p><h1>EQUIPO${teamData ? ` <span class="count">${teamData.owners.length + teamData.members.length}</span>` : ''}</h1></div>
+      ${teamData ? '<div class="head-btns"><button type="button" class="btn ghost" data-act="add-member">+ Añadir persona</button></div>' : ''}</div>`;
     if (!teamData) {
       if (!teamErr) setTimeout(loadTeam, 0);
       return head + (teamErr ? `<p class="login-error" role="alert">${esc(teamErr)}</p><button type="button" class="btn ghost" data-act="team-retry">Reintentar</button>` : '<p class="info">Cargando…</p>');
     }
-    const { owners, members, roles } = teamData;
-    const roleOpts = sel => roles.map(r => `<option value="${esc(r.id)}" ${r.id === sel ? 'selected' : ''}>${esc(r.name)}</option>`).join('');
-    const person = (name, email, pic) => `
-      ${pic ? `<img class="thumb round" src="${esc(pic)}" alt="" referrerpolicy="no-referrer">` : `<span class="thumb round ini">${esc((name || email)[0].toUpperCase())}</span>`}
-      <span class="meta"><b>${esc(name || email)}</b><span>${esc(name ? email : '')}</span></span>`;
+    const { owners, members, roles } = teamData, pics = teamData.ownerPics || {};
+    const roleOf = m => roles.find(r => r.id === m.role_id);
     return `${head}
-      <p class="info lead">Cada persona entra en <b>horizonrcrds.com/team</b> con su cuenta de Google y solo ve lo que permite su rol. /admin es solo para los owners.</p>
       <ol class="list team-list">
-        ${owners.map(e => `<li class="row tm">
-            <span class="av" style="--c:#ffffff">${esc(e[0].toUpperCase())}</span>
-            <span class="meta"><b class="who-name">${esc(e.split('@')[0])}</b><span>${esc(e)}</span></span>
-            <span class="role-tag owner">Owner</span>
-            <span class="muted sm-txt">Acceso total</span><span></span></li>`).join('')}
-        ${members.map(m => `
-          <li class="row tm">
-            <label class="av color-dot" style="--c:${esc(m.color || '#ffffff')}" title="Cambiar color">${esc((m.label || m.name || m.email)[0].toUpperCase())}<input type="color" class="color-in" data-member="${esc(m.email)}" value="${esc(m.color || '#ffffff')}" aria-label="Color de ${esc(m.label || m.email)}"></label>
-            <span class="meta"><input class="name-in" data-member="${esc(m.email)}" value="${esc(m.label || '')}" placeholder="${esc(m.name || m.email.split('@')[0])}" maxlength="40" aria-label="Nombre de ${esc(m.email)}" autocomplete="off" title="Haz clic para cambiar el nombre"><span>${esc(m.email)}</span></span>
-            <select class="role-sel role-tag" style="--c:${esc(m.color || '#ffffff')}" data-member="${esc(m.email)}" aria-label="Rol de ${esc(m.email)}" title="Cambiar rol">${m.role_id && roles.some(r => r.id === m.role_id) ? '' : '<option value="" selected>Sin rol</option>'}${roleOpts(m.role_id)}</select>
-            <span class="muted sm-txt" title="${m.last_login ? 'Última vez: ' + esc(fmtDate(m.last_login)) : ''}">Acceso activo</span>
-            <button type="button" class="btn ghost sm" data-act="remove-member" data-email="${esc(m.email)}">Quitar</button>
-          </li>`).join('')}
+        ${owners.map(e => { const me = e === auth.user.email; const nm = me ? auth.user.name || e.split('@')[0] : e.split('@')[0]; return `<li class="row tm">
+            ${avatar(me ? auth.user.picture : pics[e], nm, '#ffffff')}
+            <span class="meta"><b>${esc(nm)}</b><span>${esc(e)}</span></span>
+            <span class="role-tag owner">Owner</span><span></span></li>`; }).join('')}
+        ${members.map(m => { const r = roleOf(m), nm = m.label || m.name || m.email.split('@')[0]; return `
+          <li class="row tm" data-email="${esc(m.email)}">
+            ${avatar(m.picture, nm, m.color)}
+            <span class="meta"><b style="color:${esc(m.color || '#ffffff')}">${esc(nm)}</b><span>${esc(m.email)}${m.last_login ? ' · entró ' + esc(fmtDate(m.last_login)) : ' · aún no ha entrado'}</span></span>
+            <span class="role-tag" style="--c:${esc(m.color || '#ffffff')}">${esc(r?.name || 'Sin rol')}</span>
+            <button type="button" class="btn ghost sm" data-act="edit-member">Editar</button>
+          </li>`; }).join('')}
       </ol>
-      ${roles.length ? `
-      <form id="add-member" class="add-row" novalidate>
-        <input name="email" type="email" placeholder="email@gmail.com" aria-label="Email de Google" autocomplete="off" spellcheck="false">
-        <input name="label" placeholder="Nombre (p. ej. Kris m)" maxlength="40" aria-label="Nombre" autocomplete="off">
-        <label class="color-dot big" style="--c:#4fc3f7" title="Color"><input type="color" name="color" value="#4fc3f7" aria-label="Color"></label>
-        <select name="role_id" aria-label="Rol">${roleOpts(roles[0].id)}</select>
-        <button type="submit" class="btn primary">Añadir</button>
-        <p class="ed-error" role="alert" hidden></p>
-      </form>` : '<p class="info">Crea primero un rol (abajo) para poder añadir personas.</p>'}
 
       <div class="head sub"><div><p class="eyebrow">Permisos</p><h2>ROLES <span class="count">${roles.length}</span></h2></div>
-        ${newRole ? '' : '<button type="button" class="btn ghost" data-act="new-role">+ Nuevo rol</button>'}</div>
-      <p class="info">Marca lo que puede hacer cada rol. «Editar» incluye crear. Los owners siempre lo tienen todo.</p>
-      <div class="roles">${newRole ? roleCard({ perms: {} }) : ''}${roles.map(roleCard).join('')}${!roles.length && !newRole ? '<p class="info">Todavía no hay roles.</p>' : ''}</div>`;
+        <div class="head-btns"><button type="button" class="btn ghost" data-act="new-role">+ Nuevo rol</button></div></div>
+      <div class="roles">${roles.map(r => { const n = members.filter(m => m.role_id === r.id).length; return `
+        <div class="role-line" data-role="${esc(r.id)}">
+          <b>${esc(r.name)}</b>
+          <span class="muted sm-txt">${roleSummary(r)} · ${n} ${n === 1 ? 'persona' : 'personas'}</span>
+          <span class="role-btns"><button type="button" class="btn ghost sm" data-act="preview-role" title="Ver el panel como este rol">Probar</button><button type="button" class="btn ghost sm" data-act="open-role">Editar</button></span>
+        </div>`; }).join('')}${!roles.length ? '<p class="info">Todavía no hay roles.</p>' : ''}</div>`;
   }
   /* ---------------- Historial (solo owners) ---------------- */
   const logState = { who: '', items: [], more: false, people: [], loading: false, err: '', loaded: false };
@@ -536,16 +533,32 @@
   }
 
   function rolePerms(form) {
-    const perms = {};
-    for (const s of teamData.sections) {
-      perms[s.id] = {};
-      for (const a of s.actions) perms[s.id][a] = !!form.elements[`${s.id}.${a}`]?.checked;
+    const perms = {}, rank = { '': 0, view: 1, edit: 2, delete: 3 };
+    for (const sec of teamData.sections) {
+      const lv = rank[form.querySelector(`input[name="${sec.id}"]:checked`)?.value || ''];
+      perms[sec.id] = {};
+      for (const a of sec.actions) perms[sec.id][a] = lv >= rank[a];
     }
     return perms;
   }
+  // tu foto de perfil: se recorta cuadrada (256 px) en el navegador y se sube
+  async function setMyPhoto(file) {
+    try {
+      if (!/^image\//.test(file.type)) throw new GhError('Elige una imagen.');
+      const img = await createImageBitmap(file);
+      const side = Math.min(img.width, img.height), c = document.createElement('canvas');
+      c.width = c.height = 256;
+      c.getContext('2d').drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 256, 256);
+      const blob = await new Promise(ok => c.toBlob(ok, 'image/jpeg', 0.88));
+      const r = await (await authFetch('/api/me/avatar', { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: blob })).json();
+      auth.user.picture = r.picture;
+      for (const st of [localStorage, sessionStorage]) { try { const saved = JSON.parse(st.getItem(AUTH_KEY) || 'null'); if (saved?.user) { saved.user.picture = r.picture; st.setItem(AUTH_KEY, JSON.stringify(saved)); } } catch { /* nada */ } }
+      toast('Foto actualizada'); teamData = null; render();
+    } catch (e) { toast(e.message); }
+  }
   async function teamAction(fn, okMsg, errBox) {
     busy = true;
-    try { await fn(); if (okMsg) toast(okMsg); newRole = false; openRole = null; teamData = null; await loadTeam(); }
+    try { await fn(); if (okMsg) toast(okMsg); closeSheet(); teamData = null; await loadTeam(); }
     catch (e) {
       if (e.status === 401) { logout(e.message); return; }
       if (errBox) { errBox.textContent = e.message; errBox.hidden = false; } else toast(e.message);
@@ -1272,18 +1285,21 @@
         break;
       }
       case 'preview-off': preview = null; go('team'); break;
-      case 'open-role': openRole = t.closest('[data-role]').dataset.role; newRole = false; render(); $('.role-card input[name=name]')?.focus(); break;
-      case 'close-role': openRole = null; render(); break;
-      case 'new-role': newRole = true; openRole = null; render(); $('.role-card input[name=name]')?.focus(); break;
-      case 'cancel-role': newRole = false; render(); break;
+      case 'open-role': { const r = teamData.roles.find(x => x.id === t.closest('[data-role]').dataset.role); if (r) roleSheet(r); break; }
+      case 'new-role': roleSheet({ perms: {} }); break;
+      case 'sheet-close': closeSheet(); break;
+      case 'add-member': memberSheet(null); break;
+      case 'edit-member': { const m = teamData.members.find(x => x.email === t.closest('[data-email]').dataset.email); if (m) memberSheet(m); break; }
       case 'delete-role': {
-        const form = t.closest('.role-card'), r = teamData.roles.find(x => x.id === form.dataset.role);
-        if (!r || !await confirmBox(`¿Eliminar el rol «${r.name}»?`)) return;
-        teamAction(() => api('DELETE', `/api/team/roles?id=${encodeURIComponent(r.id)}`), 'Rol eliminado', form.querySelector('.ed-error'));
+        const form = t.closest('.role-form'), r = teamData.roles.find(x => x.id === form.dataset.role);
+        closeSheet();
+        if (!r || !await confirmBox(`¿Eliminar el rol «${r.name}»?`)) { if (r) roleSheet(r); return; }
+        teamAction(() => api('DELETE', `/api/team/roles?id=${encodeURIComponent(r.id)}`), 'Rol eliminado');
         break;
       }
       case 'remove-member': {
-        const email = t.dataset.email;
+        const email = t.closest('.member-form').dataset.email;
+        closeSheet();
         if (!await confirmBox(`¿Quitar a ${email} del equipo? Dejará de poder entrar en /team al momento.`, 'Quitar')) return;
         teamAction(() => api('DELETE', `/api/team/members?email=${encodeURIComponent(email)}`), 'Quitado del equipo');
         break;
@@ -1361,14 +1377,15 @@
     e.preventDefault();
     if (form.id === 'dev-login') { const email = form.elements.email.value.trim(); if (email) login({ email }); return; }
     if (busy) return;
-    if (form.id === 'add-member') {
+    if (form.classList.contains('member-form')) {
       const box = form.querySelector('.ed-error'); box.hidden = true;
-      const email = form.elements.email.value.trim().toLowerCase();
+      const isNew = !form.dataset.email;
+      const email = isNew ? form.elements.email.value.trim().toLowerCase() : form.dataset.email;
       if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) { box.textContent = 'Escribe un email válido.'; box.hidden = false; form.elements.email.focus(); return; }
-      teamAction(() => api('POST', '/api/team/members', { email, label: form.elements.label.value.trim(), color: form.elements.color.value, role_id: form.elements.role_id.value }), `${email} añadido al equipo`, box);
+      teamAction(() => api('POST', '/api/team/members', { email, label: form.elements.label.value.trim(), color: form.elements.color.value, role_id: form.elements.role_id?.value }), isNew ? `${email} añadido al equipo` : 'Guardado', box);
       return;
     }
-    if (form.classList.contains('role-card')) {
+    if (form.classList.contains('role-form')) {
       const box = form.querySelector('.ed-error'); box.hidden = true;
       const name = form.elements.name.value.trim();
       if (!name) { box.textContent = 'Ponle un nombre al rol.'; box.hidden = false; form.elements.name.focus(); return; }
@@ -1401,6 +1418,7 @@
   document.addEventListener('change', e => {
     const t = e.target;
     if (t.id === 'ed-file' && t.files[0]) { setCover(t.files[0]); t.value = ''; }
+    if (t.id === 'me-photo' && t.files[0]) { setMyPhoto(t.files[0]); t.value = ''; }
     if (t.id === 'mx-file' && t.files[0]) { setMixAudio(t.files[0]); t.value = ''; }
     if (t.id === 'f-sc') scFill(!editing?.key);
     if (t.classList.contains('log-who')) { logState.who = t.value; logState.items = []; logState.loaded = false; loadLog(false); render(); }
@@ -1668,7 +1686,7 @@
   // Cada contrato es el PDF descargado del Google Doc del sello, sin tocar. Aquí se sube, se marca dónde firma el
   // artista, se crea el enlace de firma y se guarda/descarga el contrato firmado.
   const CONTRACTS_DOC = 'https://docs.google.com/document/d/1rUCOAySY2XHqnmgFeH9fjF3xgXDa9cg0vy8qWJVN274/edit?authuser=contacthorizonids@gmail.com';
-  let ctData = null, ctErr = '', ctLoading = false, ctOpen = null;
+  let ctData = null, ctErr = '', ctLoading = false, ctOpen = null, ctTab = 'contracts';
   const CT_STATUS = { draft: ['Borrador', 'off'], sent: ['Enviado', ''], signed: ['Firmado', 'ok'], void: ['Anulado', 'off'] };
   const ctCanEdit = () => !!ctData?.canEdit && can('contracts', 'edit');
   const signUrl = c => `${location.origin}/sign/${c.signers?.[0]?.token || c.token}`;
@@ -1690,48 +1708,100 @@
     const body = `Hi${sg.label && !/^Artista/.test(sg.label) ? ' ' + sg.label : c.artist ? ' ' + c.artist : ''},\n\nHere is your contract with HORIZON RCRDS: ${c.title}.\nYou can read it and sign it online here:\n${signerUrl(sg)}\n\nIf you have any questions, just reply to this email.\n\nBest,\nHORIZON RCRDS`;
     return `https://mail.google.com/mail/?authuser=contacthorizonids@gmail.com&view=cm&fs=1&to=${encodeURIComponent(sg.email || '')}&su=${encodeURIComponent('HORIZON RCRDS — ' + c.title)}&body=${encodeURIComponent(body)}`;
   }
+  const isTpl = c => c?.kind === 'template';
   function ctList() {
-    const list = ctData.contracts, ed = ctCanEdit();
+    const all = ctData.contracts, ed = ctCanEdit(), tab = ctTab;
+    const tpls = all.filter(isTpl), list = all.filter(c => !isTpl(c));
+    const rows = tab === 'templates' ? tpls : list;
     return `
-      <div class="head"><div><p class="eyebrow">Firmas</p><h1>CONTRATOS <span class="count">${list.length}</span></h1></div>
-        <div class="head-btns"><a class="btn ghost" href="${CONTRACTS_DOC}" target="_blank" rel="noopener">Abrir contratos en Google Docs ↗</a>${ed ? '<button type="button" class="btn primary" data-ct="new">+ Nuevo contrato</button>' : ''}</div></div>
-      <p class="info lead">Cada contrato está enlazado a su pestaña del Google Doc: ábrelo, pulsa <b>Editar texto</b> para cambiar nombres, track, fechas… aquí mismo, y luego <b>Generar PDF desde el Doc</b>. El artista firma exactamente ese PDF.</p>
-      <ol class="list">${list.length ? list.map(c => `
+      <div class="head"><div><p class="eyebrow">Firmas</p><h1>CONTRATOS</h1></div>
+        <div class="head-btns">${ed ? (tab === 'templates' ? '<button type="button" class="btn primary" data-ct="new-tpl">+ Nueva plantilla</button>' : '<button type="button" class="btn primary" data-ct="new">+ Nuevo contrato</button>') : ''}</div></div>
+      <div class="ct-tabs" role="tablist">
+        <button type="button" role="tab" class="${tab !== 'templates' ? 'on' : ''}" data-ct="tab-contracts">Contratos <span>${list.length}</span></button>
+        <button type="button" role="tab" class="${tab === 'templates' ? 'on' : ''}" data-ct="tab-templates">Plantillas <span>${tpls.length}</span></button>
+      </div>
+      ${tab === 'templates' ? `<p class="info lead">Las plantillas son vuestros contratos de Google Docs. Donde va un dato del artista, escribe en el Doc su nombre entre llaves dobles: <b>{{Nombre real}}</b>, <b>{{Nombre artístico}}</b>, <b>{{Track}}</b>, <b>{{Fecha}}</b>… Al crear un contrato, el panel te pide esos datos y Google los pone en su sitio (el texto se recoloca solo, igual que si lo escribieras tú).</p>` : ''}
+      <ol class="list">${rows.length ? rows.map(c => `
         <li class="row ct" data-ctid="${esc(c.id)}">
-          <span class="meta"><b>${esc(c.title)}</b><span>${esc(c.artist || '')}${c.email ? ' · ' + esc(c.email) : ''}</span></span>
-          <span class="tag ${CT_STATUS[c.status]?.[1] || ''}">${CT_STATUS[c.status]?.[0] || c.status}</span>
-          <span class="muted sm-txt">${c.status === 'signed' ? 'Firmado ' + esc(fmtDate(c.signed_at)) : !c.pdf ? 'Falta el PDF' : c.signers.some(x => !x.box) ? 'Falta marcar firmas' : c.sent_at ? `Firmado ${c.signers.filter(x => x.signed).length} de ${c.signers.length}` : 'Listo para enviar'}</span>
-          <button type="button" class="btn ghost sm" data-ct="open">Abrir</button>
-        </li>`).join('') : '<li class="empty">Todavía no hay contratos.</li>'}
+          <span class="meta"><b>${esc(c.title)}</b><span>${isTpl(c) ? `${c.signers.length} firmante${c.signers.length > 1 ? 's' : ''}` : esc(c.artist || '') + (c.email ? ' · ' + esc(c.email) : '')}</span></span>
+          ${isTpl(c) ? '<span class="tag off">Plantilla</span>' : `<span class="tag ${CT_STATUS[c.status]?.[1] || ''}">${CT_STATUS[c.status]?.[0] || c.status}</span>`}
+          <span class="muted sm-txt">${isTpl(c) ? (!c.pdf ? 'Falta el PDF' : !c.doc_url ? 'Sin Google Doc' : c.signers.some(x => !x.box) ? 'Falta marcar firmas' : 'Lista') : c.status === 'signed' ? 'Firmado ' + esc(fmtDate(c.signed_at)) : !c.pdf ? 'Falta el PDF' : c.signers.some(x => !x.box) ? 'Falta marcar firmas' : c.sent_at ? `Firmado ${c.signers.filter(x => x.signed).length} de ${c.signers.length}` : 'Listo para enviar'}</span>
+          <span class="row-btns">${isTpl(c) && ed && c.pdf && c.doc_url ? '<button type="button" class="btn primary sm" data-ct="use">Usar</button>' : ''}<button type="button" class="btn ghost sm" data-ct="open">Abrir</button></span>
+        </li>`).join('') : `<li class="empty">${tab === 'templates' ? 'Todavía no hay plantillas.' : 'Todavía no hay contratos.'}</li>`}
       </ol>`;
   }
-  function ctNew() {
+  // elegir plantilla para un contrato nuevo
+  function ctPick() {
+    const tpls = ctData.contracts.filter(c => isTpl(c) && c.pdf && c.doc_url);
     return `
-      <form id="ct-new" class="editor ct-ed" novalidate>
+      <div class="editor ct-ed">
         <button type="button" class="back" data-ct="back">← Contratos</button>
         <h1>NUEVO CONTRATO</h1>
-        <p class="info lead">En el Google Doc: rellena los datos del artista → <b>Archivo → Descargar → PDF</b>. Luego sube ese PDF aquí.</p>
+        <p class="info lead">Elige la plantilla:</p>
+        <ol class="list">${tpls.length ? tpls.map(c => `
+          <li class="row ct" data-ctid="${esc(c.id)}"><span class="meta"><b>${esc(c.title)}</b><span>${c.signers.map(x => esc(x.label)).join(' · ')}</span></span><span></span><span></span>
+            <span class="row-btns"><button type="button" class="btn primary sm" data-ct="use">Usar</button></span></li>`).join('') : '<li class="empty">No hay plantillas listas (con su Google Doc y su PDF).</li>'}
+        </ol>
+        <details class="ct-other"><summary>…o subir un PDF ya hecho</summary>${ctNewForm()}</details>
+      </div>`;
+  }
+  function ctNewForm() {
+    return `
+      <form id="ct-new" class="ct-new" novalidate>
         <div class="field"><label for="ct-title">Título</label><input id="ct-title" name="title" maxlength="160" placeholder="p. ej. Release Contract — Artista — Tema" autocomplete="off"></div>
         <div class="row2 wide"><div class="field"><label for="ct-artist">Artista</label><input id="ct-artist" name="artist" maxlength="160" autocomplete="off"></div>
           <div class="field"><label for="ct-email">Email del artista</label><input id="ct-email" name="email" type="email" maxlength="160" autocomplete="off"></div></div>
-        <div class="field"><label for="ct-doc">Pestaña del Google Doc (recomendado)</label><input id="ct-doc" name="doc" placeholder="docs.google.com/document/d/…?tab=…" spellcheck="false" autocomplete="off"></div>
-        <div class="field"><label for="ct-file">…o el PDF ya descargado</label><input id="ct-file" name="file" type="file" accept="application/pdf"></div>
+        <div class="field"><label for="ct-file">PDF del contrato</label><input id="ct-file" name="file" type="file" accept="application/pdf"></div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
-        <div class="ed-actions"><button type="submit" class="btn primary">Crear contrato</button><button type="button" class="btn ghost" data-ct="back">Cancelar</button></div>
+        <div class="ed-actions"><button type="submit" class="btn primary">Crear contrato</button></div>
+      </form>`;
+  }
+  function ctNewTpl() {
+    return `
+      <form id="ct-tpl" class="editor ct-ed" novalidate>
+        <button type="button" class="back" data-ct="back">← Plantillas</button>
+        <h1>NUEVA PLANTILLA</h1>
+        <p class="info lead">Crea una pestaña nueva en vuestro Google Doc de contratos con el texto de la plantilla y pega aquí su enlace (con la pestaña abierta, copia la dirección del navegador).</p>
+        <div class="field"><label for="tp-title">Nombre de la plantilla</label><input id="tp-title" name="title" maxlength="160" placeholder="p. ej. Release — 1 artista" autocomplete="off"></div>
+        <div class="field"><label for="tp-doc">Enlace de la pestaña del Google Doc</label><input id="tp-doc" name="doc" placeholder="https://docs.google.com/document/d/…/edit?tab=t.…" spellcheck="false" autocomplete="off"></div>
+        <p class="ed-error" id="ed-error" role="alert" hidden></p>
+        <div class="ed-actions"><button type="submit" class="btn primary">Crear plantilla</button><a class="btn ghost" href="${CONTRACTS_DOC}" target="_blank" rel="noopener">Abrir el Google Doc ↗</a></div>
+      </form>`;
+  }
+  // rellenar los datos de un contrato nuevo a partir de una plantilla
+  function ctUse() {
+    const t = ctOpen.tpl, fields = ctOpen.fields;
+    return `
+      <form id="ct-use" class="editor ct-ed" novalidate>
+        <button type="button" class="back" data-ct="back">← Contratos</button>
+        <p class="eyebrow">Nuevo contrato · plantilla «${esc(t.title)}»</p>
+        <h1>DATOS DEL CONTRATO</h1>
+        <div class="row2 wide"><div class="field"><label for="u-title">Título del contrato</label><input id="u-title" name="title" maxlength="160" value="${esc(t.title)} — " autocomplete="off"></div>
+          <div class="field"><label for="u-artist">Artista</label><input id="u-artist" name="artist" maxlength="160" autocomplete="off"></div></div>
+        ${t.signers.map((x, i) => `<div class="field"><label for="u-em${i}">Email de ${esc(x.label)}</label><input id="u-em${i}" name="em${i}" type="email" maxlength="160" autocomplete="off"></div>`).join('')}
+        <h2 class="ct-sub">Datos que van en el contrato</h2>
+        ${!fields ? '<p class="info">Leyendo la plantilla…</p>' : fields.length ? `<div class="ct-fields">${fields.map((f, i) => `
+          <div class="field"><label for="u-f${i}">${esc(f.name)}</label><input id="u-f${i}" name="f${i}" maxlength="500" autocomplete="off"></div>`).join('')}</div>`
+          : '<p class="info">Esta plantilla aún no tiene huecos con llaves dobles ({{Nombre real}}, {{Track}}…). El contrato saldrá igual que la plantilla; podrás cambiar el texto en su propio Google Doc.</p>'}
+        <p class="ed-error" id="ed-error" role="alert" hidden></p>
+        <div class="ed-actions"><button type="submit" class="btn primary" ${fields ? '' : 'disabled'}>Crear contrato</button><button type="button" class="btn ghost" data-ct="back">Cancelar</button></div>
+        <p class="info">Se crea una copia de la plantilla en vuestro Google Drive con estos datos, y de ella sale el PDF que firma el artista. Cada contrato tiene su propio Doc por si quieres retocar algo.</p>
       </form>`;
   }
   function ctDetail() {
     const c = ctOpen.contract;
     if (!c) return '<p class="info">Cargando…</p>';
-    const ed = ctCanEdit(), signed = c.status === 'signed', st = CT_STATUS[c.status] || [c.status, ''];
+    const ed = ctCanEdit(), signed = c.status === 'signed', st = CT_STATUS[c.status] || [c.status, ''], tpl = isTpl(c);
+    const vars = Object.entries(c.vars || {});
     return `
       <form id="ct-ed" class="editor ct-ed" novalidate>
-        <button type="button" class="back" data-ct="back">← Contratos</button>
-        <div class="head"><div><p class="eyebrow">Contrato</p><h1>${esc(c.title)}</h1></div><span class="tag big ${st[1]}">${st[0]}</span></div>
+        <button type="button" class="back" data-ct="back">← ${tpl ? 'Plantillas' : 'Contratos'}</button>
+        <div class="head"><div><p class="eyebrow">${tpl ? 'Plantilla' : 'Contrato'}</p><h1>${esc(c.title)}</h1></div>${tpl ? (ed && c.pdf && c.doc_url ? '<button type="button" class="btn primary" data-ct="use">Crear contrato con esta plantilla</button>' : '') : `<span class="tag big ${st[1]}">${st[0]}</span>`}</div>
         ${!signed && ed ? `
-          <div class="row2 wide"><div class="field"><label for="c-title">Título</label><input id="c-title" name="title" value="${esc(c.title)}" maxlength="160" autocomplete="off"></div>
-            <div class="field"><label for="c-artist">Artista</label><input id="c-artist" name="artist" value="${esc(c.artist)}" maxlength="160" autocomplete="off"></div></div>
+          <div class="row2 wide"><div class="field"><label for="c-title">${tpl ? 'Nombre de la plantilla' : 'Título'}</label><input id="c-title" name="title" value="${esc(c.title)}" maxlength="160" autocomplete="off"></div>
+            ${tpl ? '' : `<div class="field"><label for="c-artist">Artista</label><input id="c-artist" name="artist" value="${esc(c.artist)}" maxlength="160" autocomplete="off"></div>`}</div>
           ` : ''}
+        ${!tpl && vars.length ? `<div class="ct-vars">${vars.map(([k, v]) => `<span><b>${esc(k)}</b>${esc(v)}</span>`).join('')}</div>` : ''}
         ${docBlock(c, ed && !signed)}
         ${c.pdf ? signersBlock(c, ed && !signed) : ''}
         ${c.pdf ? `
@@ -1740,13 +1810,13 @@
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions">
           ${ed ? '<button type="submit" class="btn primary">Guardar</button>' : ''}
-          ${ed && !signed ? `<label class="btn ghost" for="ct-pdf">${c.pdf ? 'Cambiar PDF' : 'Subir PDF'}</label><input type="file" id="ct-pdf" class="sr-only" accept="application/pdf">` : ''}
-          ${ed && !signed && c.status !== 'void' && c.pdf && c.signers.every(x => x.box) && c.signers.some(x => !x.token) ? '<button type="button" class="btn ghost" data-ct="send">Preparar enlaces de firma</button>' : ''}
+          ${ed && !signed ? `<label class="btn ghost" for="ct-pdf">${c.pdf ? 'Cambiar PDF a mano' : 'Subir PDF'}</label><input type="file" id="ct-pdf" class="sr-only" accept="application/pdf">` : ''}
+          ${!tpl && ed && !signed && c.status !== 'void' && c.pdf && c.signers.every(x => x.box) && c.signers.some(x => !x.token) ? '<button type="button" class="btn ghost" data-ct="send">Preparar enlaces de firma</button>' : ''}
           ${c.signers.some(x => x.signed) ? `<button type="button" class="btn ghost" data-ct="dl-signed">${signed ? 'Descargar PDF firmado' : 'Descargar con las firmas que hay'}</button>` : ''}
           ${c.pdf ? '<button type="button" class="btn ghost" data-ct="dl-orig">Descargar PDF original</button>' : ''}
           ${c.file ? '<button type="button" class="btn ghost" data-ct="dl-file">Ver PDF firmado (archivo)</button>' : ''}
-          ${ed && !signed ? `<label class="btn ghost" for="ct-arch" title="Para contratos que ya se firmaron fuera de la web">Subir PDF ya firmado</label><input type="file" id="ct-arch" class="sr-only" accept="application/pdf">` : ''}
-          ${ed && !signed ? `<button type="button" class="btn ghost" data-ct="${c.status === 'void' ? 'unvoid' : 'void'}">${c.status === 'void' ? 'Reactivar' : 'Anular'}</button>` : ''}
+          ${!tpl && ed && !signed ? `<label class="btn ghost" for="ct-arch" title="Para contratos que ya se firmaron fuera de la web">Subir PDF ya firmado</label><input type="file" id="ct-arch" class="sr-only" accept="application/pdf">` : ''}
+          ${!tpl && ed && !signed ? `<button type="button" class="btn ghost" data-ct="${c.status === 'void' ? 'unvoid' : 'void'}">${c.status === 'void' ? 'Reactivar' : 'Anular'}</button>` : ''}
           ${ed && (!signed || auth.user.owner) ? '<button type="button" class="btn danger push" data-ct="del">Eliminar</button>' : ''}
         </div>
       </form>`;
@@ -1754,21 +1824,69 @@
   /* El texto del contrato se edita en su pestaña del Google Doc, dentro del panel; el PDF lo genera Google. */
   const docEditUrl = u => { try { const x = new URL(u); x.searchParams.set('authuser', 'contacthorizonids@gmail.com'); x.pathname = x.pathname.replace(/\/(edit|view|preview)?$/, '/edit'); return x.href; } catch { return ''; } };
   function docBlock(c, ed) {
-    const open = !!ctOpen.docOpen;
     if (!ed && !c.doc_url) return '';
+    const tpl = isTpl(c);
     return `
       <div class="docbox">
         <div class="docbox-head">
-          <b>Texto del contrato (Google Docs)</b>
-          ${ed ? `<input class="doc-url" value="${esc(c.doc_url)}" placeholder="Enlace de la pestaña del Google Doc (docs.google.com/document/d/…?tab=…)" aria-label="Enlace de la pestaña del Google Doc" spellcheck="false">` : `<span class="muted">${c.doc_url ? 'Enlazado a su pestaña del Doc' : ''}</span>`}
+          <b>${tpl ? 'Texto de la plantilla' : 'Texto del contrato'}</b>
+          ${ed ? `<input class="doc-url" value="${esc(c.doc_url)}" placeholder="Enlace de la pestaña del Google Doc (docs.google.com/document/d/…?tab=…)" aria-label="Enlace de la pestaña del Google Doc" spellcheck="false">` : '<span></span>'}
           <span class="docbox-btns">
-            ${c.doc_url ? `<button type="button" class="btn ghost sm" data-ct="doc-toggle">${open ? 'Ocultar editor' : 'Editar texto'}</button><a class="btn ghost sm" href="${esc(docEditUrl(c.doc_url))}" target="_blank" rel="noopener">Abrir aparte ↗</a>` : ''}
-            ${ed && c.doc_url ? '<button type="button" class="btn primary sm" data-ct="doc-pdf">Generar PDF desde el Doc</button>' : ''}
+            ${c.doc_url ? '<button type="button" class="btn ghost sm" data-ct="doc-open">Editar en Google Docs ↗</button>' : ''}
+            ${ed && c.doc_url ? '<button type="button" class="btn primary sm" data-ct="doc-pdf">Actualizar PDF desde el Doc</button>' : ''}
           </span>
         </div>
-        ${open && c.doc_url ? `<div class="doc-frame"><iframe src="${esc(docEditUrl(c.doc_url))}" title="Editor de Google Docs" allow="clipboard-read; clipboard-write"></iframe>
-          <p class="info">Los cambios se guardan solos en vuestro Google Doc. Cuando termines, pulsa <b>Generar PDF desde el Doc</b> para que el contrato que firma el artista sea el nuevo. Si aquí te pide iniciar sesión, usa «Abrir aparte» (o permite las cookies de Google para horizonrcrds.com en el navegador).</p></div>` : ''}
+        ${tpl ? `<div class="tpl-fields">${tplFieldsHtml(ctOpen.fields)}</div>` : c.doc_url && ed ? '<p class="info">Edita el texto en Google Docs (se abre a pantalla completa) y luego pulsa <b>Actualizar PDF desde el Doc</b>: el artista firma ese PDF.</p>' : ''}
       </div>`;
+  }
+  function tplFieldsHtml(fields) {
+    if (!fields) return '<p class="info">Buscando los huecos {{…}} de la plantilla…</p>';
+    return fields.length
+      ? `<p class="info">Huecos que se piden al crear cada contrato:</p><div class="chips">${fields.map(f => `<span class="chip">${esc(f.name)}</span>`).join('')}</div><p class="info">Para añadir o cambiar huecos, edita el Doc (p. ej. escribe <b>{{Fecha}}</b> donde va la fecha) y pulsa <b>Actualizar PDF desde el Doc</b>.</p>`
+      : '<p class="info">Esta plantilla aún no tiene huecos. En el Doc, cambia los datos del artista por su nombre entre llaves dobles — <b>{{Nombre real}}</b>, <b>{{Nombre artístico}}</b>, <b>{{Track}}</b>, <b>{{Fecha}}</b>… — y pulsa <b>Actualizar PDF desde el Doc</b>.</p>';
+  }
+  // huecos {{…}} de una plantilla, leídos de su PDF
+  async function pdfFields(bytes) {
+    const pdf = await HZPDF.load(bytes), map = new Map();
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const t = await (await pdf.getPage(i)).getTextContent();
+      const txt = t.items.map(x => x.str + (x.hasEOL ? ' ' : '')).join('');
+      for (const m of txt.matchAll(/\{\{\s*([^{}]{1,60}?)\s*\}\}/g)) {
+        const name = m[1].replace(/\s+/g, ' ').trim();
+        if (!map.has(name)) map.set(name, new Set([`{{${name}}}`, `{{ ${name} }}`]));
+        map.get(name).add(m[0]);
+      }
+    }
+    return [...map].map(([name, raws]) => ({ name, raws: [...raws] }));
+  }
+  const docParts = u => { const m = String(u).match(/docs\.google\.com\/document\/(?:u\/\d+\/)?d\/([\w-]{20,})/), t = String(u).match(/[?&#]tab=(t\.[\w]+)/); return m ? { id: m[1], tab: t ? t[1] : '' } : null; };
+  async function gapi(tok, url, body) {
+    const r = await fetch(url, { method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${tok}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const msg = j.error?.message || `Error ${r.status}`;
+      if (r.status === 401) gToken = null;
+      throw new GhError(/has not been used|is disabled|not been enabled/i.test(msg) ? 'Falta activar la API de Google Docs/Drive en el proyecto de Google del panel.' : `Google: ${msg}`);
+    }
+    return j;
+  }
+  const flatTabs = (tabs, out = []) => { for (const t of tabs || []) { out.push(t.tabProperties || {}); flatTabs(t.childTabs, out); } return out; };
+  // copia la plantilla en el Drive de Horizon, pone los datos en sus huecos y devuelve el enlace de la pestaña de la copia
+  async function docFromTemplate(tok, tpl, fields, values, title) {
+    const d = docParts(tpl.doc_url);
+    if (!d) throw new GhError('La plantilla no tiene bien el enlace de su Google Doc.');
+    const copy = await gapi(tok, `https://www.googleapis.com/drive/v3/files/${d.id}/copy?fields=id&supportsAllDrives=true`, { name: `HORIZON RCRDS — ${title}` });
+    const requests = [];
+    for (const f of fields) for (const raw of f.raws) requests.push({ replaceAllText: { containsText: { text: raw, matchCase: true }, replaceText: values[f.name] ?? '' } });
+    if (requests.length) await gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}:batchUpdate`, { requests });
+    let tab = d.tab;
+    if (tab) {
+      const q = '?includeTabsContent=true&fields=tabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index))))';
+      const [a, b] = await Promise.all([gapi(tok, `https://docs.googleapis.com/v1/documents/${d.id}${q}`), gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}${q}`)]);
+      const ta = flatTabs(a.tabs), tb = flatTabs(b.tabs);
+      if (!tb.some(t => t.tabId === tab)) tab = tb[ta.findIndex(t => t.tabId === tab)]?.tabId || '';
+    }
+    return `https://docs.google.com/document/d/${copy.id}/edit${tab ? '?tab=' + tab : ''}`;
   }
   // permiso de Google (solo lectura de Docs) pedido en el momento, con la cuenta de Horizon; no se guarda
   let gToken = null;
@@ -1778,7 +1896,7 @@
     await loadGis();
     return new Promise((ok, ko) => {
       const client = google.accounts.oauth2.initTokenClient({
-        client_id: serverCfg.clientId, scope: 'https://www.googleapis.com/auth/drive.readonly', hint: 'contacthorizonids@gmail.com', prompt: '',
+        client_id: serverCfg.clientId, scope: 'https://www.googleapis.com/auth/drive', hint: 'contacthorizonids@gmail.com', prompt: '',
         callback: r => { if (r.error || !r.access_token) return ko(new GhError('Google no ha dado permiso. Elige la cuenta de Horizon y acepta.')); gToken = { value: r.access_token, exp: Date.now() + (Number(r.expires_in) || 3000) * 1000 }; ok(r.access_token); },
         error_callback: () => ko(new GhError('Se cerró la ventana de Google sin dar permiso.')),
       });
@@ -1794,7 +1912,7 @@
           <div class="signer${i === act && ed && !x.signed ? ' is-on' : ''}" data-sg="${esc(x.id)}" data-i="${i}">
             <span class="sg-n">${i + 1}</span>
             ${ed && !x.signed ? `<input class="sg-label" value="${esc(x.label)}" maxlength="60" aria-label="Nombre del firmante ${i + 1}" placeholder="Artista ${i + 1}">
-              <input class="sg-email" type="email" value="${esc(x.email)}" maxlength="160" aria-label="Email del firmante ${i + 1}" placeholder="email del artista">`
+              ${isTpl(c) ? '<span></span>' : `<input class="sg-email" type="email" value="${esc(x.email)}" maxlength="160" aria-label="Email del firmante ${i + 1}" placeholder="email del artista">`}`
               : `<span class="sg-txt"><b>${esc(x.label)}</b><span>${esc(x.email || '')}</span></span><span></span>`}
             <span class="sg-state ${x.signed ? 'ok' : x.box ? 'set' : ''}">${x.signed ? `✓ Firmado · ${esc(x.name)} · ${esc(fmtDate(x.signed_at))}` : x.box ? `Firma en pág. ${x.box.page + 1}` : 'Falta marcar dónde firma'}</span>
             <span class="sg-btns">
@@ -1812,7 +1930,9 @@
       if (!ctErr) setTimeout(loadContracts, 0);
       return `<div class="head"><div><p class="eyebrow">Firmas</p><h1>CONTRATOS</h1></div></div>${ctErr ? `<p class="login-error" role="alert">${esc(ctErr)}</p>` : '<p class="info">Cargando…</p>'}`;
     }
-    if (ctOpen?.mode === 'new') return ctNew();
+    if (ctOpen?.mode === 'new') return ctPick();
+    if (ctOpen?.mode === 'new-tpl') return ctNewTpl();
+    if (ctOpen?.mode === 'use') return ctUse();
     if (ctOpen?.mode === 'contract') { if (ctOpen.contract?.pdf) setTimeout(ctPaint, 0); return ctDetail(); }
     return ctList();
   }
@@ -1824,6 +1944,7 @@
       if (!ctOpen.bytes) ctOpen.bytes = new Uint8Array(await (await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/pdf`)).arrayBuffer());
       const ed = ctCanEdit() && c.status !== 'signed';
       ctOpen.view = await HZPDF.render(box, ctOpen.bytes, { marks: ctMarks(), maxWidth: 820, onPage: ed ? (page, x, y) => placeBox(page, x, y) : null });
+      if (isTpl(c) && !ctOpen.fields) { ctOpen.fields = await pdfFields(ctOpen.bytes); const el = $('.tpl-fields'); if (el) el.innerHTML = tplFieldsHtml(ctOpen.fields); }
     } catch (e) { box.innerHTML = `<p class="login-error">${esc(e.message)}</p>`; }
   }
   // actualiza la lista de firmantes, los botones y los recuadros sin volver a pintar la página
@@ -1879,7 +2000,7 @@
     try { const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); if (ctOpen?.id === id) { ctOpen.contract = r.contract; render(); } }
     catch (e) { toast(e.message); ctOpen = null; render(); }
   }
-  async function ctRefresh() { const keep = ctOpen?.bytes; const id = ctOpen.id; const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); ctOpen = { mode: 'contract', id, contract: r.contract, bytes: keep, active: ctOpen.active }; render(); }
+  async function ctRefresh() { const keep = ctOpen?.bytes; const id = ctOpen.id; const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); ctOpen = { mode: 'contract', id, contract: r.contract, bytes: keep, active: ctOpen.active, fields: keep ? ctOpen.fields : null }; render(); }
   async function ctAction(fn, ok) {
     busy = true;
     try { const r = await fn(); if (ok) toast(ok); return r; }
@@ -1892,14 +2013,31 @@
     if (!t || busy) return;
     const a = t.dataset.ct, c = ctOpen?.contract;
     if (a === 'back') { ctOpen = null; render(); loadContracts(); }
-    else if (a === 'new') { ctOpen = { mode: 'new' }; render(); $('#ct-title')?.focus(); }
+    else if (a === 'new') { ctOpen = { mode: 'new' }; render(); }
+    else if (a === 'new-tpl') { ctOpen = { mode: 'new-tpl' }; render(); $('#tp-title')?.focus(); }
+    else if (a === 'tab-contracts' || a === 'tab-templates') { ctTab = a === 'tab-templates' ? 'templates' : 'contracts'; render(); }
+    else if (a === 'use') {
+      const id = t.closest('[data-ctid]')?.dataset.ctid || c?.id;
+      const tpl = ctData.contracts.find(x => x.id === id) || c;
+      const bytes = c?.id === id ? ctOpen.bytes : null, known = c?.id === id ? ctOpen.fields : null;
+      ctOpen = { mode: 'use', tpl, fields: known };
+      render();
+      if (!known) try {
+        const b = bytes || new Uint8Array(await (await authFetch(`/api/contracts/${encodeURIComponent(id)}/pdf`)).arrayBuffer());
+        ctOpen.fields = await pdfFields(b);
+        if (ctOpen?.mode === 'use') { render(); $('#u-artist')?.focus(); }
+      } catch (err) { toast(err.message); }
+    }
+    else if (a === 'doc-open') {
+      const w = window.open(docEditUrl(c.doc_url), 'hz-doc', `popup,left=0,top=0,width=${screen.availWidth},height=${screen.availHeight}`);
+      if (!w) window.open(docEditUrl(c.doc_url), '_blank', 'noopener');
+    }
     else if (a === 'open') openContract(t.closest('[data-ctid]').dataset.ctid);
-    else if (a === 'doc-toggle') { ctOpen.docOpen = !ctOpen.docOpen; const el = $('.docbox'); if (el) el.outerHTML = docBlock(c, ctCanEdit() && c.status !== 'signed'); }
     else if (a === 'doc-pdf') {
       try {
         const tok = await googleToken();
         const r = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/from-doc`, { token: tok }), 'PDF actualizado desde el Doc');
-        ctOpen.bytes = null;
+        ctOpen.bytes = null; ctOpen.fields = null;
         if (r?.changedPages) toast('El número de páginas ha cambiado: vuelve a colocar las firmas.');
         ctRefresh();
       } catch (err) { toast(err.message); }
@@ -1951,18 +2089,48 @@
   });
   document.addEventListener('submit', async e => {
     const f = e.target;
-    if (!['ct-new', 'ct-ed'].includes(f.id)) return;
+    if (!['ct-new', 'ct-ed', 'ct-tpl', 'ct-use'].includes(f.id)) return;
     e.preventDefault(); e.stopImmediatePropagation();
     if (busy) return;
     try {
+      const fail = m => { const b = $('#ed-error', f) || $('#ed-error'); b.textContent = m; b.hidden = false; };
       if (f.id === 'ct-new') {
-        const file = f.elements.file.files[0], doc = f.elements.doc.value.trim();
-        if (!file && !doc) { const b = $('#ed-error'); b.textContent = 'Pega el enlace de la pestaña del Google Doc o elige el PDF.'; b.hidden = false; return; }
+        const file = f.elements.file.files[0];
+        if (!file) return fail('Elige el PDF del contrato.');
         const r = await ctAction(() => api('POST', '/api/contracts', { title: f.elements.title.value, artist: f.elements.artist.value, email: f.elements.email.value }));
-        if (doc) await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/doc`, { url: doc }));
-        if (file) await ctAction(() => uploadPdf(r.id, file), 'Contrato creado');
-        else { try { const tok = await googleToken(); await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, { token: tok }), 'Contrato creado desde el Doc'); } catch (err) { toast(err.message); } }
+        await ctAction(() => uploadPdf(r.id, file), 'Contrato creado');
         openContract(r.id); loadContracts();
+      } else if (f.id === 'ct-tpl') {
+        const doc = f.elements.doc.value.trim();
+        if (!f.elements.title.value.trim()) return fail('Ponle nombre a la plantilla.');
+        if (!docParts(doc)) return fail('Pega el enlace de la pestaña del Google Doc.');
+        const tok = await googleToken();
+        const r = await ctAction(() => api('POST', '/api/contracts', { kind: 'template', title: f.elements.title.value }));
+        await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/doc`, { url: doc }));
+        try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, { token: tok }), 'Plantilla creada'); } catch { /* aviso ya mostrado */ }
+        ctTab = 'templates'; ctData = null; openContract(r.id); loadContracts();
+      } else if (f.id === 'ct-use') {
+        const tpl = ctOpen.tpl, fields = ctOpen.fields || [];
+        const title = f.elements.title.value.trim();
+        if (!title || /—\s*$/.test(title)) return fail('Completa el título del contrato.');
+        const values = {}; fields.forEach((x, i) => { values[x.name] = f.elements['f' + i].value.trim(); });
+        const empty = fields.filter(x => !values[x.name]);
+        if (empty.length && !await confirmBox(`Hay datos sin rellenar: ${empty.map(x => x.name).join(', ')}. ¿Crear el contrato igualmente?`, 'Crear')) return;
+        const btn = $('button[type=submit]', f); btn.disabled = true; btn.textContent = 'Creando… (Google)';
+        try {
+          const tok = await googleToken();
+          const docUrl = await docFromTemplate(tok, tpl, fields, values, title);
+          const r = await ctAction(() => api('POST', '/api/contracts', { template: tpl.id, title, artist: f.elements.artist.value, email: f.elements.em0?.value || '', vars: values }));
+          await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/doc`, { url: docUrl }));
+          const emails = tpl.signers.map((x, i) => (f.elements['em' + i]?.value || '').trim());
+          if (emails.some(Boolean)) {
+            const full = await api('GET', `/api/contracts/${encodeURIComponent(r.id)}`);
+            await ctAction(() => api('POST', '/api/contracts', { id: r.id, title, artist: f.elements.artist.value, email: emails[0], signers: full.contract.signers.map((x, i) => ({ id: x.id, label: x.label, email: emails[i] || '' })) }));
+          }
+          const g = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, { token: tok }), 'Contrato creado');
+          if (g?.changedPages) toast('Con estos datos el contrato tiene otro número de páginas: revisa dónde firma cada uno.');
+          ctTab = 'contracts'; ctData = null; openContract(r.id); loadContracts();
+        } catch (err) { if (!$('#ed-error:not([hidden])')) fail(err.message); btn.disabled = false; btn.textContent = 'Crear contrato'; }
       } else {
         const c = ctOpen.contract;
         const signers = $$('.signer', f).map(el => ({ id: el.dataset.sg, label: el.querySelector('.sg-label')?.value, email: el.querySelector('.sg-email')?.value })).filter(x => x.label !== undefined);

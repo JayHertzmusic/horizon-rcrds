@@ -27,7 +27,7 @@ export const CONTRACT_SCHEMA = [
   `CREATE INDEX IF NOT EXISTS contract_signers_c ON contract_signers (contract_id, idx)`,
 ];
 // columnas del PDF (añadidas después: si ya existen, no pasa nada)
-export const CONTRACT_COLUMNS = ['pdf TEXT', 'pdf_hash TEXT', 'pdf_pages INTEGER', 'pdf_size INTEGER', 'sign_box TEXT', 'doc_url TEXT'];
+export const CONTRACT_COLUMNS = ['pdf TEXT', 'pdf_hash TEXT', 'pdf_pages INTEGER', 'pdf_size INTEGER', 'sign_box TEXT', 'doc_url TEXT', 'kind TEXT'];
 
 function box(v) {
   const b = typeof v === 'string' ? parse(v) : v;
@@ -43,6 +43,7 @@ const signerOut = (r, full) => ({
 const out = (c, signers, full) => ({
   id: c.id, title: c.title, artist: c.artist || '', email: c.email || '', status: c.status, notes: c.notes || '',
   pdf: !!c.pdf, pdf_hash: c.pdf_hash || '', pdf_pages: c.pdf_pages || 0, pdf_size: c.pdf_size || 0, file: !!c.file, doc_url: c.doc_url || '',
+  kind: c.kind === 'template' ? 'template' : 'contract', template_id: c.template_id || '', vars: parse(c.vars) || {},
   created_at: c.created_at, updated_at: c.updated_at, sent_at: c.sent_at, signed_at: c.signed_at,
   signers: signers.map(r => signerOut(r, full)),
 });
@@ -106,14 +107,27 @@ export async function contractsApi(req, env, s, url, can, audit) {
         if (em && !EMAIL.test(em)) throw new ContractError(400, `El email de «${clean(x?.label, 60) || 'firmante'}» no es válido.`);
         await DB.prepare('UPDATE contract_signers SET label = ?, email = ? WHERE id = ? AND contract_id = ? AND signed_at IS NULL').bind(clean(x?.label, 60) || null, em || null, String(x?.id || ''), String(b.id)).run();
       }
+      if (b.vars && typeof b.vars === 'object') { const v = {}; for (const [k, x] of Object.entries(b.vars).slice(0, 60)) v[clean(k, 60)] = clean(x, 500); await DB.prepare('UPDATE contracts SET vars = ? WHERE id = ?').bind(JSON.stringify(v), String(b.id)).run(); }
       await audit(`Editó los datos del contrato «${title}»`);
       return { ok: true, id: b.id };
     }
     const id = 'c_' + crypto.randomUUID().slice(0, 10);
-    await DB.prepare('INSERT INTO contracts (id, title, artist, email, status, notes, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, title, clean(b.artist, 160), email, 'draft', clean(b.notes, 2000), s.email, now(), now()).run();
-    await DB.prepare('INSERT INTO contract_signers (id, contract_id, idx, label, email) VALUES (?, ?, 0, ?, ?)').bind('s_' + crypto.randomUUID().slice(0, 10), id, 'Artista', email || null).run();
-    await audit(`Creó el contrato «${title}»`);
+    const kind = b.kind === 'template' ? 'template' : null;
+    // contrato a partir de una plantilla: hereda sus firmantes (nombre del hueco y dónde firma)
+    const tpl = b.template ? await DB.prepare(`SELECT * FROM contracts WHERE id = ? AND kind = 'template'`).bind(String(b.template)).first() : null;
+    if (b.template && !tpl) throw new ContractError(404, 'Esa plantilla ya no existe.');
+    const vars = {};
+    if (b.vars && typeof b.vars === 'object') for (const [k, v] of Object.entries(b.vars).slice(0, 60)) vars[clean(k, 60)] = clean(v, 500);
+    await DB.prepare('INSERT INTO contracts (id, title, artist, email, status, notes, created_by, created_at, updated_at, kind, template_id, vars, pdf_pages) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, title, clean(b.artist, 160), email, 'draft', clean(b.notes, 2000), s.email, now(), now(), kind, tpl?.id || null, JSON.stringify(vars), tpl?.pdf_pages || null).run();
+    const from = tpl ? await signersOf(env, tpl) : [];
+    if (from.length) {
+      await DB.batch(from.map((r, i) => DB.prepare('INSERT INTO contract_signers (id, contract_id, idx, label, email, box) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind('s_' + crypto.randomUUID().slice(0, 10), id, i, r.label || null, i === 0 && email ? email : null, r.box || null)));
+    } else {
+      await DB.prepare('INSERT INTO contract_signers (id, contract_id, idx, label, email) VALUES (?, ?, 0, ?, ?)').bind('s_' + crypto.randomUUID().slice(0, 10), id, 'Artista', kind ? null : email || null).run();
+    }
+    await audit(kind ? `Creó la plantilla «${title}»` : `Creó el contrato «${title}»${tpl ? ` desde la plantilla «${tpl.title}»` : ''}`);
     return { ok: true, id };
   }
   const mm = p.match(/^\/api\/contracts\/([\w-]+)(?:\/(pdf|box|signers|send|void|unvoid|file|doc|from-doc))?$/);
@@ -220,6 +234,7 @@ export async function contractsApi(req, env, s, url, can, audit) {
     }
     throw new ContractError(400, 'Acción no válida.');
   }
+  if (c.kind === 'template' && ['send', 'void', 'unvoid', 'file'].includes(mm[2]) && m === 'POST') throw new ContractError(400, 'Una plantilla no se envía: crea un contrato con ella.');
   if (mm[2] === 'send' && m === 'POST') {
     edit();
     if (signed) throw new ContractError(409, 'Este contrato ya está firmado.');

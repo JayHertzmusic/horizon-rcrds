@@ -1592,7 +1592,7 @@
     if (!f || !d) return;
     d.title = f.elements.title.value; d.slug = f.elements.slug.value.trim().toLowerCase(); d.description = f.elements.description.value;
     d.public = f.elements.public.checked; d.on_site = f.elements.on_site.checked; d.button = f.elements.button.value;
-    d.access = { roles: $$('input[name="acc-role"]:checked', f).map(i => i.value), emails: $$('input[name="acc-email"]:checked', f).map(i => i.value) };
+    d.access = { roles: [], emails: $$('input[name="acc-email"]:checked', f).map(i => i.value) };
     d.fields = $$('.qe', f).map(q => {
       const type = q.querySelector('[name=type]').value;
       const x = { id: q.dataset.id, type, label: q.querySelector('[name=label]').value, help: q.querySelector('[name=help]').value };
@@ -1625,7 +1625,7 @@
     return `
       <form id="form-ed" class="editor fe" novalidate>
         <button type="button" class="back" data-act="form-back">← Forms</button>
-        <h1>${isNew ? 'NUEVO FORMULARIO' : esc(d.title || 'Formulario')}</h1>
+        <h1>${isNew ? 'NEW FORM' : esc(d.title || 'Form')}</h1>
         <div class="fe-grid">
           <div class="fe-main">
             <div class="field"><label for="fe-title">Title</label><input id="fe-title" name="title" value="${esc(d.title)}" maxlength="140" autocomplete="off"></div>
@@ -1641,28 +1641,26 @@
                 <div class="field"><label for="fe-btn">Button text</label><input id="fe-btn" name="button" value="${esc(d.button || '')}" maxlength="60" placeholder="Submit via Form" autocomplete="off"></div>
               </div>
               ${isOwnerNow() ? `<div class="fe-box">
-                <b class="fe-h">Who can see the responses</b>
-                <p class="info">Owners always. Also:</p>
-                ${!teamData ? '<p class="info">Loading team…</p>' : `
-                ${roles.length ? `<p class="mini">Roles</p>${roles.map(r => `<label class="check sm"><input type="checkbox" name="acc-role" value="${esc(r.id)}" ${d.access.roles.includes(r.id) ? 'checked' : ''}><span>${esc(r.name)}</span></label>`).join('')}` : ''}
-                ${members.length ? `<p class="mini">People</p>${members.map(m => `<label class="check sm"><input type="checkbox" name="acc-email" value="${esc(m.email)}" ${d.access.emails.includes(m.email) ? 'checked' : ''}><span style="${m.color ? `color:${esc(m.color)}` : ''}">${esc(m.label || m.name || m.email)}</span></label>`).join('')}` : ''}
-                ${!roles.length && !members.length ? '<p class="info">No team yet.</p>' : ''}`}
+                <b class="fe-h">Who sees the responses</b>
+                <p class="info">Owners always. Tap the people who also see them:</p>
+                ${!teamData ? '<p class="info">Loading team…</p>' : members.length ? `<div class="who-chips">${members.map(m => { const on = d.access.emails.includes(m.email) || d.access.roles.includes(m.role_id), nm = m.label || m.name || m.email.split('@')[0]; return `
+                  <label class="who-chip" style="--c:${esc(m.color || '#ffffff')}"><input type="checkbox" name="acc-email" value="${esc(m.email)}" ${on ? 'checked' : ''}>${avatar(m.picture, nm, m.color)}<span>${esc(nm)}</span></label>`; }).join('')}</div>` : '<p class="info">No team yet.</p>'}
               </div>` : ''}
             </div>
             <p class="group">Questions</p>
             <div class="qes">${d.fields.map((x, i) => questionEditor(x, i, d.fields.length)).join('')}</div>
             <div class="card-actions"><button type="button" class="btn ghost sm" data-act="q-add">+ Question</button><button type="button" class="btn ghost sm" data-act="q-sec">+ Section</button></div>
+            <p class="ed-error" id="ed-error" role="alert" hidden></p>
+            <div class="ed-actions fe-actions">
+              <button type="submit" class="btn primary">${isNew ? 'Create form' : 'Save changes'}</button>
+              <button type="button" class="btn ghost" data-act="form-back">Cancel</button>
+              ${isNew || !can('forms', 'delete') ? '' : '<button type="button" class="btn danger push" data-act="form-del">Delete form</button>'}
+            </div>
           </div>
           <aside class="fe-prev">
             <div class="prev-head"><b>Preview</b><span class="muted sm-txt">How people see it on the site${d.public ? '' : ' (closed right now)'}</span>${!isNew && d.public ? `<a class="btn ghost sm" href="${esc(publicUrl(d))}" target="_blank" rel="noopener">Open ↗</a>` : ''}</div>
             <iframe id="fe-prev" src="/form?preview=1" title="Form preview"></iframe>
           </aside>
-        </div>
-        <p class="ed-error" id="ed-error" role="alert" hidden></p>
-        <div class="ed-actions">
-          <button type="submit" class="btn primary">${isNew ? 'Create form' : 'Save changes'}</button>
-          <button type="button" class="btn ghost" data-act="form-back">Cancel</button>
-          ${isNew || !can('forms', 'delete') ? '' : '<button type="button" class="btn danger push" data-act="form-del">Delete form</button>'}
         </div>
       </form>`;
   }

@@ -671,3 +671,19 @@ img.av.xl { width: 84px; height: 84px; }
 .perm-name .ord { display: inline-flex; gap: 2px; }
 .perm-name .ord .ic { width: 22px; height: 22px; font-size: 9px; border-radius: 6px; }
 .perm-row:first-child [data-act="sec-up"], .perm-row:last-child [data-act="sec-down"] { opacity: .25; pointer-events: none; }
+
+/* Barra de guardar: sólida, sin degradado encima del contenido */
+.ed-actions { background: rgba(5, 5, 5, .96); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-top: 1px solid var(--line); padding-top: 14px; padding-bottom: 14px; }
+.ed-actions .push { margin-left: auto; }
+.fe-actions { margin: 28px 0 0; padding-left: 0; padding-right: 0; }
+
+/* Quién ve las respuestas: una persona = un chip */
+.who-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+.who-chip { position: relative; display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .12); background: rgba(255, 255, 255, .03); cursor: pointer; color: var(--muted); font-weight: 600; font-size: 14px; transition: border-color .15s, background .15s, color .15s; }
+.who-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.who-chip .av, .who-chip img.av { width: 26px; height: 26px; font-size: 12px; opacity: .45; transition: opacity .15s; }
+.who-chip:hover { border-color: rgba(255, 255, 255, .28); }
+.who-chip:has(input:checked) { color: #fff; border-color: var(--c); background: color-mix(in srgb, var(--c) 16%, transparent); }
+.who-chip:has(input:checked) .av { opacity: 1; }
+.who-chip:has(input:focus-visible) { outline: 2px solid #fff; outline-offset: 2px; }
+@media (max-width: 900px) { .ed-actions { padding-right: 72px; } }

@@ -438,10 +438,10 @@
         <div class="sheet-head"><h2>${isNew ? 'New role' : 'Edit role'}</h2><button type="button" class="ic" data-act="sheet-close" aria-label="Close">✕</button></div>
         <input name="name" class="role-name" value="${esc(r.name || '')}" maxlength="40" placeholder="Role name (e.g. A&R)" aria-label="Role name" autocomplete="off">
         <div class="perm-list">${teamData.sections.map(sec => { const lv = levelOf(r, sec); return `
-          <div class="perm-row" data-sec="${esc(sec.id)}"><span class="perm-name"><span class="ord"><button type="button" class="ic" data-act="sec-up" aria-label="Move up">▲</button><button type="button" class="ic" data-act="sec-down" aria-label="Move down">▼</button></span>${esc(sec.label)}</span><span class="seg" role="radiogroup" aria-label="${esc(sec.label)}">${LEVELS.filter(([v]) => !v || sec.actions.includes(v)).map(([v, l]) => `
+          <div class="perm-row" data-sec="${esc(sec.id)}"><span class="perm-name"><button type="button" class="grip" aria-label="Drag to reorder ${esc(sec.label)}" title="Drag to reorder"><svg viewBox="0 0 10 16" aria-hidden="true"><circle cx="2.5" cy="3" r="1.4"/><circle cx="7.5" cy="3" r="1.4"/><circle cx="2.5" cy="8" r="1.4"/><circle cx="7.5" cy="8" r="1.4"/><circle cx="2.5" cy="13" r="1.4"/><circle cx="7.5" cy="13" r="1.4"/></svg></button>${esc(sec.label)}</span><span class="seg" role="radiogroup" aria-label="${esc(sec.label)}">${LEVELS.filter(([v]) => !v || sec.actions.includes(v)).map(([v, l]) => `
             <label><input type="radio" name="${esc(sec.id)}" value="${v}" ${v === lv ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>`; }).join('')}
         </div>
-        <p class="info sm-txt">“Edit” includes creating. “All” includes deleting. Owners always have everything.</p>
+        <p class="info sm-txt"><b>View</b>: only look. <b>Edit</b>: create and change. <b>All</b>: also delete. Drag ⋮⋮ to change the order of the sections. Owners always have everything.</p>
         <p class="ed-error" role="alert" hidden></p>
         <div class="confirm-actions">${isNew ? '' : '<button type="button" class="btn danger push-l" data-act="delete-role">Delete role</button>'}<button type="submit" class="btn primary">${isNew ? 'Create role' : 'Save'}</button></div>
       </form>`);
@@ -1287,6 +1287,47 @@
     $('#color-prev').style.setProperty('--c', h);
   }
 
+  /* Orden de las secciones: se arrastra por el asa (o flechas del teclado sobre ella) */
+  async function saveSectionOrder(list) {
+    const ids = [...list.querySelectorAll('.perm-row')].map(x => x.dataset.sec);
+    if (ids.join() === (auth.sections || []).map(x => x.id).join()) return;
+    try {
+      const r = await api('POST', '/api/team/sections', { ids });
+      teamData.sections = r.sections; auth.sections = r.sections;
+      for (const st of [localStorage, sessionStorage]) { try { const sv = JSON.parse(st.getItem(AUTH_KEY) || 'null'); if (sv) { sv.sections = r.sections; st.setItem(AUTH_KEY, JSON.stringify(sv)); } } catch { /* nada */ } }
+      render(); toast('Order saved');
+    } catch (err) { toast(err.message); }
+  }
+  document.addEventListener('pointerdown', e => {
+    const g = e.target.closest('.grip');
+    if (!g || e.button) return;
+    e.preventDefault();
+    const row = g.closest('.perm-row'), list = row.parentElement;
+    row.classList.add('dragging'); list.classList.add('sorting');
+    try { g.setPointerCapture(e.pointerId); } catch { /* nada */ }
+    const move = ev => {
+      const rows = [...list.querySelectorAll('.perm-row:not(.dragging)')];
+      const after = rows.find(r => { const b = r.getBoundingClientRect(); return ev.clientY < b.top + b.height / 2; });
+      if (after) { if (after !== row.nextElementSibling) list.insertBefore(row, after); } else if (list.lastElementChild !== row) list.appendChild(row);
+    };
+    const up = () => {
+      g.removeEventListener('pointermove', move); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up);
+      row.classList.remove('dragging'); list.classList.remove('sorting');
+      saveSectionOrder(list);
+    };
+    g.addEventListener('pointermove', move); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
+  });
+  document.addEventListener('keydown', e => {
+    const g = e.target.closest?.('.grip');
+    if (!g || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+    e.preventDefault();
+    const row = g.closest('.perm-row'), list = row.parentElement;
+    const sib = e.key === 'ArrowUp' ? row.previousElementSibling : row.nextElementSibling;
+    if (!sib) return;
+    if (e.key === 'ArrowUp') list.insertBefore(row, sib); else list.insertBefore(sib, row);
+    g.focus(); saveSectionOrder(list);
+  });
+
   /* ---------------- Eventos ---------------- */
   // «Atrás» del navegador no saca del panel: vuelve a la primera sección (Releases)
   try { history.replaceState({ hz: 0 }, ''); history.pushState({ hz: 1 }, ''); } catch { /* nada */ }
@@ -1326,18 +1367,6 @@
       case 'new-role': roleSheet({ perms: {} }); break;
       case 'sheet-close': closeSheet(); break;
       case 'me': meSheet(); break;
-      case 'sec-up': case 'sec-down': {
-        const row = t.closest('.perm-row'), list = row.parentElement;
-        const up = t.dataset.act === 'sec-up', sib = up ? row.previousElementSibling : row.nextElementSibling;
-        if (!sib) break;
-        if (up) list.insertBefore(row, sib); else list.insertBefore(sib, row);
-        const ids = [...list.querySelectorAll('.perm-row')].map(x => x.dataset.sec);
-        try {
-          const r = await api('POST', '/api/team/sections', { ids });
-          teamData.sections = r.sections; auth.sections = r.sections; for (const st of [localStorage, sessionStorage]) { try { const sv = JSON.parse(st.getItem(AUTH_KEY) || 'null'); if (sv) { sv.sections = r.sections; st.setItem(AUTH_KEY, JSON.stringify(sv)); } } catch { /* nada */ } } render();
-        } catch (err) { toast(err.message); }
-        break;
-      }
       case 'me-color': setMyColor(t.dataset.c); break;
       case 'me-nophoto': try { await authFetch('/api/me/avatar', { method: 'DELETE' }); auth.user.picture = ''; saveMe({ picture: '' }); teamData = null; render(); meSheet(); } catch (err) { toast(err.message); } break;
       case 'add-member': memberSheet(null); break;

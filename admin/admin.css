@@ -668,9 +668,12 @@ img.av.xl { width: 84px; height: 84px; }
 .ic:hover:not(:disabled) { background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .3); }
 .sheet-head .ic { width: 32px; height: 32px; font-size: 13px; }
 .perm-name { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; }
-.perm-name .ord { display: inline-flex; gap: 2px; }
-.perm-name .ord .ic { width: 22px; height: 22px; font-size: 9px; border-radius: 6px; }
-.perm-row:first-child [data-act="sec-up"], .perm-row:last-child [data-act="sec-down"] { opacity: .25; pointer-events: none; }
+.grip { display: grid; place-items: center; width: 22px; height: 30px; margin-left: -6px; padding: 0; border: 0; border-radius: 6px; background: none; color: rgba(255, 255, 255, .28); cursor: grab; touch-action: none; min-height: 0; box-shadow: none; }
+.grip svg { width: 10px; height: 16px; fill: currentColor; }
+.grip:hover, .grip:focus-visible { color: #fff; background: rgba(255, 255, 255, .06); }
+.grip:focus-visible { outline: 2px solid #fff; outline-offset: 1px; }
+.perm-list.sorting, .perm-list.sorting * { cursor: grabbing !important; user-select: none; }
+.perm-row.dragging { background: rgba(255, 255, 255, .06); border-radius: 8px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .18); position: relative; z-index: 1; }
 
 /* Barra de guardar: sólida, sin degradado encima del contenido */
 .ed-actions { background: rgba(5, 5, 5, .96); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-top: 1px solid var(--line); padding-top: 14px; padding-bottom: 14px; }

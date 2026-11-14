@@ -595,10 +595,16 @@
 
   /* Qué enlaces tiene cada uno (encendido = puesto) */
   const CHIP = { spotify_link: 'Spotify', soundcloud_link: 'SoundCloud', youtube_link: 'YouTube', stream_link: 'Smart link' };
-  const CHIP_SHORT = { spotify_link: 'SP', soundcloud_link: 'SC', youtube_link: 'YT', stream_link: 'LINK' };
+  const ICON = {
+    spotify_link: '<circle cx="12" cy="12" r="9.5"/><path d="M7.2 9.6c3.3-.9 7-.5 9.8 1.1M7.7 12.8c2.7-.7 5.6-.4 7.9.9M8.2 15.8c2.1-.5 4.2-.3 6 .7"/>',
+    soundcloud_link: '<path d="M3.5 15.5v-2M6.5 16.5v-5M9.5 16.5v-7"/><path d="M12.5 16.5V8.6a5 5 0 0 1 5.6 4 2.9 2.9 0 0 1 .4 5.9h-6"/>',
+    youtube_link: '<rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="M10.2 9.4v5.2l4.4-2.6z" fill="currentColor" stroke="none"/>',
+    stream_link: '<path d="M10 13.5a4.5 4.5 0 0 0 6.8.5l2.7-2.7a4.5 4.5 0 0 0-6.4-6.4l-1.5 1.5"/><path d="M14 10.5a4.5 4.5 0 0 0-6.8-.5l-2.7 2.7a4.5 4.5 0 0 0 6.4 6.4l1.5-1.5"/>',
+  };
+  const ico = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[k]}</svg>`;
   const linkChips = (x, keys) => `<span class="links">${keys.map(k => x[k]
-    ? `<a class="chip on" href="${esc(x[k])}" target="_blank" rel="noopener" title="${CHIP[k]}">${CHIP_SHORT[k]}</a>`
-    : `<span class="chip" title="No ${CHIP[k]}">${CHIP_SHORT[k]}</span>`).join('')}</span>`;
+    ? `<a class="lk on" href="${esc(x[k])}" target="_blank" rel="noopener" title="${CHIP[k]}" aria-label="${CHIP[k]}">${ico(k)}</a>`
+    : `<span class="lk" title="No ${CHIP[k]}" aria-label="No ${CHIP[k]}">${ico(k)}</span>`).join('')}</span>`;
 
   /* Releases */
   function releaseRows() {
@@ -606,14 +612,14 @@
     const rows = repo.releases.map((r, i) => ({ r, i })).filter(({ r }) => !q || [r.title, r.artist, catOf(r)].join(' ').toLowerCase().includes(q));
     if (!rows.length) return `<li class="empty">Nothing matches “${esc(filter)}”.</li>`;
     return rows.map(({ r, i }) => `
-      <li class="row">
+      <li class="row item">
         <span class="pos">${i + 1}</span>
         ${imgTag(r.image, 'thumb')}
         <span class="meta"><b>${esc(r.title || 'Untitled')}</b><span>${esc(r.artist || '')}</span></span>
         <span class="cat">${esc(catOf(r))}</span>
         ${linkChips(r, ['spotify_link', 'soundcloud_link', 'youtube_link', 'stream_link'])}
         <span class="swatch" style="--c:${esc(hex6(r.color) || '#ffffff')}" title="${esc(r.color || '')}"></span>
-        ${i === 0 ? '<span class="tag">Cover</span>' : '<span></span>'}
+        ${i === 0 ? '<span class="feat">Cover</span>' : '<span></span>'}
         ${can('releases', 'edit') ? `<button type="button" class="btn ghost sm" data-act="edit-release" data-key="${esc(keyOf(r))}">Edit</button>` : '<span></span>'}
       </li>`).join('');
   }
@@ -809,14 +815,14 @@
         ${can('radio', 'edit') ? '<button type="button" class="btn primary" data-act="new-mixtape">+ New mixtape</button>' : ''}
       </div>
       <ol class="list">${list.length ? list.map((m, i) => `
-        <li class="row">
+        <li class="row item">
           <span class="pos">${i + 1}</span>
           ${imgTag(m.image, 'thumb')}
           <span class="meta"><b>${esc(m.number ? 'Horizon Mixtape ' + m.number : m.title || 'Untitled')}</b><span>${esc(m.artist || '')}</span></span>
           <span class="cat">${m.preview ? '♪ Audio' : '<span class="muted">No audio</span>'}</span>
           ${linkChips(m, ['soundcloud_link', 'youtube_link'])}
           <span class="swatch" style="--c:${esc(hex6(m.color) || '#ffffff')}"></span>
-          ${i === 0 ? '<span class="tag">Cover</span>' : '<span></span>'}
+          ${i === 0 ? '<span class="feat">Cover</span>' : '<span></span>'}
           ${can('radio', 'edit') ? `<button type="button" class="btn ghost sm" data-act="edit-mixtape" data-key="${esc(keyOf(m))}">Edit</button>` : '<span></span>'}
         </li>`).join('') : '<li class="empty">No mixtapes yet.</li>'}
       </ol>

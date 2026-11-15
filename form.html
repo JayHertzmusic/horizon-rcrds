@@ -117,11 +117,11 @@
     } else input = `<input id="${id}" name="${esc(f.id)}" type="${f.type === 'email' ? 'email' : f.type === 'url' ? 'url' : 'text'}" ${aria} maxlength="1000" autocomplete="${f.type === 'email' ? 'email' : 'off'}" placeholder="${f.type === 'url' ? 'https://' : f.type === 'email' ? 'name@email.com' : 'Your answer'}">`;
     return `<div class="q${HALF.has(f.id) ? ' half' : ''}" data-q="${esc(f.id)}"><label for="${id}">${esc(f.label)}${req}</label>${help}${input}</div>`;
   }
-  function draw(closed) {
+  function draw(closed, target = root) {
     document.title = `${form.title || 'Form'} — HORIZON RCRDS`;
     const hasReq = form.fields.some(x => x.required);
     HALF = halves(form.fields);
-    root.innerHTML = `<p class="eyebrow">HORIZON RCRDS</p><h1>${esc(form.title || 'Untitled form')}</h1>
+    target.innerHTML = `<p class="eyebrow">HORIZON RCRDS</p><h1>${esc(form.title || 'Untitled form')}</h1>
       ${closed ? '<p style="text-align:center"><span class="closed">Closed — preview</span></p>' : ''}
       ${form.description ? `<p class="desc">${linky(form.description)}</p>` : ''}
       <form id="f" novalidate>
@@ -130,7 +130,7 @@
         <p class="err" id="err" role="alert" hidden></p>
         <div class="foot"><button class="send" type="submit">Send</button>${hasReq ? '<small>* Required</small>' : ''}</div>
       </form>`;
-    progress();
+    if (target === root) progress();
   }
   async function load() {
     try {
@@ -141,11 +141,35 @@
     } catch (e) { root.innerHTML = `<h1>Not available</h1><p class="msg">${esc(e.message)}</p>`; }
   }
   // vista previa del panel: el formulario llega del editor (mismo sitio) y se redibuja al momento
+  let lastFocus = '';
+  function morph(a, b) {
+    for (const { name } of [...a.attributes]) if (!b.hasAttribute(name)) a.removeAttribute(name);
+    for (const { name, value } of [...b.attributes]) if (a.getAttribute(name) !== value) a.setAttribute(name, value);
+    const ac = [...a.childNodes], bc = [...b.childNodes];
+    for (let i = 0; i < Math.max(ac.length, bc.length); i++) {
+      const x = ac[i], y = bc[i];
+      if (!y) { x.remove(); continue; }
+      if (!x) { a.appendChild(y.cloneNode(true)); continue; }
+      if (x.isEqualNode(y)) continue;
+      if (x.nodeType === 1 && y.nodeType === 1 && x.tagName === y.tagName && !/^(INPUT|TEXTAREA|SELECT|IMG)$/.test(x.tagName)) morph(x, y);
+      else if (x.nodeType === 3 && y.nodeType === 3) x.nodeValue = y.nodeValue;
+      else x.replaceWith(y.cloneNode(true));
+    }
+  }
   if (PREVIEW) {
     window.addEventListener('message', e => {
       if (e.origin !== location.origin || e.data?.type !== 'hz-form') return;
-      const y = scrollY; form = e.data.form; draw(!e.data.form.public); scrollTo(0, y);
-      if (e.data.focus) document.querySelector(`[data-q="${CSS.escape(e.data.focus)}"]`)?.scrollIntoView({ block: 'center' });
+      form = e.data.form;
+      // solo se cambia lo que ha cambiado (sin redibujar todo: así no parpadea ni salta)
+      if (!root.querySelector('#f')) draw(!form.public);
+      else { const fresh = document.createElement('main'); draw(!form.public, fresh); morph(root, fresh); progress(); }
+      // solo se desplaza al pasar a otra pregunta, y solo si no se ve ya
+      if (e.data.focus && e.data.focus !== lastFocus) {
+        lastFocus = e.data.focus;
+        const q = document.querySelector(`[data-q="${CSS.escape(e.data.focus)}"]`);
+        const b = q?.getBoundingClientRect();
+        if (b && (b.top < 0 || b.bottom > innerHeight)) q.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      }
     });
     root.innerHTML = '<p class="msg">Preview…</p>';
     parent.postMessage({ type: 'hz-form-ready' }, location.origin);

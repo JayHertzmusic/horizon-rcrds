@@ -2193,6 +2193,10 @@
   const artistsOf = t => t.signers.length > 1 ? t.signers.length : copiesOf();
   // a qué artista pertenece cada dato («Artist 2 legal name» → 2; en contratos de 1 artista, los datos personales → 1)
   const PERSONAL = /^(artist name|legal name|e-?mail|age|address|city)/i;
+  const SMALL = /^(de|del|la|las|los|el|y|e|da|das|do|dos|di|van|von|der|of|the|and)$/i;
+  // «nune nunito» → «Nune Nunito», «benito juares, 000111» → «Benito Juares, 000111», «mexico» → «Mexico» (lo que ya va en mayúsculas no se toca)
+  const titleCase = v => String(v || '').replace(/\S+/g, (w, at) => at && SMALL.test(w) ? w.toLowerCase() : w.replace(/^(\p{Ll})/u, c => c.toUpperCase()));
+  const needsCaps = name => /legal|address|city|country/i.test(name);
   const fieldArtist = (name, n, copies) => { const k = Number((String(name).match(/^artist (\d)/i) || [])[1]) || 0; if (k) return k; if (!PERSONAL.test(name)) return 0; return copies ? 'each' : n === 1 ? 1 : 0; };
   const isCopies = t => t.signers.length === 1 && artistsOf(t) > 1;
   // nombre del campo en el formulario (los «each» van una vez por artista)
@@ -2216,7 +2220,8 @@
     const label = f => esc(f.name.replace(/^Artist \d /i, '').replace(/^./, x => x.toUpperCase()));
     const fieldHtml = (f, i, k = 0) => { const nm = fieldInput(i, fieldArtist(f.name, n, copies), k); return `<div class="field"><label for="u-${nm}">${label(f)}</label><input id="u-${nm}" name="${nm}" maxlength="500" value="${esc(fieldDefault(f))}" autocomplete="off"></div>`; };
     const all = (fields || []).map((f, i) => [f, i, fieldArtist(f.name, n, copies)]);
-    const general = all.filter(([, , w]) => w === 0), mine = k => all.filter(([f, , w]) => (w === k || w === 'each') && !isDupField(f.name));
+    const isLabel = f => /^label /i.test(f.name);
+    const general = all.filter(([f, , w]) => w === 0 && !isLabel(f)), labelF = all.filter(([f, , w]) => w === 0 && isLabel(f)), mine = k => all.filter(([f, , w]) => (w === k || w === 'each') && !isDupField(f.name));
     const picker = k => rf?.list?.length ? `<div class="field"><label for="u-from${k}">${n > 1 ? 'Fill from this artist’s Release Form' : 'Fill from a Release Form response'}</label><select id="u-from${k}" class="u-from" data-k="${k}"><option value="">Choose a response…</option>${rf.list.map(r => `<option value="${r.id}">${esc(rfLabel(r))}</option>`).join('')}</select></div>` : '';
     const who = k => `<div class="row2 wide"><div class="field"><label for="u-cn${k - 1}">Artist name</label><input id="u-cn${k - 1}" name="cn${k - 1}" maxlength="60" autocomplete="off"></div>
           <div class="field"><label for="u-em${k - 1}">Email (the signing link goes here)</label><input id="u-em${k - 1}" name="em${k - 1}" type="email" maxlength="160" autocomplete="off"></div></div>`;
@@ -2236,9 +2241,10 @@
     // 1 artista: todo seguido, sin recuadros
     if (n === 1) return `
       <form id="ct-use" class="editor ct-ed" novalidate>${head}
-        ${picker(1)}${release}
-        <h2 class="ct-sub">Release &amp; label</h2>
-        ${reading}${grid(general.map(([f, i]) => fieldHtml(f, i)))}
+        ${picker(1)}
+        <h2 class="ct-sub">Release</h2>
+        ${release}${reading}${grid(general.map(([f, i]) => fieldHtml(f, i)))}
+        ${labelF.length ? `<h2 class="ct-sub">Label</h2>${grid(labelF.map(([f, i]) => fieldHtml(f, i)))}` : ''}
         <h2 class="ct-sub">Artist</h2>
         ${who(1)}${grid(mine(1).map(([f, i]) => fieldHtml(f, i, 1)))}
         ${t.signers.length === 1 ? '<div class="copy-btns"><button type="button" class="btn ghost sm" data-ct="copy-add">+ Add artist (own copy)</button></div>' : ''}
@@ -2247,9 +2253,9 @@
     // varios artistas: un recuadro por artista con su Release Form, su nombre, su email y sus datos
     return `
       <form id="ct-use" class="editor ct-ed" novalidate>${head}
-        ${release}
-        <h2 class="ct-sub">Release &amp; label</h2>
-        ${reading}${grid(general.map(([f, i]) => fieldHtml(f, i)))}
+        <h2 class="ct-sub">Release</h2>
+        ${release}${reading}${grid(general.map(([f, i]) => fieldHtml(f, i)))}
+        ${labelF.length ? `<h2 class="ct-sub">Label</h2>${grid(labelF.map(([f, i]) => fieldHtml(f, i)))}` : ''}
         <h2 class="ct-sub">Artists · ${copies ? 'each one gets their own copy, with their own details, and signs it' : 'all of them sign this contract'}</h2>
         ${Array.from({ length: n }, (_, x) => `
         <fieldset class="ct-artist">
@@ -2299,7 +2305,7 @@
       if (who === k || who === 'each') {
         const v = /legal/.test(nm) ? o.legal : /e-?mail/.test(nm) ? o.email : /\bage\b/.test(nm) ? o.age : /address/.test(nm) ? o.address
           : /city/.test(nm) ? [o.city, o.country].filter(Boolean).join(', ') : /country/.test(nm) ? o.country : /name/.test(nm) ? o.artist : undefined;
-        if (v !== undefined) el.value = v || '';
+        if (v !== undefined) el.value = needsCaps(x.name) ? titleCase(v || '') : v || '';
       } else if (!who && /^track$/.test(nm) && !el.value.trim()) el.value = o.track || '';
     });
     const names = Array.from({ length: n }, (_, i) => (f.elements['cn' + i]?.value || '').trim()).filter(Boolean);
@@ -2895,7 +2901,8 @@
             const who = fieldArtist(x.name, n, copiesMode);
             if (who === 'each' && !k) return;
             const a = who === 'each' ? k : who;
-            v[x.name] = a && isDupField(x.name) ? (people[a - 1]?.[/mail/i.test(x.name) ? 'email' : 'name'] || '') : (f.elements[fieldInput(i, who, k)]?.value || '').trim();
+            const raw = a && isDupField(x.name) ? (people[a - 1]?.[/mail/i.test(x.name) ? 'email' : 'name'] || '') : (f.elements[fieldInput(i, who, k)]?.value || '').trim();
+            v[x.name] = needsCaps(x.name) ? titleCase(raw) : raw;
           });
           return v;
         };

@@ -799,3 +799,8 @@ html, body, * { scrollbar-width: none; }
 .resp header .new-pill { height: 22px; }
 .resp-btns { margin-left: auto; display: flex; gap: 8px; }
 .resp.is-new { border-color: rgba(255, 59, 71, .5); box-shadow: inset 3px 0 0 #ff3b47; }
+
+/* Buscador de respuestas */
+.resp-search { margin: 0 0 18px; }
+.resp-search .search { width: min(520px, 100%); }
+.resp mark { background: rgba(255, 210, 63, .28); color: #fff; border-radius: 2px; padding: 0 1px; }

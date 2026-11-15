@@ -122,7 +122,11 @@ export async function formsApi(req, env, s, url, audit) {
   }
   if (mm[2] === 'responses' && m === 'GET') {
     const before = Number(url.searchParams.get('before')) || 9e15;
-    const rows = (await DB.prepare('SELECT id, at, data, seen FROM form_responses WHERE form_id = ? AND id < ? ORDER BY id DESC LIMIT 51').bind(f.id, before).all()).results;
+    const q = String(url.searchParams.get('q') || '').trim().slice(0, 100);
+    const like = '%' + q.replace(/[\\%_]/g, c => '\\' + c) + '%';
+    const rows = (q
+      ? await DB.prepare("SELECT id, at, data, seen FROM form_responses WHERE form_id = ? AND id < ? AND data LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 51").bind(f.id, before, like).all()
+      : await DB.prepare('SELECT id, at, data, seen FROM form_responses WHERE form_id = ? AND id < ? ORDER BY id DESC LIMIT 51').bind(f.id, before).all()).results;
     return { responses: rows.slice(0, 50).map(r => ({ id: r.id, at: r.at, seen: !!r.seen, data: parse(r.data) || {} })), more: rows.length > 50 };
   }
   if (mm[2] === 'responses' && mm[3] && m === 'POST') {

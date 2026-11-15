@@ -1517,6 +1517,7 @@
   document.addEventListener('input', e => {
     const t = e.target;
     if (t.id === 'rel-filter') { filter = t.value; $('#rel-list').innerHTML = releaseRows(); return; }
+    if (t.id === 'resp-filter' && formOpen) { formOpen.q = t.value; clearTimeout(respTimer); respTimer = setTimeout(searchResponses, 250); return; }
     if (t.id === 'f-color-pick') setColor(t.value);
     if (t.type === 'color' && t.closest('.color-dot')) { t.closest('.color-dot').style.setProperty('--c', t.value); const n = t.dataset.member && $$('.name-in').find(i => i.dataset.member === t.dataset.member); if (n) n.style.color = t.value; }
     if (t.id === 'f-color' && hex6(t.value)) { editing.color = hex6(t.value); $('#f-color-pick').value = editing.color; $('#color-prev').style.setProperty('--c', editing.color); }
@@ -1652,13 +1653,36 @@
       <div class="head"><div><p class="eyebrow">Responses</p><h1>${esc(f.title)} <span class="count">${f.total}</span></h1></div>
         <div class="head-btns" data-form="${esc(f.id)}">${rs && rs.some(r => !r.seen) && !preview ? '<button type="button" class="btn ghost" data-act="resp-all-seen">Mark all as seen</button>' : ''}${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Download (Excel / CSV)</button>' : ''}${can('forms', 'edit') && !preview ? '<button type="button" class="btn primary" data-act="form-edit">Edit form</button>' : ''}</div></div>
       ${formOpen.err ? `<p class="login-error" role="alert">${esc(formOpen.err)}</p>` : ''}
-      ${!rs ? '<p class="info">Loading…</p>' : rs.length ? `<div class="resps">${rs.map(r => `
+      ${f.total ? `<div class="resp-search"><input class="search" type="search" id="resp-filter" placeholder="Search by name, track, email…" aria-label="Search responses" value="${esc(formOpen.q || '')}" autocomplete="off"></div>` : ''}
+      <div id="resp-list">${respList(f)}</div>`;
+  }
+  function respList(f) {
+    const qs = f.fields.filter(x => x.type !== 'section'), own = can('forms', 'delete'), rs = formOpen.responses, q = (formOpen.q || '').trim();
+    return `${!rs ? '<p class="info">Loading…</p>' : rs.length ? `${q ? `<p class="info">${rs.length}${formOpen.more ? '+' : ''} ${rs.length === 1 ? 'response matches' : 'responses match'} “${esc(q)}”</p>` : ''}<div class="resps">${rs.map(r => `
         <article class="resp${r.seen ? '' : ' is-new'}" data-resp="${r.id}">
           <header>${r.seen ? '' : '<span class="new-pill">New</span>'}<b>${esc(fmtDate(r.at))}</b>
             <span class="resp-btns">${preview ? '' : r.seen ? '<button type="button" class="btn ghost sm" data-act="resp-unseen">Mark as new</button>' : '<button type="button" class="btn primary sm" data-act="resp-seen">Mark as seen</button>'}${own ? '<button type="button" class="btn ghost sm" data-act="resp-del">Delete</button>' : ''}</span></header>
-          <dl>${qs.map(q => `<dt>${esc(q.label)}</dt><dd>${answerHtml(r.data[q.id])}</dd>`).join('')}</dl>
+          <dl>${qs.map(x => `<dt>${esc(x.label)}</dt><dd>${mark(answerHtml(r.data[x.id]), q)}</dd>`).join('')}</dl>
         </article>`).join('')}</div>
-        ${formOpen.more ? '<button type="button" class="btn ghost log-more" data-act="resp-more">Show more</button>' : ''}` : '<p class="info">No responses yet.</p>'}`;
+        ${formOpen.more ? '<button type="button" class="btn ghost log-more" data-act="resp-more">Show more</button>' : ''}` : `<p class="info">${q ? `Nothing matches “${esc(q)}”.` : 'No responses yet.'}</p>`}`;
+  }
+  // resalta lo buscado dentro de las respuestas (sin tocar las etiquetas HTML)
+  function mark(html, q) {
+    if (!q) return html;
+    const re = new RegExp(esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+    return html.replace(/(^|>)([^<]+)/g, (m, a, txt) => a + txt.replace(re, s => `<mark>${s}</mark>`));
+  }
+  // buscar en las respuestas (en el servidor: también las que aún no se han cargado)
+  let respTimer = 0;
+  async function searchResponses() {
+    const id = formOpen?.id, q = (formOpen?.q || '').trim();
+    try {
+      const r = await api('GET', `/api/forms/${encodeURIComponent(id)}/responses${q ? '?q=' + encodeURIComponent(q) : ''}`);
+      if (formOpen?.id !== id || (formOpen.q || '').trim() !== q) return;
+      formOpen.responses = r.responses; formOpen.more = r.more;
+      const f = formsData.forms.find(x => x.id === id), box = $('#resp-list');
+      if (f && box) box.innerHTML = respList(f);
+    } catch (err) { toast(err.message); }
   }
   /* Editor (owners) */
   function openEditor(f) {
@@ -1803,7 +1827,8 @@
       } catch (err) { toast(err.message); }
     } else if (act === 'resp-more') {
       const last = formOpen.responses.at(-1)?.id;
-      try { const r = await api('GET', `/api/forms/${encodeURIComponent(formOpen.id)}/responses?before=${last}`); formOpen.responses.push(...r.responses); formOpen.more = r.more; render(); } catch (err) { toast(err.message); }
+      const q = (formOpen.q || '').trim();
+      try { const r = await api('GET', `/api/forms/${encodeURIComponent(formOpen.id)}/responses?before=${last}${q ? '&q=' + encodeURIComponent(q) : ''}`); formOpen.responses.push(...r.responses); formOpen.more = r.more; const f = formsData.forms.find(x => x.id === formOpen.id); $('#resp-list').innerHTML = respList(f); } catch (err) { toast(err.message); }
     } else if (act === 'resp-seen' || act === 'resp-unseen' || act === 'resp-all-seen') {
       const all = act === 'resp-all-seen', seen = act !== 'resp-unseen';
       const ids = all ? formOpen.responses.filter(r => !r.seen).map(r => r.id) : [Number(t.closest('[data-resp]').dataset.resp)];

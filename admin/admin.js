@@ -2463,7 +2463,7 @@
       const ed = ctCanEdit() && c.status !== 'signed';
       ctOpen.view = await HZPDF.render(box, ctOpen.bytes, { marks: ctMarks(), maxWidth: 820, onPage: ed ? (page, x, y) => placeBox(page, x, y) : null });
       if (ctCanEdit() && c.status === 'signed' && !c.signed_pdf) ensureSigned(c, ctOpen.bytes).catch(() => { /* se reintenta la próxima vez */ });
-      if (ed && !c.signers.some(x => x.signed) && (autoPlaceFor === c.id || c.signers.some(x => !x.box))) { autoPlaceFor = null; autoPlace(c).catch(() => { /* se colocan a mano */ }); }
+      if (ed && !c.signers.some(x => x.signed)) { autoPlaceFor = null; autoPlace(c).catch(() => { /* se colocan a mano */ }); }
       if (isTpl(c) && !ctOpen.fields) { ctOpen.fields = await pdfFields(ctOpen.bytes); const el = $('.tpl-fields'); if (el) el.innerHTML = tplFieldsHtml(ctOpen.fields); }
     } catch (e) { box.innerHTML = `<p class="login-error">${esc(e.message)}</p>`; }
   }
@@ -2481,8 +2481,17 @@
         const mid = lb.x + lb.w / 2;
         // la línea justo encima de la etiqueta (la más cercana que la cubra)
         const ln = lines.filter(l => l.y < lb.y && lb.y - l.y < 40 && l.x - 20 < mid && l.x + l.w + 20 > mid).sort((a, b) => b.y - a.y)[0];
-        const x = ln ? ln.x : lb.x, w = ln ? ln.w : Math.max(lb.w, 150), bottom = ln ? ln.y - 1 : lb.y - 14, h = 50;
-        spots.push({ n: m[1] ? Number(m[1]) : null, box: { page: i - 1, x: Math.max(0, x / W), y: Math.max(0, (bottom - h) / H), w: Math.min(1, w / W), h: h / H } });
+        const cx = ln ? ln.x + ln.w / 2 : mid, w = Math.max(0.3 * W, ln ? ln.w : lb.w), bottom = ln ? ln.y - 1 : lb.y - 14, h = 0.07 * H;
+        const x = Math.min(Math.max(0, cx - w / 2), W - w);
+        spots.push({ n: m[1] ? Number(m[1]) : null, box: { page: i - 1, x: x / W, y: Math.max(0, (bottom - h) / H), w: w / W, h: h / H } });
+      }
+    }
+    // dos firmas en la misma fila (DUO): que los recuadros no se toquen
+    for (const a of spots) {
+      const cx = a.box.x + a.box.w / 2;
+      for (const b of spots) if (b !== a && b.box.page === a.box.page && Math.abs(b.box.y - a.box.y) < 0.03) {
+        const d = Math.abs(b.box.x + b.box.w / 2 - cx) - 0.015;
+        if (a.box.w > d) { a.box.w = d; a.box.x = cx - d / 2; }
       }
     }
     return spots;
@@ -2493,7 +2502,7 @@
     const free = spots.filter(x => x.n === null), done = [];
     for (const [i, sg] of c.signers.entries()) {
       const sp = spots.find(x => x.n === i + 1) || (i === 0 ? spots.find(x => x.n === 1) : null) || free.shift();
-      if (!sp || sg.signed) continue;
+      if (!sp || sg.signed || sg.box?.manual) continue;
       const b = sp.box, old = sg.box;
       if (old && Math.abs(old.page - b.page) + Math.abs(old.x - b.x) + Math.abs(old.y - b.y) + Math.abs(old.w - b.w) < 0.005) continue;
       await api('POST', `/api/contracts/${encodeURIComponent(c.id)}/box`, { signer: sg.id, box: b });
@@ -2530,7 +2539,7 @@
     if (!sg || sg.signed) { toast('Pick a signer first (“Place signature”).'); return; }
     const old = sg.box;
     const w = old?.w || (c.signers.length > 2 ? 0.24 : 0.3), h = old?.h || 0.07;
-    const b = { page, x: Math.min(Math.max(0, x - w / 2), 1 - w), y: Math.min(Math.max(0, y - h * 0.75), 1 - h), w, h };
+    const b = { page, x: Math.min(Math.max(0, x - w / 2), 1 - w), y: Math.min(Math.max(0, y - h * 0.75), 1 - h), w, h, manual: 1 };   // movida a mano: no se recoloca sola
     sg.box = b;
     HZPDF.drawMarks(ctOpen.view.pages, ctMarks());
     try {

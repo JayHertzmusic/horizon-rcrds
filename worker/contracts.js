@@ -39,7 +39,7 @@ function box(v) {
   const b = typeof v === 'string' ? parse(v) : v;
   if (!b) return null;
   const n = x => Math.min(1, Math.max(0, Number(x) || 0));
-  return { page: Math.max(0, Math.floor(Number(b.page) || 0)), x: n(b.x), y: n(b.y), w: Math.max(0.03, n(b.w)), h: Math.max(0.02, n(b.h)) };
+  return { page: Math.max(0, Math.floor(Number(b.page) || 0)), x: n(b.x), y: n(b.y), w: Math.max(0.03, n(b.w)), h: Math.max(0.02, n(b.h)), ...(b.manual ? { manual: 1 } : {}) };
 }
 const signerOut = (r, full) => ({
   id: r.id, idx: r.idx, label: r.label || `Artista ${r.idx + 1}`, email: r.email || '', box: box(r.box), token: r.token || '',

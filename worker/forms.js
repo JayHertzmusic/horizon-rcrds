@@ -124,10 +124,13 @@ export async function formsApi(req, env, s, url, audit) {
     const before = Number(url.searchParams.get('before')) || 9e15;
     const q = String(url.searchParams.get('q') || '').trim().slice(0, 100);
     const like = '%' + q.replace(/[\\%_]/g, c => '\\' + c) + '%';
+    // cada respuesta lleva su número (#1 = la primera que llegó), como las filas de Google; se puede buscar por él
+    const num = /^#?\d{1,6}$/.test(q) ? Number(q.replace('#', '')) : -1;
+    const base = 'WITH t AS (SELECT id, at, data, seen, ROW_NUMBER() OVER (ORDER BY id) AS n FROM form_responses WHERE form_id = ?) SELECT * FROM t WHERE id < ?';
     const rows = (q
-      ? await DB.prepare("SELECT id, at, data, seen FROM form_responses WHERE form_id = ? AND id < ? AND data LIKE ? ESCAPE '\\' ORDER BY id DESC LIMIT 51").bind(f.id, before, like).all()
-      : await DB.prepare('SELECT id, at, data, seen FROM form_responses WHERE form_id = ? AND id < ? ORDER BY id DESC LIMIT 51').bind(f.id, before).all()).results;
-    return { responses: rows.slice(0, 50).map(r => ({ id: r.id, at: r.at, seen: !!r.seen, data: parse(r.data) || {} })), more: rows.length > 50 };
+      ? await DB.prepare(base + " AND (data LIKE ? ESCAPE '\\' OR n = ?) ORDER BY id DESC LIMIT 51").bind(f.id, before, like, num).all()
+      : await DB.prepare(base + ' ORDER BY id DESC LIMIT 51').bind(f.id, before).all()).results;
+    return { responses: rows.slice(0, 50).map(r => ({ id: r.id, n: r.n, at: r.at, seen: !!r.seen, data: parse(r.data) || {} })), more: rows.length > 50 };
   }
   if (mm[2] === 'responses' && mm[3] && m === 'POST') {
     const seen = (parse(await req.text()) || {}).seen ? 1 : 0;

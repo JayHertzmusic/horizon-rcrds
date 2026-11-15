@@ -804,3 +804,5 @@ html, body, * { scrollbar-width: none; }
 .resp-search { margin: 0 0 18px; }
 .resp-search .search { width: min(520px, 100%); }
 .resp mark { background: rgba(255, 210, 63, .28); color: #fff; border-radius: 2px; padding: 0 1px; }
+
+.resp-num { min-width: 44px; font: 400 22px/1 'Bebas Neue', sans-serif; letter-spacing: .04em; color: #fff; }

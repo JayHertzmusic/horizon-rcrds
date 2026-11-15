@@ -480,21 +480,21 @@
     .dx-facts p { font-size: 0.78rem; color: #6b7280; line-height: 1.6; margin: 4px 0 0; }
 
     /* formulario abierto en la propia sección (a la derecha; en móvil, debajo) */
-    .dx-grid.has-form { max-width: none; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); column-gap: clamp(32px, 5vw, 80px); align-items: start; }
+    .dx-grid.has-form { max-width: none; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); column-gap: clamp(32px, 5vw, 80px); align-items: center; }
     .dx-form { display: none; }
     .dx-grid.has-form .dx-form { display: block; animation: dx-in .45s cubic-bezier(.2, .8, .2, 1); }
     @keyframes dx-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-    .dx-form-card { position: relative; border: 1px solid #262626; border-radius: 18px; background: rgba(10,10,10,0.86); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 30px 80px rgba(0,0,0,0.55); overflow: hidden; }
-    .dx-form-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 14px 22px; border-bottom: 1px solid #1f1f1f; }
-    .dx-form-head span { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.28em; text-transform: uppercase; color: #9ca3af; }
-    .dx-form-x { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #2a2a2a; border-radius: 10px; background: none; color: #d1d5db; cursor: pointer; transition: border-color .2s, color .2s; }
+    .dx-form { width: 100%; max-width: 460px; justify-self: end; }
+    .dx-form-card { position: relative; border: 1px solid #1f1f1f; border-top: 2px solid var(--accent-color); border-radius: 2px; background: rgba(10,10,10,0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); overflow: hidden; }
+    .dx-form-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 14px 0 22px; }
+    .dx-form-head span { font-family: 'Bebas Neue', sans-serif; font-size: 1.45rem; line-height: 1; letter-spacing: 0.03em; color: #fff; }
+    .dx-form-x { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid #262626; border-radius: 2px; background: none; color: #9ca3af; cursor: pointer; transition: border-color .2s, color .2s; }
     .dx-form-x:hover { border-color: #fff; color: #fff; }
     .dx-form iframe { display: block; width: 100%; height: 640px; border: 0; background: transparent; transition: height .25s ease; }
-    .dx-btn-on { border-color: #fff !important; background: #fff !important; color: #0a0a0a !important; }
-    .dx-btn-on i { color: #0a0a0a !important; }
+    .dx-btn-on { border-color: var(--accent-color) !important; color: #fff !important; background: rgba(var(--accent-color-rgb), 0.14) !important; }
     @media (max-width: 1023px) {
       .dx-grid.has-form { grid-template-columns: minmax(0, 1fr); }
-      .dx-grid.has-form .dx-form { margin-top: 36px; }
+      .dx-grid.has-form .dx-form { margin-top: 36px; max-width: none; justify-self: stretch; }
       .dx-grid { grid-template-columns: minmax(0, 1fr); }
      .dx-col { width: 140px; }
       .dx-shade { background: linear-gradient(180deg, #0a0a0a 0%, rgba(10,10,10,0.82) 12%, rgba(10,10,10,0.88) 60%, rgba(10,10,10,0.7) 85%, #0a0a0a 100%), radial-gradient(ellipse 80% 40% at 50% 80%, rgba(var(--accent-color-rgb), 0.2), transparent 70%); }
@@ -1209,7 +1209,7 @@
           <a href="https://www.labelradar.com/labels/horizonrcrds/portal" target="_blank" rel="noopener noreferrer" class="btn-primary" style="font-size:0.75rem;padding:17px 38px;">
             <i class="fa-solid fa-paper-plane"></i> Submit via LabelRadar
           </a>
-          <a id="dx-form-btn" href="/forms/demo-submission" class="btn-outline dx-ghost" style="font-size:0.75rem;padding:16px 30px;">
+          <a id="dx-form-btn" href="/forms/demo-submission" data-title="Demo Submission" class="btn-outline dx-ghost" style="font-size:0.75rem;padding:16px 30px;">
             <i class="fa-solid fa-file-lines"></i> Submit via Form
           </a>
         </div>
@@ -2291,7 +2291,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!j || !j.forms || !j.forms.length) return;
     var html = j.forms.map(function (f) {
       var t = String(f.button || f.title).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
-      return '<a href="/forms/' + encodeURIComponent(f.slug) + '" class="btn-outline dx-ghost" style="font-size:0.75rem;padding:16px 30px;"><i class="fa-solid fa-file-lines"></i> ' + t + '</a>';
+      var tt = String(f.title || '').replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+      return '<a href="/forms/' + encodeURIComponent(f.slug) + '" data-title="' + tt + '" class="btn-outline dx-ghost" style="font-size:0.75rem;padding:16px 30px;"><i class="fa-solid fa-file-lines"></i> ' + t + '</a>';
     }).join('');
     btn.insertAdjacentHTML('afterend', html);
     btn.remove();
@@ -2316,8 +2317,9 @@ document.addEventListener('DOMContentLoaded', () => {
     close();
     current = href;
     frame.style.height = '640px';
-    frame.src = href + (href.indexOf('?') < 0 ? '?' : '&') + 'embed=1';
-    name.textContent = (a.textContent || 'Form').trim();
+    var acc = (getComputedStyle(document.documentElement).getPropertyValue('--accent-color') || '').trim();
+    frame.src = href + (href.indexOf('?') < 0 ? '?' : '&') + 'embed=1' + (/^#[0-9a-f]{3,6}$/i.test(acc) ? '&accent=' + encodeURIComponent(acc) : '');
+    name.textContent = a.getAttribute('data-title') || 'Demo submission';
     a.classList.add('dx-btn-on'); a.setAttribute('aria-expanded', 'true');
     grid.classList.add('has-form');
     if (window.innerWidth < 1024) setTimeout(function () { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60);

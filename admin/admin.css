@@ -832,3 +832,10 @@ html, body, * { scrollbar-width: none; }
 .pf-chip input { position: absolute; opacity: 0; pointer-events: none; }
 .pf-chip:has(input:checked) { color: #0a0a0a; background: #fff; border-color: #fff; font-weight: 600; }
 .pf-chip:has(input:focus-visible) { outline: 2px solid #fff; outline-offset: 2px; }
+
+/* Rol → Forms: un nivel por formulario */
+.perm-forms { padding: 0 0 6px 32px; border-bottom: 1px solid var(--line); display: block; }
+.pf-head .sm-txt { font-size: 12px; }
+.pf-row { padding: 6px 0; border-bottom: 1px dashed rgba(255, 255, 255, .06); }
+.pf-row:last-child { border-bottom: 0; }
+.pf-name { font-size: 13.5px; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

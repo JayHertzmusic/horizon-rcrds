@@ -119,7 +119,7 @@ async function resolve(env, email) {
   const m = await env.DB.prepare('SELECT m.email, m.role_id, m.label, r.name AS role_name, r.perms, r.forms FROM panel_members m LEFT JOIN panel_roles r ON r.id = m.role_id WHERE m.email = ?').bind(email).first();
   if (!m) return null;
   const forms = parse(m.forms);
-  return { owner: false, label: m.label || '', role: m.role_name ? { id: m.role_id, name: m.role_name, forms: Array.isArray(forms) ? forms : null } : null, perms: normPerms(m.role_name ? parse(m.perms) : null) };
+  return { owner: false, label: m.label || '', role: m.role_name ? { id: m.role_id, name: m.role_name, forms: forms && typeof forms === 'object' ? forms : null } : null, perms: normPerms(m.role_name ? parse(m.perms) : null) };
 }
 const can = (s, sec, act) => s.owner || !!s.perms?.[sec]?.[act];
 const anyCan = (s, act) => s.owner || SECTIONS.some(x => s.perms?.[x.id]?.[act]);
@@ -388,7 +388,7 @@ async function team(req, env, s, p) {
       DB.prepare('SELECT id, name, perms, forms FROM panel_roles ORDER BY created_at').all(),
     ]);
     const profs = (await DB.prepare(`SELECT p.email, ${AVATAR_SQL} AS picture, p.color FROM panel_profiles p`).all()).results, pics = Object.fromEntries(profs.map(r => [r.email, r.picture])), cols = Object.fromEntries(profs.map(r => [r.email, r.color]));
-    return json({ owners: owners(env), ownerPics: Object.fromEntries(owners(env).map(e => [e, pics[e] || ''])), ownerColors: Object.fromEntries(owners(env).map(e => [e, cols[e] || ''])), sections: await sections(env), members: members.results, roles: roles.results.map(r => ({ id: r.id, name: r.name, perms: normPerms(parse(r.perms)), forms: Array.isArray(parse(r.forms)) ? parse(r.forms) : null })) });
+    return json({ owners: owners(env), ownerPics: Object.fromEntries(owners(env).map(e => [e, pics[e] || ''])), ownerColors: Object.fromEntries(owners(env).map(e => [e, cols[e] || ''])), sections: await sections(env), members: members.results, roles: roles.results.map(r => ({ id: r.id, name: r.name, perms: normPerms(parse(r.perms)), forms: parse(r.forms) && typeof parse(r.forms) === 'object' ? parse(r.forms) : null })) });
   }
   if (p === '/api/team/audit' && m === 'GET') {
     // historial completo, de 100 en 100 (before = id del último que ya se ve), de todos o de una persona
@@ -443,9 +443,13 @@ async function team(req, env, s, p) {
     const id = body.id ? String(body.id) : 'r_' + randomToken().slice(0, 10);
     const dup = await DB.prepare('SELECT id FROM panel_roles WHERE lower(name) = lower(?) AND id != ?').bind(name, id).first();
     if (dup) throw new HttpError(400, `There is already a role called ${name}.`);
-    const perms = JSON.stringify(normPerms(body.perms));
-    // formularios que ve el rol: null = todos; si no, solo esos
-    const forms = Array.isArray(body.forms) ? JSON.stringify(body.forms.map(String).slice(0, 200)) : null;
+    // formularios del rol: un nivel por formulario ({ id: 'view' | 'edit' }); «Forms» queda activado si tiene alguno
+    const fm = {};
+    if (body.forms && typeof body.forms === 'object' && !Array.isArray(body.forms)) for (const [k, v] of Object.entries(body.forms).slice(0, 200)) if (v === 'view' || v === 'edit') fm[String(k)] = v;
+    const lv = Object.values(fm);
+    const rp = { ...(body.perms || {}), forms: { view: lv.length > 0, edit: lv.includes('edit'), delete: false } };
+    const perms = JSON.stringify(normPerms(rp));
+    const forms = JSON.stringify(fm);
     if (body.id) {
       const r = await DB.prepare('UPDATE panel_roles SET name = ?, perms = ?, forms = ?, updated_at = ? WHERE id = ?').bind(name, perms, forms, now(), id).run();
       if (!r.meta.changes) throw new HttpError(404, 'That role no longer exists.');

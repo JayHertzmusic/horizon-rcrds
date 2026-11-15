@@ -35,8 +35,15 @@ function normFields(list) {
   });
 }
 const access = f => { const a = parse(f.access) || {}; return { roles: Array.isArray(a.roles) ? a.roles : [], emails: Array.isArray(a.emails) ? a.emails : [] }; };
-// el rol ve los formularios si tiene «Forms» y (todos, o este en concreto); además los que se le den uno a uno
-export const canSeeForm = (s, f) => !!s.owner || (!!s.perms?.forms?.view && (!Array.isArray(s.role?.forms) || s.role.forms.includes(f.id))) || access(f).roles.includes(s.role?.id) || access(f).emails.includes(s.email);
+// nivel del rol en un formulario: '' | 'view' | 'edit' (roles antiguos sin lista: el nivel de «Forms» en todos)
+export function formLevel(s, f) {
+  if (s.owner) return 'edit';
+  const m = s.role?.forms, base = s.perms?.forms?.edit ? 'edit' : s.perms?.forms?.view ? 'view' : '';
+  if (Array.isArray(m)) return m.includes(f.id) ? base : '';
+  if (m && typeof m === 'object') return m[f.id] === 'edit' ? 'edit' : m[f.id] === 'view' ? 'view' : '';
+  return base;
+}
+export const canSeeForm = (s, f) => !!s.owner || !!formLevel(s, f) || access(f).roles.includes(s.role?.id) || access(f).emails.includes(s.email);
 export async function formsCount(env, s) {
   if (s.owner) return (await env.DB.prepare('SELECT COUNT(*) AS n FROM forms').first())?.n || 0;
   const rows = (await env.DB.prepare('SELECT id, access FROM forms').all()).results;
@@ -72,14 +79,19 @@ export async function formsApi(req, env, s, url, audit) {
       owner: !!s.owner,
       forms: forms.map(f => {
         const c = counts.find(x => x.form_id === f.id) || {};
-        return { id: f.id, slug: f.slug, title: f.title, description: f.description || '', fields: parse(f.fields) || [], public: !!f.public, on_site: !!f.on_site, button: f.button || '',
+        return { id: f.id, level: formLevel(s, f) || 'view', slug: f.slug, title: f.title, description: f.description || '', fields: parse(f.fields) || [], public: !!f.public, on_site: !!f.on_site, button: f.button || '',
           access: s.owner ? access(f) : undefined, total: c.total || 0, unseen: c.unseen || 0, updated_at: f.updated_at };
       }),
     };
   }
   if (p === '/api/forms' && m === 'POST') {
-    ownerOnly();
     const b = parse(await req.text()) || {};
+    // crear: solo owners; cambiar: quien tenga «Edit» en ese formulario
+    if (s.sync) throw new FormError(403, 'Not allowed.');
+    if (!s.owner) {
+      const cur = b.id ? await DB.prepare('SELECT id, access FROM forms WHERE id = ?').bind(String(b.id)).first() : null;
+      if (!cur || formLevel(s, cur) !== 'edit') throw new FormError(403, 'Your role can’t edit this form.');
+    }
     const title = clean(b.title, 140);
     if (!title) throw new FormError(400, 'Give it a title.');
     const slug = clean(b.slug, 60).toLowerCase();
@@ -116,7 +128,7 @@ export async function formsApi(req, env, s, url, audit) {
   const f = await getForm(env, mm[1]);
   if (!canSeeForm(s, f)) throw new FormError(403, 'You don’t have access to this form.');
   if (!mm[2] && m === 'DELETE') {
-    ownerOnly('delete');
+    if (!s.owner || s.sync) throw new FormError(403, 'Only owners can delete a form.');
     const n = (await DB.prepare('SELECT COUNT(*) AS n FROM form_responses WHERE form_id = ?').bind(f.id).first()).n;
     await DB.batch([DB.prepare('DELETE FROM form_responses WHERE form_id = ?').bind(f.id), DB.prepare('DELETE FROM forms WHERE id = ?').bind(f.id)]);
     await audit(`Deleted the form “${f.title}” (${n} responses)`);
@@ -148,7 +160,7 @@ export async function formsApi(req, env, s, url, audit) {
     return { ok: true };
   }
   if (mm[2] === 'responses' && mm[3] && m === 'DELETE') {
-    ownerOnly('delete');
+    if (s.sync || formLevel(s, f) !== 'edit') throw new FormError(403, 'Your role can’t delete responses here.');
     const r = await DB.prepare('DELETE FROM form_responses WHERE id = ? AND form_id = ?').bind(Number(mm[3]), f.id).run();
     if (!r.meta.changes) throw new FormError(404, 'That response no longer exists.');
     await audit(`Deleted a response from the form “${f.title}”`);

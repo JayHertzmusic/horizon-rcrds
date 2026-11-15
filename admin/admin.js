@@ -431,20 +431,24 @@
     const n = teamData.sections.filter(sec => levelOf(r, sec)).length;
     return n ? `${n} ${n === 1 ? 'section' : 'sections'}` : 'No sections';
   }
-  // qué formularios ve el rol: todos o solo algunos
-  function roleFormsPick(r, lv) {
-    const list = formsData?.forms || [];
-    // la lista de formularios se carga aparte y se pinta en su sitio al llegar (sin rehacer la ventana)
-    if (!formsData) loadForms().then(() => {
-      const box = $('#sheet .role-form .perm-forms .pf-list');
-      if (!box || box.querySelector('[name="forms-pick"]')) return;
-      box.innerHTML = (formsData?.forms || []).map(f => `<label class="pf-chip"><input type="checkbox" name="forms-pick" value="${esc(f.id)}" ${(r.forms || []).includes(f.id) ? 'checked' : ''}><span>${esc(f.title)}</span></label>`).join('') || '<span class="muted sm-txt">No forms yet.</span>';
-    });
-    const all = !Array.isArray(r.forms), sel = new Set(r.forms || []);
-    return `<div class="perm-forms"${lv ? '' : ' hidden'}>
-      <label class="pf-all"><input type="checkbox" name="forms-all" ${all ? 'checked' : ''}><span>All forms</span></label>
-      <div class="pf-list"${all ? ' hidden' : ''}>${list.length ? list.map(f => `<label class="pf-chip"><input type="checkbox" name="forms-pick" value="${esc(f.id)}" ${sel.has(f.id) ? 'checked' : ''}><span>${esc(f.title)}</span></label>`).join('') : '<span class="muted sm-txt">Loading forms…</span>'}</div>
-    </div>`;
+  // Forms en un rol: cada formulario con su nivel (None / View / Edit)
+  const FORM_LEVELS = [['', 'None'], ['view', 'View'], ['edit', 'Edit']];
+  function roleFormLevel(r, f) {
+    const m = r.forms, base = r.perms?.forms?.edit ? 'edit' : r.perms?.forms?.view ? 'view' : '';
+    if (Array.isArray(m)) return m.includes(f.id) ? base : '';
+    if (m && typeof m === 'object') return m[f.id] || '';
+    return base;
+  }
+  function roleFormRows(r) {
+    if (!formsData) return '<p class="muted sm-txt pf-wait">Loading forms…</p>';
+    if (!formsData.forms.length) return '<p class="muted sm-txt">No forms yet.</p>';
+    return formsData.forms.map(f => { const lv = roleFormLevel(r, f); return `
+      <div class="perm-row pf-row" data-form="${esc(f.id)}"><span class="pf-name">${esc(f.title)}</span><span class="seg" role="radiogroup" aria-label="${esc(f.title)}">${FORM_LEVELS.map(([v, l]) => `
+        <label><input type="radio" name="form:${esc(f.id)}" value="${v}" ${v === lv ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>`; }).join('');
+  }
+  function roleFormsPick(r) {
+    if (!formsData) loadForms().then(() => { const box = $('#sheet .role-form .perm-forms'); if (box) box.innerHTML = roleFormRows(r); });
+    return `<div class="perm-forms">${roleFormRows(r)}</div>`;
   }
   function roleSheet(r) {
     const isNew = !r.id;
@@ -453,10 +457,10 @@
         <div class="sheet-head"><h2>${isNew ? 'New role' : 'Edit role'}</h2><button type="button" class="ic" data-act="sheet-close" aria-label="Close">✕</button></div>
         <input name="name" class="role-name" value="${esc(r.name || '')}" maxlength="40" placeholder="Role name (e.g. A&R)" aria-label="Role name" autocomplete="off">
         <div class="perm-list">${teamData.sections.map(sec => { const lv = levelOf(r, sec); return `
-          <div class="perm-row" data-sec="${esc(sec.id)}"><span class="perm-name"><button type="button" class="grip" aria-label="Drag to reorder ${esc(sec.label)}" title="Drag to reorder">${GRIP_SVG}</button>${esc(sec.label)}</span><span class="seg" role="radiogroup" aria-label="${esc(sec.label)}">${LEVELS.filter(([v]) => !v || sec.actions.includes(v)).map(([v, l]) => `
-            <label><input type="radio" name="${esc(sec.id)}" value="${v}" ${v === lv ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>${sec.id === 'forms' ? roleFormsPick(r, lv) : ''}`; }).join('')}
+          ${sec.id === 'forms' ? `<div class="perm-row pf-head" data-sec="forms"><span class="perm-name"><button type="button" class="grip" aria-label="Drag to reorder ${esc(sec.label)}" title="Drag to reorder">${GRIP_SVG}</button>${esc(sec.label)}</span><span class="muted sm-txt">Pick per form</span></div>${roleFormsPick(r)}` : `<div class="perm-row" data-sec="${esc(sec.id)}"><span class="perm-name"><button type="button" class="grip" aria-label="Drag to reorder ${esc(sec.label)}" title="Drag to reorder">${GRIP_SVG}</button>${esc(sec.label)}</span><span class="seg" role="radiogroup" aria-label="${esc(sec.label)}">${LEVELS.filter(([v]) => !v || sec.actions.includes(v)).map(([v, l]) => `
+            <label><input type="radio" name="${esc(sec.id)}" value="${v}" ${v === lv ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>`}`; }).join('')}
         </div>
-        <p class="info sm-txt"><b>View</b>: only look. <b>Edit</b>: create and change. <b>All</b>: also delete. Drag ⋮⋮ to change the order of the sections. Owners always have everything.</p>
+        <p class="info sm-txt"><b>View</b>: only look. <b>Edit</b>: create and change. <b>All</b>: also delete. For forms, pick None / View / Edit on each one. Drag ⋮⋮ to change the order of the sections. Owners always have everything.</p>
         <p class="ed-error" role="alert" hidden></p>
         <div class="confirm-actions">${isNew ? '' : '<button type="button" class="btn danger push-l" data-act="delete-role">Delete role</button>'}<button type="submit" class="btn primary">${isNew ? 'Create role' : 'Save'}</button></div>
       </form>`);
@@ -1513,7 +1517,9 @@
       const name = form.elements.name.value.trim();
       if (!name) { box.textContent = 'Give the role a name.'; box.hidden = false; form.elements.name.focus(); return; }
       const id = form.dataset.role || undefined;
-      const forms = form.querySelector('[name="forms-all"]')?.checked !== false ? null : [...form.querySelectorAll('[name="forms-pick"]:checked')].map(x => x.value);
+      const forms = {};
+      form.querySelectorAll('.pf-row').forEach(row => { const v = row.querySelector('input:checked')?.value; if (v) forms[row.dataset.form] = v; });
+      if (!form.querySelector('.pf-row') && !form.querySelector('.pf-wait')) { /* sin formularios */ }
       teamAction(() => api('POST', '/api/team/roles', { id, name, perms: rolePerms(form), forms }), id ? 'Role saved' : 'Role created', box);
       return;
     }
@@ -1545,11 +1551,6 @@
     if (t.id === 'ed-file' && t.files[0]) { setCover(t.files[0]); t.value = ''; }
     if (t.id === 'me-photo' && t.files[0]) { setMyPhoto(t.files[0]); t.value = ''; }
     if (t.id === 'me-color') setMyColor(t.value);
-    if (t.closest?.('.role-form')) {
-      const f = t.closest('.role-form'), box = f.querySelector('.perm-forms');
-      if (box && t.name === 'forms') box.hidden = !t.value;
-      if (box && t.name === 'forms-all') box.querySelector('.pf-list').hidden = t.checked;
-    }
     if (t.id === 'mx-file' && t.files[0]) { setMixAudio(t.files[0]); t.value = ''; }
     if (t.id === 'f-sc') scFill(!editing?.key);
     if (t.classList.contains('log-who')) { logState.who = t.value; logState.items = []; logState.loaded = false; loadLog(false); render(); }
@@ -1590,7 +1591,9 @@
   let formsData = null, formsErr = '', formsLoading = false, formOpen = null;
   const FTYPES = { text: 'Short text', textarea: 'Long text', email: 'Email', url: 'Link', radio: 'Single choice', checkbox: 'Varias opciones', select: 'Dropdown', section: 'Section (title)' };
   const isOwnerNow = () => !!auth?.user?.owner && !preview;
-  const visibleForms = () => (formsData?.forms || []).filter(f => !preview || (preview.perms?.forms?.view && (!Array.isArray(preview.forms) || preview.forms.includes(f.id))) || f.access?.roles?.includes(preview.id));
+  const visibleForms = () => (formsData?.forms || []).filter(f => !preview || roleFormLevel(preview, f) || f.access?.roles?.includes(preview.id));
+  // puede editar este formulario (owner, o su rol tiene «Edit» en él)
+  const canEditForm = f => !!f && (preview ? roleFormLevel(preview, f) === 'edit' : (auth?.user?.owner || f.level === 'edit'));
   /* Aviso de respuestas nuevas: número en «Forms» y en cada formulario; se mira cada minuto */
   let unseen = { total: 0, forms: {} };
   async function checkUnseen() {
@@ -1632,7 +1635,7 @@
     }
     if (formOpen?.mode === 'edit') return formEditor();
     if (formOpen?.mode === 'responses') return formResponses();
-    const list = visibleForms(), own = can('forms', 'edit');
+    const list = visibleForms(), own = isOwnerNow();
     return `
       <div class="head"><div><p class="eyebrow">Responses and links</p><h1>FORMS <span class="count">${list.length}</span></h1></div>
         ${own ? '<button type="button" class="btn primary" data-act="form-new">+ New form</button>' : ''}</div>
@@ -1644,7 +1647,7 @@
           <span class="badges">${f.public ? '<span class="tag">Open</span>' : '<span class="tag off">Closed</span>'}${f.on_site ? '<span class="tag">On the site</span>' : ''}</span>
           <span class="resp-n"><b>${f.total}</b> ${f.total === 1 ? 'response' : 'responses'}</span>
           ${f.unseen ? `<span class="new-pill">${f.unseen} new</span>` : '<span></span>'}
-          <span class="fm-btns">${f.public ? `<a class="btn ghost sm" href="${esc(publicUrl(f))}" target="_blank" rel="noopener">View ↗</a>` : ''}<button type="button" class="btn ghost sm" data-act="form-resp">Responses</button>${own ? '<button type="button" class="btn primary sm" data-act="form-edit">Edit</button>' : ''}</span>
+          <span class="fm-btns">${f.public ? `<a class="btn ghost sm" href="${esc(publicUrl(f))}" target="_blank" rel="noopener">View ↗</a>` : ''}<button type="button" class="btn ghost sm" data-act="form-resp">Responses</button>${canEditForm(f) ? '<button type="button" class="btn primary sm" data-act="form-edit">Edit</button>' : ''}</span>
         </li>`).join('') : '<li class="empty">No forms.</li>'}
       </ol>`;
   }
@@ -1667,12 +1670,12 @@
   function formResponses() {
     const f = formsData.forms.find(x => x.id === formOpen.id);
     if (!f) { formOpen = null; return formsPage(); }
-    const qs = f.fields.filter(x => x.type !== 'section'), own = can('forms', 'delete');
+    const qs = f.fields.filter(x => x.type !== 'section'), own = canEditForm(f);
     const rs = formOpen.responses;
     return `
       <button type="button" class="back" data-act="form-back">← Forms</button>
       <div class="head"><div><p class="eyebrow">Responses</p><h1>${esc(f.title)} <span class="count">${f.total}</span></h1></div>
-        <div class="head-btns" data-form="${esc(f.id)}">${rs && rs.some(r => !r.seen) && !preview ? '<button type="button" class="btn ghost" data-act="resp-all-seen">Mark all as seen</button>' : ''}${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Download (Excel / CSV)</button>' : ''}${can('forms', 'edit') && !preview ? '<button type="button" class="btn primary" data-act="form-edit">Edit form</button>' : ''}</div></div>
+        <div class="head-btns" data-form="${esc(f.id)}">${rs && rs.some(r => !r.seen) && !preview ? '<button type="button" class="btn ghost" data-act="resp-all-seen">Mark all as seen</button>' : ''}${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Download (Excel / CSV)</button>' : ''}${canEditForm(f) && !preview ? '<button type="button" class="btn primary" data-act="form-edit">Edit form</button>' : ''}</div></div>
       ${formOpen.err ? `<p class="login-error" role="alert">${esc(formOpen.err)}</p>` : ''}
       ${f.total ? `<div class="resp-search"><input class="search" type="search" id="resp-filter" placeholder="Search by #number, name, track, email…" aria-label="Search responses" value="${esc(formOpen.q || '')}" autocomplete="off"></div>` : ''}
       <div id="resp-list">${respList(f)}</div>`;
@@ -1687,7 +1690,7 @@
   // cerradas por defecto (solo nombre y track); se abren con un clic. Si la búsqueda da una sola, se abre sola.
   const respOpen = (r, rs) => formOpen.openIds?.has(r.id) || (rs.length === 1 && !!(formOpen.q || '').trim());
   function respList(f) {
-    const qs = f.fields.filter(x => x.type !== 'section'), own = can('forms', 'delete'), rs = formOpen.responses, q = (formOpen.q || '').trim();
+    const qs = f.fields.filter(x => x.type !== 'section'), own = canEditForm(f), rs = formOpen.responses, q = (formOpen.q || '').trim();
     return `${!rs ? '<p class="info">Loading…</p>' : rs.length ? `${q ? `<p class="info">${rs.length}${formOpen.more ? '+' : ''} ${rs.length === 1 ? 'response matches' : 'responses match'} “${esc(q)}”</p>` : ''}<div class="resps">${rs.map(r => `
         <article class="resp${r.seen ? '' : ' is-new'}${respOpen(r, rs) ? ' is-open' : ''}" data-resp="${r.id}">
           <header data-act="resp-toggle" title="Show / hide the answers"><span class="resp-num">#${r.n || ''}</span>${(() => { const w = respWho(f, r); return w.who ? `<span class="resp-who"><b>${mark(esc(w.who), q)}</b>${w.what ? `<span>${mark(esc(w.what), q)}</span>` : ''}</span>` : ''; })()}${r.seen ? '' : '<span class="new-pill">New</span>'}<span class="resp-date">${esc(fmtDate(r.at))}</span>
@@ -1789,7 +1792,7 @@
             <div class="ed-actions fe-actions">
               <button type="submit" class="btn primary">${isNew ? 'Create form' : 'Save changes'}</button>
               <button type="button" class="btn ghost" data-act="form-back">Cancel</button>
-              ${isNew || !can('forms', 'delete') ? '' : '<button type="button" class="btn danger push" data-act="form-del">Delete form</button>'}
+              ${isNew || !isOwnerNow() ? '' : '<button type="button" class="btn danger push" data-act="form-del">Delete form</button>'}
             </div>
           </div>
           <aside class="fe-prev">

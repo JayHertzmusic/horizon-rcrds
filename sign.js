@@ -9,14 +9,44 @@
   const fmt = t => new Date(t).toLocaleString('en-GB', { dateStyle: 'long', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
   const FONTS = ["'Brush Script MT', 'Segoe Script', cursive", "'Lucida Handwriting', 'Segoe Script', cursive", "Georgia, 'Times New Roman', serif"];
   let data = null, pdfBytes = null, hash = '', view = null, adopted = null, drawn = false, font = 0;
+  // acceso: el email al que se envió el contrato (se recuerda en esta pestaña)
+  const KEY = 'hz_sign_' + token;
+  let who = '';
+  try { who = sessionStorage.getItem(KEY) || ''; } catch { /* nada */ }
+  const get = (path = '') => fetch(API + path, { cache: 'no-store', headers: who ? { 'X-Signer-Email': who } : {} });
+
+  function gate(message = '') {
+    statusEl.className = 'status'; statusEl.textContent = 'Private contract';
+    root.innerHTML = `
+      <form class="panel gate" id="gate" novalidate>
+        <h2>Open your contract</h2>
+        <p class="msg">For your security, enter the email address where you received this contract.</p>
+        <div class="field"><label for="g-email">Email</label><input id="g-email" name="email" type="email" autocomplete="email" maxlength="160" value="${esc(who)}"></div>
+        <p class="err" id="g-err" role="alert"${message ? '' : ' hidden'}>${esc(message)}</p>
+        <div class="actions"><button type="submit" class="btn">Continue</button></div>
+      </form>`;
+    const f = document.getElementById('gate');
+    f.elements.email.focus();
+    f.addEventListener('submit', e => {
+      e.preventDefault();
+      const v = f.elements.email.value.trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v)) { const er = document.getElementById('g-err'); er.textContent = 'Please write a valid email.'; er.hidden = false; return; }
+      who = v; f.querySelector('.btn').disabled = true;
+      load();
+    });
+  }
 
   async function load() {
     try {
-      const r = await fetch(API, { cache: 'no-store' });
+      const r = await get();
       const j = await r.json().catch(() => ({}));
+      if (r.status === 403 && who) { who = ''; try { sessionStorage.removeItem(KEY); } catch { /* nada */ } return gate(j.message); }
       if (!r.ok) throw new Error(j.message || 'This contract link is not valid.');
+      if (j.gate) return gate();
+      if (who) try { sessionStorage.setItem(KEY, who); } catch { /* nada */ }
       data = j;
-      const f = await fetch(API + '/pdf', { cache: 'no-store' });
+      root.innerHTML = '<p class="msg">Loading the contract…</p>';
+      const f = await get('/pdf');
       if (!f.ok) throw new Error('The contract file could not be loaded. Please reload the page.');
       pdfBytes = new Uint8Array(await f.arrayBuffer());
       hash = await HZPDF.sha256(pdfBytes);
@@ -68,7 +98,7 @@
         <h2>Adopt your signature</h2>
         <p class="msg">Confirm your name and your signature.</p>
         <div class="field"><label for="a-name">Full legal name</label><input id="a-name" name="name" type="text" autocomplete="name" maxlength="160" value="${esc(adopted?.name || '')}"></div>
-        <div class="field"><label for="a-email">Email</label><input id="a-email" name="email" type="email" autocomplete="email" maxlength="160" value="${esc(adopted?.email || data.email || '')}"></div>
+        <div class="field"><label for="a-email">Email</label><input id="a-email" name="email" type="email" autocomplete="email" maxlength="160" value="${esc(adopted?.email || data.email || who || '')}"${data.email ? ' readonly' : ''}></div>
         <div class="ds-tabs" role="tablist"><button type="button" class="on" data-tab="type" role="tab">Type</button><button type="button" data-tab="draw" role="tab">Draw</button></div>
         <div class="ds-pane" data-pane="type">
           <div class="ds-styles">${FONTS.map((f, i) => `<button type="button" class="ds-style${i === font ? ' on' : ''}" data-font="${i}" style="font-family:${f}">Your name</button>`).join('')}</div>
@@ -148,7 +178,7 @@
     const btn = document.getElementById('finish'), err = document.getElementById('err');
     btn.disabled = true; btn.textContent = 'Signing…'; err.hidden = true;
     try {
-      const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(who ? { 'X-Signer-Email': who } : {}) },
         body: JSON.stringify({ name: adopted.name, email: adopted.email, signature: adopted.signature, agree: true, hash }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.message || 'Something went wrong. Please try again.');
@@ -159,9 +189,14 @@
     const btn = document.getElementById('dl');
     btn.disabled = true; btn.textContent = 'Preparing…';
     try {
-      const out = await HZPDF.signed(pdfBytes, { title: data.title, hash: data.pdf_hash, link: location.href,
+      const name = `${data.title.replace(/[^\w\- ]+/g, '').trim() || 'contract'} - signed.pdf`;
+      if (allSigned()) {
+        const r = await get('/signed');
+        if (r.ok) { HZPDF.download(new Uint8Array(await r.arrayBuffer()), name); btn.disabled = false; btn.textContent = 'Download signed PDF'; return; }
+      }
+      const out = await HZPDF.signed(pdfBytes, { title: data.title, hash: data.pdf_hash,
         signers: data.signers.map(s => ({ label: s.label, box: s.box, signed: s.signed ? { ...s.signed, hash: data.pdf_hash } : null })) });
-      HZPDF.download(out, `${data.title.replace(/[^\w\- ]+/g, '').trim() || 'contract'} - signed.pdf`);
+      HZPDF.download(out, name);
     } catch (e) { alert('The signed PDF could not be created: ' + e.message); }
     btn.disabled = false; btn.textContent = 'Download signed PDF';
   }

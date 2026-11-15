@@ -7,7 +7,7 @@
      workflow: no hay claves guardadas en ningún sitio. */
 import STATIC_FILES from './static-files.json';
 import { FORM_SCHEMA, FormError, formsApi, publicFormsApi, formsCount } from './forms.js';
-import { CONTRACT_SCHEMA, CONTRACT_COLUMNS, ContractError, contractsApi, signApi } from './contracts.js';
+import { CONTRACT_SCHEMA, CONTRACT_COLUMNS, SIGNER_COLUMNS, ContractError, contractsApi, signApi } from './contracts.js';
 import { EmailMessage } from 'cloudflare:email';
 
 // Secciones del panel y lo que se puede hacer en cada una. Una sección nueva (p. ej. eventos) se añade aquí.
@@ -90,6 +90,7 @@ async function ensureSchema(env) {
   try { await env.DB.prepare('ALTER TABLE panel_profiles ADD COLUMN color TEXT').run(); } catch { /* ya existe */ }
   try { await env.DB.prepare('ALTER TABLE panel_roles ADD COLUMN forms TEXT').run(); } catch { /* ya existe */ }
   for (const col of CONTRACT_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE contracts ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
+  for (const col of SIGNER_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE contract_signers ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
   schemaReady = true;
 }
 const audit = (env, who, action, detail = '') => env.DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)')
@@ -527,7 +528,7 @@ async function chat(req, env, s, url) {
 }
 
 /* ---------------- API ---------------- */
-async function api(req, env, p) {
+async function api(req, env, p, ctx) {
   const url = new URL(req.url);
   // Mismo origen siempre (la web y el panel están en el mismo dominio): se rechazan peticiones de otras webs
   const origin = req.headers.get('Origin');
@@ -547,7 +548,7 @@ async function api(req, env, p) {
     if (!EMAIL.test(email)) throw new HttpError(400, 'Invalid email.');
     return json(await startSession(env, { email, name: clean(b.name || email.split('@')[0], 80), picture: '' }, area(b.area)));
   }
-  if (p.startsWith('/api/public/sign/')) { const r = await signApi(req, env, url, mailer(env)); return r instanceof Response ? r : json(r); }   // firma de contratos (enlace privado)
+  if (p.startsWith('/api/public/sign/')) { const r = await signApi(req, env, url, mailer(env), ctx); return r instanceof Response ? r : json(r); }   // firma de contratos (enlace privado)
   const av = p.match(/^\/api\/public\/avatar\/([a-f0-9]{32})$/);
   if (av) {
     const f = await env.FILES.getWithMetadata('avatars/' + av[1], { type: 'arrayBuffer' });
@@ -582,10 +583,10 @@ async function api(req, env, p) {
 }
 
 export default {
-  async fetch(req, env) {
+  async fetch(req, env, ctx) {
     const url = new URL(req.url), p = url.pathname;
     try {
-      if (p.startsWith('/api/')) return await api(req, env, p);
+      if (p.startsWith('/api/')) return await api(req, env, p, ctx);
       // página pública de cada formulario: /forms/<enlace>
       if (/^\/forms\/[a-z0-9-]+\/?$/.test(p)) return env.ASSETS.fetch(new Request(new URL('/form', url), req));
       // página de firma de cada contrato: /sign/<token>

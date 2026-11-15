@@ -57,6 +57,8 @@
   .err { color: #ffb4b6; margin: 10px 0 0; }
   .msg { color: var(--muted); }
   .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+  .gate { width: min(460px, 100%); margin: 8vh auto 0; }
+  .gate .actions .btn { width: 100%; }
   @media print {
     body { background: #fff; color: #111; }
     main { padding: 0; width: 100%; }
@@ -91,6 +93,7 @@
   .ds-card .msg { color: #555; margin: 0 0 16px; }
   .ds-card .field label { color: #555; }
   .ds-card input[type=text], .ds-card input[type=email] { background: #fff; color: #111; border-color: #c9ccd3; }
+  .ds-card input[readonly] { background: #f3f4f6; color: #555; }
   .ds-tabs { display: flex; gap: 4px; margin: 6px 0 12px; border-bottom: 1px solid #ddd; }
   .ds-tabs button { background: none; border: 0; border-bottom: 3px solid transparent; padding: 10px 14px; font: 700 13px/1 Arial, sans-serif; color: #555; cursor: pointer; }
   .ds-tabs button.on { color: #111; border-bottom-color: #ffd335; }
@@ -116,7 +119,7 @@
 </main>
 <script src="/assets/vendor/pdf/pdf.min.js"></script>
 <script src="/assets/vendor/pdf/pdf-lib.min.js"></script>
-<script src="/contract-pdf.js?v=3"></script>
-<script src="/sign.js?v=4"></script>
+<script src="/contract-pdf.js?v=4"></script>
+<script src="/sign.js?v=5"></script>
 </body>
 </html>

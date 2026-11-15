@@ -78,7 +78,7 @@
   const drawBox = (pages, box, sign, label) => drawMarks(pages, box ? [{ box, sign, label }] : []);
 
   // pdf-lib usa fuentes estándar (Latin-1): lo que no quepa se cambia por «?» en el texto añadido
-  const latin1 = s => String(s ?? '').normalize('NFC').replace(/[^\x20-\x7e\xa0-\xff]/g, '?');
+  const latin1 = s => String(s ?? '').normalize('NFC').replace(/[^\x20-\x7e\xa0-\xff–—‘’“”•…€™]/g, '?');
   const fmt = t => new Date(t).toISOString().replace('T', ' ').slice(0, 16) + ' UTC';
   /* data: { title, box, signed: { name, email, at, ip, ua, signature, hash }, link } → Uint8Array */
   async function signed(bytes, data) {

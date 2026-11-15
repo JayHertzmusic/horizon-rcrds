@@ -868,3 +868,12 @@ html, body, * { scrollbar-width: none; }
 /* flecha sin recuadro, también al pulsarla */
 .pf-arrow, .pf-arrow:focus, .pf-arrow:hover, .pf-arrow:active { border: 0 !important; background: none !important; box-shadow: none !important; outline: none; }
 .pf-arrow:focus-visible { outline: 1px solid rgba(255, 255, 255, .6); outline-offset: 2px; border-radius: 4px; }
+/* Contrato firmado: estado + Drive */
+.ct-done { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+/* Google Doc dentro del panel */
+.doc-ov { position: fixed; inset: 0; z-index: 90; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--bg); }
+.doc-ov-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line-2); background: var(--panel); }
+.doc-ov-bar b { color: #fff; font-size: 15px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.doc-ov iframe { width: 100%; height: 100%; border: 0; background: #fff; }
+@media (max-width: 700px) { .doc-ov-bar { flex-direction: column; align-items: stretch; } .doc-ov-bar .docbox-btns { justify-content: flex-start; } }
+#u-from { width: 100%; min-height: 46px; }

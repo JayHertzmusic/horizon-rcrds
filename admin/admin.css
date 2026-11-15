@@ -806,3 +806,10 @@ html, body, * { scrollbar-width: none; }
 .resp mark { background: rgba(255, 210, 63, .28); color: #fff; border-radius: 2px; padding: 0 1px; }
 
 .resp-num { min-width: 44px; font: 400 22px/1 'Bebas Neue', sans-serif; letter-spacing: .04em; color: #fff; }
+
+/* Cabecera de cada respuesta: número, artista y track */
+.resp-who { display: inline-flex; align-items: baseline; gap: 10px; min-width: 0; }
+.resp-who b { color: #fff; font-size: 16px; font-weight: 700; }
+.resp-who span { color: var(--muted); font-size: 14px; }
+.resp-who span::before { content: '— '; }
+.resp header .resp-date { color: var(--faint); font-size: 13px; }

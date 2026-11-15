@@ -1656,11 +1656,18 @@
       ${f.total ? `<div class="resp-search"><input class="search" type="search" id="resp-filter" placeholder="Search by #number, name, track, email…" aria-label="Search responses" value="${esc(formOpen.q || '')}" autocomplete="off"></div>` : ''}
       <div id="resp-list">${respList(f)}</div>`;
   }
+  // nombre del artista (y título del track) para la cabecera de cada respuesta
+  function respWho(f, r) {
+    const qs = f.fields.filter(x => x.type !== 'section'), val = x => (Array.isArray(r.data[x.id]) ? r.data[x.id].join(', ') : String(r.data[x.id] || '')).trim();
+    const who = qs.find(x => /artist|team/i.test(x.label) && val(x)) || qs.find(x => /name/i.test(x.label) && val(x));
+    const what = qs.find(x => /track|song|title/i.test(x.label) && x !== who && val(x));
+    return { who: who ? val(who) : '', what: what ? val(what) : '' };
+  }
   function respList(f) {
     const qs = f.fields.filter(x => x.type !== 'section'), own = can('forms', 'delete'), rs = formOpen.responses, q = (formOpen.q || '').trim();
     return `${!rs ? '<p class="info">Loading…</p>' : rs.length ? `${q ? `<p class="info">${rs.length}${formOpen.more ? '+' : ''} ${rs.length === 1 ? 'response matches' : 'responses match'} “${esc(q)}”</p>` : ''}<div class="resps">${rs.map(r => `
         <article class="resp${r.seen ? '' : ' is-new'}" data-resp="${r.id}">
-          <header><span class="resp-num">#${r.n || ''}</span>${r.seen ? '' : '<span class="new-pill">New</span>'}<b>${esc(fmtDate(r.at))}</b>
+          <header><span class="resp-num">#${r.n || ''}</span>${(() => { const w = respWho(f, r); return w.who ? `<span class="resp-who"><b>${mark(esc(w.who), q)}</b>${w.what ? `<span>${mark(esc(w.what), q)}</span>` : ''}</span>` : ''; })()}${r.seen ? '' : '<span class="new-pill">New</span>'}<span class="resp-date">${esc(fmtDate(r.at))}</span>
             <span class="resp-btns">${preview ? '' : r.seen ? '<button type="button" class="btn ghost sm" data-act="resp-unseen">Mark as new</button>' : '<button type="button" class="btn primary sm" data-act="resp-seen">Mark as seen</button>'}${own ? '<button type="button" class="btn ghost sm" data-act="resp-del">Delete</button>' : ''}</span></header>
           <dl>${qs.map(x => `<dt>${esc(x.label)}</dt><dd>${mark(answerHtml(r.data[x.id]), q)}</dd>`).join('')}</dl>
         </article>`).join('')}</div>

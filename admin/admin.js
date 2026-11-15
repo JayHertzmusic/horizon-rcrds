@@ -2425,7 +2425,7 @@
     c.signed_pdf = true;
   }
   // en cuanto firman todos, el contrato se guarda solo en Drive (con el panel abierto por alguien que puede editar contratos)
-  const AUTO_DRIVE_FROM = Date.parse('2026-11-15T21:00:00Z');   // los firmados antes se guardan a mano
+  const AUTO_DRIVE_FROM = Date.parse('2026-11-15T20:00:00Z');   // los firmados antes se guardan a mano
   let autoDriving = false;
   const autoDriveFailed = new Set();
   async function autoDrive() {

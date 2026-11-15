@@ -181,8 +181,16 @@ export async function discordCalendarHook(req, env) {
 // número de release de las fechas nuevas: el de su carpeta en el Drive de contratos («[HRZ#105] Nune - U»)
 async function fillCats(env) {
   const DB = env.DB;
-  const todo = (await DB.prepare("SELECT id, artist, title FROM calendar WHERE kind = 'release' AND (cat IS NULL OR cat = '')").all()).results;
+  let todo = (await DB.prepare("SELECT id, artist, title FROM calendar WHERE kind = 'release' AND (cat IS NULL OR cat = '')").all()).results;
   if (!todo.length) return;
+  // primero, el número que tenga su contrato (mismo artista y track)
+  const cts = (await DB.prepare("SELECT artist, release_name, release_cat FROM contracts WHERE release_cat IS NOT NULL AND release_cat <> '' AND (kind IS NULL OR kind = 'contract')").all()).results;
+  const byContract = [];
+  for (const r of todo) {
+    const c = cts.find(x => norm(x.release_name) === norm(r.title) && norm(String(x.artist || '').split(/\s*(?:,|&|\band\b)\s*/i)[0]) === norm(String(r.artist || '').split(/\s*(?:,|&|\band\b)\s*/i)[0]));
+    if (c) byContract.push(DB.prepare('UPDATE calendar SET cat = ? WHERE id = ?').bind(c.release_cat, r.id));
+  }
+  if (byContract.length) { await DB.batch(byContract); todo = (await DB.prepare("SELECT id, artist, title FROM calendar WHERE kind = 'release' AND (cat IS NULL OR cat = '')").all()).results; if (!todo.length) return; }
   const root = (await DB.prepare("SELECT value FROM panel_settings WHERE key = 'contracts_drive'").first())?.value;
   if (!root) return;
   const tok = await horizonToken(env), names = [];

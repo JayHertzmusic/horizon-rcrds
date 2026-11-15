@@ -151,6 +151,19 @@ export async function finalize(env, id, origin) {
   return { ok: !errors.length };
 }
 
+/* Cada 30 min: si el PDF de un contrato firmado se borró del Drive (o está en la papelera), se olvida su enlace,
+   así el panel lo vuelve a guardar en su carpeta. Solo los firmados en los últimos 6 meses. */
+export async function checkDriveFiles(env) {
+  const rows = (await env.DB.prepare("SELECT id, drive_id FROM contracts WHERE status = 'signed' AND drive_id IS NOT NULL AND signed_at > ?").bind(now() - 180 * 864e5).all()).results;
+  if (!rows.length) return;
+  const tok = await horizonToken(env);
+  for (const r of rows) {
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${r.drive_id}?fields=trashed&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${tok}` } });
+    const j = await res.json().catch(() => ({}));
+    if (res.status === 404 || j.trashed) await env.DB.prepare('UPDATE contracts SET drive_id = NULL, drive_url = NULL WHERE id = ?').bind(r.id).run();
+  }
+}
+
 /* Panel (con sesión). can(act) = permiso «contracts» del rol; audit(texto) apunta en el historial. */
 export async function contractsApi(req, env, s, url, can, audit) {
   const DB = env.DB, m = req.method, p = url.pathname;

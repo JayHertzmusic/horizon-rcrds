@@ -7,7 +7,7 @@
      workflow: no hay claves guardadas en ningún sitio. */
 import STATIC_FILES from './static-files.json';
 import { FORM_SCHEMA, FormError, formsApi, publicFormsApi, formsCount, gformHook } from './forms.js';
-import { CONTRACT_SCHEMA, CONTRACT_COLUMNS, SIGNER_COLUMNS, ContractError, contractsApi, signApi } from './contracts.js';
+import { CONTRACT_SCHEMA, CONTRACT_COLUMNS, SIGNER_COLUMNS, ContractError, contractsApi, signApi, checkDriveFiles } from './contracts.js';
 import { EmailMessage } from 'cloudflare:email';
 import { loginCodeMail } from './contract-mail.js';
 import { CALENDAR_SCHEMA, CalendarError, calendarApi, discordCalendarHook } from './calendar.js';
@@ -679,7 +679,7 @@ async function api(req, env, p, ctx) {
 
 export default {
   // cada 30 min: fotos de SoundCloud del equipo al día
-  async scheduled(event, env, ctx) { ctx.waitUntil(refreshScPhotos(env)); },
+  async scheduled(event, env, ctx) { ctx.waitUntil(refreshScPhotos(env)); ctx.waitUntil(checkDriveFiles(env).catch(e => console.error('drive check', e))); },
   async fetch(req, env, ctx) {
     const url = new URL(req.url), p = url.pathname;
     try {

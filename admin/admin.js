@@ -2033,7 +2033,7 @@
   // artista, se crea el enlace de firma y se guarda/descarga el contrato firmado.
   const CONTRACTS_DOC = 'https://docs.google.com/document/d/1rUCOAySY2XHqnmgFeH9fjF3xgXDa9cg0vy8qWJVN274/edit?authuser=contacthorizonids@gmail.com';
   let ctData = null, ctErr = '', ctLoading = false, ctOpen = null, ctTab = 'contracts';
-  const CT_STATUS = { draft: ['Draft', 'off'], sent: ['Sent', ''], signed: ['Signed', 'ok'], void: ['Voided', 'off'] };
+  const CT_STATUS = { draft: ['Draft', 'off'], sent: ['Sent', ''], signed: ['Signed', 'ok'], void: ['Cancelled', 'off'] };
   const ctCanEdit = () => !!ctData?.canEdit && can('contracts', 'edit');
   async function loadContracts() {
     if (ctLoading) return;
@@ -2200,6 +2200,7 @@
       <form id="ct-ed" class="editor ct-ed" novalidate>
         <button type="button" class="back" data-ct="back">← ${tpl ? 'Templates' : 'Contracts'}</button>
         <div class="head"><div><p class="eyebrow">${tpl ? 'Template' : 'Contract'}</p><h1>${esc(c.title)}</h1></div>${tpl ? (ed && c.pdf && c.doc_url ? '<button type="button" class="btn primary" data-ct="use">Create contract from this template</button>' : '') : `<span class="tag big ${st[1]}">${st[0]}</span>`}</div>
+        ${tpl ? '' : ctSteps(c)}
         ${!signed && ed ? `
           <div class="row2 wide"><div class="field"><label for="c-title">${tpl ? 'Template name' : 'Title'}</label><input id="c-title" name="title" value="${esc(c.title)}" maxlength="160" autocomplete="off"></div>
             ${tpl ? '' : `<div class="field"><label for="c-artist">Artist</label><input id="c-artist" name="artist" value="${esc(c.artist)}" maxlength="160" autocomplete="off"></div>`}</div>
@@ -2215,17 +2216,38 @@
         <div class="field" style="margin-top:18px"><label for="c-notes">Internal notes (the artist can’t see them)</label><textarea id="c-notes" name="notes" rows="2" maxlength="2000" ${ed ? '' : 'readonly'}>${esc(c.notes)}</textarea></div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions">
-          ${ed ? '<button type="submit" class="btn primary">Save</button>' : ''}
-          ${ed && !signed ? `<label class="btn ghost" for="ct-pdf">${c.pdf ? 'Replace PDF manually' : 'Upload PDF'}</label><input type="file" id="ct-pdf" class="sr-only" accept="application/pdf">` : ''}
-          ${!tpl && ed && !signed && c.status !== 'void' && c.pdf && c.signers.every(x => x.box) && c.signers.some(x => !x.emailed_at && !x.signed) ? '<button type="button" class="btn primary" data-ct="send">Send to sign</button>' : ''}
-          ${c.signers.some(x => x.signed) && !(signed && c.file && !c.signed_pdf) ? `<button type="button" class="btn ghost" data-ct="dl-signed">${signed ? 'Download signed PDF' : 'Download with current signatures'}</button>` : ''}
-          ${c.pdf ? '<button type="button" class="btn ghost" data-ct="dl-orig">Download original PDF</button>' : ''}
-          ${c.file ? '<button type="button" class="btn ghost" data-ct="dl-file">View signed PDF (file)</button>' : ''}
-          ${!tpl && ed && !signed ? `<label class="btn ghost" for="ct-arch" title="For contracts already signed outside the site">Upload signed PDF</label><input type="file" id="ct-arch" class="sr-only" accept="application/pdf">` : ''}
-          ${!tpl && ed && !signed ? `<button type="button" class="btn ghost" data-ct="${c.status === 'void' ? 'unvoid' : 'void'}">${c.status === 'void' ? 'Reactivar' : 'Anular'}</button>` : ''}
-          ${ed && (!signed || auth.user.owner) ? '<button type="button" class="btn danger push" data-ct="del">Delete</button>' : ''}
+          ${ed ? '<button type="submit" class="btn primary">Save changes</button>' : ''}
+          ${!tpl && ed && !signed && c.status !== 'void' && c.pdf && c.signers.every(x => x.box) && c.signers.some(x => !x.emailed_at && !x.signed) ? '<button type="button" class="btn primary" data-ct="send" title="Each artist gets an email with their private link to read and sign">Send to sign</button>' : ''}
+          ${c.signers.some(x => x.signed) && !(signed && c.file && !c.signed_pdf) ? `<button type="button" class="btn ghost" data-ct="dl-signed">${signed ? 'Download signed PDF' : 'Download PDF (signatures so far)'}</button>` : c.pdf ? '<button type="button" class="btn ghost" data-ct="dl-orig">Download PDF</button>' : ''}
+          ${!tpl && signed && ed ? (c.drive_url ? `<a class="btn ghost" href="${esc(c.drive_url)}" target="_blank" rel="noopener">Open in Drive ↗</a>` : '<button type="button" class="btn ghost" data-ct="drive-one" title="Saves the signed PDF in Drive: Year → Release number - Name">Save to Drive</button>') : ''}
+          ${ctMoreMenu(c, ed, signed, tpl)}
         </div>
+        ${ed && !signed ? '<input type="file" id="ct-pdf" class="sr-only" accept="application/pdf">' : ''}
+        ${!tpl && ed && !signed ? '<input type="file" id="ct-arch" class="sr-only" accept="application/pdf">' : ''}
       </form>`;
+  }
+  // en qué punto está el contrato
+  function ctSteps(c) {
+    const n = c.signers.length, done = c.signers.filter(x => x.signed).length, sent = !!c.sent_at || c.signers.some(x => x.emailed_at), signed = c.status === 'signed';
+    const at = signed ? (c.drive_url ? 5 : 4) : sent ? 3 : 1;
+    const steps = ['Details', 'Send to sign', 'Signed', 'Saved in Drive'];
+    const note = c.status === 'void' ? 'Cancelled: the signing links don’t work. Reactivate it from “More”.'
+      : signed ? (c.drive_url ? 'Done: signed by everyone and saved in Drive. It is in Contracts → Signed.' : 'Signed by everyone. It is in Contracts → Signed. Press “Save to Drive” to keep a copy in your Drive.')
+      : sent ? `Waiting for signatures: ${done} of ${n} signed. When everyone signs, it moves to Contracts → Signed and each artist gets their copy by email.`
+      : 'Check the details and where each artist signs (the boxes on the document), then press “Send to sign”: each artist gets an email with their private link.';
+    return `<ol class="ct-steps">${steps.map((t, i) => `<li class="${i + 1 < at ? 'done' : i + 1 === at ? 'on' : ''}"><span>${i + 1 < at ? '✓' : i + 1}</span>${t}</li>`).join('')}</ol>
+      <p class="info ct-steps-note">${note}</p>`;
+  }
+  // opciones que casi no se usan, explicadas
+  function ctMoreMenu(c, ed, signed, tpl) {
+    const items = [];
+    if (ed && !signed) items.push(`<label class="ct-mi" for="ct-pdf"><b>${c.pdf ? 'Upload a different PDF' : 'Upload the PDF'}</b><span>${c.pdf ? 'Replaces the contract document with a PDF from your computer.' : 'The contract document, exported from Google Docs.'}</span></label>`);
+    if (c.pdf && c.signers.some(x => x.signed)) items.push('<button type="button" class="ct-mi" data-ct="dl-orig"><b>Download PDF without signatures</b><span>The document as it was sent to sign.</span></button>');
+    if (c.file) items.push('<button type="button" class="ct-mi" data-ct="dl-file"><b>View the copy signed on paper</b><span>The signed PDF you uploaded.</span></button>');
+    if (!tpl && ed && !signed) items.push('<label class="ct-mi" for="ct-arch"><b>Upload a copy signed on paper</b><span>If the artist signed outside the web, upload that PDF: the contract is marked as signed.</span></label>');
+    if (!tpl && ed && !signed) items.push(`<button type="button" class="ct-mi" data-ct="${c.status === 'void' ? 'unvoid' : 'void'}"><b>${c.status === 'void' ? 'Reactivate contract' : 'Cancel contract'}</b><span>${c.status === 'void' ? 'The signing links work again.' : 'The signing links stop working. You can reactivate it later.'}</span></button>`);
+    if (ed && (!signed || auth.user.owner)) items.push(`<button type="button" class="ct-mi danger" data-ct="del"><b>Delete ${tpl ? 'template' : 'contract'}</b><span>Deletes it and its PDF for good.</span></button>`);
+    return items.length ? `<details class="ct-more"><summary class="btn ghost">More ▾</summary><div class="ct-menu">${items.join('')}</div></details>` : '';
   }
   /* El texto del contrato se edita en su pestaña del Google Doc, dentro del panel; el PDF lo genera Google. */
   const docEditUrl = u => { try { const x = new URL(u); x.searchParams.set('authuser', 'contacthorizonids@gmail.com'); x.pathname = x.pathname.replace(/\/(edit|view|preview)?$/, '/edit'); return x.href; } catch { return ''; } };
@@ -2435,7 +2457,7 @@
     if (el) el.outerHTML = signersBlock(c, ed);
     if (ctOpen.view) HZPDF.drawMarks(ctOpen.view.pages, ctMarks());
     const send = $('[data-ct=send]'), canSend = ed && !isTpl(c) && c.status !== 'void' && c.pdf && c.signers.every(x => x.box) && c.signers.some(x => !x.emailed_at && !x.signed);
-    if (canSend && !send) $('.ed-actions')?.insertAdjacentHTML('afterbegin', '<button type="button" class="btn primary" data-ct="send">Send to sign</button>');
+    if (canSend && !send) { const at = $('.ed-actions [type=submit]'); const html = '<button type="button" class="btn primary" data-ct="send" title="Each artist gets an email with their private link to read and sign">Send to sign</button>'; if (at) at.insertAdjacentHTML('afterend', html); else $('.ed-actions')?.insertAdjacentHTML('afterbegin', html); }
   }
   function ctMarks() {
     const c = ctOpen.contract, act = ctOpen.active ?? c.signers.findIndex(x => !x.box && !x.signed);
@@ -2544,8 +2566,8 @@
       } catch { /* aviso ya mostrado */ }
     }
     else if (a === 'void' || a === 'unvoid') {
-      if (a === 'void' && !await confirmBox('Void this contract? The signing link will stop working.', 'Anular')) return;
-      try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/${a}`), a === 'void' ? 'Contract voided' : 'Contract reactivated'); ctRefresh(); } catch { /* aviso ya mostrado */ }
+      if (a === 'void' && !await confirmBox('Cancel this contract? The signing links will stop working (you can reactivate it).', 'Cancel contract')) return;
+      try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/${a}`), a === 'void' ? 'Contract cancelled' : 'Contract reactivated'); ctRefresh(); } catch { /* aviso ya mostrado */ }
     } else if (a === 'del') {
       if (!await confirmBox(`Delete “${c.title}”${c.status === 'signed' ? ' (SIGNED)' : ''}? Its PDF is deleted too. This can’t be undone.`, 'Delete')) return;
       try { await ctAction(() => api('DELETE', `/api/contracts/${encodeURIComponent(c.id)}`), 'Contract deleted'); ctOpen = null; ctData = null; render(); } catch { /* aviso ya mostrado */ }

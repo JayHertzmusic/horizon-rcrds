@@ -1319,24 +1319,30 @@
       render(); toast('Order saved');
     } catch (err) { toast(err.message); }
   }
+  // arrastrar: la fila sigue al ratón por toda la lista (se escucha en window, así no se pierde al mover la fila)
   document.addEventListener('pointerdown', e => {
     const g = e.target.closest('.grip');
     if (!g || e.button) return;
     e.preventDefault();
     const row = g.closest('.perm-row, .row.fm'), list = row.parentElement, sel = row.classList.contains('fm') ? '.row.fm' : '.perm-row';
     row.classList.add('dragging'); list.classList.add('sorting');
-    try { g.setPointerCapture(e.pointerId); } catch { /* nada */ }
-    const move = ev => {
+    let lastY = e.clientY, raf = 0;
+    const place = () => {
+      raf = 0;
       const rows = [...list.querySelectorAll(sel + ':not(.dragging)')];
-      const after = rows.find(r => { const b = r.getBoundingClientRect(); return ev.clientY < b.top + b.height / 2; });
-      if (after) { if (after !== row.nextElementSibling) list.insertBefore(row, after); } else if (list.lastElementChild !== row) list.appendChild(row);
+      const after = rows.find(r => { const b = r.getBoundingClientRect(); return lastY < b.top + b.height / 2; });
+      if (after) { if (after !== row.nextElementSibling) list.insertBefore(row, after); } else if (rows.length && rows[rows.length - 1].nextElementSibling !== row) rows[rows.length - 1].after(row);
+      // cerca del borde de la ventana: se desplaza sola para poder llegar arriba o abajo del todo
+      if (lastY < 70) window.scrollBy(0, -12); else if (lastY > innerHeight - 70) window.scrollBy(0, 12);
     };
+    const move = ev => { lastY = ev.clientY; if (!raf) raf = requestAnimationFrame(place); };
     const up = () => {
-      g.removeEventListener('pointermove', move); g.removeEventListener('pointerup', up); g.removeEventListener('pointercancel', up);
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+      if (raf) cancelAnimationFrame(raf);
       row.classList.remove('dragging'); list.classList.remove('sorting');
       saveOrder(list);
     };
-    g.addEventListener('pointermove', move); g.addEventListener('pointerup', up); g.addEventListener('pointercancel', up);
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
   });
   document.addEventListener('keydown', e => {
     const g = e.target.closest?.('.grip');
@@ -1584,10 +1590,10 @@
     return `
       <div class="head"><div><p class="eyebrow">Responses and links</p><h1>FORMS <span class="count">${list.length}</span></h1></div>
         ${own ? '<button type="button" class="btn primary" data-act="form-new">+ New form</button>' : ''}</div>
-      <p class="info lead">${own ? 'Click a form to edit it with a live preview of how it looks on the site. Drag ⋮⋮ to reorder. Each form has its own public link (when open) and can appear as a button in “Send your demo” on the site.' : 'The forms you have access to.'}</p>
+      <p class="info lead">${own ? 'Click a form to edit it with a live preview of how it looks on the site. Owners drag ⋮⋮ to set the order everyone sees. Each form has its own public link (when open) and can appear as a button in “Send your demo” on the site.' : 'The forms you have access to.'}</p>
       <ol class="list forms-list">${list.length ? list.map((f, i) => `
         <li class="row fm" data-form="${esc(f.id)}" title="${own ? 'Open to edit' : 'See responses'}">
-          ${own && !preview ? `<button type="button" class="grip" aria-label="Drag to reorder ${esc(f.title)}" title="Drag to reorder">${GRIP_SVG}</button>` : '<span></span>'}
+          ${isOwnerNow() ? `<button type="button" class="grip" aria-label="Drag to reorder ${esc(f.title)}" title="Drag to reorder">${GRIP_SVG}</button>` : '<span></span>'}
           <span class="meta"><b>${esc(f.title)}</b><span>${f.public ? `<a href="${esc(publicUrl(f))}" target="_blank" rel="noopener">/forms/${esc(f.slug)}</a>` : `/forms/${esc(f.slug)}`}</span></span>
           <span class="badges">${f.public ? '<span class="tag">Open</span>' : '<span class="tag off">Closed</span>'}${f.on_site ? '<span class="tag">On the site</span>' : ''}</span>
           <span class="resp-n"><b>${f.total}</b> ${f.total === 1 ? 'response' : 'responses'}${f.unseen ? ` <i>${f.unseen} new</i>` : ''}</span>

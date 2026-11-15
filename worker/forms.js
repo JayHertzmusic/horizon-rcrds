@@ -97,7 +97,7 @@ export async function formsApi(req, env, s, url, audit) {
     return { ok: true, id };
   }
   if (p === '/api/forms/order' && m === 'POST') {
-    ownerOnly();
+    if (!s.owner || s.sync) throw new FormError(403, 'Only owners can change the order.');
     const ids = (parse(await req.text()) || {}).ids;
     if (!Array.isArray(ids)) throw new FormError(400, 'Invalid order.');
     await DB.batch(ids.slice(0, 200).map((id, i) => DB.prepare('UPDATE forms SET position = ? WHERE id = ?').bind(i + 1, String(id))));

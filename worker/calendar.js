@@ -148,7 +148,7 @@ export async function discordCalendarHook(req, env) {
   const last = await DB.prepare("SELECT value FROM panel_settings WHERE key = 'calendar_discord_hash'").first();
   if (last?.value === hash) return { ok: true, unchanged: true };
   const rows = (await DB.prepare('SELECT * FROM calendar').all()).results, used = new Set(), t = Date.now(), ops = [];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10), soon = new Date(Date.now() + 864e5).toISOString().slice(0, 10);   // (margen de un día por la zona horaria)
   for (const x of lines) {
     const key = x.kind + norm(x.artist) + norm(x.title);
     const r = rows.find(y => !used.has(y.id) && y.kind + norm(y.artist) + norm(y.title) === key)
@@ -163,8 +163,8 @@ export async function discordCalendarHook(req, env) {
       ops.push(DB.prepare('INSERT INTO calendar (id, date, kind, artist, title, programmed, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, x.date, x.kind, x.artist, x.title, x.programmed ? 1 : 0, 'discord', t, t));
     }
   }
-  // lo que venía de Discord y ya no está (y todavía no ha salido) se quita
-  for (const r of rows) if (!used.has(r.id) && r.created_by === 'discord' && r.date >= today) ops.push(DB.prepare('DELETE FROM calendar WHERE id = ?').bind(r.id));
+  // lo que venía de Discord y ya no está (y todavía no ha salido) se quita; lo que ya salió (o sale hoy) se queda: en Discord se borra al salir
+  for (const r of rows) if (!used.has(r.id) && r.created_by === 'discord' && r.date > soon) ops.push(DB.prepare('DELETE FROM calendar WHERE id = ?').bind(r.id));
   ops.push(DB.prepare("INSERT OR REPLACE INTO panel_settings (key, value) VALUES ('calendar_discord_hash', ?)").bind(hash));
   await DB.batch(ops);
   await fillCats(env).catch(e => console.error('calendar cats', e));

@@ -10,7 +10,7 @@ import { FORM_SCHEMA, FormError, formsApi, publicFormsApi, formsCount, gformHook
 import { CONTRACT_SCHEMA, CONTRACT_COLUMNS, SIGNER_COLUMNS, ContractError, contractsApi, signApi } from './contracts.js';
 import { EmailMessage } from 'cloudflare:email';
 import { loginCodeMail } from './contract-mail.js';
-import { CALENDAR_SCHEMA, CalendarError, calendarApi } from './calendar.js';
+import { CALENDAR_SCHEMA, CalendarError, calendarApi, discordCalendarHook } from './calendar.js';
 
 // Secciones del panel y lo que se puede hacer en cada una. Una sección nueva (p. ej. eventos) se añade aquí.
 const SECTIONS = [
@@ -642,6 +642,7 @@ async function api(req, env, p, ctx) {
     return new Response(f.value, { headers: { 'Content-Type': f.metadata?.type || 'image/jpeg', 'Cache-Control': 'public, max-age=31536000, immutable' } });
   }
   if (p.startsWith('/api/hooks/gform/') && req.method === 'POST') return json(await gformHook(req, env, url));   // Google Forms ↔ web
+  if (p === '/api/hooks/discord-calendar' && req.method === 'POST') return json(await discordCalendarHook(req, env));   // #horizon-calendar (bot de Discord) → Calendar
   if (p.startsWith('/api/public/')) return json(await publicFormsApi(req, env, url));   // formularios públicos (sin sesión)
   const s = await session(req, env);
   if (p === '/api/auth/me' && req.method === 'GET') return json({ user: { ...userOut(s), formsCount: await formsCount(env, s) }, sections: await sections(env) });

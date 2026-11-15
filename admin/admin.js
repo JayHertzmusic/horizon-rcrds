@@ -2059,7 +2059,7 @@
   async function loadContracts() {
     if (ctLoading) return;
     ctLoading = true;
-    try { ctData = await api('GET', '/api/contracts'); ctErr = ''; paintBadge(); }
+    try { ctData = await api('GET', '/api/contracts'); ctErr = ''; paintBadge(); autoDrive(); }
     catch (e) { ctErr = e.message; if (e.status === 401) { ctLoading = false; logout(e.message); return; } }
     ctLoading = false;
     if (view === 'contracts') render();
@@ -2096,8 +2096,8 @@
         const o = before.get(c.id);
         if (o) for (const x of c.signers) if (x.signed_at && !o.signers.find(y => y.id === x.id)?.signed_at) toast(`${x.name || x.label} signed “${c.title}”`);
       }
-      if (!changed) return;
-      ctData = r; paintBadge();
+      if (!changed) { autoDrive(); return; }
+      ctData = r; paintBadge(); autoDrive();
       if (view !== 'contracts' || busy) return;
       if (!ctOpen) render();
       else if (ctOpen.mode === 'contract' && ctOpen.contract) {
@@ -2423,6 +2423,29 @@
       signers: c.signers.map(x => ({ label: x.label, box: x.box, signed: { name: x.name, email: x.signer_email, at: x.signed_at, ip: x.ip, ua: x.ua, signature: x.signature, hash: c.pdf_hash } })) });
     await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/signed`, { method: 'POST', body: out });
     c.signed_pdf = true;
+  }
+  // en cuanto firman todos, el contrato se guarda solo en Drive (con el panel abierto por alguien que puede editar contratos)
+  const AUTO_DRIVE_FROM = Date.parse('2026-11-15T21:00:00Z');   // los firmados antes se guardan a mano
+  let autoDriving = false;
+  const autoDriveFailed = new Set();
+  async function autoDrive() {
+    if (autoDriving || !ctData || !ctCanEdit() || preview) return;
+    const todo = ctData.contracts.filter(c => !isTpl(c) && !isDraft(c) && c.status === 'signed' && !c.drive_url && !c.file && (c.signed_at || 0) >= AUTO_DRIVE_FROM && !autoDriveFailed.has(c.id));
+    if (!todo.length) return;
+    autoDriving = true;
+    try {
+      if (ctDrive === null || !ctDriveReady) await ctDriveLoad();
+      if (!ctDriveReady) return;
+      for (const c of todo) {
+        try {
+          await ensureSigned(c);
+          const r = await api('POST', `/api/contracts/${encodeURIComponent(c.id)}/drive-save`);
+          c.drive_url = r.drive_url;
+          toast(`Saved in Drive: ${c.title}`);
+          if (view === 'contracts' && (!ctOpen || ctOpen.id === c.id)) { if (ctOpen) ctRefresh(); else render(); }
+        } catch (e) { autoDriveFailed.add(c.id); console.warn('Drive', c.id, e.message); }
+      }
+    } finally { autoDriving = false; }
   }
   // guardar en Drive: lo hace el servidor con la cuenta de Horizon (antes se asegura el PDF firmado oficial)
   async function saveToDrive(list) {
@@ -2973,6 +2996,7 @@
     return `
       <div class="head"><div><p class="eyebrow">Schedule</p><h1>CALENDAR</h1></div>
         <div class="head-btns">${ed ? '<button type="button" class="btn primary" data-cal-act="new">+ Add date</button>' : ''}</div></div>
+      ${calSyncNote()}
       ${todo.length ? `<h2 class="ct-group-h">Signed contracts without a date <span>${todo.length}</span></h2>
         <ol class="list">${todo.map(c => `
           <li class="row cal-todo" data-ctid="${esc(c.id)}">
@@ -2982,6 +3006,13 @@
           </li>`).join('')}</ol>` : ''}
       ${Object.keys(months).length ? Object.entries(months).map(([m, l]) => `<h2 class="ct-group-h">${esc(m)} <span>${l.length}</span></h2><ol class="list">${l.map(row).join('')}</ol>`).join('') : '<ol class="list"><li class="empty">Nothing scheduled yet.</li></ol>'}
       ${past.length ? `<details class="cal-past"><summary>Past · ${past.length}</summary><ol class="list">${past.map(row).join('')}</ol></details>` : ''}`;
+  }
+  function calSyncNote() {
+    const d = calData.discord;
+    if (!d) return '<p class="info cal-sync">Dates come from the Discord channel #horizon-calendar (checked every 10 minutes).</p>';
+    if (d.noText) return '<p class="login-error cal-sync">The Discord bot can’t read the text of #horizon-calendar. In the Discord Developer Portal → your bot → Bot, turn on <b>Message Content Intent</b>.</p>';
+    const mins = Math.max(0, Math.round((Date.now() - d.at) / 60000));
+    return `<p class="info cal-sync">Synced with Discord #horizon-calendar ${mins < 1 ? 'just now' : mins === 1 ? '1 minute ago' : mins + ' minutes ago'} · edit the dates there and they change here.</p>`;
   }
   function calForm() {
     const x = calOpen.item || { date: '', kind: 'release', artist: '', title: '', cat: '', note: '', programmed: 0 };

@@ -980,3 +980,4 @@ html, body, * { scrollbar-width: none; }
 .ct-log-all li { grid-template-columns: 130px minmax(0, 200px) minmax(0, 1fr); }
 .ct-log .link { padding: 0; border: 0; background: none; color: #fff; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 .ct-who { margin: 18px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: #fff; }
+.cal-sync { margin: -8px 0 18px; }

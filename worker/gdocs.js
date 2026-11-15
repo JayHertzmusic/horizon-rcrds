@@ -120,7 +120,7 @@ async function gDrive(tok, path, opts = {}) {
   if (!r.ok) { if (r.status === 401) cached = null; throw new Error(`Google Drive: ${j.error?.message || 'error ' + r.status}`); }
   return j;
 }
-async function subfolders(tok, parent) {
+export async function subfolders(tok, parent) {
   const q = encodeURIComponent(`'${parent}' in parents and mimeType='${FOLDER}' and trashed=false`);
   return (await gDrive(tok, `files?q=${q}&fields=files(id,name)&pageSize=1000&includeItemsFromAllDrives=true`)).files || [];
 }

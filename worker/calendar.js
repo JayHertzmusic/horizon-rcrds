@@ -1,6 +1,8 @@
 /* Calendario de HORIZON RCRDS (panel → Calendar): releases y mixtapes con su fecha.
    Permiso: sección «calendar» de los roles (ver / editar). Los owners siempre.
    Cada fecha puede ir ligada a un contrato firmado (así se ve qué firmado tiene ya fecha y cuál no). */
+import { horizonToken, subfolders } from './gdocs.js';
+
 export class CalendarError extends Error { constructor(status, message) { super(message); this.status = status; } }
 const parse = s => { try { return JSON.parse(s); } catch { return null; } };
 const clean = (v, max) => String(v ?? '').replace(/[\u0000-\u001f]/g, ' ').trim().slice(0, max);
@@ -60,7 +62,8 @@ export async function calendarApi(req, env, s, url, can, audit) {
     const items = (await DB.prepare('SELECT * FROM calendar ORDER BY date, created_at').all()).results;
     // contratos firmados que aún no tienen fecha en el calendario
     const signed = (await DB.prepare("SELECT id, title, artist, release_cat, release_name, signed_at FROM contracts WHERE status = 'signed' AND (kind IS NULL OR kind = 'contract') AND id NOT IN (SELECT contract_id FROM calendar WHERE contract_id IS NOT NULL) ORDER BY signed_at DESC LIMIT 50").all()).results;
-    return { items, unscheduled: signed, canEdit: can('edit') && !s.sync };
+    const dc = parse((await DB.prepare("SELECT value FROM panel_settings WHERE key = 'calendar_discord'").first())?.value);
+    return { items, unscheduled: signed, discord: dc, canEdit: can('edit') && !s.sync };
   }
   if (p === '/api/calendar' && m === 'POST') {
     edit();
@@ -92,4 +95,96 @@ export async function calendarApi(req, env, s, url, can, audit) {
     return { ok: true };
   }
   throw new CalendarError(404, 'Not found.');
+}
+
+/* ---------- #horizon-calendar (Discord) → Calendar ----------
+   El bot de Discord manda cada 10 min los mensajes del canal. Las líneas con fecha («20.11.26 - VENTA - Back»,
+   «02.12.26 | Mixtape #012 | Jay Hertz - December») se convierten en fechas del calendario: lo que cambia en Discord
+   cambia aquí, lo nuevo se añade y lo que ya no está (y aún no ha salido) se quita. Lo añadido a mano en la web se respeta. */
+const norm = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
+export function parseDiscordCalendar(messages) {
+  const out = [];
+  for (const m of messages || []) {
+    let kind = 'release';
+    for (let line of String(m.content || '').split('\n')) {
+      line = line.replace(/\*\*|__|~~|`|\*/g, '').replace(/\s+/g, ' ').trim();
+      if (!line) continue;
+      if (!/^\d/.test(line)) { if (/mixtape/i.test(line)) kind = 'mixtape'; else if (/release/i.test(line)) kind = 'release'; continue; }
+      const d = line.match(/^(\d{1,2})[./](\d{1,2})[./](\d{2,4})\s*[|\-–—:]\s*(.+)$/);
+      if (!d) continue;
+      const year = d[3].length === 2 ? 2000 + Number(d[3]) : Number(d[3]);
+      const date = `${year}-${d[2].padStart(2, '0')}-${d[1].padStart(2, '0')}`;
+      if (isNaN(Date.parse(date))) continue;
+      let rest = d[4].trim();
+      const programmed = /\[\s*programmed\s*\]/i.test(rest);
+      rest = rest.replace(/\[\s*programmed\s*\]/ig, '').replace(/\|\s*$/, '').trim();
+      let artist = '', title = rest;
+      const parts = rest.split(/\s*\|\s*/).filter(Boolean);
+      if (parts.length >= 2) {   // «Mixtape #012 | Jay Hertz - December»
+        const [a, ...b] = parts[1].split(/\s+-\s+/);
+        artist = b.length ? a : '';
+        title = b.length ? `${parts[0]} - ${b.join(' - ')}` : `${parts[0]} - ${parts[1]}`;
+      } else if (kind === 'release') {   // «VENTA - Back»
+        const [a, ...b] = rest.split(/\s+-\s+/);
+        if (b.length) { artist = a; title = b.join(' - '); }
+      }
+      out.push({ date, kind, artist: artist.trim(), title: title.trim(), programmed });
+    }
+  }
+  return out;
+}
+export async function discordCalendarHook(req, env) {
+  // solo desde el bot (enlace interno entre Workers: no viene de internet)
+  if ((req.headers.get('cf-connecting-ip') && env.DEV_LOGIN !== '1') || req.headers.get('x-horizon-bot') !== '1') throw new CalendarError(404, 'Not found.');   // (en local, para probar)
+  const DB = env.DB, b = parse(await req.text()) || {};
+  const msgs = Array.isArray(b.messages) ? b.messages.slice(0, 50) : [];
+  // si una fecha sale varias veces (mensajes viejos y nuevos), vale la del mensaje más reciente
+  const lines = [...new Map(parseDiscordCalendar(msgs).map(x => [x.kind + norm(x.artist) + norm(x.title), x])).values()];
+  const status = { at: Date.now(), messages: msgs.length, lines: lines.length, noText: msgs.length > 0 && msgs.every(m => !m.content) };
+  await DB.prepare("INSERT OR REPLACE INTO panel_settings (key, value) VALUES ('calendar_discord', ?)").bind(JSON.stringify(status)).run();
+  if (!lines.length) return { ok: true, ...status };
+  await seed(DB);
+  const hash = JSON.stringify(lines);
+  const last = await DB.prepare("SELECT value FROM panel_settings WHERE key = 'calendar_discord_hash'").first();
+  if (last?.value === hash) return { ok: true, unchanged: true };
+  const rows = (await DB.prepare('SELECT * FROM calendar').all()).results, used = new Set(), t = Date.now(), ops = [];
+  const today = new Date().toISOString().slice(0, 10);
+  for (const x of lines) {
+    const key = x.kind + norm(x.artist) + norm(x.title);
+    const r = rows.find(y => !used.has(y.id) && y.kind + norm(y.artist) + norm(y.title) === key)
+      || rows.find(y => !used.has(y.id) && y.kind === x.kind && norm(y.title) === norm(x.title) && (!x.artist || !y.artist || norm(y.artist) === norm(x.artist)));
+    if (r) {
+      used.add(r.id);
+      if (r.date !== x.date || !!r.programmed !== x.programmed || r.artist !== x.artist || r.title !== x.title)
+        ops.push(DB.prepare('UPDATE calendar SET date = ?, programmed = ?, artist = ?, title = ?, updated_at = ? WHERE id = ?').bind(x.date, x.programmed ? 1 : 0, x.artist, x.title, t, r.id));
+    } else {
+      const id = 'cal_' + crypto.randomUUID().slice(0, 10);
+      used.add(id);
+      ops.push(DB.prepare('INSERT INTO calendar (id, date, kind, artist, title, programmed, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, x.date, x.kind, x.artist, x.title, x.programmed ? 1 : 0, 'discord', t, t));
+    }
+  }
+  // lo que venía de Discord y ya no está (y todavía no ha salido) se quita
+  for (const r of rows) if (!used.has(r.id) && r.created_by === 'discord' && r.date >= today) ops.push(DB.prepare('DELETE FROM calendar WHERE id = ?').bind(r.id));
+  ops.push(DB.prepare("INSERT OR REPLACE INTO panel_settings (key, value) VALUES ('calendar_discord_hash', ?)").bind(hash));
+  await DB.batch(ops);
+  await fillCats(env).catch(e => console.error('calendar cats', e));
+  return { ok: true, changed: ops.length - 1 };
+}
+// número de release de las fechas nuevas: el de su carpeta en el Drive de contratos («[HRZ#105] Nune - U»)
+async function fillCats(env) {
+  const DB = env.DB;
+  const todo = (await DB.prepare("SELECT id, artist, title FROM calendar WHERE kind = 'release' AND (cat IS NULL OR cat = '')").all()).results;
+  if (!todo.length) return;
+  const root = (await DB.prepare("SELECT value FROM panel_settings WHERE key = 'contracts_drive'").first())?.value;
+  if (!root) return;
+  const tok = await horizonToken(env), names = [];
+  for (const y of await subfolders(tok, root)) if (/^\d{4}$/.test(y.name.trim()) && Number(y.name) >= new Date().getFullYear() - 1) names.push(...(await subfolders(tok, y.id)).map(f => f.name));
+  const ops = [];
+  for (const r of todo) {
+    const want = norm(`${r.artist}${r.title}`);
+    const f = names.find(nm => { const m = nm.match(/^\[([^\]]+)\]\s*(.+)$/); return m && norm(m[2]) === want; });
+    const cat = f?.match(/^\[([^\]]+)\]/)?.[1];
+    if (cat && /\d/.test(cat)) ops.push(DB.prepare('UPDATE calendar SET cat = ? WHERE id = ?').bind(cat, r.id));
+  }
+  if (ops.length) await DB.batch(ops);
 }

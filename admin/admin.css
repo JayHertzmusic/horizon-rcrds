@@ -781,3 +781,7 @@ a.lk.on:hover { color: #fff; background: rgba(255, 255, 255, .08); }
 .row.fm .fm-btns { justify-self: end; }
 @media (max-width: 1100px) { .row.fm { grid-template-columns: 34px minmax(0, 1fr) 90px auto; } }
 @media (max-width: 640px) { .row.fm { grid-template-columns: minmax(0, 1fr) auto; } }
+
+/* Número de respuestas nuevas: números de ancho fijo (el «1» queda centrado a ojo, no solo en la medida) */
+.nbadge { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-width: 20px; height: 20px; padding: 1px 5px 0; font: 700 11px/1 'Barlow', sans-serif; font-variant-numeric: tabular-nums lining-nums; vertical-align: middle; position: relative; top: -1.5px; }
+.new-pill { font-variant-numeric: tabular-nums; }

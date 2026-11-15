@@ -371,7 +371,7 @@
   }
 
   function shell(inner) {
-    const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}${id === 'forms' ? `<span class="nbadge" id="forms-badge" ${unseen.total ? '' : 'hidden'}><span class="nb-n${unseen.total === 1 ? ' one' : ''}">${unseen.total > 99 ? '99+' : unseen.total}</span></span>` : ''}</button>`;
+    const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}${id === 'forms' ? (() => { const n = badgeCount(); return `<span class="nbadge" id="forms-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}</button>`;
     const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', forms: 'Forms', contracts: 'Contracts' };
     const initials = (u.name || u.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
     return `
@@ -1413,10 +1413,11 @@
         const r = teamData?.roles.find(x => x.id === t.closest('[data-role]')?.dataset.role);
         if (!r) return;
         preview = { id: r.id, name: r.name, perms: r.perms, forms: r.forms };
+        if (!formsData) loadForms().then(() => render());
         filter = ''; go(firstView());
         break;
       }
-      case 'preview-off': preview = null; go('team'); break;
+      case 'preview-off': preview = null; go('team'); checkUnseen(); break;
       case 'open-role': { const r = teamData.roles.find(x => x.id === t.closest('[data-role]').dataset.role); if (r) roleSheet(r); break; }
       case 'new-role': roleSheet({ perms: {} }); break;
       case 'sheet-close': closeSheet(); break;
@@ -1617,6 +1618,8 @@
   const canEditForm = f => !!f && (preview ? roleFormLevel(preview, f) === 'edit' : (auth?.user?.owner || f.level === 'edit'));
   /* Aviso de respuestas nuevas: número en «Forms» y en cada formulario; se mira cada minuto */
   let unseen = { total: 0, forms: {} };
+  // al probar un rol, el aviso cuenta solo lo nuevo de los formularios que ese rol puede ver
+  const badgeCount = () => preview ? visibleForms().reduce((a, f) => a + (f.unseen || 0), 0) : unseen.total;
   async function checkUnseen() {
     if (!auth || preview || !showForms() || document.hidden) return;
     try {

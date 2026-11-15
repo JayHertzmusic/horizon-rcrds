@@ -650,6 +650,16 @@ async function api(req, env, p, ctx) {
     if (!s.sync) await env.DB.prepare('DELETE FROM panel_sessions WHERE hash = ?').bind(s.hash).run();
     return json({ ok: true });
   }
+  // ¿ha cambiado algo? (el panel lo pregunta cada pocos segundos: versión de la web, historial y equipo)
+  if (p === '/api/live' && req.method === 'GET') {
+    const DB = env.DB;
+    const [v, a, m] = await Promise.all([
+      DB.prepare("SELECT v FROM site_meta WHERE k = 'version'").first(),
+      DB.prepare('SELECT MAX(id) id FROM panel_audit').first(),
+      DB.prepare("SELECT COUNT(*) n, MAX(COALESCE(added_at, 0)) a, GROUP_CONCAT(COALESCE(role_id, '') || COALESCE(color, ''), ',') r FROM panel_members").first(),
+    ]);
+    return json({ v: v?.v || 0, audit: a?.id || 0, team: `${m?.n}|${m?.a}|${m?.r || ''}` });
+  }
   if (p === '/api/data' && req.method === 'GET') {
     if (!s.sync && !anyCan(s, 'view')) throw new HttpError(403, 'Your role has no sections yet.');
     return json({ ...await readData(env), files: await fileList(env) });

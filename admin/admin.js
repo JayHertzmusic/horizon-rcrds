@@ -1688,7 +1688,7 @@
     unseen = { total, forms }; paintBadge();
   }
   async function checkUnseen() {
-    if (!auth || preview || !showForms() || document.hidden) return;
+    if (!auth || preview || !showForms()) return;
     try {
       const r = await api('GET', '/api/forms/unseen'), old = unseen;
       const grown = Object.keys(r.forms || {}).filter(id => (r.forms[id] || 0) > ((old.forms || {})[id] || 0));
@@ -1716,6 +1716,23 @@
     } catch { /* sin aviso */ }
   }
   setInterval(checkUnseen, 15e3);
+  // todo lo demás se pone al día solo (lo que publica otro miembro, la sincronización con SoundCloud, el equipo, el historial)
+  let live = null;
+  async function checkLive() {
+    if (!auth || !repo || busy) return;
+    try {
+      const r = await api('GET', '/api/live'), old = live; live = r;
+      if (!old) return;
+      if (r.v !== old.v && !editing && !isDirty()) {
+        repo = await loadRepo();
+        if (['releases', 'radio', 'playlists', 'player'].includes(view) && !editing && !$('#sheet')?.open) render();
+      }
+      if (r.audit !== old.audit && view === 'log' && !$('#sheet')?.open) { logState.loaded = false; loadLog(false); }
+      if (r.team !== old.team) { teamData = null; if (view === 'team' && !$('#sheet')?.open) loadTeam(); }
+    } catch { /* sin aviso */ }
+  }
+  setInterval(checkLive, 20e3);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkLive(); });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUnseen(); });
   const showForms = () => can('forms') || (preview ? visibleForms().length > 0 : auth?.user?.formsCount > 0);
   async function loadForms() {
@@ -2087,7 +2104,7 @@
   function ctMarkSeen(c) { if (!c || !ctSeen) return; const t = ctLast(c); if (t > (ctSeen[c.id] || 0)) { ctSeen[c.id] = t; ctSaveSeen(); paintBadge(); } }
   // cada 15 s: contratos al día (firmas nuevas → aviso, número y lista sin recargar)
   async function checkContracts() {
-    if (!auth || preview || !can('contracts') || document.hidden || busy) return;
+    if (!auth || preview || !can('contracts') || busy) return;
     try {
       const r = await api('GET', '/api/contracts'), before = new Map((ctData?.contracts || []).map(c => [c.id, c]));
       const sig = c => `${c.status}|${c.signers.map(x => (x.signed_at || 0) + ':' + (x.emailed_at || 0)).join(',')}|${c.drive_url}|${c.title}`;
@@ -2970,6 +2987,19 @@
     calLoading = false;
     if (view === 'calendar') render();
   }
+  // mientras miras Calendar, cada 30 s se pone al día (fechas que llegan de Discord, cambios de otros); sin parpadeo
+  async function checkCalendar() {
+    if (!auth || view !== 'calendar' || calOpen || !calData || calLoading || busy || document.hidden) return;
+    if (document.activeElement?.matches?.('.cal-pick, input, select, textarea')) return;   // eligiendo una fecha: no se toca
+    try {
+      const r = await api('GET', '/api/calendar');
+      const key = x => JSON.stringify([x.items, x.unscheduled]);
+      if (key(r) !== key(calData)) { calData = r; if (view === 'calendar' && !calOpen) render(); }
+      else { calData.discord = r.discord; const n = $('.cal-sync'); if (n) n.outerHTML = calSyncNote(); }
+    } catch { /* sin aviso */ }
+  }
+  setInterval(checkCalendar, 30e3);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkCalendar(); });
   const CAL_KIND = { release: 'Release', mixtape: 'Mixtape', other: 'Other' };
   const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
   const calDay = d => { const [y, m, x] = d.split('-'); return `${x}.${m}.${y.slice(2)}`; };

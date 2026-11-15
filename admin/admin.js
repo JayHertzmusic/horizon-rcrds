@@ -1949,7 +1949,6 @@
   let ctData = null, ctErr = '', ctLoading = false, ctOpen = null, ctTab = 'contracts';
   const CT_STATUS = { draft: ['Draft', 'off'], sent: ['Sent', ''], signed: ['Signed', 'ok'], void: ['Voided', 'off'] };
   const ctCanEdit = () => !!ctData?.canEdit && can('contracts', 'edit');
-  const signUrl = c => `${location.origin}/sign/${c.signers?.[0]?.token || c.token}`;
   async function loadContracts() {
     if (ctLoading) return;
     ctLoading = true;
@@ -1969,7 +1968,7 @@
     const all = ctData.contracts, ed = ctCanEdit(), tab = ctTab;
     const tpls = all.filter(isTpl), list = all.filter(c => !isTpl(c) && c.status !== 'signed'), done = all.filter(c => !isTpl(c) && c.status === 'signed');
     const rows = tab === 'templates' ? tpls : tab === 'signed' ? done : list;
-    const noDrive = done.filter(c => !c.drive_url && (c.signed_pdf || c.file));
+    const noDrive = done.filter(c => !c.drive_url);
     return `
       <div class="head"><div><p class="eyebrow">Signatures</p><h1>CONTRACTS</h1></div>
         <div class="head-btns">${ed ? (tab === 'templates' ? '<button type="button" class="btn primary" data-ct="new-tpl">+ New template</button>' : '<button type="button" class="btn primary" data-ct="new">+ New contract</button>') : ''}</div></div>
@@ -2269,14 +2268,14 @@
   }
   /* Contrato firmado: PDF final, correo con la copia a cada firmante y Google Drive */
   function ctDoneBlock(c, ed) {
-    if (c.file && !c.signed_pdf) return '';
-    const mailOk = !!c.done_mail_at;
+    const online = c.signers.length && c.signers.every(x => x.signed), mailOk = !!c.done_mail_at;
+    if (!online && !c.file) return '';
     return `
       <div class="ct-step done ct-done">
-        <span>${c.signed_pdf ? `Signed by everyone · ${mailOk ? `copy emailed to ${c.signers.length > 1 ? 'each signer' : 'the artist'}` : 'copy not emailed yet'}${c.drive_url ? ' · saved in Drive' : ''}` : 'Signed by everyone · preparing the signed PDF…'}</span>
+        <span>${online ? `Signed by everyone · ${mailOk ? `download link emailed to ${c.signers.length > 1 ? 'each signer' : 'the artist'}` : 'signed copy not emailed yet'}` : 'Signed outside the site'}${c.drive_url ? ' · saved in Drive' : ''}</span>
         <span class="docbox-btns">
-          ${ed && (c.finish_error || !c.signed_pdf || !mailOk) ? `<button type="button" class="btn ghost sm" data-ct="finish">${c.finish_error ? 'Try again' : 'Finish now'}</button>` : ''}
-          ${c.drive_url ? `<a class="btn ghost sm" href="${esc(c.drive_url)}" target="_blank" rel="noopener">Open in Drive ↗</a>` : ed && c.signed_pdf ? '<button type="button" class="btn ghost sm" data-ct="drive-one">Save to Drive</button>' : ''}
+          ${ed && online && !mailOk ? `<button type="button" class="btn ghost sm" data-ct="finish">${c.finish_error ? 'Try again' : 'Send now'}</button>` : ''}
+          ${c.drive_url ? `<a class="btn ghost sm" href="${esc(c.drive_url)}" target="_blank" rel="noopener">Open in Drive ↗</a>` : ed ? '<button type="button" class="btn ghost sm" data-ct="drive-one">Save to Drive</button>' : ''}
         </span>
       </div>
       ${c.finish_error ? `<p class="login-error" role="alert">${esc(c.finish_error)}</p>` : ''}`;
@@ -2313,7 +2312,19 @@
   }
   const mkFolder = (tok, parent, name) => gDrive(tok, 'files?fields=id,name', { method: 'POST', json: { name, mimeType: FOLDER, parents: [parent] } });
   const catNum = v => { const m = String(v || '').match(/(\d+)\s*$/) || String(v || '').match(/(\d+)/); return m ? Number(m[1]) : null; };
+  // PDF firmado oficial (original + firmas + certificado). Lo crea el panel la primera vez y queda guardado.
+  async function ensureSigned(c, orig) {
+    if (c.signed_pdf || !c.signers.length || !c.signers.every(x => x.signed)) return;
+    if (!c.signers[0].signature) c = (await api('GET', `/api/contracts/${encodeURIComponent(c.id)}`)).contract;
+    const bytes = orig || new Uint8Array(await (await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/pdf`)).arrayBuffer());
+    const out = await HZPDF.signed(bytes, { title: c.title, hash: c.pdf_hash,
+      signers: c.signers.map(x => ({ label: x.label, box: x.box, signed: { name: x.name, email: x.signer_email, at: x.signed_at, ip: x.ip, ua: x.ua, signature: x.signature, hash: c.pdf_hash } })) });
+    await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/signed`, { method: 'POST', body: out });
+    c.signed_pdf = true;
+  }
   async function toDrive(tok, c) {
+    const online = c.signers.length && c.signers.every(x => x.signed);
+    if (online) await ensureSigned(c);
     const year = String(new Date(c.signed_at || Date.now()).getFullYear());
     const years = await subfolders(tok, ctDrive);
     const y = years.find(f => f.name.trim() === year) || await mkFolder(tok, ctDrive, year);
@@ -2324,7 +2335,7 @@
       dest = rels.find(f => n !== null && catNum((f.name.match(/^[^\s-]*\d+/) || [''])[0]) === n) || await mkFolder(tok, y.id, [c.release_cat, c.release_name].filter(Boolean).join(' - '));
       path += ' / ' + dest.name;
     }
-    const bytes = new Uint8Array(await (await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/${c.signed_pdf ? 'signed' : 'file'}`)).arrayBuffer());
+    const bytes = new Uint8Array(await (await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/${online ? 'signed' : 'file'}`)).arrayBuffer());
     const name = `${c.title.replace(/[\\/:*?"<>|]+/g, '').trim()} (signed).pdf`, B = 'hz' + Math.random().toString(36).slice(2);
     const body = new Blob([`--${B}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [dest.id], mimeType: 'application/pdf' })}\r\n--${B}\r\nContent-Type: application/pdf\r\n\r\n`, bytes, `\r\n--${B}--`]);
     const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id', { method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': `multipart/related; boundary=${B}` }, body });
@@ -2409,6 +2420,7 @@
       if (!ctOpen.bytes) ctOpen.bytes = new Uint8Array(await (await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/pdf`)).arrayBuffer());
       const ed = ctCanEdit() && c.status !== 'signed';
       ctOpen.view = await HZPDF.render(box, ctOpen.bytes, { marks: ctMarks(), maxWidth: 820, onPage: ed ? (page, x, y) => placeBox(page, x, y) : null });
+      if (ctCanEdit() && c.status === 'signed' && !c.signed_pdf) ensureSigned(c, ctOpen.bytes).catch(() => { /* se reintenta la próxima vez */ });
       if (isTpl(c) && !ctOpen.fields) { ctOpen.fields = await pdfFields(ctOpen.bytes); const el = $('.tpl-fields'); if (el) el.innerHTML = tplFieldsHtml(ctOpen.fields); }
     } catch (e) { box.innerHTML = `<p class="login-error">${esc(e.message)}</p>`; }
   }
@@ -2481,9 +2493,9 @@
     else if (a === 'new') { ctOpen = { mode: 'new' }; render(); }
     else if (a === 'new-tpl') { ctOpen = { mode: 'new-tpl' }; render(); $('#tp-title')?.focus(); }
     else if (a === 'tab-contracts' || a === 'tab-templates' || a === 'tab-signed') { ctTab = a.slice(4); render(); }
-    else if (a === 'drive-all') { const list = ctData.contracts.filter(x => !isTpl(x) && x.status === 'signed' && !x.drive_url && (x.signed_pdf || x.file)); await saveToDrive(list); ctData = null; loadContracts(); }
+    else if (a === 'drive-all') { const list = ctData.contracts.filter(x => !isTpl(x) && x.status === 'signed' && !x.drive_url); await saveToDrive(list); ctData = null; loadContracts(); }
     else if (a === 'drive-one') { if (ctDrive === null) ctDrive = (await api('GET', '/api/contracts/settings').catch(() => ({}))).drive_folder || ''; await saveToDrive([c]); ctRefresh(); }
-    else if (a === 'finish') { try { const r = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/finish`)); toast(r?.ok ? 'Done: signed PDF ready and emailed' : r?.error || 'Not finished'); ctRefresh(); } catch { /* aviso ya mostrado */ } }
+    else if (a === 'finish') { try { const r = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/finish`)); toast(r?.ok ? 'Signed copy emailed' : r?.error || 'The email could not be sent'); ctRefresh(); } catch { /* aviso ya mostrado */ } }
     else if (a === 'sg-mail') {
       const sg = c.signers[Number(t.closest('[data-i]').dataset.i)];
       try { const r = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/send`, { signer: sg.id })); toast(r?.ok ? `Email sent to ${sg.email}` : r?.error || 'The email could not be sent'); ctRefresh(); } catch { /* aviso ya mostrado */ }
@@ -2542,7 +2554,7 @@
     else if (a === 'dl-signed') {
       try {
         if (c.signed_pdf) { const r = await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/signed`); HZPDF.download(new Uint8Array(await r.arrayBuffer()), `${c.title} (signed).pdf`); return; }
-        const out = await HZPDF.signed(ctOpen.bytes, { title: c.title, hash: c.pdf_hash, link: signUrl(c),
+        const out = await HZPDF.signed(ctOpen.bytes, { title: c.title, hash: c.pdf_hash,
           signers: c.signers.map(x => ({ label: x.label, box: x.box, signed: x.signed ? { name: x.name, email: x.signer_email, at: x.signed_at, ip: x.ip, ua: x.ua, signature: x.signature, hash: c.pdf_hash } : null })) });
         HZPDF.download(out, `${c.title} (firmado).pdf`);
       } catch (err) { toast('Could not create the signed PDF: ' + err.message); }

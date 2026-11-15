@@ -123,9 +123,10 @@
       line(`Email: ${s.email}`, helv, 9.5, 14);
       line(`Date and time: ${fmt(s.at)}   IP address: ${s.ip || '-'}`, helv, 9.5, 14);
       line(`Device: ${(s.ua || '-').slice(0, 110)}`, helv, 7.5, 13);
-      line(`Signature method: ${s.signature.startsWith('typed:') ? 'typed name' : 'handwritten signature drawn on screen'}`, helv, 9, 22);
+      line(`Signature method: ${s.signature.startsWith('typed:') ? 'typed name' : 'signature adopted on screen (typed or drawn)'}`, helv, 9, 22);
     }
-    line('Each signer read the document above, confirmed that they agree to it and signed it online.', helv, 9, 13);
+    line('Each signer opened the document with their private link, confirmed their email address,', helv, 9, 13);
+    line('read the document above, confirmed that they agree to it and signed it online.', helv, 9, 13);
     line('The fingerprint proves that the signed document is exactly this file: any change gives a different fingerprint.', helv, 9, 20);
     if (data.link) line(`Signed copy: ${data.link}`, helv, 8.5, 14);
     doc.setTitle(`${latin1(data.title)} (signed)`);

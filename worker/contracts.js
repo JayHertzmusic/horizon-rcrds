@@ -10,7 +10,6 @@
    - Si está configurado el correo (binding MAIL), llega un aviso al Gmail de Horizon en cada firma.
    Permiso: sección «contracts» de los roles (ver / editar). Los owners siempre. */
 
-import { buildSignedPdf } from './signed-pdf.js';
 import { inviteMail, doneMail } from './contract-mail.js';
 
 export class ContractError extends Error { constructor(status, message) { super(message); this.status = status; } }
@@ -84,42 +83,23 @@ async function pdfBody(req) {
 }
 const pdfResponse = (buf, name) => new Response(buf, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${name}"`, 'Cache-Control': 'no-store' } });
 const sha256 = async buf => [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map(b => b.toString(16).padStart(2, '0')).join('');
-const b64 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); };
 export const signedName = c => `${String(c.title || 'Contract').replace(/[\\/:*?"<>|]+/g, '').trim() || 'Contract'} (signed).pdf`;
 const signerLink = (origin, r) => `${origin}/sign/${r.token}`;
 
-/* Cuando han firmado todos: se crea el PDF firmado final (se guarda) y cada firmante recibe un correo con él adjunto
-   y su enlace para descargarlo. Si algo falla queda apuntado (finish_error) y se puede repetir desde el panel. */
+/* Cuando han firmado todos: cada firmante recibe un correo con su enlace, donde descarga el contrato firmado.
+   (El PDF firmado se crea en el navegador: el plan gratis de Cloudflare no da CPU para hacerlo aquí.)
+   Si el correo falla queda apuntado (finish_error) y se puede repetir desde el panel. */
 export async function finalize(env, id, origin) {
   const DB = env.DB;
   const c = await DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(id).first();
-  if (!c || c.status !== 'signed' || !c.pdf) return { ok: false };
+  if (!c || c.status !== 'signed' || c.done_mail_at) return { ok: !!c?.done_mail_at };
   const sg = await signersOf(env, c);
   if (!sg.length || sg.some(r => !r.signed_at)) return { ok: false };
-  let key = c.signed_pdf, bytes = null;
-  try {
-    if (key) bytes = new Uint8Array(await env.FILES.get(key, { type: 'arrayBuffer' }) || new ArrayBuffer(0));
-    if (!bytes?.length) {
-      const orig = await env.FILES.get(c.pdf, { type: 'arrayBuffer' });
-      if (!orig) throw new Error('Original PDF not found.');
-      bytes = await buildSignedPdf(new Uint8Array(orig), { title: c.title, hash: c.pdf_hash,
-        signers: sg.map(r => ({ label: r.label || '', box: box(r.box), signed: { name: r.name, email: r.signer_email, at: r.signed_at, ip: r.ip, ua: r.ua, signature: r.signature || '' } })) });
-      const hash = await sha256(bytes);
-      key = `contracts/${c.id}-signed-${hash.slice(0, 12)}.pdf`;
-      await env.FILES.put(key, bytes, { metadata: { type: 'application/pdf', at: now() } });
-      await DB.prepare('UPDATE contracts SET signed_pdf = ?, signed_hash = ?, finish_error = NULL WHERE id = ?').bind(key, hash, c.id).run();
-    }
-  } catch (e) {
-    console.error('finalize pdf', e);
-    await DB.prepare('UPDATE contracts SET finish_error = ? WHERE id = ?').bind(`The signed PDF could not be created: ${String(e?.message || e).slice(0, 200)}`, c.id).run();
-    return { ok: false, error: 'pdf' };
-  }
-  if (c.done_mail_at) return { ok: true };
-  const att = b64(bytes), errors = [];
+  const errors = [];
   for (const r of sg) {
     const to = r.email || r.signer_email;
-    if (!to) continue;
-    try { await doneMail(env, c, { ...r, email: to }, signerLink(origin, r), att, signedName(c)); }
+    if (!to || !r.token) continue;
+    try { await doneMail(env, c, { ...r, email: to }, signerLink(origin, r)); }
     catch (e) { errors.push(`${r.label || to}: ${e.message}`); }
   }
   if (errors.length) await DB.prepare('UPDATE contracts SET finish_error = ? WHERE id = ?').bind(`Signed copy not emailed — ${errors.join(' · ')}`.slice(0, 600), c.id).run();
@@ -342,6 +322,18 @@ export async function contractsApi(req, env, s, url, can, audit) {
     await env.FILES.put(key, buf, { metadata: { type: 'application/pdf', at: now() } });
     await DB.prepare(`UPDATE contracts SET file = ?, status = 'signed', signed_at = COALESCE(signed_at, ?), updated_at = ? WHERE id = ?`).bind(key, now(), now(), c.id).run();
     await audit(`Uploaded the signed PDF of “${c.title}”`);
+    return { ok: true };
+  }
+  if (mm[2] === 'signed' && m === 'POST') {
+    // PDF firmado oficial: lo crea el panel (original + firmas + certificado) y se guarda una vez
+    edit();
+    if (!signed || sg.some(r => !r.signed_at)) throw new ContractError(409, 'Not everyone has signed yet.');
+    if (c.signed_pdf) return { ok: true };
+    const buf = await pdfBody(req);
+    const hash = await sha256(buf);
+    const key = `contracts/${c.id}-signed-${hash.slice(0, 12)}.pdf`;
+    await env.FILES.put(key, buf, { metadata: { type: 'application/pdf', at: now() } });
+    await DB.prepare('UPDATE contracts SET signed_pdf = ?, signed_hash = ? WHERE id = ?').bind(key, hash, c.id).run();
     return { ok: true };
   }
   if (mm[2] === 'signed' && m === 'GET') {

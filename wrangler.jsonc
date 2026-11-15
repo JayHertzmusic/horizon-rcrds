@@ -24,12 +24,9 @@
     // Aviso al Gmail de Horizon cuando un artista firma un contrato (Cloudflare Email Routing)
     "MAIL_FROM": "contratos@horizonrcrds.com",
     "MAIL_TO": "contacthorizonids@gmail.com"
+    // Correos de contratos a los artistas: Resend (gratis), clave en el secreto RESEND_API_KEY
   },
-  // MAIL: avisos al correo de Horizon. SEND: correos de contratos a los artistas (Cloudflare Email Service, sale de MAIL_FROM)
-  "send_email": [
-    { "name": "MAIL", "destination_address": "contacthorizonids@gmail.com" },
-    { "name": "SEND", "allowed_sender_addresses": ["contratos@horizonrcrds.com"] }
-  ],
+  "send_email": [{ "name": "MAIL", "destination_address": "contacthorizonids@gmail.com" }],
   "d1_databases": [{ "binding": "DB", "database_name": "horizon-web", "database_id": "a9514982-6bf4-47ad-8181-cd95caf3df46" }],
   "kv_namespaces": [{ "binding": "FILES", "id": "f2ce183033764564beb769fcb97505bc" }],
   "observability": { "enabled": true }

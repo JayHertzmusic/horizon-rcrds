@@ -26,7 +26,8 @@ const LINK_DAYS = 30;
 const sha = async v => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v)))].map(b => b.toString(16).padStart(2, '0')).join('');
 const linkToken = () => { const u = crypto.getRandomValues(new Uint8Array(18)); return btoa(String.fromCharCode(...u)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 // estado de un enlace personal para mostrarlo en el panel
-const linkState = l => l.used_at ? 'sent' : l.expires_at < now() ? 'expired' : l.opened_at ? 'opened' : 'unused';
+const linkState = l => l.revoked ? 'revoked' : l.used_at ? 'sent' : l.expires_at < now() ? 'expired' : l.opened_at ? 'opened' : 'unused';
+export const FORM_LINK_COLUMNS = ['token TEXT', 'revoked INTEGER NOT NULL DEFAULT 0'];
 
 /* ---------- Conexión con Google Forms (script de Apps Script en la cuenta de Horizon) ----------
    - Google → web: cada respuesta de un Google Form llega aquí y se guarda en su formulario de la web.
@@ -144,6 +145,12 @@ export async function gformHook(req, env, url) {
     // la mandó la web hace poco: ya está guardada
     const sent = await DB.prepare('SELECT at FROM gform_sent WHERE hash = ?').bind(hash).first();
     if (sent && now() - sent.at < 30 * 60e3) return { ok: true, duplicate: true };
+    // también es la misma si coincide con una respuesta de la web de hace poco en todo lo que trae
+    // (Google a veces se queda solo con una parte, p. ej. la primera página de un formulario de varias páginas)
+    const recent = (await DB.prepare("SELECT data FROM form_responses WHERE form_id = ? AND ip <> 'google' AND at > ? ORDER BY id DESC LIMIT 20").bind(f.id, now() - 30 * 60e3).all()).results;
+    const same = (a, b) => JSON.stringify(Array.isArray(a) ? [...a].sort() : String(a ?? '').trim()) === JSON.stringify(Array.isArray(b) ? [...b].sort() : String(b ?? '').trim());
+    const keys = Object.keys(data).filter(k => Array.isArray(data[k]) ? data[k].length : data[k]);
+    if (keys.length && recent.some(r => { const w = parse(r.data) || {}; return keys.every(k => same(data[k], w[k])); })) return { ok: true, duplicate: true };
     const at = Number(b.at) > 0 && Number(b.at) < now() + 60e3 ? Number(b.at) : now();
     await DB.prepare('INSERT INTO form_responses (form_id, at, data, ip) VALUES (?, ?, ?, ?)').bind(f.id, at, JSON.stringify(data), 'google').run();
     return { ok: true };
@@ -162,7 +169,16 @@ async function toGoogle(env, f, data) {
   }
   const hash = await respHash(f.id, data);
   await env.DB.batch([env.DB.prepare('DELETE FROM gform_sent WHERE at < ?').bind(now() - 86400e3), env.DB.prepare('INSERT OR REPLACE INTO gform_sent (hash, at) VALUES (?, ?)').bind(hash, now())]);
-  const r = await fetch(g.url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, redirect: 'manual' });
+  // formularios de Google con varias páginas: hay que decir que se pasó por todas (si no, solo guarda la primera)
+  const pages = (parse(f.fields) || []).filter(x => x.type === 'section').length;
+  const post = b => fetch(g.url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: b, redirect: 'manual' });
+  let r;
+  if (pages) {
+    const withPages = new URLSearchParams(body);
+    withPages.append('pageHistory', Array.from({ length: pages + 1 }, (_, i) => i).join(','));
+    r = await post(withPages);
+    if (r.status >= 400) r = await post(body);   // (si alguna sección no es una página nueva, Google no lo acepta: se manda sin)
+  } else r = await post(body);
   if (r.status >= 400) console.error('google form copy', f.id, r.status);
 }
 
@@ -284,14 +300,30 @@ export async function formsApi(req, env, s, url, audit) {
     if (m === 'POST') {
       if (s.sync) throw new FormError(403, 'Not allowed.');
       const b = parse(await req.text()) || {};
+      if (b.action) {
+        // un enlace concreto: alargar 30 días, dejar que se abra en otro dispositivo, anular o borrar
+        const id = String(b.id || '');
+        if (!/^[a-f0-9]{16}$/.test(id)) throw new FormError(400, 'Invalid link.');
+        const l = await DB.prepare("SELECT * FROM form_links WHERE form_id = ? AND substr(hash, 1, 16) = ?").bind(f.id, id).first();
+        if (!l) throw new FormError(404, 'That link no longer exists.');
+        const who = l.note ? ` (${l.note})` : '';
+        if (b.action === 'extend') { await DB.prepare('UPDATE form_links SET expires_at = ?, revoked = 0 WHERE hash = ?').bind(Math.max(now(), l.expires_at) + LINK_DAYS * 864e5, l.hash).run(); await audit(`Extended a personal link of “${f.title}”${who} by 30 days`); }
+        else if (b.action === 'reset') { if (l.used_at) throw new FormError(409, 'That link was already used to send the form.'); await DB.prepare('UPDATE form_links SET device = NULL, opened_at = NULL WHERE hash = ?').bind(l.hash).run(); await audit(`Let a personal link of “${f.title}”${who} be opened on a new device`); }
+        else if (b.action === 'revoke') { await DB.prepare('UPDATE form_links SET revoked = 1 WHERE hash = ?').bind(l.hash).run(); await audit(`Cancelled a personal link of “${f.title}”${who}`); }
+        else if (b.action === 'delete') { await DB.prepare('DELETE FROM form_links WHERE hash = ?').bind(l.hash).run(); await audit(`Deleted a personal link of “${f.title}”${who}`); }
+        else throw new FormError(400, 'Invalid action.');
+        return { ok: true };
+      }
       const tok = linkToken(), t = now();
-      await DB.prepare('INSERT INTO form_links (hash, form_id, note, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?)').bind(await sha(tok), f.id, clean(b.note, 120) || null, s.email, t, t + LINK_DAYS * 864e5).run();
+      await DB.prepare('INSERT INTO form_links (hash, form_id, note, created_by, created_at, expires_at, token) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(await sha(tok), f.id, clean(b.note, 120) || null, s.email, t, t + LINK_DAYS * 864e5, tok).run();
       await audit(`Created a personal link for “${f.title}”${b.note ? ` (${clean(b.note, 120)})` : ''}`);
       const origin = /(^|\.)horizonrcrds\.com$/.test(url.hostname) ? 'https://horizonrcrds.com' : url.origin;
       return { ok: true, url: `${origin}/forms/${f.slug}?k=${tok}`, expires_at: t + LINK_DAYS * 864e5 };
     }
-    const rows = (await DB.prepare('SELECT note, created_by, created_at, expires_at, opened_at, used_at FROM form_links WHERE form_id = ? ORDER BY created_at DESC LIMIT 50').bind(f.id).all()).results;
-    return { links: rows.map(l => ({ note: l.note || '', by: l.created_by, created_at: l.created_at, expires_at: l.expires_at, opened_at: l.opened_at, used_at: l.used_at, state: linkState(l) })) };
+    const rows = (await DB.prepare('SELECT * FROM form_links WHERE form_id = ? ORDER BY created_at DESC LIMIT 500').bind(f.id).all()).results;
+    const origin = /(^|\.)horizonrcrds\.com$/.test(url.hostname) ? 'https://horizonrcrds.com' : url.origin;
+    return { links: rows.map(l => ({ id: l.hash.slice(0, 16), note: l.note || '', by: l.created_by, created_at: l.created_at, expires_at: l.expires_at, opened_at: l.opened_at, used_at: l.used_at, response_id: l.response_id || null,
+      state: linkState(l), url: l.token ? `${origin}/forms/${f.slug}?k=${l.token}` : '' })) };
   }
   if (!mm[2] && m === 'DELETE') {
     if (!s.owner || s.sync) throw new FormError(403, 'Only owners can delete a form.');
@@ -365,6 +397,7 @@ export async function publicFormsApi(req, env, url) {
     if (!/^[\w-]{16,64}$/.test(k)) throw new FormError(403, 'This form is private. Ask HORIZON RCRDS for your personal link.');
     link = await DB.prepare('SELECT * FROM form_links WHERE hash = ? AND form_id = ?').bind(await sha(k), f.id).first();
     if (!link) throw new FormError(404, 'This link is not valid. Ask HORIZON RCRDS for a new one.');
+    if (link.revoked) throw new FormError(410, 'This link has been cancelled. Ask HORIZON RCRDS for a new one.');
     if (link.used_at) throw new FormError(410, 'This link has already been used to send the form. Ask HORIZON RCRDS if you need a new one.');
     if (link.expires_at < now()) throw new FormError(410, 'This link has expired. Ask HORIZON RCRDS for a new one.');
     if (!/^[\w-]{20,80}$/.test(dev)) throw new FormError(400, 'Please open the link again.');
@@ -375,7 +408,7 @@ export async function publicFormsApi(req, env, url) {
       if (!r.meta.changes) throw new FormError(403, 'This link is personal and has already been opened on another device.');
     }
   }
-  if (req.method === 'GET') return { title: f.title, description: f.description || '', fields };
+  if (req.method === 'GET') return { title: f.title, description: f.description || '', fields, invite: !!f.invite, note: link?.note || '' };
   if (req.method !== 'POST') throw new FormError(405, 'Not allowed.');
   if (b._hp) return { ok: true };   // campo trampa para bots: se ignora en silencio
   const ip = req.headers.get('CF-Connecting-IP') || '';

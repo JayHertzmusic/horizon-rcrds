@@ -1755,6 +1755,7 @@
     }
     if (formOpen?.mode === 'edit') return formEditor();
     if (formOpen?.mode === 'responses') return formResponses();
+    if (formOpen?.mode === 'links') return formLinks();
     const list = visibleForms(), own = isOwnerNow();
     return `
       <div class="head"><div><p class="eyebrow">Responses and links</p><h1>FORMS <span class="count">${list.length}</span></h1></div>
@@ -1966,35 +1967,101 @@
   document.addEventListener('focusin', e => { const q = view === 'forms' && e.target.closest?.('#form-ed .qe'); if (q) sendPreview(q.dataset.id); });
   /* Enlaces personales de un formulario privado (Release Form): cada enlace es para una persona, vale para un solo
      envío, solo en el primer dispositivo que lo abre y durante 30 días */
-  const LINK_STATE = { unused: ['Not opened yet', 'off'], opened: ['Opened', ''], sent: ['Sent', 'ok'], expired: ['Expired', 'off'] };
-  async function linksSheet(f, made = null) {
-    const d = sheet(`<h2 class="sheet-t">Personal link · ${esc(f.title)}</h2>
-      <p class="info">Each link is for one artist: it only works on the first device that opens it, only to send the form once, and for 30 days.</p>
-      <form id="link-new" class="link-new" novalidate>
-        <input name="note" maxlength="120" placeholder="Who is it for? (e.g. artist name) — optional" aria-label="Who is it for" autocomplete="off">
+  /* Enlaces personales de un formulario privado (Release Form): página propia con filtros, búsqueda y acciones.
+     Cada enlace: una persona, el primer dispositivo que lo abre, un envío y 30 días. */
+  const LINK_STATE = { unused: ['Not opened', 'off'], opened: ['Opened', ''], sent: ['Sent', 'ok'], expired: ['Expired', 'off'], revoked: ['Cancelled', 'off'] };
+  async function openLinks(id, keep = {}) {
+    formOpen = { mode: 'links', id, links: null, filter: 'all', q: '', show: 12, made: null, ...keep };
+    render();
+    try { const r = await api('GET', `/api/forms/${encodeURIComponent(id)}/links`); if (formOpen?.mode === 'links' && formOpen.id === id) { formOpen.links = r.links; render(); } }
+    catch (e) { toast(e.message); }
+  }
+  const daysTo = t => Math.ceil((t - Date.now()) / 864e5);
+  function formLinks() {
+    const f = formsData.forms.find(x => x.id === formOpen.id);
+    if (!f) { formOpen = null; return formsPage(); }
+    const all = formOpen.links, o = formOpen;
+    const count = k => (all || []).filter(l => k === 'all' || l.state === k).length;
+    const q = o.q.trim().toLowerCase();
+    const list = (all || []).filter(l => (o.filter === 'all' || l.state === o.filter) && (!q || `${l.note} ${l.by}`.toLowerCase().includes(q)));
+    const card = l => {
+      const st = LINK_STATE[l.state] || [l.state, ''], d = daysTo(l.expires_at), live = l.state === 'unused' || l.state === 'opened';
+      return `
+        <article class="lk-card is-${l.state}" data-link="${esc(l.id)}">
+          <header><b title="${esc(l.note)}">${esc(l.note || 'Untitled link')}</b><span class="tag ${st[1]}">${st[0]}</span></header>
+          <dl>
+            <dt>Created</dt><dd>${esc(fmtDate(l.created_at))}<small>${esc((l.by || '').split('@')[0])}</small></dd>
+            <dt>${l.state === 'expired' ? 'Expired' : 'Expires'}</dt><dd>${live ? (d <= 1 ? 'Today' : `In ${d} days`) : esc(new Date(l.expires_at).toLocaleDateString('en-GB'))}</dd>
+            <dt>Opened</dt><dd>${l.opened_at ? esc(fmtDate(l.opened_at)) : '—'}</dd>
+            <dt>Sent</dt><dd>${l.used_at ? esc(fmtDate(l.used_at)) : '—'}</dd>
+          </dl>
+          <footer>
+            ${l.url && live ? '<button type="button" class="btn ghost sm" data-lk="copy">Copy link</button>' : ''}
+            ${l.used_at && l.response_id ? '<button type="button" class="btn ghost sm" data-lk="resp">See answers</button>' : ''}
+            ${!l.used_at ? `<button type="button" class="btn ghost sm" data-lk="extend" title="30 more days">+30 days</button>` : ''}
+            ${l.state === 'opened' ? '<button type="button" class="btn ghost sm" data-lk="reset" title="If the artist changed phone or browser: the link can be opened again on a new device">New device</button>' : ''}
+            ${live ? '<button type="button" class="btn ghost sm" data-lk="revoke">Cancel</button>' : ''}
+            <button type="button" class="ic danger" data-lk="delete" aria-label="Delete link" title="Delete">✕</button>
+          </footer>
+        </article>`;
+    };
+    const chips = [['all', 'All'], ['unused', 'Not opened'], ['opened', 'Opened'], ['sent', 'Sent'], ['expired', 'Expired'], ['revoked', 'Cancelled']];
+    return `
+      <button type="button" class="back" data-act="form-resp-back">← ${esc(f.title)}</button>
+      <div class="head"><div><p class="eyebrow">Private form</p><h1>PERSONAL LINKS <span class="count">${(all || []).length}</span></h1></div></div>
+      <p class="info lead">Each link is for one artist: it only works on the first device that opens it, only to send <b>${esc(f.title)}</b> once, and for 30 days.</p>
+      <form id="lk-new" class="lk-new" novalidate>
+        <input name="note" maxlength="120" placeholder="Who is it for? (artist name)" aria-label="Who is the link for" autocomplete="off">
         <button type="submit" class="btn primary">Generate link</button>
       </form>
-      ${made ? `<div class="link-made"><input readonly value="${esc(made.url)}" aria-label="New link"><button type="button" class="btn ghost sm" data-link-copy>Copy</button></div>
-        <p class="sm-txt link-ok">Copied. Send it to the artist. It works until ${esc(new Date(made.expires_at).toLocaleDateString('en-GB', { dateStyle: 'long' }))}.</p>` : ''}
-      <p class="mini">Recent links</p><ol class="link-list"><li class="muted">Loading…</li></ol>
-      <div class="confirm-actions"><button type="button" class="btn ghost" data-link-close>Close</button></div>`);
-    d.querySelector('[data-link-close]').onclick = closeSheet;
-    d.querySelector('[data-link-copy]')?.addEventListener('click', () => { navigator.clipboard?.writeText(made.url).then(() => toast('Link copied')).catch(() => {}); d.querySelector('.link-made input').select(); });
-    d.querySelector('#link-new').onsubmit = async e => {
-      e.preventDefault();
-      const btn = e.target.querySelector('button'); btn.disabled = true;
-      try {
-        const r = await api('POST', `/api/forms/${encodeURIComponent(f.id)}/links`, { note: e.target.elements.note.value.trim() });
-        try { await navigator.clipboard.writeText(r.url); } catch { /* se copia a mano */ }
-        linksSheet(f, r);
-      } catch (x) { toast(x.message); btn.disabled = false; }
-    };
-    try {
-      const r = await api('GET', `/api/forms/${encodeURIComponent(f.id)}/links`);
-      const ol = d.querySelector('.link-list');
-      if (ol) ol.innerHTML = r.links.length ? r.links.map(l => `<li><span><b>${esc(l.note || 'Link')}</b><small>${esc(fmtDate(l.created_at))} · ${esc(l.by || '')}</small></span><span class="tag ${LINK_STATE[l.state]?.[1] || ''}">${LINK_STATE[l.state]?.[0] || l.state}</span></li>`).join('') : '<li class="muted">No links yet.</li>';
-    } catch { /* sin lista */ }
+      ${o.made ? `<div class="lk-made"><span>New link${o.made.note ? ` for <b>${esc(o.made.note)}</b>` : ''} — copied, ready to send:</span><input readonly value="${esc(o.made.url)}" aria-label="New link"><button type="button" class="btn ghost sm" data-lk="copy-new">Copy</button></div>` : ''}
+      <div class="lk-tools">
+        <div class="lk-chips" role="tablist">${chips.map(([k, t]) => `<button type="button" role="tab" class="${o.filter === k ? 'on' : ''}" data-lk-filter="${k}">${t} <span>${count(k)}</span></button>`).join('')}</div>
+        <input class="lk-search" type="search" placeholder="Search by artist…" value="${esc(o.q)}" aria-label="Search links">
+      </div>
+      ${!all ? '<p class="info">Loading…</p>' : list.length ? `<div class="lk-grid">${list.slice(0, o.show).map(card).join('')}</div>
+        ${list.length > o.show ? `<div class="lk-more"><button type="button" class="btn ghost" data-lk="more">Show more (${list.length - o.show})</button></div>` : ''}` : '<p class="info lk-empty">No links here.</p>'}`;
   }
+  document.addEventListener('submit', async e => {
+    if (e.target.id !== 'lk-new') return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    const btn = e.target.querySelector('button'), note = e.target.elements.note.value.trim();
+    btn.disabled = true;
+    try {
+      const r = await api('POST', `/api/forms/${encodeURIComponent(formOpen.id)}/links`, { note });
+      try { await navigator.clipboard.writeText(r.url); } catch { /* se copia a mano */ }
+      toast('Link created and copied');
+      openLinks(formOpen.id, { made: { url: r.url, note }, filter: 'all', q: '' });
+    } catch (x) { toast(x.message); btn.disabled = false; }
+  }, true);
+  document.addEventListener('input', e => {
+    if (!e.target.classList?.contains('lk-search') || formOpen?.mode !== 'links') return;
+    formOpen.q = e.target.value; formOpen.show = 12;
+    const pos = e.target.selectionStart; render();
+    const el = $('.lk-search'); if (el) { el.focus(); el.setSelectionRange(pos, pos); }
+  });
+  document.addEventListener('click', async e => {
+    if (view !== 'forms' || formOpen?.mode !== 'links') return;
+    const fl = e.target.closest('[data-lk-filter]');
+    if (fl) { formOpen.filter = fl.dataset.lkFilter; formOpen.show = 12; render(); return; }
+    const b = e.target.closest('[data-lk]');
+    if (!b) return;
+    const a = b.dataset.lk, id = b.closest('[data-link]')?.dataset.link, l = formOpen.links?.find(x => x.id === id);
+    if (a === 'more') { formOpen.show += 12; render(); return; }
+    if (a === 'copy-new' || a === 'copy') {
+      const u = a === 'copy' ? l.url : formOpen.made.url;
+      try { await navigator.clipboard.writeText(u); toast('Link copied'); } catch { $('.lk-made input')?.select(); }
+      return;
+    }
+    if (a === 'resp') { const fid = formOpen.id; await openResponses(fid); return; }
+    const ask = { delete: `Delete the link${l.note ? ` for ${l.note}` : ''}? It stops working.`, revoke: `Cancel the link${l.note ? ` for ${l.note}` : ''}? It stops working (you can give it 30 more days later).` }[a];
+    if (ask && !await confirmBox(ask, a === 'delete' ? 'Delete' : 'Cancel link')) return;
+    try {
+      await api('POST', `/api/forms/${encodeURIComponent(formOpen.id)}/links`, { action: a, id });
+      toast({ extend: '30 more days', reset: 'It can be opened on a new device now', revoke: 'Link cancelled', delete: 'Link deleted' }[a]);
+      openLinks(formOpen.id, { filter: formOpen.filter, q: formOpen.q, show: formOpen.show, made: formOpen.made, links: formOpen.links });
+    } catch (x) { toast(x.message); }
+  });
   async function formAction(fn, ok) {
     busy = true;
     try { await fn(); if (ok) toast(ok); }
@@ -2021,6 +2088,7 @@
       finally { busy = false; }
     }
     else if (act === 'form-back') { formOpen = null; render(); loadForms(); }
+    else if (act === 'form-resp-back') openResponses(formOpen.id);
     else if (act === 'form-up' || act === 'form-down') {
       const ids = formsData.forms.map(f => f.id), i = ids.indexOf(id), j = act === 'form-up' ? i - 1 : i + 1;
       if (j < 0 || j >= ids.length) return;
@@ -2029,7 +2097,7 @@
       render();
       try { await formAction(() => api('POST', '/api/forms/order', { ids })); } catch { loadForms(); }
     } else if (act === 'form-links') {
-      linksSheet(formsData.forms.find(x => x.id === formOpen.id));
+      openLinks(formOpen.id);
     } else if (act === 'form-csv') {
       const f = formsData.forms.find(x => x.id === formOpen.id);
       try {

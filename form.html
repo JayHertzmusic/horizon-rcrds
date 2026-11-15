@@ -108,6 +108,49 @@
   @media (max-width: 470px) { html.embed #f > .q.half { grid-column: 1 / -1; } }
   .send { text-indent: .24em; }
   html.embed .send { text-indent: .22em; }
+  /* ===== Formulario privado (enlace personal): invitación, pasos por secciones ===== */
+  html.excl body::before { background: radial-gradient(1100px 620px at 50% -18%, rgba(255, 255, 255, .10), transparent 70%), radial-gradient(700px 500px at 100% 100%, rgba(255, 255, 255, .04), transparent 70%); }
+  html.excl main { width: min(880px, 100%); padding-top: 44px; }
+  .x-hero { text-align: center; margin-bottom: 34px; }
+  .x-badge { display: inline-flex; align-items: center; gap: 10px; padding: 7px 16px; border: 1px solid rgba(255, 255, 255, .25); border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .28em; text-transform: uppercase; color: #fff; background: rgba(255, 255, 255, .04); }
+  .x-badge i { width: 6px; height: 6px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px #fff; }
+  .x-hero h1 { margin: 22px 0 12px; font-size: clamp(54px, 11vw, 104px); }
+  .x-for { margin: 0 0 16px; font-size: 15px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .x-for b { color: #fff; font-weight: 600; }
+  html.excl .desc { margin-bottom: 0; }
+  .x-steps { position: sticky; top: 0; z-index: 4; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 14px; margin: 0 0 26px; padding: 14px 0 12px; background: linear-gradient(180deg, var(--bg) 70%, transparent); list-style: none; }
+  .x-steps li { display: grid; gap: 8px; min-width: 0; cursor: pointer; }
+  .x-steps li::before { content: ''; height: 3px; border-radius: 3px; background: #262626; transition: background .3s; }
+  .x-steps li.past::before { background: #8a8a8a; }
+  .x-steps li.on::before { background: #fff; }
+  .x-steps span { display: block; padding-right: 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .x-steps span em { font-style: normal; color: inherit; opacity: .8; margin-right: 8px; }
+  .x-steps li.on span { color: #fff; }
+  .x-steps li.past span { color: var(--muted); }
+  .x-card { padding: 34px 34px 30px; border: 1px solid #222; border-radius: 22px; background: linear-gradient(180deg, rgba(22, 22, 22, .92), rgba(10, 10, 10, .92)); box-shadow: 0 30px 80px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .05); }
+  html.excl #f { display: block; }
+  html.excl .step { display: none; grid-template-columns: 1fr 1fr; column-gap: 14px; animation: x-in .35s ease; }
+  html.excl .step.on { display: grid; }
+  html.excl .step > * { grid-column: 1 / -1; }
+  html.excl .step > .q.half { grid-column: auto; }
+  @media (max-width: 760px) { html.excl .step > .q.half { grid-column: 1 / -1; } }
+  @keyframes x-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  html.excl .sec { margin: 0 0 22px; }
+  html.excl .sec::before { display: none; }
+  .x-num { display: block; margin-bottom: 8px; font: 700 11px/1 'Barlow', sans-serif; letter-spacing: .3em; color: var(--muted); }
+  html.excl .sec h2 { font-size: clamp(36px, 6vw, 52px); }
+  html.excl .q { padding: 22px 24px; border-radius: 14px; border-color: #1f1f1f; background: rgba(255, 255, 255, .02); }
+  html.excl .q:focus-within { border-color: #4a4a4a; background: rgba(255, 255, 255, .035); }
+  .x-qn { display: inline-block; min-width: 26px; margin-right: 10px; font-size: 12px; font-weight: 700; letter-spacing: .1em; color: var(--faint); }
+  .x-nav { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 26px; padding-top: 22px; border-top: 1px solid #1d1d1d; }
+  .x-nav .ghost { min-height: 54px; padding: 0 30px; border: 1px solid #333; border-radius: 2px; background: none; color: #fff; font: 700 13px/1 'Barlow', sans-serif; letter-spacing: .24em; text-indent: .24em; text-transform: uppercase; cursor: pointer; }
+  .x-nav .ghost:hover { border-color: #fff; }
+  .x-nav .ghost[hidden] { display: inline-flex; visibility: hidden; }
+  .x-nav small { color: var(--faint); font-size: 12.5px; letter-spacing: .08em; }
+  .x-note { margin: 22px 0 0; text-align: center; font-size: 12.5px; letter-spacing: .06em; color: var(--faint); }
+  html.excl .done { padding: 80px 28px; border-radius: 22px; }
+  html.excl .done h2 { font-size: clamp(48px, 9vw, 76px); }
+  @media (max-width: 560px) { .x-card { padding: 22px 16px 20px; border-radius: 16px; } .x-steps span em { display: none; } .x-nav .ghost, .x-nav .send { padding: 0 18px; } }
     /* sin barras de scroll visibles (se sigue pudiendo desplazar) */
     html, body, * { scrollbar-width: none; }
     ::-webkit-scrollbar { display: none; width: 0; height: 0; }
@@ -169,7 +212,89 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     } else input = `<input id="${id}" name="${esc(f.id)}" type="${f.type === 'email' ? 'email' : f.type === 'url' ? 'url' : 'text'}" ${aria} maxlength="1000" autocomplete="${f.type === 'email' ? 'email' : 'off'}" placeholder="${f.type === 'url' ? 'https://' : f.type === 'email' ? 'name@email.com' : 'Your answer'}">`;
     return `<div class="q${HALF.has(f.id) ? ' half' : ''}" data-q="${esc(f.id)}"><label for="${id}">${esc(f.label)}${req}</label>${help}${input}</div>`;
   }
+  // privado con enlace personal: portada de invitación y una sección por paso
+  const EXCL = () => !!form?.invite && !PREVIEW && !EMBED;
+  let steps = [], cur = 0;
+  function stepsOf(fields) {
+    const out = [];
+    for (const x of fields) {
+      if (x.type === 'section') { out.push({ title: x.label, sec: x, fields: [] }); continue; }
+      if (!out.length) out.push({ title: 'About you', sec: null, fields: [] });
+      out[out.length - 1].fields.push(x);
+    }
+    return out.filter(st => st.fields.length);
+  }
+  const plain = t => String(t || '').replace(/[^\p{L}\p{N}&,'’ .()!?-]+/gu, ' ').replace(/\s+/g, ' ').trim();
+  function drawExcl() {
+    document.documentElement.classList.add('excl');
+    document.title = `${form.title || 'Form'} — HORIZON RCRDS`;
+    steps = stepsOf(form.fields); HALF = halves(form.fields);
+    let n = 0;
+    const num = x => x.type === 'section' ? '' : `<span class="x-qn">${String(++n).padStart(2, '0')}</span>`;
+    const q = x => field(x).replace(/(<label for="[^"]+">|<span class="lbl" id="[^"]+">)/, m => m + num(x));
+    root.innerHTML = `
+      <div class="x-hero">
+        <span class="x-badge"><i></i>Private invitation</span>
+        <h1>${esc(form.title || 'Form')}</h1>
+        ${form.note ? `<p class="x-for">Prepared for <b>${esc(form.note)}</b></p>` : ''}
+        ${form.description ? `<p class="desc">${linky(form.description)}</p>` : ''}
+      </div>
+      <ol class="x-steps">${steps.map((st, i) => `<li data-go="${i}"><span><em>${String(i + 1).padStart(2, '0')}</em>${esc(plain(st.title) || 'Step ' + (i + 1))}</span></li>`).join('')}</ol>
+      <div class="x-card">
+        <form id="f" novalidate>
+          ${steps.map((st, i) => `<section class="step" data-step="${i}">
+            <div class="sec"><span class="x-num">STEP ${i + 1} OF ${steps.length}</span><h2>${esc(plain(st.sec ? st.sec.label : st.title))}</h2>${st.sec?.help ? `<p>${linky(st.sec.help)}</p>` : ''}</div>
+            ${st.fields.map(q).join('')}
+          </section>`).join('')}
+          <div class="hp" aria-hidden="true"><label>Leave empty <input name="_hp" tabindex="-1" autocomplete="off"></label></div>
+          <p class="err" id="err" role="alert" hidden></p>
+          <div class="x-nav"><button type="button" class="ghost" data-back>Back</button><small id="x-pos"></small><button type="button" class="send" data-next>Next</button></div>
+        </form>
+      </div>
+      <p class="x-note">This link is personal: it only works for you, once, on this device.</p>`;
+    goStep(0, false);
+  }
+  function goStep(i, scroll = true) {
+    cur = Math.max(0, Math.min(steps.length - 1, i));
+    document.querySelectorAll('.step').forEach(el => el.classList.toggle('on', Number(el.dataset.step) === cur));
+    document.querySelectorAll('.x-steps li').forEach((li, k) => { li.classList.toggle('on', k === cur); li.classList.toggle('past', k < cur); });
+    const last = cur === steps.length - 1, next = document.querySelector('[data-next]');
+    next.textContent = last ? 'Send' : 'Next'; next.type = last ? 'submit' : 'button';
+    document.querySelector('[data-back]').hidden = cur === 0;
+    document.getElementById('x-pos').textContent = `${cur + 1} / ${steps.length}`;
+    document.getElementById('err').hidden = true;
+    progress();
+    if (scroll) document.querySelector('.x-steps').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  // lo obligatorio de un paso, antes de pasar al siguiente
+  function stepMissing(i) {
+    const a = answers(document.getElementById('f'));
+    return steps[i].fields.find(x => x.required && (!a[x.id] || (Array.isArray(a[x.id]) && !a[x.id].length)));
+  }
+  function markMissing(x) {
+    const f = document.getElementById('f'), q = f.querySelector(`[data-q="${CSS.escape(x.id)}"]`), err = document.getElementById('err');
+    q.classList.add('bad'); q.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    err.textContent = `Please answer “${x.label.trim()}”.`; err.hidden = false;
+  }
+  document.addEventListener('click', e => {
+    if (!EXCL()) return;
+    if (e.target.closest('[data-back]')) { goStep(cur - 1); return; }
+    const nx = e.target.closest('[data-next]');
+    if (nx && nx.type === 'button') {
+      document.querySelectorAll('.q.bad').forEach(q => q.classList.remove('bad'));
+      const m = stepMissing(cur);
+      if (m) { markMissing(m); return; }
+      goStep(cur + 1); return;
+    }
+    const li = e.target.closest('.x-steps li');
+    if (li) {
+      const to = Number(li.dataset.go);
+      if (to > cur) { for (let k = cur; k < to; k++) { const m = stepMissing(k); if (m) { goStep(k); markMissing(m); return; } } }
+      goStep(to);
+    }
+  });
   function draw(closed, target = root) {
+    if (target === root && EXCL()) return drawExcl();
     document.title = `${form.title || 'Form'} — HORIZON RCRDS`;
     const hasReq = form.fields.some(x => x.required);
     HALF = halves(form.fields);
@@ -266,6 +391,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     const a = answers(f);
     f.querySelectorAll('.q.bad').forEach(q => q.classList.remove('bad'));
     const missing = form.fields.find(x => x.required && (!a[x.id] || (Array.isArray(a[x.id]) && !a[x.id].length)));
+    if (missing && EXCL()) { const k = steps.findIndex(st => st.fields.includes(missing)); if (k >= 0 && k !== cur) goStep(k, false); markMissing(missing); return; }
     if (missing) {
       const q = f.querySelector(`[data-q="${CSS.escape(missing.id)}"]`);
       q.classList.add('bad'); q.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -279,7 +405,9 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
       if (!r.ok) throw new Error(j.message || 'Something went wrong. Please try again.');
       document.getElementById('bar').style.width = '100%';
       if (EMBED) parent.postMessage({ type: 'hz-form-sent' }, location.origin);
-      root.innerHTML = `<div class="done"><h2>Thank you!</h2><p>Your answer has been sent to HORIZON RCRDS.<br>We’ll get back to you soon.</p><a href="/">Back to the website</a></div>`;
+      root.innerHTML = EXCL()
+        ? `<div class="done"><span class="x-badge"><i></i>Received</span><h2 style="margin-top:22px">Thank you${form.note ? ', ' + esc(form.note) : ''}!</h2><p>Your details are with HORIZON RCRDS.<br>We’ll prepare everything for your release and be in touch soon.</p><a href="/">Back to the website</a></div>`
+        : `<div class="done"><h2>Thank you!</h2><p>Your answer has been sent to HORIZON RCRDS.<br>We’ll get back to you soon.</p><a href="/">Back to the website</a></div>`;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (x) { err.textContent = x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Send'; }
   });

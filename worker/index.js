@@ -6,7 +6,7 @@
    - La sincronización con SoundCloud (GitHub Actions) se identifica con el token OIDC que GitHub da a ese
      workflow: no hay claves guardadas en ningún sitio. */
 import STATIC_FILES from './static-files.json';
-import { FORM_SCHEMA, FormError, formsApi, publicFormsApi, formsCount, gformHook } from './forms.js';
+import { FORM_SCHEMA, FORM_LINK_COLUMNS, FormError, formsApi, publicFormsApi, formsCount, gformHook } from './forms.js';
 import { CONTRACT_SCHEMA, CONTRACT_COLUMNS, SIGNER_COLUMNS, ContractError, contractsApi, signApi, checkDriveFiles } from './contracts.js';
 import { EmailMessage } from 'cloudflare:email';
 import { loginCodeMail } from './contract-mail.js';
@@ -97,6 +97,7 @@ async function ensureSchema(env) {
   for (const col of ['soundcloud TEXT', 'sc_pic TEXT']) { try { await env.DB.prepare(`ALTER TABLE panel_profiles ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
   try { await env.DB.prepare('ALTER TABLE panel_roles ADD COLUMN forms TEXT').run(); } catch { /* ya existe */ }
   try { await env.DB.prepare('ALTER TABLE forms ADD COLUMN google TEXT').run(); } catch { /* ya existe */ }   // Google Form conectado
+  for (const col of FORM_LINK_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE form_links ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
   // formulario privado (solo con enlace personal). El Release Form lo es desde el principio.
   try { await env.DB.prepare('ALTER TABLE forms ADD COLUMN invite INTEGER NOT NULL DEFAULT 0').run(); await env.DB.prepare("UPDATE forms SET invite = 1 WHERE slug = 'release-form'").run(); } catch { /* ya existe */ }
   for (const col of CONTRACT_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE contracts ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }

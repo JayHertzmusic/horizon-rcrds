@@ -314,8 +314,15 @@
           <img class="login-logo" src="${SITE}assets/logo.png" alt="">
           <h1>HORIZON <span>RCRDS</span></h1>
           <p class="login-sub">${MODE === 'team' ? 'Team' : 'Panel · Owners'}</p>
-          <p class="login-text">${MODE === 'team' ? 'Sign in with the Google account you were added to the team with.' : 'Owners only. Sign in with your Google account.'}</p>
+          <p class="login-text">${MODE === 'team' ? 'Sign in with the Google account or the email you were added to the team with.' : 'Owners only. Sign in with your Google account or your email.'}</p>
           <div id="g-btn" class="g-btn"></div>
+          <form id="mail-login" class="mail-login" novalidate>
+            <p class="login-or"><span>or sign in with email</span></p>
+            <div class="field"><label for="ml-email" class="sr-only">Email</label><input id="ml-email" name="email" type="email" autocomplete="email" spellcheck="false" placeholder="Your email (Outlook, iCloud…)"></div>
+            <div class="field" id="ml-code-f" hidden><label for="ml-code">Code from the email</label><input id="ml-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 digits"></div>
+            <p class="ml-info" id="ml-info" hidden></p>
+            <button class="btn ghost wide" type="submit" id="ml-btn">Email me a code</button>
+          </form>
           <form id="dev-login" class="dev-login" hidden novalidate>
             <div class="field"><label for="dev-email">Local test · email</label><input id="dev-email" name="email" type="email" autocomplete="off" spellcheck="false"></div>
             <button class="btn ghost wide" type="submit">Entrar (prueba local)</button>
@@ -350,7 +357,8 @@
     const card = $('.login-card'), remember = $('#remember')?.checked !== false;
     loginError(''); card?.setAttribute('aria-busy', 'true');
     try {
-      const res = await api('POST', cred.email ? '/api/auth/dev' : '/api/auth/login', cred.email ? { email: cred.email, area: MODE } : { credential: cred.credential, area: MODE });
+      const res = cred.code ? await api('POST', '/api/auth/email/verify', { email: cred.mail, code: cred.code, area: MODE })
+        : await api('POST', cred.email ? '/api/auth/dev' : '/api/auth/login', cred.email ? { email: cred.email, area: MODE } : { credential: cred.credential, area: MODE });
       useSession(res);
       repo = firstView() === 'none' ? emptyRepo() : await loadRepo();
       saveAuth(auth, remember);
@@ -1518,6 +1526,26 @@
     if (form.method === 'dialog') return;   // la ventana de confirmar se cierra sola
     e.preventDefault();
     if (form.id === 'dev-login') { const email = form.elements.email.value.trim(); if (email) login({ email }); return; }
+    if (form.id === 'mail-login') {
+      const mail = form.elements.email.value.trim().toLowerCase(), codeF = $('#ml-code-f'), info = $('#ml-info'), btn = $('#ml-btn');
+      loginError('');
+      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(mail)) { loginError('Write a valid email.'); return; }
+      if (codeF.hidden) {
+        btn.disabled = true;
+        try {
+          await api('POST', '/api/auth/email/start', { email: mail, area: MODE });
+          codeF.hidden = false; form.elements.email.readOnly = true; btn.textContent = 'Sign in';
+          info.textContent = 'If this email is on the team, a 6-digit code is on its way. Check your inbox (and spam).'; info.hidden = false;
+          $('#ml-code').focus();
+        } catch (err) { loginError(err.message); }
+        btn.disabled = false;
+        return;
+      }
+      const code = form.elements.code.value.replace(/\D/g, '');
+      if (code.length !== 6) { loginError('Write the 6-digit code from the email.'); return; }
+      login({ mail, code });
+      return;
+    }
     if (busy) return;
     if (form.classList.contains('member-form')) {
       const box = form.querySelector('.ed-error'); box.hidden = true;

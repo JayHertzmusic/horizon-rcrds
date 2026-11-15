@@ -19,7 +19,7 @@ function layout(title, body, button) {
   ${button ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:26px"><tr><td style="background:#050505;border-radius:4px"><a href="${esc(button.href)}" style="display:inline-block;padding:15px 32px;font-family:${FONT};font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#ffffff;text-decoration:none">${esc(button.label)}</a></td></tr></table>
   <div style="margin-top:22px;padding-top:18px;border-top:1px solid #eeeeee;font-size:12px;line-height:1.55;color:#6b7280">If the button does not work, copy this link into your browser:<br><a href="${esc(button.href)}" style="color:#4b5563;word-break:break-all">${esc(button.href)}</a></div>` : ''}
 </td></tr>
-<tr><td align="center" style="padding:22px 10px 0;font-size:12px;line-height:1.6;color:#9ca3af">This link is private and only for you. Any questions? Just reply to this email.<br>
+<tr><td align="center" style="padding:22px 10px 0;font-size:12px;line-height:1.6;color:#9ca3af">${button ? 'This link is private and only for you. Any questions? Just reply to this email.' : 'Sent by HORIZON RCRDS.'}<br>
   <a href="${SITE}" style="color:#6b7280;text-decoration:none;letter-spacing:2px;padding-left:2px">horizonrcrds.com</a></td></tr>
 </table></td></tr></table></center>
 <div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#ffffff;opacity:0">${crypto.randomUUID()}</div></body></html>`;
@@ -33,7 +33,7 @@ const hello = sg => sg.label && !/^Artista?\s*\d*$/i.test(sg.label) ? `Hi ${esc(
 async function send(env, msg) {
   const from = env.MAIL_FROM || 'contratos@horizonrcrds.com';
   const body = {
-    from: `HORIZON RCRDS <${from}>`, to: [msg.to], reply_to: env.MAIL_TO || from, ...(env.MAIL_TO && env.MAIL_TO !== msg.to ? { bcc: [env.MAIL_TO] } : {}),
+    from: `HORIZON RCRDS <${from}>`, to: [msg.to], reply_to: env.MAIL_TO || from, ...(env.MAIL_TO && env.MAIL_TO !== msg.to && !msg.noBcc ? { bcc: [env.MAIL_TO] } : {}),
     subject: msg.subject, html: msg.html, text: textOf(msg.html),
     ...(msg.attachments ? { attachments: msg.attachments.map(a => ({ filename: a.filename, content: a.content })) } : {}),
   };
@@ -49,6 +49,14 @@ async function send(env, msg) {
   if (/domain.*not verified|verify a domain|testing emails/i.test(m)) throw new Error('Resend did not send it: the horizonrcrds.com domain is not verified in Resend yet.');
   if (r.status === 429) throw new Error('Resend sending limit reached (100 a day on the free plan). Try again later.');
   throw new Error(`The email could not be sent (Resend: ${m || r.status}).`);
+}
+
+// código para entrar al panel con el email (para quien no usa Google)
+export function loginCodeMail(env, email, code, area) {
+  const body = `Use this code to sign in to the HORIZON RCRDS ${area === 'admin' ? 'panel' : 'team panel'}:
+    <div style="margin:18px 0 6px;font-size:32px;line-height:1;font-weight:700;letter-spacing:10px;padding-left:10px;color:#111111">${esc(code)}</div>
+    <div style="font-size:13px;color:#6b7280">It expires in 10 minutes. If you did not try to sign in, you can ignore this email.</div>`;
+  return send(env, { to: email, subject: `Your sign-in code: ${code}`, html: layout('Sign in to HORIZON RCRDS', body, null), noBcc: true });
 }
 
 // invitación a firmar

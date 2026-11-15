@@ -9,6 +9,7 @@ import STATIC_FILES from './static-files.json';
 import { FORM_SCHEMA, FormError, formsApi, publicFormsApi, formsCount } from './forms.js';
 import { CONTRACT_SCHEMA, CONTRACT_COLUMNS, SIGNER_COLUMNS, ContractError, contractsApi, signApi } from './contracts.js';
 import { EmailMessage } from 'cloudflare:email';
+import { loginCodeMail } from './contract-mail.js';
 
 // Secciones del panel y lo que se puede hacer en cada una. Una sección nueva (p. ej. eventos) se añade aquí.
 const SECTIONS = [
@@ -79,6 +80,7 @@ async function ensureSchema(env) {
     `CREATE TABLE IF NOT EXISTS chat_messages (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, email TEXT NOT NULL, name TEXT, picture TEXT, text TEXT NOT NULL, deleted INTEGER NOT NULL DEFAULT 0)`,
     `CREATE TABLE IF NOT EXISTS panel_profiles (email TEXT PRIMARY KEY, avatar TEXT, updated_at INTEGER)`,
     `CREATE TABLE IF NOT EXISTS panel_settings (key TEXT PRIMARY KEY, value TEXT)`,
+    `CREATE TABLE IF NOT EXISTS panel_email_codes (email TEXT PRIMARY KEY, hash TEXT NOT NULL, area TEXT, expires_at INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, sent_at INTEGER NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS panel_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, email TEXT, name TEXT, action TEXT NOT NULL, detail TEXT)`,
     `INSERT OR IGNORE INTO site_meta (k, v) VALUES ('version', 0)`,
     ...FORM_SCHEMA,
@@ -539,6 +541,41 @@ async function api(req, env, p, ctx) {
   if (p === '/api/auth/login' && req.method === 'POST') {
     const b = parse(await req.text()) || {};
     return json(await startSession(env, await verifyGoogle(b.credential, env), area(b.area)));
+  }
+  // Entrar con un código por email (para quien no usa Google: Outlook, iCloud…). Solo emails del equipo.
+  if (p === '/api/auth/email/start' && req.method === 'POST') {
+    const b = parse(await req.text()) || {};
+    const email = String(b.email || '').trim().toLowerCase(), ar = area(b.area);
+    if (!EMAIL.test(email)) throw new HttpError(400, 'Write a valid email.');
+    const who = await resolve(env, email);
+    // misma respuesta tenga acceso o no (no se revela quién está en el equipo)
+    if (who && !(ar === 'admin' && !who.owner)) {
+      const old = await env.DB.prepare('SELECT sent_at FROM panel_email_codes WHERE email = ?').bind(email).first();
+      if (!old || now() - old.sent_at > 60e3) {
+        const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1e6).padStart(6, '0');
+        await env.DB.prepare('INSERT INTO panel_email_codes (email, hash, area, expires_at, tries, sent_at) VALUES (?, ?, ?, ?, 0, ?) ON CONFLICT(email) DO UPDATE SET hash = excluded.hash, area = excluded.area, expires_at = excluded.expires_at, tries = 0, sent_at = excluded.sent_at')
+          .bind(email, await sha256(email + ':' + code), ar, now() + 10 * 60e3, now()).run();
+        try { await loginCodeMail(env, email, code, ar); }
+        catch (e) { console.error('login code', e); throw new HttpError(502, 'The code could not be sent. Try again in a minute.'); }
+      }
+    }
+    return json({ ok: true });
+  }
+  if (p === '/api/auth/email/verify' && req.method === 'POST') {
+    const b = parse(await req.text()) || {};
+    const email = String(b.email || '').trim().toLowerCase(), code = String(b.code || '').replace(/\D/g, ''), ar = area(b.area);
+    const row = await env.DB.prepare('SELECT * FROM panel_email_codes WHERE email = ?').bind(email).first();
+    if (!row || row.expires_at < now() || row.tries >= 5) {
+      if (row) await env.DB.prepare('DELETE FROM panel_email_codes WHERE email = ?').bind(email).run();
+      throw new HttpError(400, 'That code has expired. Ask for a new one.');
+    }
+    if (code.length !== 6 || await sha256(email + ':' + code) !== row.hash) {
+      await env.DB.prepare('UPDATE panel_email_codes SET tries = tries + 1 WHERE email = ?').bind(email).run();
+      throw new HttpError(400, 'That code is not correct.');
+    }
+    await env.DB.prepare('DELETE FROM panel_email_codes WHERE email = ?').bind(email).run();
+    const m = await env.DB.prepare('SELECT name, picture FROM panel_members WHERE email = ?').bind(email).first();
+    return json(await startSession(env, { email, name: clean(m?.name || email.split('@')[0], 80), picture: m?.picture || '' }, ar));
   }
   // Solo para probar en el ordenador (wrangler dev con DEV_LOGIN=1): entrar sin Google
   if (p === '/api/auth/dev' && req.method === 'POST') {

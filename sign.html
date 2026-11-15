@@ -46,7 +46,6 @@
   input[type=text], input[type=email] { width: 100%; min-height: 46px; padding: 11px 14px; border-radius: 6px; background: #121212; border: 1px solid var(--line-2); color: var(--text); font: inherit; outline: none; }
   input:focus { border-color: rgba(var(--accent-rgb), .8); }
   .pad-wrap { position: relative; }
-  canvas { display: block; width: 100%; height: 180px; border-radius: 6px; background: #fff; touch-action: none; cursor: crosshair; }
   .pad-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 13px; color: var(--muted); }
   .link-btn { background: none; border: 0; color: var(--accent); font: inherit; cursor: pointer; padding: 0; }
   .agree { display: flex; gap: 12px; align-items: flex-start; margin: 16px 0; cursor: pointer; }
@@ -59,11 +58,19 @@
   .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
   .gate { width: min(460px, 100%); margin: 8vh auto 0; }
   .gate .actions .btn { width: 100%; }
-  .gate-links { margin: 16px 0 0; text-align: center; font-size: 14px; }
-  #g-code { text-align: center; font-size: 24px; letter-spacing: .4em; padding-left: calc(14px + .4em); }
-  .ds-end { width: min(620px, 100%); margin: 32px auto 0; text-align: center; }
-  .ds-end .actions { justify-content: center; }
-  .ds-end .proof { text-align: left; }
+  h1.doc-title { font-size: clamp(28px, 5vw, 44px); line-height: 1; margin-bottom: 18px; }
+  /* al final del contrato: solo el botón de enviar (sin recuadro) */
+  .ds-end { display: flex; flex-direction: column; align-items: center; gap: 4px; margin: 30px auto 0; text-align: center; }
+  .ds-end:empty { display: none; }
+  .ds-end .err { margin-top: 8px; }
+  /* pantalla final */
+  .ds-done { width: min(560px, 100%); margin: 6vh auto 0; text-align: center; }
+  .ds-done-logo { width: 64px; height: 64px; border-radius: 14px; display: block; margin: 0 auto 22px; }
+  .ds-done h1 { font-size: clamp(38px, 7vw, 56px); margin-bottom: 12px; }
+  .ds-done .lead { margin: 0 0 14px; font-size: 18px; color: #fff; }
+  .ds-done .msg { margin: 0 0 10px; }
+  .ds-done .actions { justify-content: center; margin-top: 26px; }
+  .ds-done .btn { text-decoration: none; }
   @media print {
     body { background: #fff; color: #111; }
     main { padding: 0; width: 100%; }
@@ -93,7 +100,7 @@
   .pdf-box:not(.is-active):not(.is-signed) { border: 1px dashed #9aa0aa; background: rgba(150, 150, 150, .08); }
   .pdf-box:not(.is-active):not(.is-signed) .pdf-flag { background: #d4d4d8; color: #111; }
   .ds-modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, .7); }
-  .ds-card { width: min(560px, 100%); max-height: 92vh; overflow: auto; padding: 24px; border-radius: 10px; background: #fff; color: #111; }
+  .ds-card { width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; padding: 22px 24px; border-radius: 10px; background: #fff; color: #111; }
   .ds-card h2 { margin: 0 0 4px; font: 700 22px/1.2 Arial, sans-serif; color: #111; }
   .ds-card .msg { color: #555; margin: 0 0 16px; }
   .ds-card .field label { color: #555; }
@@ -102,10 +109,14 @@
   .ds-tabs { display: flex; gap: 4px; margin: 6px 0 12px; border-bottom: 1px solid #ddd; }
   .ds-tabs button { background: none; border: 0; border-bottom: 3px solid transparent; padding: 10px 14px; font: 700 13px/1 Arial, sans-serif; color: #555; cursor: pointer; }
   .ds-tabs button.on { color: #111; border-bottom-color: #111; }
-  .ds-styles { display: grid; gap: 8px; }
-  .ds-style { text-align: left; padding: 12px 16px; border: 1px solid #ddd; border-radius: 6px; background: #fafafa; font-size: 34px; line-height: 1.25; font-style: normal; color: #0d0d33; cursor: pointer; overflow: hidden; white-space: nowrap; }
+  .ds-styles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; height: 200px; }
+  .ds-style { text-align: center; padding: 4px 10px; border: 1px solid #ddd; border-radius: 6px; background: #fafafa; font-size: 26px; line-height: 1.2; font-style: normal; color: #0d0d33; cursor: pointer; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   .ds-style.on { border-color: #111; box-shadow: 0 0 0 2px rgba(0, 0, 0, .15); background: #f5f5f5; }
-  .ds-card canvas { display: block; width: 100%; height: 170px; border: 1px solid #ddd; border-radius: 6px; background: #fff; touch-action: none; }
+  .ds-card canvas { display: block; width: 100%; height: 200px; border: 1px solid #ddd; border-radius: 6px; background: #fff; touch-action: none; cursor: crosshair; }
+  .pad-clear { position: absolute; top: 8px; right: 8px; padding: 6px 12px; border: 1px solid #c9ccd3; border-radius: 4px; background: #fff; color: #111; font: 700 11px/1 Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+  .pad-clear:hover { border-color: #111; }
+  .pad-hint { margin: 6px 0 0; font-size: 13px; color: #666; }
+  .ds-card .agree { margin: 14px 0 12px; }
   .ds-card .pad-actions { color: #555; }
   .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
   .up-box { display: grid; place-items: center; min-height: 170px; padding: 14px; border: 1px dashed #c9ccd3; border-radius: 6px; background: #fafafa; color: #111; font: 700 13px/1.4 Arial, sans-serif; text-align: center; cursor: pointer; }
@@ -130,7 +141,7 @@
 </main>
 <script src="/assets/vendor/pdf/pdf.min.js"></script>
 <script src="/assets/vendor/pdf/pdf-lib.min.js"></script>
-<script src="/contract-pdf.js?v=8"></script>
-<script src="/sign.js?v=8"></script>
+<script src="/contract-pdf.js?v=9"></script>
+<script src="/sign.js?v=10"></script>
 </body>
 </html>

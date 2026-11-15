@@ -10,6 +10,7 @@ import { FORM_SCHEMA, FormError, formsApi, publicFormsApi, formsCount, gformHook
 import { CONTRACT_SCHEMA, CONTRACT_COLUMNS, SIGNER_COLUMNS, ContractError, contractsApi, signApi } from './contracts.js';
 import { EmailMessage } from 'cloudflare:email';
 import { loginCodeMail } from './contract-mail.js';
+import { CALENDAR_SCHEMA, CalendarError, calendarApi } from './calendar.js';
 
 // Secciones del panel y lo que se puede hacer en cada una. Una sección nueva (p. ej. eventos) se añade aquí.
 const SECTIONS = [
@@ -19,6 +20,7 @@ const SECTIONS = [
   { id: 'player', label: 'Player', actions: ['view', 'edit'] },
   { id: 'forms', label: 'Forms', actions: ['view', 'edit', 'delete'] },
   { id: 'contracts', label: 'Contracts', actions: ['view', 'edit'] },
+  { id: 'calendar', label: 'Calendar', actions: ['view', 'edit'] },
 ];
 // Datos de la web: nombre en la API → archivo público y sección del panel
 const DATA = {
@@ -85,6 +87,7 @@ async function ensureSchema(env) {
     `INSERT OR IGNORE INTO site_meta (k, v) VALUES ('version', 0)`,
     ...FORM_SCHEMA,
     ...CONTRACT_SCHEMA,
+    ...CALENDAR_SCHEMA,
   ].map(q => env.DB.prepare(q)));
   // nombre que le pone el owner a cada persona (columna añadida después)
   try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN label TEXT').run(); } catch { /* ya existe */ }
@@ -664,6 +667,7 @@ async function api(req, env, p, ctx) {
     const r = await contractsApi(req, env, s, url, act => can(s, 'contracts', act), action => audit(env, s, action));
     return r instanceof Response ? r : json(r);
   }
+  if (p === '/api/calendar' || p.startsWith('/api/calendar/')) return json(await calendarApi(req, env, s, url, act => can(s, 'calendar', act), action => audit(env, s, action)));
   if (p === '/api/forms' || p.startsWith('/api/forms/')) {
     const r = await formsApi(req, env, s, url, action => audit(env, s, action));
     return r instanceof Response ? r : json(r);
@@ -691,7 +695,7 @@ export default {
       }
       return env.ASSETS.fetch(req);
     } catch (e) {
-      if (e instanceof HttpError || e instanceof FormError || e instanceof ContractError) return fail(e.status, e.message);
+      if (e instanceof HttpError || e instanceof FormError || e instanceof ContractError || e instanceof CalendarError) return fail(e.status, e.message);
       console.error(e);
       return fail(500, 'Server error. Please try again.');
     }

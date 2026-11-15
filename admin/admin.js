@@ -134,7 +134,12 @@
     $('#confirm-msg').textContent = msg; $('#confirm-ok').textContent = okLabel;
     d.returnValue = '';
     d.showModal();
-    return new Promise(res => d.addEventListener('close', () => res(d.returnValue === 'ok'), { once: true }));
+    // se responde al pulsar el botón (y con Esc, al cerrarse); una sola vez
+    return new Promise(res => {
+      let done = false; const end = v => { if (!done) { done = true; res(v); } };
+      d.querySelector('form').addEventListener('submit', e => end(e.submitter?.value === 'ok'), { once: true });
+      d.addEventListener('close', () => end(d.returnValue === 'ok'), { once: true });
+    });
   }
 
   /* ---------------- Utilidades de datos ---------------- */
@@ -345,7 +350,7 @@
 
   const VIEWS = ['releases', 'radio', 'playlists', 'player'];
   // secciones en el orden que eligen los owners
-  const ORDER = () => (auth?.sections || []).map(x => x.id).concat(['releases', 'radio', 'playlists', 'player', 'forms', 'contracts']).filter((v, i, a) => a.indexOf(v) === i);
+  const ORDER = () => (auth?.sections || []).map(x => x.id).concat(['releases', 'radio', 'playlists', 'player', 'forms', 'contracts', 'calendar']).filter((v, i, a) => a.indexOf(v) === i);
   const canTab = v => v === 'forms' ? showForms() : can(v);
   const firstView = () => ORDER().find(canTab) || (showForms() ? 'forms' : MODE === 'admin' && auth?.user?.owner && !preview ? 'team' : 'none');
   const emptyRepo = () => ({ head: '', treeSha: '', files: new Map(), truncated: false, releases: [], mixtapes: [], playlists: [], ignore: [] });
@@ -380,8 +385,8 @@
   }
 
   function shell(inner) {
-    const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}${id === 'forms' ? (() => { const n = badgeCount(); return `<span class="nbadge" id="forms-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}</button>`;
-    const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', forms: 'Forms', contracts: 'Contracts' };
+    const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}${id === 'forms' ? (() => { const n = badgeCount(); return `<span class="nbadge" id="forms-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}${id === 'contracts' ? (() => { if (!ctPolled) { ctPolled = true; setTimeout(checkContracts, 0); } const n = ctBadgeCount(); return `<span class="nbadge" id="ct-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}</button>`;
+    const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar' };
     const initials = (u.name || u.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
     return `
       <header class="top">
@@ -1257,7 +1262,7 @@
     return ok;
   }
   function go(v, ed = null) {
-    formOpen = null; ctOpen = null;
+    formOpen = null; ctOpen = null; calOpen = null;
     view = v; editing = ed; setDirtyBase(null);
     render();
     if (editing) setDirtyBase(formState());
@@ -1271,6 +1276,7 @@
     if (view === 'forms' && !showForms()) view = firstView();
     if (view !== 'team' && view !== 'log' && view !== 'none' && view !== 'forms' && view !== 'contracts' && !can(view)) { view = firstView(); editing = null; }
     if (view === 'contracts' && !can('contracts')) view = firstView();
+    if (view === 'calendar' && !can('calendar')) view = firstView();
     if ((view === 'team' || view === 'log') && (preview || !(MODE === 'admin' && auth.user.owner))) view = firstView();
     let inner;
     if (view === 'none') inner = noAccessView();
@@ -1278,6 +1284,7 @@
     else if (view === 'log') inner = logView();
     else if (view === 'forms') inner = formsPage();
     else if (view === 'contracts') inner = contractsPage();
+    else if (view === 'calendar') inner = calendarPage();
     else if (editing?.view === 'releases') inner = releaseEditor();
     else if (editing?.view === 'playlists') inner = playlistEditor();
     else if (editing?.view === 'radio') inner = mixtapeEditor();
@@ -1287,7 +1294,7 @@
     else inner = releasesView();
     app.innerHTML = shell(inner);
     chatStart();
-    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', team: 'Team', log: 'History', forms: 'Forms', contracts: 'Contracts', none: 'Team' };
+    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', team: 'Team', log: 'History', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', none: 'Team' };
     document.title = `${unseen.total && !preview ? `(${unseen.total > 99 ? '99+' : unseen.total}) ` : ''}${editing ? (editing.orig?.title || 'New') + ' · ' : ''}${names[view] || ''} — Panel HORIZON RCRDS`;
   }
   function busyOn(scope, btn, label) {
@@ -1409,7 +1416,7 @@
     const t = e.target.closest('[data-act], [data-view]');
     if (!t || busy) return;
     if (t.dataset.view) {
-      if (t.dataset.view === view && !editing && !formOpen && !ctOpen) return;
+      if (t.dataset.view === view && !editing && !formOpen && !ctOpen && !calOpen) return;
       if (!await leaveOk()) return;
       filter = ''; go(t.dataset.view);
       return;
@@ -1662,12 +1669,16 @@
   let unseen = { total: 0, forms: {} };
   // al probar un rol, el aviso cuenta solo lo nuevo de los formularios que ese rol puede ver
   const badgeCount = () => preview ? visibleForms().reduce((a, f) => a + (f.unseen || 0), 0) : unseen.total;
-  let unseenReady = false;   // la primera vez solo se apunta lo que hay (sin avisos)
+  const ctBadgeCount = () => (preview || !can('contracts') ? 0 : ctNew().length);
+  let unseenReady = false;
+  let ctSeen = (() => { try { return JSON.parse(localStorage.getItem('hz_ct_seen') || 'null'); } catch { return null; } })(), ctPolled = false;   // la primera vez solo se apunta lo que hay (sin avisos)
   function paintBadge() {
-    const n = badgeCount(), b = $('#forms-badge');
+    const n = badgeCount(), b = $('#forms-badge'), k = ctBadgeCount(), cb = $('#ct-badge');
     if (b) { b.hidden = !n; b.innerHTML = `<span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span>`; }
+    if (cb) { cb.hidden = !k; cb.innerHTML = `<span class="nb-n${k === 1 ? ' one' : ''}">${k > 99 ? '99+' : k}</span>`; }
+    const all = n + k;
     document.title = document.title.replace(/^\(\d+\+?\) /, '');
-    if (n) document.title = `(${n > 99 ? '99+' : n}) ${document.title}`;
+    if (all) document.title = `(${all > 99 ? '99+' : all}) ${document.title}`;
   }
   // la lista de formularios trae sus «nuevas»: el número rojo sale de los mismos datos (siempre coinciden)
   function unseenFromForms() {
@@ -2043,12 +2054,12 @@
   // artista, se crea el enlace de firma y se guarda/descarga el contrato firmado.
   const CONTRACTS_DOC = 'https://docs.google.com/document/d/1rUCOAySY2XHqnmgFeH9fjF3xgXDa9cg0vy8qWJVN274/edit?authuser=contacthorizonids@gmail.com';
   let ctData = null, ctErr = '', ctLoading = false, ctOpen = null, ctTab = 'contracts';
-  const CT_STATUS = { draft: ['Draft', 'off'], sent: ['Sent', ''], signed: ['Signed', 'ok'], void: ['Cancelled', 'off'] };
+  const CT_STATUS = { draft: ['Not sent', 'off'], sent: ['Sent', ''], signed: ['Signed', 'ok'], void: ['Cancelled', 'off'] };
   const ctCanEdit = () => !!ctData?.canEdit && can('contracts', 'edit');
   async function loadContracts() {
     if (ctLoading) return;
     ctLoading = true;
-    try { ctData = await api('GET', '/api/contracts'); ctErr = ''; }
+    try { ctData = await api('GET', '/api/contracts'); ctErr = ''; paintBadge(); }
     catch (e) { ctErr = e.message; if (e.status === 401) { ctLoading = false; logout(e.message); return; } }
     ctLoading = false;
     if (view === 'contracts') render();
@@ -2059,34 +2070,86 @@
     return r;
   }
   const signerUrl = sg => `${location.origin}/sign/${sg.token}`;
+  const ctName = c => {
+    const kind = c.kind === 'draft' || /draft/i.test(c.title || '') ? 'DRAFT CONTRACT' : /remix/i.test(c.title || '') ? 'REMIX AUTHORIZATION' : 'RELEASE CONTRACT';
+    const who = [String(c.artist || '').split(/\s*(?:,|&|\band\b)\s*/i).map(x => x.trim()).filter(Boolean).join(' & '), String(c.release_name || c.vars?.Track || '').trim()].filter(Boolean).join(' - ');
+    return `HORIZON RCRDS ${kind}${who ? ' | ' + who : ''}`;
+  };
+  const pdfName = (c, extra = '') => `${ctName(c).replace(/\|/g, '｜').replace(/[\\/:*?"<>]+/g, '')}${extra}.pdf`;
+  // contratos con firmas nuevas (número rojo en «Contracts» hasta que abres ese contrato)
+  const ctLast = c => Math.max(0, ...c.signers.map(x => x.signed_at || 0));
+  const ctSaveSeen = () => { try { localStorage.setItem('hz_ct_seen', JSON.stringify(ctSeen)); } catch { /* nada */ } };
+  function ctNew() {
+    if (!ctData) return [];
+    if (!ctSeen) { ctSeen = {}; for (const c of ctData.contracts) ctSeen[c.id] = ctLast(c); ctSaveSeen(); }   // la primera vez: lo que ya había no cuenta
+    return ctData.contracts.filter(c => !isTpl(c) && ctLast(c) > (ctSeen[c.id] || 0));
+  }
+  function ctMarkSeen(c) { if (!c || !ctSeen) return; const t = ctLast(c); if (t > (ctSeen[c.id] || 0)) { ctSeen[c.id] = t; ctSaveSeen(); paintBadge(); } }
+  // cada 15 s: contratos al día (firmas nuevas → aviso, número y lista sin recargar)
+  async function checkContracts() {
+    if (!auth || preview || !can('contracts') || document.hidden || busy) return;
+    try {
+      const r = await api('GET', '/api/contracts'), before = new Map((ctData?.contracts || []).map(c => [c.id, c]));
+      const sig = c => `${c.status}|${c.signers.map(x => (x.signed_at || 0) + ':' + (x.emailed_at || 0)).join(',')}|${c.drive_url}|${c.title}`;
+      const changed = !ctData || r.contracts.length !== ctData.contracts.length || r.contracts.some(c => !before.get(c.id) || sig(before.get(c.id)) !== sig(c));
+      if (ctData) for (const c of r.contracts) {
+        const o = before.get(c.id);
+        if (o) for (const x of c.signers) if (x.signed_at && !o.signers.find(y => y.id === x.id)?.signed_at) toast(`${x.name || x.label} signed “${c.title}”`);
+      }
+      if (!changed) return;
+      ctData = r; paintBadge();
+      if (view !== 'contracts' || busy) return;
+      if (!ctOpen) render();
+      else if (ctOpen.mode === 'contract' && ctOpen.contract) {
+        const now = r.contracts.find(c => c.id === ctOpen.id), was = before.get(ctOpen.id);
+        if (now && was && sig(now) !== sig(was) && !document.activeElement?.closest?.('#ct-ed')) ctRefresh();
+      }
+    } catch { /* sin aviso */ }
+  }
+  setInterval(checkContracts, 15e3);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkContracts(); });
   const isTpl = c => c?.kind === 'template';
   function ctList() {
-    const all = ctData.contracts, ed = ctCanEdit(), tab = ctTab;
-    const tpls = all.filter(isTpl), list = all.filter(c => !isTpl(c) && c.status !== 'signed'), done = all.filter(c => !isTpl(c) && c.status === 'signed');
-    const rows = tab === 'templates' ? tpls : tab === 'signed' ? done : list;
+    const all = ctData.contracts, ed = ctCanEdit(), tab = ctTab, fresh = new Set(ctNew().map(c => c.id));
+    const tpls = all.filter(isTpl), list = all.filter(c => !isTpl(c) && c.status !== 'signed'), done = all.filter(c => !isTpl(c) && c.status === 'signed').sort((a, b) => (b.signed_at || 0) - (a.signed_at || 0));
     const noDrive = done.filter(c => !c.drive_url);
+    const state = c => isTpl(c) ? (!c.pdf ? 'PDF missing' : !c.doc_url ? 'No Google Doc' : c.signers.some(x => !x.box) ? 'Signatures not placed' : 'Ready')
+      : isDraft(c) ? (c.sent_at ? `Sent for review · ${esc(fmtDate(c.sent_at))}` : 'Not sent')
+      : c.status === 'signed' ? 'Signed ' + esc(fmtDate(c.signed_at)) + (c.drive_url ? ' · In Drive' : '')
+      : c.status === 'void' ? 'Links don’t work' : !c.pdf ? 'PDF missing' : c.signers.some(x => !x.box) ? 'Signatures not placed'
+      : c.sent_at ? `Signed ${c.signers.filter(x => x.signed).length} of ${c.signers.length}` : 'Ready to send';
+    const row = c => `
+        <li class="row ct${fresh.has(c.id) ? ' is-new' : ''}" data-ctid="${esc(c.id)}">
+          <span class="meta"><b>${esc(c.title)}</b><span>${isTpl(c) ? `${c.signers.length} signer${c.signers.length > 1 ? 's' : ''}` : (c.release_cat ? esc(c.release_cat) + ' · ' : '') + esc(c.artist || '') + (c.email ? ' · ' + esc(c.email) : '')}</span></span>
+          ${isTpl(c) ? '<span class="tag off">Template</span>' : isDraft(c) ? '<span class="tag off">Draft</span>' : `<span class="tag ${CT_STATUS[c.status]?.[1] || ''}">${CT_STATUS[c.status]?.[0] || c.status}</span>`}
+          <span class="muted sm-txt">${fresh.has(c.id) ? '<b class="ct-new">New signature</b> · ' : ''}${state(c)}</span>
+          <span class="row-btns">${isTpl(c) && ed && c.pdf && (c.doc_url || isDraftTpl(c)) ? '<button type="button" class="btn primary sm" data-ct="use">Use</button>' : ''}${c.drive_url ? `<a class="btn ghost sm" href="${esc(c.drive_url)}" target="_blank" rel="noopener">Drive ↗</a>` : ''}<button type="button" class="btn ghost sm" data-ct="open">Open</button></span>
+        </li>`;
+    const group = (name, rows, empty) => rows.length || empty ? `<h2 class="ct-group-h">${name} <span>${rows.length}</span></h2><ol class="list">${rows.length ? rows.map(row).join('') : `<li class="empty">${empty}</li>`}</ol>` : '';
+    const byNew = (a, b) => (b.sent_at || b.created_at || 0) - (a.sent_at || a.created_at || 0);
+    const body = tab === 'templates' ? `<ol class="list">${tpls.length ? tpls.map(row).join('') : '<li class="empty">No templates yet.</li>'}</ol>`
+      : tab === 'signed' ? `<ol class="list">${done.length ? done.map(row).join('') : '<li class="empty">No signed contracts yet.</li>'}</ol>`
+      : list.length ? [
+        group('Waiting for signatures', list.filter(c => !isDraft(c) && c.status === 'sent').sort(byNew)),
+        group('Not sent yet', list.filter(c => !isDraft(c) && c.status === 'draft').sort(byNew)),
+        group('Drafts sent for review', list.filter(isDraft).sort(byNew)),
+        group('Cancelled', list.filter(c => !isDraft(c) && c.status === 'void').sort(byNew)),
+      ].join('') : '<ol class="list"><li class="empty">No contracts waiting.</li></ol>';
     return `
       <div class="head"><div><p class="eyebrow">Signatures</p><h1>CONTRACTS</h1></div>
         <div class="head-btns">${ed ? (tab === 'templates' ? '<button type="button" class="btn primary" data-ct="new-tpl">+ New template</button>' : '<button type="button" class="btn primary" data-ct="new">+ New contract</button>') : ''}</div></div>
       <div class="ct-tabs" role="tablist">
         <button type="button" role="tab" class="${tab === 'contracts' ? 'on' : ''}" data-ct="tab-contracts">Contracts <span>${list.length}</span></button>
-        <button type="button" role="tab" class="${tab === 'signed' ? 'on' : ''}" data-ct="tab-signed">Signed <span>${done.length}</span></button>
+        <button type="button" role="tab" class="${tab === 'signed' ? 'on' : ''}" data-ct="tab-signed">Signed <span>${done.length}</span>${done.some(c => fresh.has(c.id)) ? '<i class="ct-dot"></i>' : ''}</button>
         <button type="button" role="tab" class="${tab === 'templates' ? 'on' : ''}" data-ct="tab-templates">Templates <span>${tpls.length}</span></button>
       </div>
       ${tab === 'signed' ? driveBox(ed, noDrive) : ''}
       ${tab === 'templates' ? `<p class="info lead">Templates are your Google Docs contracts. The panel finds the artist details by itself (names, track, date…), or write a name between double braces in the Doc: <b>{{Nombre real}}</b>, <b>{{Nombre artístico}}</b>, <b>{{Track}}</b>, <b>{{Fecha}}</b>… When you create a contract the panel asks for those details and Google puts them in place (the text reflows by itself).</p>` : ''}
-      <ol class="list">${rows.length ? rows.map(c => `
-        <li class="row ct" data-ctid="${esc(c.id)}">
-          <span class="meta"><b>${esc(c.title)}</b><span>${isTpl(c) ? `${c.signers.length} signer${c.signers.length > 1 ? 's' : ''}` : (c.release_cat ? esc(c.release_cat) + ' · ' : '') + esc(c.artist || '') + (c.email ? ' · ' + esc(c.email) : '')}</span></span>
-          ${isTpl(c) ? '<span class="tag off">Template</span>' : `<span class="tag ${CT_STATUS[c.status]?.[1] || ''}">${CT_STATUS[c.status]?.[0] || c.status}</span>`}
-          <span class="muted sm-txt">${isTpl(c) ? (!c.pdf ? 'PDF missing' : !c.doc_url ? 'No Google Doc' : c.signers.some(x => !x.box) ? 'Signatures not placed' : 'Ready') : c.status === 'signed' ? 'Signed ' + esc(fmtDate(c.signed_at)) + (c.drive_url ? ' · In Drive' : '') : !c.pdf ? 'PDF missing' : c.signers.some(x => !x.box) ? 'Signatures not placed' : c.sent_at ? `Signed ${c.signers.filter(x => x.signed).length} of ${c.signers.length}` : 'Ready to send'}</span>
-          <span class="row-btns">${isTpl(c) && ed && c.pdf && c.doc_url ? '<button type="button" class="btn primary sm" data-ct="use">Use</button>' : ''}${c.drive_url ? `<a class="btn ghost sm" href="${esc(c.drive_url)}" target="_blank" rel="noopener">Drive ↗</a>` : ''}<button type="button" class="btn ghost sm" data-ct="open">Open</button></span>
-        </li>`).join('') : `<li class="empty">${tab === 'templates' ? 'No templates yet.' : tab === 'signed' ? 'No signed contracts yet.' : 'No contracts waiting.'}</li>`}
-      </ol>`;
+      ${body}`;
   }
   // elegir plantilla para un contrato nuevo
   function ctPick() {
-    const tpls = ctData.contracts.filter(c => isTpl(c) && c.pdf && c.doc_url);
+    const tpls = ctData.contracts.filter(c => isTpl(c) && c.pdf && (c.doc_url || isDraftTpl(c)));
     return `
       <div class="editor ct-ed">
         <button type="button" class="back" data-ct="back">← Contracts</button>
@@ -2123,42 +2186,62 @@
       </form>`;
   }
   // rellenar los datos de un contrato nuevo a partir de una plantilla
+  const isDraftTpl = t => /draft/i.test(t?.title || '');
+  const isDraft = c => c?.kind === 'draft';
+  // cuántos artistas tiene el contrato (firmantes del mismo contrato, o una copia por artista)
+  const artistsOf = t => t.signers.length > 1 ? t.signers.length : copiesOf();
+  // a qué artista pertenece cada dato («Artist 2 legal name» → 2; en contratos de 1 artista, los datos personales → 1)
+  const fieldArtist = (name, n) => { const k = Number((String(name).match(/^artist (\d)/i) || [])[1]) || 0; if (k) return k; return n === 1 && /^(artist name|legal name|e-?mail|age|address|city)/i.test(name) ? 1 : 0; };
+  // el nombre y el email de cada artista se escriben una vez (arriba de su bloque) y van también al contrato
+  const isDupField = name => /^artist( \d)? name$|^(artist \d )?e-?mail$/i.test(name);
+  const fieldDefault = f => /date/i.test(f.name) && !/original/i.test(f.name) ? today() : /^label (representative|signatory)$/i.test(f.name) ? f.current : '';
   function ctUse() {
     const t = ctOpen.tpl, fields = ctOpen.fields, rf = ctOpen.rf;
+    if (isDraftTpl(t)) return `
+      <form id="ct-use" class="editor ct-ed ct-draft" novalidate>
+        <button type="button" class="back" data-ct="back">← Contracts</button>
+        <p class="eyebrow">Contract draft</p>
+        <h1>SEND A DRAFT</h1>
+        <p class="info lead">The artist gets an email with a private link to read the draft online. They can’t sign it or download it.</p>
+        <div class="field"><label for="u-em0">Send it to (email)</label><input id="u-em0" name="em0" type="email" maxlength="160" autocomplete="off" placeholder="artist@email.com"></div>
+        <p class="ed-error" id="ed-error" role="alert" hidden></p>
+        <div class="ed-actions"><button type="submit" class="btn primary">Send draft</button><button type="button" class="btn ghost" data-ct="back">Cancel</button></div>
+      </form>`;
+    const n = artistsOf(t), copies = t.signers.length === 1 && n > 1;
+    const fieldHtml = (f, i) => `<div class="field"><label for="u-f${i}">${esc(f.name.replace(/^Artist \d /i, '').replace(/^./, x => x.toUpperCase()))}</label><input id="u-f${i}" name="f${i}" maxlength="500" value="${esc(fieldDefault(f))}" autocomplete="off"></div>`;
+    const of = k => (fields || []).map((f, i) => [f, i]).filter(([f]) => fieldArtist(f.name, n) === k && !(k && isDupField(f.name)));
+    const artistBlock = k => `
+      <fieldset class="ct-artist">
+        <legend>Artist ${k}</legend>
+        ${rf?.list?.length ? `<div class="field"><label for="u-from${k}">Fill from this artist’s Release Form</label><select id="u-from${k}" class="u-from" data-k="${k}"><option value="">Choose a response…</option>${rf.list.map(r => `<option value="${r.id}">${esc(rfLabel(r))}</option>`).join('')}</select></div>` : ''}
+        <div class="row2 wide"><div class="field"><label for="u-cn${k - 1}">Artist name</label><input id="u-cn${k - 1}" name="cn${k - 1}" maxlength="60" autocomplete="off"></div>
+          <div class="field"><label for="u-em${k - 1}">Email (the signing link goes here)</label><input id="u-em${k - 1}" name="em${k - 1}" type="email" maxlength="160" autocomplete="off"></div></div>
+        ${of(k).length ? `<div class="ct-fields">${of(k).map(([f, i]) => fieldHtml(f, i)).join('')}</div>` : ''}
+      </fieldset>`;
     return `
       <form id="ct-use" class="editor ct-ed" novalidate>
         <button type="button" class="back" data-ct="back">← Contracts</button>
         <p class="eyebrow">New contract · template “${esc(t.title)}”</p>
         <h1>CONTRACT DETAILS</h1>
-        ${rf?.list?.length ? `<div class="field"><label for="u-from">Fill from a Release Form response</label><select id="u-from" name="from"><option value="">Choose a response…</option>${rf.list.map(r => `<option value="${r.id}">${esc(rfLabel(r))}</option>`).join('')}</select></div>` : ''}
+        <h2 class="ct-sub">Release</h2>
         <div class="row2 wide"><div class="field"><label for="u-cat">Release number</label><input id="u-cat" name="release_cat" maxlength="40" value="${esc(ctOpen.cat || '')}" autocomplete="off"></div>
           <div class="field"><label for="u-rel">Release name</label><input id="u-rel" name="release_name" maxlength="160" autocomplete="off" placeholder="Track title"></div></div>
-        <div class="row2 wide"><div class="field"><label for="u-title">Contract title</label><input id="u-title" name="title" maxlength="160" value="${esc(t.title)} — " autocomplete="off"></div>
-          <div class="field"><label for="u-artist">Artist</label><input id="u-artist" name="artist" maxlength="160" autocomplete="off"></div></div>
-        ${t.signers.length === 1 && copiesOf() > 1 ? copiesHtml() : t.signers.map((x, i) => `<div class="field"><label for="u-em${i}">${esc(x.label)} email</label><input id="u-em${i}" name="em${i}" type="email" maxlength="160" autocomplete="off"></div>`).join('')}
-        ${t.signers.length === 1 ? `<div class="copy-btns"><button type="button" class="btn ghost sm" data-ct="copy-add">+ Add artist (own copy)</button>${copiesOf() > 1 ? '<button type="button" class="btn ghost sm" data-ct="copy-del">Remove last</button>' : ''}</div>` : ''}
-        <h2 class="ct-sub">Details that go in the contract</h2>
-        ${!fields ? '<p class="info">Reading the template…</p>' : fields.length ? `<div class="ct-fields">${fields.map((f, i) => `
-          <div class="field"><label for="u-f${i}">${esc(f.name)}</label><input id="u-f${i}" name="f${i}" maxlength="500" value="${esc(/date/i.test(f.name) && !/original/i.test(f.name) ? today() : f.current)}" autocomplete="off"></div>`).join('')}</div>
-          <p class="info">Everything above goes into the contract in every place it appears. A field left empty keeps what the template says.</p>`
-          : '<p class="info">No details found in this template. The contract will be an exact copy; you can change its text in its own Google Doc.</p>'}
+        <div class="field"><label for="u-title">Contract title (only for the panel)</label><input id="u-title" name="title" maxlength="160" value="${esc(t.title)} — " autocomplete="off"></div>
+        ${of(0).length ? `<div class="ct-fields">${of(0).map(([f, i]) => fieldHtml(f, i)).join('')}</div>` : ''}
+        ${!fields ? '<p class="info">Reading the template…</p>' : ''}
+        <h2 class="ct-sub">${n > 1 ? `Artists${copies ? ' · each one gets their own copy and signs it' : ' · both sign this contract'}` : 'Artist'}</h2>
+        ${Array.from({ length: n }, (_, i) => artistBlock(i + 1)).join('')}
+        ${t.signers.length === 1 ? `<div class="copy-btns"><button type="button" class="btn ghost sm" data-ct="copy-add">+ Add artist (own copy)</button>${n > 1 ? '<button type="button" class="btn ghost sm" data-ct="copy-del">Remove last</button>' : ''}</div>` : ''}
+        <p class="info">Everything goes into the contract in every place it appears. A field left empty keeps what the template says.</p>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions"><button type="submit" class="btn primary" ${fields ? '' : 'disabled'}>Create contract</button><button type="button" class="btn ghost" data-ct="back">Cancel</button></div>
-        <p class="info">A copy of the template is made in your Google Drive with these details, and the PDF the artist signs comes from it. Each contract has its own Doc in case you want to tweak something.</p>
       </form>`;
   }
   /* Un contrato, una copia por artista (p. ej. «3 Artists»): mismos datos, cada uno firma la suya */
   const copiesOf = () => ctOpen?.copies || Number((String(ctOpen?.tpl?.title || '').match(/(\d+)\s*artists/i) || [])[1]) || 1;
-  function copiesHtml() {
-    const n = copiesOf();
-    return `<div class="copies">${Array.from({ length: n }, (_, i) => `
-      <div class="row2 wide"><div class="field"><label for="u-cn${i}">Artist ${i + 1} name</label><input id="u-cn${i}" name="cn${i}" maxlength="60" autocomplete="off"></div>
-        <div class="field"><label for="u-em${i}">Artist ${i + 1} email</label><input id="u-em${i}" name="em${i}" type="email" maxlength="160" autocomplete="off"></div></div>`).join('')}
-      <p class="info">Each artist gets their own copy of this contract (same details) and signs it separately.</p></div>`;
-  }
   const today = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`; };
   /* Release Form → datos del contrato (nombres artísticos, nombres reales, email, país, track) */
-  const RF_KEYS = { artist: /^artist name/i, legal: /^legal full name/i, email: /^contact email/i, country: /^country/i, track: /^track title/i };
+  const RF_KEYS = { artist: /^artist name/i, legal: /^legal full name/i, email: /^contact email/i, country: /^country/i, track: /^track title/i, age: /^(age\b|date of birth|birth)/i, address: /address/i, city: /^city/i };
   function rfRead(r) {
     const o = {};
     for (const f of ctOpen.rf.fields) for (const [k, re] of Object.entries(RF_KEYS)) if (re.test(f.label || '') && !o[k]) o[k] = String(r.data?.[f.id] ?? '').trim();
@@ -2180,26 +2263,26 @@
   }
   const ctFormValues = () => { const f = $('#ct-use'); return f ? [...f.elements].filter(x => x.name).map(x => [x.name, x.value]) : []; };
   const ctFormRestore = vals => { const f = $('#ct-use'); if (f) for (const [n, v] of vals) if (f.elements[n] && n !== 'from') f.elements[n].value = v; };
-  function rfFill(id) {
+  // la respuesta del Release Form de un artista → sus datos (bloque «Artist k») y los del release si faltan
+  function rfFill(k, id) {
     const r = ctOpen.rf?.list.find(x => String(x.id) === String(id)), f = $('#ct-use');
     if (!r || !f) return;
-    const o = rfRead(r), artists = splitNames(o.artist), legals = splitNames(o.legal), set = (n, v) => { if (f.elements[n] && v) f.elements[n].value = v; };
-    set('artist', o.artist); set('em0', o.email); set('release_name', o.track);
-    if (ctOpen.tpl.signers.length === 1 && copiesOf() > 1) artists.forEach((a, i) => set('cn' + i, a));
-    if (o.track && o.artist) set('title', `${ctOpen.tpl.title} — ${o.artist} — ${o.track}`);
-    // cada dato del contrato: lo que dice la respuesta; si la respuesta no lo tiene, se vacía (para no dejar datos de otro artista)
+    const o = rfRead(r), n = artistsOf(ctOpen.tpl);
+    const set = (name, v, force) => { const el = f.elements[name]; if (el && v && (force || !el.value.trim() || /—\s*$/.test(el.value))) el.value = v; };
+    set('cn' + (k - 1), o.artist, true); set('em' + (k - 1), o.email, true); set('release_name', o.track);
     (ctOpen.fields || []).forEach((x, i) => {
-      const n = x.name.toLowerCase(), k = Number((n.match(/artist[a]? (\d)/) || [])[1]) || 0;
-      let v;
-      if (/\bage\b|edad|address|direcci|zip|street|calle|city|ciudad/.test(n)) v = undefined;
-      else if (/legal|real/.test(n)) v = k ? legals[k - 1] || '' : legals.length > 1 ? legals.join(' & ') : o.legal || '';
-      else if (/track|canci|song|tema/.test(n) && !/remix/.test(n)) v = o.track || '';
-      else if (/e-?mail|correo/.test(n)) v = k > 1 ? undefined : o.email || '';
-      else if (/country|pa[ií]s/.test(n)) v = o.country || '';
-      else if (/artist|art[ií]stic|stage/.test(n) && /name|nombre|art[ií]stic|^artist$/.test(n) && !/representative|signatory|label/.test(n)) v = k ? artists[k - 1] || '' : o.artist || '';
-      if (v !== undefined && f.elements['f' + i]) f.elements['f' + i].value = v;
+      const nm = x.name.toLowerCase(), el = f.elements['f' + i], who = fieldArtist(x.name, n);
+      if (!el) return;
+      if (who === k) {
+        const v = /legal/.test(nm) ? o.legal : /e-?mail/.test(nm) ? o.email : /\bage\b/.test(nm) ? o.age : /address/.test(nm) ? o.address
+          : /city/.test(nm) ? [o.city, o.country].filter(Boolean).join(', ') : /country/.test(nm) ? o.country : /name/.test(nm) ? o.artist : undefined;
+        if (v !== undefined) el.value = v || '';
+      } else if (!who && /^track$/.test(nm) && !el.value.trim()) el.value = o.track || '';
     });
-    toast('Details filled from the Release Form — check them');
+    const names = Array.from({ length: n }, (_, i) => (f.elements['cn' + i]?.value || '').trim()).filter(Boolean);
+    const track = f.elements.release_name.value.trim();
+    if (names.length && track) f.elements.title.value = `${ctOpen.tpl.title} — ${names.join(' & ')} — ${track}`;
+    toast(`Artist ${k}: details filled from the Release Form — check them`);
   }
   function ctDetail() {
     const c = ctOpen.contract;
@@ -2210,7 +2293,7 @@
       <form id="ct-ed" class="editor ct-ed" novalidate>
         <button type="button" class="back" data-ct="back">← ${tpl ? 'Templates' : 'Contracts'}</button>
         <div class="head"><div><p class="eyebrow">${tpl ? 'Template' : 'Contract'}</p><h1>${esc(c.title)}</h1></div>${tpl ? (ed && c.pdf && c.doc_url ? '<button type="button" class="btn primary" data-ct="use">Create contract from this template</button>' : '') : `<span class="tag big ${st[1]}">${st[0]}</span>`}</div>
-        ${tpl ? '' : ctSteps(c)}
+        ${tpl || isDraft(c) ? '' : ctSteps(c)}
         ${!signed && ed ? `
           <div class="row2 wide"><div class="field"><label for="c-title">${tpl ? 'Template name' : 'Title'}</label><input id="c-title" name="title" value="${esc(c.title)}" maxlength="160" autocomplete="off"></div>
             ${tpl ? '' : `<div class="field"><label for="c-artist">Artist</label><input id="c-artist" name="artist" value="${esc(c.artist)}" maxlength="160" autocomplete="off"></div>`}</div>
@@ -2229,7 +2312,7 @@
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions">
           ${ed ? '<button type="submit" class="btn primary">Save changes</button>' : ''}
-          ${!tpl && ed && !signed && c.status !== 'void' && c.pdf && c.signers.every(x => x.box) && c.signers.some(x => !x.emailed_at && !x.signed) ? '<button type="button" class="btn primary" data-ct="send" title="Each artist gets an email with their private link to read and sign">Send to sign</button>' : ''}
+          ${!tpl && ed && !signed && c.status !== 'void' && c.pdf && (isDraft(c) || c.signers.every(x => x.box)) && c.signers.some(x => !x.emailed_at && !x.signed) ? '<button type="button" class="btn primary" data-ct="send" title="Each artist gets an email with their private link to read and sign">Send to sign</button>' : ''}
           ${c.signers.some(x => x.signed) && !(signed && c.file && !c.signed_pdf) ? `<button type="button" class="btn ghost" data-ct="dl-signed">${signed ? 'Download signed PDF' : 'Download PDF (signatures so far)'}</button>` : c.pdf ? '<button type="button" class="btn ghost" data-ct="dl-orig">Download PDF</button>' : ''}
           ${!tpl && signed && ed ? (c.drive_url ? `<a class="btn ghost" href="${esc(c.drive_url)}" target="_blank" rel="noopener">Open in Drive ↗</a>` : '<button type="button" class="btn ghost" data-ct="drive-one" title="Saves the signed PDF in Drive: Year → Release number - Name">Save to Drive</button>') : ''}
           ${ctMoreMenu(c, ed, signed, tpl)}
@@ -2260,6 +2343,88 @@
       ${evs.length ? `<ol>${evs.map(e => `<li><time>${esc(fmtDate(e.at))}</time><b>${esc(e.label || e.email || 'Artist')}</b><span>${esc(what(e.event))}</span><span class="muted">${esc([dev(e.ua || ''), e.ip].filter(Boolean).join(' · '))}</span></li>`).join('')}</ol>`
         : '<p class="info">Nothing yet. When an artist opens their link, reads, signs or downloads the contract, it shows here.</p>'}</div>`;
   }
+  function ctDoneBlock(c, ed) {
+    const online = c.signers.length && c.signers.every(x => x.signed), mailOk = !!c.done_mail_at;
+    if (!online && !c.file) return '';
+    return `
+      <div class="ct-step done ct-done">
+        <span>${online ? `Signed by everyone · ${mailOk ? `download link emailed to ${c.signers.length > 1 ? 'each signer' : 'the artist'}` : 'signed copy not emailed yet'}` : 'Signed outside the site'}${c.drive_url ? ' · saved in Drive' : ''}</span>
+        <span class="docbox-btns">
+          ${ed && online && !mailOk ? `<button type="button" class="btn ghost sm" data-ct="finish">${c.finish_error ? 'Try again' : 'Send now'}</button>` : ''}
+          ${c.drive_url ? `<a class="btn ghost sm" href="${esc(c.drive_url)}" target="_blank" rel="noopener">Open in Drive ↗</a>` : ed ? '<button type="button" class="btn ghost sm" data-ct="drive-one">Save to Drive</button>' : ''}
+        </span>
+      </div>
+      ${c.finish_error ? `<p class="login-error" role="alert">${esc(c.finish_error)}</p>` : ''}`;
+  }
+  /* Google Drive: carpeta raíz (donde están las de cada año) → Año → «HRZ#xxx - Nombre» → PDF firmado */
+  let ctDrive = null;
+  const driveId = u => (String(u).match(/(?:folders\/|[?&]id=)([\w-]{10,})/) || String(u).match(/^([\w-]{10,})$/) || [])[1] || '';
+  function driveBox(ed, pending) {
+    if (ctDrive === null) { api('GET', '/api/contracts/settings').then(r => { ctDrive = r.drive_folder || ''; if (view === 'contracts' && !ctOpen && ctTab === 'signed') render(); }).catch(() => { ctDrive = ''; }); return ''; }
+    if (!ed) return '';
+    return `
+      <div class="docbox">
+        <div class="docbox-head">
+          <b>Google Drive</b>
+          <input class="drive-url" value="${ctDrive ? esc(`https://drive.google.com/drive/folders/${ctDrive}`) : ''}" placeholder="Link of the Drive folder that holds the year folders" aria-label="Drive folder link" spellcheck="false">
+          <span class="docbox-btns">
+            ${ctDrive ? `<a class="btn ghost sm" href="https://drive.google.com/drive/folders/${esc(ctDrive)}?authuser=contacthorizonids@gmail.com" target="_blank" rel="noopener">Open ↗</a>` : ''}
+            ${ctDrive && pending.length ? `<button type="button" class="btn primary sm" data-ct="drive-all">Save ${pending.length} to Drive</button>` : ''}
+          </span>
+        </div>
+        <p class="info">${!ctDrive ? 'Paste the link of your contracts folder in Drive. Each signed contract goes to <b>Year → Release number - Name</b> (the folders are created if they don’t exist).' : pending.length ? `${pending.length} signed contract${pending.length > 1 ? 's are' : ' is'} not in Drive yet.` : 'All signed contracts are in Drive.'}</p>
+      </div>`;
+  }
+  async function ensureSigned(c, orig) {
+    if (c.signed_pdf || !c.signers.length || !c.signers.every(x => x.signed)) return;
+    if (!c.signers[0].signature) c = (await api('GET', `/api/contracts/${encodeURIComponent(c.id)}`)).contract;
+    const bytes = orig || new Uint8Array(await (await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/pdf`)).arrayBuffer());
+    const out = await HZPDF.signed(bytes, { title: ctName(c), hash: c.pdf_hash,
+      signers: c.signers.map(x => ({ label: x.label, box: x.box, signed: { name: x.name, email: x.signer_email, at: x.signed_at, ip: x.ip, ua: x.ua, signature: x.signature, hash: c.pdf_hash } })) });
+    await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/signed`, { method: 'POST', body: out });
+    c.signed_pdf = true;
+  }
+  // guardar en Drive: lo hace el servidor con la cuenta de Horizon (antes se asegura el PDF firmado oficial)
+  async function saveToDrive(list) {
+    if (ctDrive === null) ctDrive = (await api('GET', '/api/contracts/settings').catch(() => ({}))).drive_folder || '';
+    if (!ctDrive) { toast('Paste the Drive folder link first (Contracts → Signed).'); return; }
+    busy = true;
+    try {
+      let ok = 0;
+      for (const c of list) {
+        if (c.signers.length && c.signers.every(x => x.signed)) await ensureSigned(c);
+        const r = await api('POST', `/api/contracts/${encodeURIComponent(c.id)}/drive-save`);
+        c.drive_url = r.drive_url; ok++;
+      }
+      toast(ok === 1 ? 'Saved in Drive' : `${ok} contracts saved in Drive`);
+    } catch (e) { toast(e.message); }
+    finally { busy = false; }
+  }
+  /* Google Doc dentro del panel (editor de Google tal cual); si el navegador no lo deja, «Open in a new window» */
+  function docEditor(c) {
+    $('#doc-ov')?.remove();
+    const ed = ctCanEdit() && c.status !== 'signed' && !c.signers.some(x => x.signed);
+    document.body.insertAdjacentHTML('beforeend', `
+      <div class="doc-ov" id="doc-ov" role="dialog" aria-modal="true" aria-label="Google Doc">
+        <div class="doc-ov-bar">
+          <b>${esc(c.title)}</b>
+          <span class="docbox-btns">
+            <a class="btn ghost sm" href="${esc(docEditUrl(c.doc_url))}" target="_blank" rel="noopener">Open in a new window ↗</a>
+            ${ed ? '<button type="button" class="btn primary sm" data-doc="done">Done · update PDF</button>' : ''}
+            <button type="button" class="btn ghost sm" data-doc="close">Close</button>
+          </span>
+        </div>
+        <iframe src="${esc(docEditUrl(c.doc_url))}" title="Google Doc" allow="clipboard-read; clipboard-write"></iframe>
+      </div>`);
+    document.body.style.overflow = 'hidden';
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-doc]');
+    if (!b) return;
+    $('#doc-ov')?.remove(); document.body.style.overflow = '';
+    if (b.dataset.doc === 'done') $('[data-ct="doc-pdf"]')?.click();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#doc-ov')) { $('#doc-ov').remove(); document.body.style.overflow = ''; } });
   // opciones que casi no se usan, explicadas
   function ctMoreMenu(c, ed, signed, tpl) {
     const items = [];
@@ -2354,9 +2519,9 @@
             ${ed && !x.signed ? `<label class="sg-f"><span>Name</span><input class="sg-label" value="${esc(x.label)}" maxlength="60" placeholder="Artist name"></label>
               ${tpl ? '<span></span>' : `<label class="sg-f"><span>Signing link is sent to</span><input class="sg-email" type="email" value="${esc(x.email)}" maxlength="160" placeholder="artist@email.com"></label>`}`
               : `<span class="sg-txt"><b>${esc(x.label)}</b><span>${esc(x.email || '')}</span></span><span></span>`}
-            <span class="sg-state ${x.signed ? 'ok' : x.email_error && !x.emailed_at ? '' : x.box ? 'set' : ''}" ${x.email_error && !x.signed ? `title="${esc(x.email_error)}"` : ''}>${x.signed ? `✓ Signed · ${esc(x.name)} · ${esc(fmtDate(x.signed_at))}` : x.email_error && !x.emailed_at ? 'Email not sent' : x.emailed_at ? `Emailed · ${esc(fmtDate(x.emailed_at))}` : x.box ? `Signs on page ${x.box.page + 1}` : 'Signature spot not set'}</span>
+            <span class="sg-state ${x.signed ? 'ok' : x.email_error && !x.emailed_at ? '' : x.box ? 'set' : ''}" ${x.email_error && !x.signed ? `title="${esc(x.email_error)}"` : ''}>${x.signed ? `✓ Signed · ${esc(x.name)} · ${esc(fmtDate(x.signed_at))}` : x.email_error && !x.emailed_at ? 'Email not sent' : x.emailed_at ? `Emailed · ${esc(fmtDate(x.emailed_at))}` : isDraft(c) ? 'Review only' : x.box ? `Signs on page ${x.box.page + 1}` : 'Signature spot not set'}</span>
             <span class="sg-btns">
-              ${ed && !x.signed ? (i === act ? '<button type="button" class="btn primary sm" data-ct="sg-cancel">Cancel</button>' : `<button type="button" class="btn ghost sm" data-ct="sg-pick" ${act >= 0 ? 'disabled' : ''}>${x.box ? 'Move signature' : 'Place signature'}</button>`) : ''}
+              ${ed && !x.signed && !isDraft(c) ? (i === act ? '<button type="button" class="btn primary sm" data-ct="sg-cancel">Cancel</button>' : `<button type="button" class="btn ghost sm" data-ct="sg-pick" ${act >= 0 ? 'disabled' : ''}>${x.box ? 'Move signature' : 'Place signature'}</button>`) : ''}
               ${x.token && !x.signed && c.status !== 'void' ? `<button type="button" class="btn ghost sm" data-ct="sg-copy" title="${esc(signerUrl(x))}">Copy link</button>${ed ? `<button type="button" class="btn ghost sm" data-ct="sg-mail">${x.emailed_at ? 'Resend email' : 'Send email'}</button>` : ''}` : ''}
               ${x.signed && x.token ? `<a class="btn ghost sm" href="${esc(signerUrl(x))}" target="_blank" rel="noopener">View</a>` : ''}
               ${ed && !x.signed && c.signers.length > 1 ? '<button type="button" class="ic danger" data-ct="sg-del" aria-label="Remove signer">✕</button>' : ''}
@@ -2389,7 +2554,7 @@
     if (!c || !box || !c.pdf) return;
     try {
       if (!ctOpen.bytes) ctOpen.bytes = new Uint8Array(await (await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/pdf`)).arrayBuffer());
-      const ed = ctCanEdit() && c.status !== 'signed';
+      const ed = ctCanEdit() && c.status !== 'signed' && !isDraft(c);
       ctOpen.view = await HZPDF.render(box, ctOpen.bytes, { marks: ctMarks(), maxWidth: 820, onPage: ed ? (page, x, y) => placeBox(page, x, y) : null });
       if (ctCanEdit() && c.status === 'signed' && !c.signed_pdf) ensureSigned(c, ctOpen.bytes).catch(() => { /* se reintenta la próxima vez */ });
       if (ed && !c.signers.some(x => x.signed)) { autoPlaceFor = null; autoPlace(c).catch(() => { /* se colocan a mano */ }); }
@@ -2496,6 +2661,7 @@
       : { box: x.box, title: x.label || `Artist ${i + 1}`, active: i === act });
   }
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && view === 'contracts' && ctOpen?.placing != null) { ctOpen.placing = null; ctSoftUpdate(); } });
+  document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's' && view === 'contracts' && $('#ct-ed')) { e.preventDefault(); $('#ct-ed').requestSubmit(); } });
   async function placeBox(page, x, y) {
     const c = ctOpen.contract, act = ctOpen.placing ?? -1;
     if (act < 0) return;   // solo después de pulsar «Place signature» (un clic suelto en el documento no mueve nada)
@@ -2526,10 +2692,10 @@
   async function openContract(id) {
     ctOpen = { mode: 'contract', id, contract: null };
     render();
-    try { const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); if (ctOpen?.id === id) { ctOpen.contract = r.contract; ctOpen.events = r.events || []; render(); } }
+    try { const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); if (ctOpen?.id === id) { ctOpen.contract = r.contract; ctOpen.events = r.events || []; ctMarkSeen(r.contract); render(); } }
     catch (e) { toast(e.message); ctOpen = null; render(); }
   }
-  async function ctRefresh() { const keep = ctOpen?.bytes; const id = ctOpen.id; const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); ctOpen = { mode: 'contract', id, contract: r.contract, events: r.events || [], bytes: keep, placing: null, fields: keep ? ctOpen.fields : null }; render(); }
+  async function ctRefresh() { const keep = ctOpen?.bytes; const id = ctOpen.id; const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); ctOpen = { mode: 'contract', id, contract: r.contract, events: r.events || [], bytes: keep, placing: null, fields: keep ? ctOpen.fields : null }; ctMarkSeen(r.contract); render(); }
   async function ctAction(fn, ok) {
     busy = true;
     try { const r = await fn(); if (ok) toast(ok); return r; }
@@ -2604,7 +2770,7 @@
         if (!await confirmBox(`Send “${c.title}” to sign? ${c.signers.length > 1 ? 'Each signer gets' : 'The artist gets'} an email with a private link.`, 'Send')) return;
         const r = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/send`));
         toast(r?.ok ? `Sent: ${r.sent} email${r.sent === 1 ? '' : 's'}` : r?.error || 'The email could not be sent');
-        ctRefresh();
+        if (r?.ok) { ctOpen = null; ctTab = 'contracts'; ctData = null; render(); loadContracts(); } else ctRefresh();
       } catch { /* aviso ya mostrado */ }
     }
     else if (a === 'void' || a === 'unvoid') {
@@ -2613,20 +2779,20 @@
     } else if (a === 'del') {
       if (!await confirmBox(`Delete “${c.title}”${c.status === 'signed' ? ' (SIGNED)' : ''}? Its PDF is deleted too. This can’t be undone.`, 'Delete')) return;
       try { await ctAction(() => api('DELETE', `/api/contracts/${encodeURIComponent(c.id)}`), 'Contract deleted'); ctOpen = null; ctData = null; render(); } catch { /* aviso ya mostrado */ }
-    } else if (a === 'dl-orig') { HZPDF.download(ctOpen.bytes, `${c.title} (original).pdf`); }
-    else if (a === 'dl-file') { try { const r = await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/file`); HZPDF.download(new Uint8Array(await r.arrayBuffer()), `${c.title} (firmado).pdf`); } catch (err) { toast(err.message); } }
+    } else if (a === 'dl-orig') { HZPDF.download(ctOpen.bytes, pdfName(c, ' (not signed)')); }
+    else if (a === 'dl-file') { try { const r = await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/file`); HZPDF.download(new Uint8Array(await r.arrayBuffer()), pdfName(c, ' (signed on paper)')); } catch (err) { toast(err.message); } }
     else if (a === 'dl-signed') {
       try {
-        if (c.signed_pdf) { const r = await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/signed`); HZPDF.download(new Uint8Array(await r.arrayBuffer()), `${c.title} (signed).pdf`); return; }
-        const out = await HZPDF.signed(ctOpen.bytes, { title: c.title, hash: c.pdf_hash,
+        if (c.signed_pdf) { const r = await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/signed`); HZPDF.download(new Uint8Array(await r.arrayBuffer()), pdfName(c)); return; }
+        const out = await HZPDF.signed(ctOpen.bytes, { title: ctName(c), hash: c.pdf_hash,
           signers: c.signers.map(x => ({ label: x.label, box: x.box, signed: x.signed ? { name: x.name, email: x.signer_email, at: x.signed_at, ip: x.ip, ua: x.ua, signature: x.signature, hash: c.pdf_hash } : null })) });
-        HZPDF.download(out, `${c.title} (firmado).pdf`);
+        HZPDF.download(out, pdfName(c, c.status === 'signed' ? '' : ' (signatures so far)'));
       } catch (err) { toast('Could not create the signed PDF: ' + err.message); }
     }
   });
   document.addEventListener('change', async e => {
     if (view !== 'contracts' || busy) return;
-    if (e.target.id === 'u-from') { rfFill(e.target.value); return; }
+    if (e.target.classList?.contains('u-from')) { rfFill(Number(e.target.dataset.k), e.target.value); return; }
     if (e.target.classList?.contains('drive-url')) {
       const v = e.target.value.trim(), id = driveId(v);
       if (v && !id) { toast('Paste the link of a Drive folder (drive.google.com/drive/folders/…).'); return; }
@@ -2673,54 +2839,149 @@
         try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, {}), 'Template created'); } catch { /* aviso ya mostrado */ }
         ctTab = 'templates'; ctData = null; autoPlaceFor = r.id; openContract(r.id); loadContracts();
       } else if (f.id === 'ct-use') {
-        const tpl = ctOpen.tpl, fields = ctOpen.fields || [];
+        const tpl = ctOpen.tpl, fields = ctOpen.fields || [], btn = $('button[type=submit]', f);
+        const stage = t => { btn.textContent = t; };   // en qué va
+        if (isDraftTpl(tpl)) {
+          const em = f.elements.em0.value.trim();
+          if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(em)) return fail('Write the email the draft is sent to.');
+          btn.disabled = true; stage('Sending…');
+          try {
+            const r = await ctAction(() => api('POST', '/api/contracts/make', { template: tpl.id, copies: [{ title: 'Contract Draft', artist: '', signers: [{ email: em }] }], send: true }));
+            toast(r.ok ? `Draft sent to ${em}` : r.error || 'The email could not be sent');
+            ctTab = 'contracts'; ctData = null; ctOpen = null; render(); loadContracts();
+          } catch (err) { if (!$('#ed-error:not([hidden])')) fail(err.message); btn.disabled = false; stage('Send draft'); }
+          return;
+        }
         const title = f.elements.title.value.trim();
         if (!title || /—\s*$/.test(title)) return fail('Complete the contract title.');
-        const values = {}; fields.forEach((x, i) => { values[x.name] = f.elements['f' + i].value.trim(); });
-        const n = tpl.signers.length === 1 ? copiesOf() : 1;
+        const n = artistsOf(tpl), values = {};
+        fields.forEach((x, i) => { const k = fieldArtist(x.name, n); values[x.name] = k && isDupField(x.name) ? (f.elements[(/mail/i.test(x.name) ? 'em' : 'cn') + (k - 1)]?.value || '').trim() : (f.elements['f' + i]?.value || '').trim(); });
         const people = Array.from({ length: n }, (_, i) => ({ name: (f.elements['cn' + i]?.value || '').trim(), email: (f.elements['em' + i]?.value || '').trim() }));
-        if (n > 1 && people.some(p => !p.email)) return fail('Write the email of each artist.');
-        const btn = $('button[type=submit]', f); btn.disabled = true;
-        const stage = t => { btn.textContent = t; };   // en qué va (copiar la plantilla, poner los datos, hacer el PDF)
-        stage('Copying the template and filling in the details…');
+        if (people.some(p => !p.name)) return fail(`Write the name of ${n > 1 ? 'each artist' : 'the artist'}.`);
+        const bad = people.find(p => p.email && !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(p.email));
+        if (bad) return fail(`The email of ${bad.name} is not valid.`);
+        const artist = people.map(p => p.name).join(' & ');
+        const copies = tpl.signers.length > 1 || n === 1
+          ? [{ title, artist, signers: people.map(p => ({ label: p.name, email: p.email })) }]
+          : people.map(p => ({ title: `${title} (${p.name})`, artist, signers: [{ label: p.name, email: p.email }] }));
+        btn.disabled = true; stage('Making the contract and its PDF…');
         try {
-          const docUrl = (await ctAction(() => api('POST', '/api/contracts/make-doc', { template: tpl.id, title, values }))).doc_url;   // Google lo hace el servidor (cuenta de Horizon)
-          if (n > 1) {
-            // mismo Doc y mismos datos; un contrato por artista, cada uno con su firmante
-            for (const [k, p] of people.entries()) {
-              stage(`Making the PDF ${k + 1} of ${n}…`);
-              const t2 = p.name ? `${title} (${p.name})` : title;
-              const r = await ctAction(() => api('POST', '/api/contracts', { template: tpl.id, title: t2, artist: f.elements.artist.value.trim() || p.name, email: p.email, vars: values, release_cat: f.elements.release_cat.value, release_name: f.elements.release_name.value }));
-              await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/doc`, { url: docUrl }));
-              const full = await api('GET', `/api/contracts/${encodeURIComponent(r.id)}`);
-              await ctAction(() => api('POST', '/api/contracts', { id: r.id, title: t2, artist: f.elements.artist.value.trim() || p.name, email: p.email, signers: full.contract.signers.map(x => ({ id: x.id, label: p.name || x.label, email: p.email })) }));
-              await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, {}));
-            }
-            toast(`${n} contracts created, one per artist`);
-            ctTab = 'contracts'; ctData = null; ctOpen = null; render(); loadContracts();
-            return;
-          }
-          stage('Saving the contract…');
-          const r = await ctAction(() => api('POST', '/api/contracts', { template: tpl.id, title, artist: f.elements.artist.value, email: f.elements.em0?.value || '', vars: values, release_cat: f.elements.release_cat.value, release_name: f.elements.release_name.value }));
-          await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/doc`, { url: docUrl }));
-          // quién firma: el nombre del artista (no «Artist») y su email (el escrito, o el del contrato)
-          const vget = re => { const k = Object.keys(values).find(n => re.test(n)); return k ? values[k] : ''; };
-          const emails = tpl.signers.map((x, i) => (f.elements['em' + i]?.value || '').trim() || (tpl.signers.length > 1 ? vget(new RegExp(`^artist ${i + 1} e-?mail`, 'i')) : vget(/^e-?mail$/i)));
-          const names = tpl.signers.map((x, i) => tpl.signers.length > 1 ? vget(new RegExp(`^artist ${i + 1} name`, 'i')) : f.elements.artist.value.trim() || vget(/^artist name$/i));
-          const full = await api('GET', `/api/contracts/${encodeURIComponent(r.id)}`);
-          await ctAction(() => api('POST', '/api/contracts', { id: r.id, title, artist: f.elements.artist.value, email: emails[0], signers: full.contract.signers.map((x, i) => ({ id: x.id, label: names[i] || x.label, email: emails[i] || '' })) }));
-          stage('Making the PDF…');
-          const g = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, {}), 'Contract created');
-          ctTab = 'contracts'; ctData = null; autoPlaceFor = r.id; openContract(r.id); loadContracts();
-        } catch (err) { if (!$('#ed-error:not([hidden])')) fail(err.message); btn.disabled = false; btn.textContent = 'Create contract'; }
+          const r = await ctAction(() => api('POST', '/api/contracts/make', { template: tpl.id, values, copies, release_cat: f.elements.release_cat.value, release_name: f.elements.release_name.value }));
+          toast(r.ids.length > 1 ? `${r.ids.length} contracts created, one per artist` : 'Contract created');
+          ctTab = 'contracts'; ctData = null;
+          if (r.ids.length > 1) { ctOpen = null; render(); loadContracts(); }
+          else { autoPlaceFor = r.ids[0]; openContract(r.ids[0]); loadContracts(); }
+        } catch (err) { if (!$('#ed-error:not([hidden])')) fail(err.message); btn.disabled = false; stage('Create contract'); }
       } else {
         const c = ctOpen.contract;
         const signers = $$('.signer', f).map(el => ({ id: el.dataset.sg, label: el.querySelector('.sg-label')?.value, email: el.querySelector('.sg-email')?.value })).filter(x => x.label !== undefined);
         await ctAction(() => api('POST', '/api/contracts', { id: c.id, title: f.elements.title?.value ?? c.title, artist: f.elements.artist?.value ?? c.artist, email: signers[0]?.email ?? c.email, notes: f.elements.notes.value, signers,
           ...(f.elements.release_cat ? { release_cat: f.elements.release_cat.value, release_name: f.elements.release_name.value } : {}) }), 'Saved');
-        ctRefresh();
+        // se queda todo como está; solo se ponen al día los datos y el título
+        const r = await api('GET', `/api/contracts/${encodeURIComponent(c.id)}`).catch(() => null);
+        if (r && ctOpen?.id === c.id) { ctOpen.contract = r.contract; ctOpen.events = r.events || []; const h = $('.ct-ed .head h1'); if (h) h.textContent = r.contract.title; }
       }
     } catch { /* aviso ya mostrado */ }
+  }, true);
+
+  /* ---------------- Calendar: releases y mixtapes con su fecha ---------------- */
+  let calData = null, calErr = '', calLoading = false, calOpen = null;
+  const calCanEdit = () => !!calData?.canEdit && can('calendar', 'edit');
+  async function loadCalendar() {
+    if (calLoading) return;
+    calLoading = true;
+    try { calData = await api('GET', '/api/calendar'); calErr = ''; }
+    catch (e) { calErr = e.message; if (e.status === 401) { calLoading = false; logout(e.message); return; } }
+    calLoading = false;
+    if (view === 'calendar') render();
+  }
+  const CAL_KIND = { release: 'Release', mixtape: 'Mixtape', other: 'Other' };
+  const todayIso = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const calDay = d => { const [y, m, x] = d.split('-'); return `${x}.${m}.${y.slice(2)}`; };
+  const calWeekday = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short' });
+  const calMonth = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  function calendarPage() {
+    if (!calData) {
+      if (!calErr) setTimeout(loadCalendar, 0);
+      return `<div class="head"><div><p class="eyebrow">Schedule</p><h1>CALENDAR</h1></div></div>${calErr ? `<p class="login-error" role="alert">${esc(calErr)}</p>` : '<p class="info">Loading…</p>'}`;
+    }
+    if (calOpen) return calForm();
+    const ed = calCanEdit(), today = todayIso();
+    const next = calData.items.filter(x => x.date >= today), past = calData.items.filter(x => x.date < today).reverse();
+    const row = x => `
+        <li class="row cal" data-cal="${esc(x.id)}">
+          <span class="cal-date"><b>${calDay(x.date)}</b><small>${calWeekday(x.date)}</small></span>
+          <span class="meta"><b>${x.artist ? esc(x.artist) + ' - ' : ''}${esc(x.title)}</b><span>${[x.cat, x.note].filter(Boolean).map(esc).join(' · ')}</span></span>
+          <span class="cal-tags"><span class="tag ${x.kind === 'mixtape' ? '' : 'off'}">${CAL_KIND[x.kind] || x.kind}</span>${x.programmed ? '<span class="tag ok">Programmed</span>' : ''}</span>
+          <span class="row-btns">${ed ? '<button type="button" class="btn ghost sm" data-cal-act="edit">Edit</button>' : ''}</span>
+        </li>`;
+    const months = {};
+    for (const x of next) (months[calMonth(x.date)] ||= []).push(x);
+    const todo = ed ? calData.unscheduled : [];
+    return `
+      <div class="head"><div><p class="eyebrow">Schedule</p><h1>CALENDAR</h1></div>
+        <div class="head-btns">${ed ? '<button type="button" class="btn primary" data-cal-act="new">+ Add date</button>' : ''}</div></div>
+      ${todo.length ? `<h2 class="ct-group-h">Signed contracts without a date <span>${todo.length}</span></h2>
+        <ol class="list">${todo.map(c => `
+          <li class="row cal-todo" data-ctid="${esc(c.id)}">
+            <span class="meta"><b>${esc(c.artist || '')}${c.release_name ? ' - ' + esc(c.release_name) : ''}</b><span>${[c.release_cat, 'Signed ' + fmtDate(c.signed_at)].filter(Boolean).map(esc).join(' · ')}</span></span>
+            <input type="date" class="cal-pick" aria-label="Release date" min="${today}">
+            <span class="row-btns"><button type="button" class="btn primary sm" data-cal-act="schedule">Add to calendar</button></span>
+          </li>`).join('')}</ol>` : ''}
+      ${Object.keys(months).length ? Object.entries(months).map(([m, l]) => `<h2 class="ct-group-h">${esc(m)} <span>${l.length}</span></h2><ol class="list">${l.map(row).join('')}</ol>`).join('') : '<ol class="list"><li class="empty">Nothing scheduled yet.</li></ol>'}
+      ${past.length ? `<details class="cal-past"><summary>Past · ${past.length}</summary><ol class="list">${past.map(row).join('')}</ol></details>` : ''}`;
+  }
+  function calForm() {
+    const x = calOpen.item || { date: '', kind: 'release', artist: '', title: '', cat: '', note: '', programmed: 0 };
+    return `
+      <form id="cal-ed" class="editor ct-ed cal-ed" novalidate>
+        <button type="button" class="back" data-cal-act="back">← Calendar</button>
+        <h1>${calOpen.item ? 'EDIT DATE' : 'NEW DATE'}</h1>
+        <div class="row2 wide"><div class="field"><label for="cl-date">Date</label><input id="cl-date" name="date" type="date" value="${esc(x.date)}"></div>
+          <div class="field"><label for="cl-kind">Type</label><select id="cl-kind" name="kind">${Object.entries(CAL_KIND).map(([k, v]) => `<option value="${k}"${x.kind === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div></div>
+        <div class="row2 wide"><div class="field"><label for="cl-artist">Artist</label><input id="cl-artist" name="artist" maxlength="160" value="${esc(x.artist || '')}" autocomplete="off"></div>
+          <div class="field"><label for="cl-title">Title</label><input id="cl-title" name="title" maxlength="160" value="${esc(x.title)}" autocomplete="off"></div></div>
+        <div class="row2 wide"><div class="field"><label for="cl-cat">Release number</label><input id="cl-cat" name="cat" maxlength="40" value="${esc(x.cat || '')}" autocomplete="off" placeholder="HRZ#092"></div>
+          <div class="field"><label for="cl-note">Note</label><input id="cl-note" name="note" maxlength="500" value="${esc(x.note || '')}" autocomplete="off"></div></div>
+        <label class="check"><input type="checkbox" name="programmed"${x.programmed ? ' checked' : ''}> <span>Programmed (already scheduled in the distributor)</span></label>
+        <p class="ed-error" id="ed-error" role="alert" hidden></p>
+        <div class="ed-actions"><button type="submit" class="btn primary">Save</button><button type="button" class="btn ghost" data-cal-act="back">Cancel</button>${calOpen.item ? '<button type="button" class="btn ghost danger-txt" data-cal-act="del">Delete</button>' : ''}</div>
+      </form>`;
+  }
+  async function calSave(body, ok) {
+    busy = true;
+    try { await api('POST', '/api/calendar', body); toast(ok); calOpen = null; calData = null; await loadCalendar(); }
+    catch (e) { const b = $('#ed-error'); if (b) { b.textContent = e.message; b.hidden = false; } else toast(e.message); }
+    finally { busy = false; }
+  }
+  document.addEventListener('click', async e => {
+    if (view !== 'calendar') return;
+    const t = e.target.closest('[data-cal-act]');
+    if (!t || busy) return;
+    const a = t.dataset.calAct, id = t.closest('[data-cal]')?.dataset.cal;
+    if (a === 'new') { calOpen = { item: null }; render(); $('#cl-date')?.focus(); }
+    else if (a === 'edit') { calOpen = { item: calData.items.find(x => x.id === id) }; render(); }
+    else if (a === 'back') { calOpen = null; render(); }
+    else if (a === 'del') {
+      const x = calOpen.item;
+      if (!await confirmBox(`Remove “${x.artist ? x.artist + ' - ' : ''}${x.title}” (${calDay(x.date)}) from the calendar?`, 'Remove')) return;
+      busy = true;
+      try { await api('DELETE', `/api/calendar/${encodeURIComponent(x.id)}`); toast('Removed'); calOpen = null; calData = null; await loadCalendar(); }
+      catch (err) { toast(err.message); } finally { busy = false; }
+    }
+    else if (a === 'schedule') {
+      // un contrato firmado → su fecha de salida
+      const li = t.closest('[data-ctid]'), c = calData.unscheduled.find(x => x.id === li.dataset.ctid), date = $('.cal-pick', li).value;
+      if (!date) { toast('Choose the release date first.'); $('.cal-pick', li).focus(); return; }
+      await calSave({ date, kind: 'release', artist: c.artist, title: c.release_name || c.title, cat: c.release_cat, contract_id: c.id }, 'Added to the calendar');
+    }
+  });
+  document.addEventListener('submit', async e => {
+    if (e.target.id !== 'cal-ed') return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (busy) return;
+    const f = e.target;
+    await calSave({ id: calOpen.item?.id, date: f.elements.date.value, kind: f.elements.kind.value, artist: f.elements.artist.value, title: f.elements.title.value, cat: f.elements.cat.value, note: f.elements.note.value, programmed: f.elements.programmed.checked }, 'Saved');
   }, true);
 
   /* ---------------- Team chat (burbuja abajo a la derecha) ---------------- */

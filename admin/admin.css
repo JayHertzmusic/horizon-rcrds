@@ -953,3 +953,26 @@ html, body, * { scrollbar-width: none; }
 .signer .sg-n, .signer .sg-state, .signer .sg-btns { align-self: center; }
 .pdf-viewer:not(.placing) .pdf-page { cursor: default !important; }
 .signers.is-placing .signers-head .muted { color: #fff; }
+/* contratos: lista por grupos, firmas nuevas, un bloque por artista al crear */
+.ct-group-h { margin: 26px 0 10px; font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+.ct-group-h:first-of-type { margin-top: 6px; }
+.ct-group-h span { margin-left: 6px; opacity: .6; }
+.row.ct.is-new { border-color: rgba(255, 59, 71, .55); }
+.ct-new { color: #ff6b74; font-weight: 700; }
+.ct-tabs .ct-dot { display: inline-block; width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: #ff3b47; vertical-align: 2px; }
+.ct-artist { margin: 0 0 16px; padding: 14px 16px 2px; border: 1px solid var(--line-2); border-radius: 8px; background: #0b0b0b; min-width: 0; }
+.ct-artist legend { padding: 0 8px; margin-left: -8px; font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #fff; }
+.ct-draft { max-width: 560px; }
+/* calendario */
+.row.cal { grid-template-columns: 74px minmax(0, 1fr) auto auto; }
+.cal-date { display: flex; flex-direction: column; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.cal-date b { font-size: 15px; color: #fff; }
+.cal-date small { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.cal-tags { display: flex; gap: 6px; }
+.row.cal-todo { grid-template-columns: minmax(0, 1fr) 170px auto; }
+.cal-pick { min-height: 36px; padding: 6px 10px; border-radius: 6px; background: #121212; border: 1px solid var(--line-2); color: var(--text); font: inherit; color-scheme: dark; }
+.cal-past { margin-top: 26px; }
+.cal-past summary { cursor: pointer; font-size: 13px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin-bottom: 10px; }
+.cal-ed input[type=date] { color-scheme: dark; }
+.danger-txt { color: #ff6b74 !important; }
+@media (max-width: 760px) { .row.cal { grid-template-columns: 64px minmax(0, 1fr) auto; } .row.cal .cal-tags { display: none; } .row.cal-todo { grid-template-columns: 1fr; } }

@@ -21,8 +21,8 @@
     // ID de cliente de Google (público). Los emails de los owners van como secreto (OWNER_EMAILS).
     "GOOGLE_CLIENT_ID": "157268274335-7oct5ose15hu5c9dhq1bh2fem0dnden0.apps.googleusercontent.com",
     "SYNC_REPO": "JayHertzmusic/horizon-rcrds",
-    // Aviso al Gmail de Horizon cuando un artista firma un contrato (Cloudflare Email Routing)
-    "MAIL_FROM": "contratos@horizonrcrds.com",
+    // Remitente de los correos de contratos; las respuestas de los artistas llegan a MAIL_TO (Gmail de Horizon)
+    "MAIL_FROM": "contracts@horizonrcrds.com",
     "MAIL_TO": "contacthorizonids@gmail.com",
     // Correos de contratos a los artistas: Resend (gratis), clave en el secreto RESEND_API_KEY
     // Script de Google de Horizon (aplicación web): da al servidor el permiso de Google Docs/Drive de la cuenta de Horizon

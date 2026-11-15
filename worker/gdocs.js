@@ -99,9 +99,10 @@ export async function docFromTemplate(env, docUrl, values, title) {
     // si era una raya «____» (o XXX), el dato lleva la letra de su etiqueta («Artist Name:»…), en negrita y sin subrayado
     if (line) {
       let k = b.start - 1 - extra; while (k > 0 && /\s/.test(text[k])) k--;
-      const ls = sty[k] || {}, style = { underline: false, italic: !!ls.italic, smallCaps: !!ls.smallCaps, strikethrough: false, bold: true };   // datos del artista siempre en negrita
-      const fields = ['underline', 'italic', 'smallCaps', 'strikethrough', 'bold'];
-      for (const f of ['weightedFontFamily', 'fontSize', 'foregroundColor']) if (ls[f]) { style[f] = ls[f]; fields.push(f); }
+      // datos del artista en negrita (la fecha no); letra y tamaño los de la etiqueta (si la etiqueta no los fija, los del párrafo)
+      const ls = sty[k] || {}, style = { underline: false, italic: !!ls.italic, smallCaps: !!ls.smallCaps, strikethrough: false, bold: !/date/i.test(b.name) };
+      const fields = ['underline', 'italic', 'smallCaps', 'strikethrough', 'bold', 'weightedFontFamily', 'fontSize', 'foregroundColor'];
+      for (const f of ['weightedFontFamily', 'fontSize', 'foregroundColor']) if (ls[f]) style[f] = ls[f];
       requests.push({ updateTextStyle: { range: { startIndex: startIndex + pre.length, endIndex: startIndex + pre.length + v.length, tabId: tab }, textStyle: style, fields: fields.join(',') } });
     }
   }

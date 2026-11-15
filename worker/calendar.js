@@ -1,7 +1,7 @@
 /* Calendario de HORIZON RCRDS (panel → Calendar): releases y mixtapes con su fecha.
    Permiso: sección «calendar» de los roles (ver / editar). Los owners siempre.
    Cada fecha puede ir ligada a un contrato firmado (así se ve qué firmado tiene ya fecha y cuál no). */
-import { horizonToken, subfolders } from './gdocs.js';
+import { horizonToken, subfolders, placeReleaseFolders } from './gdocs.js';
 
 export class CalendarError extends Error { constructor(status, message) { super(message); this.status = status; } }
 const parse = s => { try { return JSON.parse(s); } catch { return null; } };
@@ -168,7 +168,15 @@ export async function discordCalendarHook(req, env) {
   ops.push(DB.prepare("INSERT OR REPLACE INTO panel_settings (key, value) VALUES ('calendar_discord_hash', ?)").bind(hash));
   await DB.batch(ops);
   await fillCats(env).catch(e => console.error('calendar cats', e));
-  return { ok: true, changed: ops.length - 1 };
+  // si una fecha cambia de año, su carpeta del Drive de contratos se mueve a ese año
+  let moved = [];
+  try {
+    const root = (await DB.prepare("SELECT value FROM panel_settings WHERE key = 'contracts_drive'").first())?.value;
+    const rel = (await DB.prepare("SELECT date, cat FROM calendar WHERE kind = 'release' AND cat IS NOT NULL AND cat <> ''").all()).results;
+    if (root) moved = await placeReleaseFolders(env, root, rel.map(r => ({ cat: r.cat, year: r.date.slice(0, 4) })));
+    if (moved.length) await DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)').bind(Date.now(), '', 'Discord calendar', `Moved in Drive: ${moved.join(' · ')}`.slice(0, 500), '').run();
+  } catch (e) { console.error('calendar drive', e); }
+  return { ok: true, changed: ops.length - 1, moved };
 }
 // número de release de las fechas nuevas: el de su carpeta en el Drive de contratos («[HRZ#105] Nune - U»)
 async function fillCats(env) {

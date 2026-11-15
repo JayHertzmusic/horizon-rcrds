@@ -124,6 +124,25 @@ export async function subfolders(tok, parent) {
   const q = encodeURIComponent(`'${parent}' in parents and mimeType='${FOLDER}' and trashed=false`);
   return (await gDrive(tok, `files?q=${q}&fields=files(id,name)&pageSize=1000&includeItemsFromAllDrives=true`)).files || [];
 }
+const moveFolder = (tok, id, from, to) => gDrive(tok, `files/${id}?addParents=${to}&removeParents=${from}&fields=id`, { method: 'PATCH', json: {} });
+const relNum = name => catNum((String(name).match(/^\[?[^\s\]-]*\d+/) || [''])[0]);
+/* Calendario → Drive: cada carpeta de release («[HRZ#105] …») va en el año de su fecha en el calendario.
+   Si cambia de año (p. ej. de 2028 a 2027), se mueve; si el año no tiene carpeta, se crea. Nunca se borra nada. */
+export async function placeReleaseFolders(env, root, list) {
+  const want = new Map(list.filter(x => relNum(x.cat) !== null).map(x => [relNum(x.cat), String(x.year)]));
+  if (!want.size) return [];
+  const tok = await horizonToken(env), moved = [];
+  const years = (await subfolders(tok, root)).filter(y => /^\d{4}$/.test(y.name.trim()));
+  for (const y of years) for (const f of await subfolders(tok, y.id)) {
+    const target = want.get(relNum(f.name));
+    if (!target || target === y.name.trim()) continue;
+    let ty = years.find(x => x.name.trim() === target);
+    if (!ty) { ty = await mkFolder(tok, root, target); years.push(ty); }
+    await moveFolder(tok, f.id, y.id, ty.id);
+    moved.push(`${f.name}: ${y.name.trim()} → ${target}`);
+  }
+  return moved;
+}
 const mkFolder = (tok, parent, name) => gDrive(tok, 'files?fields=id,name', { method: 'POST', json: { name, mimeType: FOLDER, parents: [parent] } });
 const catNum = v => { const m = String(v || '').match(/(\d+)\s*$/) || String(v || '').match(/(\d+)/); return m ? Number(m[1]) : null; };
 // carpeta de cada release: «[HRZ#105] Artista 1 & Artista 2 - Track», dentro del año en que sale.
@@ -140,7 +159,14 @@ export async function saveToDrive(env, root, c, bytes, cal = {}) {
     const rels = await subfolders(tok, y.id);
     for (const x of rels) { const k = catNum((x.name.match(/^\[?[^\s\]-]*\d+/) || [''])[0]); if (k !== null) known.push({ n: k, year: Number(y.name) }); }
     const f = rels.find(x => catNum((x.name.match(/^\[?[^\s\]-]*\d+/) || [''])[0]) === n);
-    if (f && (!cal.year || String(cal.year) === y.name.trim())) { dest = f; path = `${y.name} / ${f.name}`; break; }
+    if (!f) continue;
+    if (cal.year && String(cal.year) !== y.name.trim()) {
+      // la carpeta está en otro año que el del calendario: se mueve a su año (no se crea otra)
+      const ty = years.find(x => x.name.trim() === String(cal.year)) || await mkFolder(tok, root, String(cal.year));
+      await moveFolder(tok, f.id, y.id, ty.id);
+      dest = f; path = `${cal.year} / ${f.name}`; break;
+    }
+    dest = f; path = `${y.name} / ${f.name}`; break;
   }
   if (!dest) {
     const prev = n === null ? null : known.filter(x => x.n < n).sort((a, b) => b.n - a.n || b.year - a.year)[0];

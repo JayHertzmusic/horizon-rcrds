@@ -17,6 +17,7 @@ export const FORM_SCHEMA = [
   `CREATE INDEX IF NOT EXISTS form_responses_form ON form_responses (form_id, id)`,
   // respuestas que la web copió a Google Forms (para no volver a meterlas cuando Google las devuelve)
   `CREATE TABLE IF NOT EXISTS gform_sent (hash TEXT PRIMARY KEY, at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS gform_trash (google_id TEXT PRIMARY KEY, at INTEGER NOT NULL)`,
 ];
 
 /* ---------- Conexión con Google Forms (script de Apps Script en la cuenta de Horizon) ----------
@@ -29,29 +30,96 @@ async function respHash(formId, data) {
   const body = formId + '\n' + Object.keys(data).sort().map(k => k + '=' + answerKey(data[k])).join('\n');
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body)))].map(b => b.toString(16).padStart(2, '0')).join('');
 }
+// firma de las preguntas (para saber si cambiaron desde la última sincronización)
+async function structSig(description, fields) {
+  const norm = (Array.isArray(fields) ? fields : []).map(x => [['email', 'url'].includes(x.type) ? 'text' : x.type, normQ(x.label), String(x.help || '').trim(), !!x.required, (x.options || []).map(o => String(o).trim()), !!x.other]);
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify([String(description || '').trim(), norm]))))].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+// preguntas de Google sobre las de la web: se conservan los ids (y email/link) de las que ya existían
+function mergeFields(web, google) {
+  const left = [...web], used = new Set(web.map(x => x.id));
+  let n = web.length + 1;
+  const out = (Array.isArray(google) ? google : []).map(gq => {
+    const k = left.findIndex(w => normQ(w.label) === normQ(gq.label) && (w.type === 'section') === (gq.type === 'section'));
+    const old = k >= 0 ? left.splice(k, 1)[0] : null;
+    let id = old?.id;
+    if (!id) { while (used.has('q' + n)) n++; id = 'q' + n; used.add(id); }
+    const type = old && ['email', 'url'].includes(old.type) && gq.type === 'text' ? old.type : gq.type;
+    return { ...gq, id, type };
+  });
+  return normFields(out);
+}
+// enlazar un formulario de la web con su Google Form (números de las preguntas y firmas de ambos lados)
+async function linkGoogle(DB, f, g) {
+  const fields = (parse(f.fields) || []).filter(x => x.type !== 'section'), byQ = new Map(fields.map(x => [normQ(x.label), x]));
+  const map = {}, missing = [];
+  for (const it of Array.isArray(g.fields) ? g.fields : []) {
+    if (it.type === 'section') continue;
+    const x = byQ.get(normQ(it.label));
+    if (x && /^\d+$/.test(String(it.entry || ''))) map[x.id] = String(it.entry); else missing.push(String(it.label).slice(0, 80));
+  }
+  const url2 = String(g.responseUrl || '');
+  const google = { id: String(g.googleId || '').slice(0, 100), url: /^https:\/\/docs\.google\.com\/forms\/(u\/\d+\/)?d\/e\/[\w-]+\/formResponse$/.test(url2) ? url2 : '', map,
+    gsig: await structSig(g.description, g.fields), wsig: await structSig(f.description, parse(f.fields) || []) };
+  await DB.prepare('UPDATE forms SET google = ? WHERE id = ?').bind(JSON.stringify(google), f.id).run();
+  return { matched: Object.keys(map).length, notInWeb: missing, notInGoogle: fields.filter(x => !map[x.id]).map(x => x.label.slice(0, 80)) };
+}
 const okSecret = (env, s) => !!env.GFORM_SECRET && typeof s === 'string' && s.length === env.GFORM_SECRET.length && s === env.GFORM_SECRET;
 
 export async function gformHook(req, env, url) {
   const DB = env.DB, b = parse(await req.text()) || {};
   if (!okSecret(env, b.secret)) throw new FormError(403, 'Not allowed.');
   if (url.pathname === '/api/hooks/gform/setup') {
-    // el script manda cada Google Form con sus preguntas (y el número «entry» de cada una)
+    // el script manda cada Google Form con sus preguntas; se enlazan sin cambiar nada (punto de partida)
     const report = [];
     for (const g of (Array.isArray(b.forms) ? b.forms : []).slice(0, 30)) {
-      const f = await DB.prepare('SELECT id, fields FROM forms WHERE slug = ?').bind(String(g.slug || '')).first();
+      const f = await DB.prepare('SELECT * FROM forms WHERE slug = ?').bind(String(g.slug || '')).first();
       if (!f) { report.push({ slug: g.slug, error: 'no web form with that link' }); continue; }
-      const fields = (parse(f.fields) || []).filter(x => x.type !== 'section'), byQ = new Map(fields.map(x => [normQ(x.label), x]));
-      const map = {}, missing = [];
-      for (const it of Array.isArray(g.items) ? g.items : []) {
-        const x = byQ.get(normQ(it.title));
-        if (x && /^\d+$/.test(String(it.entry || ''))) map[x.id] = String(it.entry); else missing.push(String(it.title).slice(0, 80));
-      }
-      const url2 = String(g.responseUrl || '');
-      const google = { id: String(g.googleId || '').slice(0, 100), url: /^https:\/\/docs\.google\.com\/forms\/(u\/\d+\/)?d\/e\/[\w-]+\/formResponse$/.test(url2) ? url2 : '', map };
-      await DB.prepare('UPDATE forms SET google = ? WHERE id = ?').bind(JSON.stringify(google), f.id).run();
-      report.push({ slug: g.slug, matched: Object.keys(map).length, notInWeb: missing, notInGoogle: fields.filter(x => !map[x.id]).map(x => x.label.slice(0, 80)) });
+      report.push({ slug: g.slug, ...await linkGoogle(DB, f, g) });
     }
+    // desde ahora, los formularios nuevos de la web se crean también en Google (los de antes, no: así no hay duplicados)
+    await DB.prepare("INSERT INTO panel_settings (key, value) VALUES ('gform_setup_at', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(String(now())).run();
     return { ok: true, report };
+  }
+  if (url.pathname === '/api/hooks/gform/sync') {
+    // cada 5 min: el script manda cómo están los Google Forms; la web aplica los cambios de Google y devuelve
+    // lo que el script tiene que hacer en Google (cambios hechos en la web, formularios nuevos o borrados)
+    const reported = new Map((Array.isArray(b.forms) ? b.forms : []).map(g => [String(g.googleId || ''), g]));
+    const ops = [], log = [];
+    const since = Number((await DB.prepare("SELECT value FROM panel_settings WHERE key = 'gform_setup_at'").first())?.value) || Infinity;
+    for (const f of (await DB.prepare('SELECT * FROM forms ORDER BY position').all()).results) {
+      const g = parse(f.google), web = parse(f.fields) || [];
+      if (!g?.id) { if ((f.created_at || 0) > since) ops.push({ op: 'upsert', slug: f.slug, googleId: null, title: f.title, description: f.description || '', fields: web }); continue; }
+      const r = reported.get(g.id);
+      if (!r) continue;
+      if (r.trashed) {   // en la papelera de Google → se borra también aquí
+        const n = (await DB.prepare('SELECT COUNT(*) AS n FROM form_responses WHERE form_id = ?').bind(f.id).first()).n;
+        await DB.batch([DB.prepare('DELETE FROM form_responses WHERE form_id = ?').bind(f.id), DB.prepare('DELETE FROM forms WHERE id = ?').bind(f.id)]);
+        await DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)').bind(now(), 'google', 'Google Forms', `Deleted the form “${f.title}” (${n} responses): it was deleted in Google Forms`, '').run();
+        log.push(`deleted ${f.slug}`); continue;
+      }
+      const wNow = await structSig(f.description, web), gNow = await structSig(r.description, r.fields);
+      if (g.wsig !== wNow) ops.push({ op: 'upsert', slug: f.slug, googleId: g.id, title: f.title, description: f.description || '', fields: web });   // la web manda
+      else if (g.gsig !== gNow) {   // cambió en Google → se aplica aquí
+        const merged = mergeFields(web, r.fields);
+        await DB.prepare('UPDATE forms SET fields = ?, description = ?, updated_at = ? WHERE id = ?').bind(JSON.stringify(merged), clean(r.description, 4000), now(), f.id).run();
+        await linkGoogle(DB, { ...f, fields: JSON.stringify(merged), description: clean(r.description, 4000) }, r);
+        await DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)').bind(now(), 'google', 'Google Forms', `Updated the questions of “${f.title}” from Google Forms`, '').run();
+        log.push(`updated ${f.slug}`);
+      } else await linkGoogle(DB, f, r);   // mismos datos: solo se refrescan los números de las preguntas
+    }
+    // formularios borrados en la web → a la papelera de Google
+    for (const t of (await DB.prepare('SELECT google_id FROM gform_trash').all()).results) ops.push({ op: 'trash', googleId: t.google_id });
+    return { ok: true, ops, log };
+  }
+  if (url.pathname === '/api/hooks/gform/ack') {
+    // el script ya aplicó los cambios: se guarda cómo quedaron los Google Forms
+    for (const g of (Array.isArray(b.done) ? b.done : []).slice(0, 30)) {
+      const f = await DB.prepare('SELECT * FROM forms WHERE slug = ?').bind(String(g.slug || '')).first();
+      if (f) await linkGoogle(DB, f, g);
+    }
+    for (const id of (Array.isArray(b.trashed) ? b.trashed : []).slice(0, 30)) await DB.prepare('DELETE FROM gform_trash WHERE google_id = ?').bind(String(id)).run();
+    return { ok: true };
   }
   if (url.pathname === '/api/hooks/gform/response') {
     const gid = String(b.googleId || '');
@@ -206,6 +274,8 @@ export async function formsApi(req, env, s, url, audit) {
     if (!s.owner || s.sync) throw new FormError(403, 'Only owners can delete a form.');
     const n = (await DB.prepare('SELECT COUNT(*) AS n FROM form_responses WHERE form_id = ?').bind(f.id).first()).n;
     await DB.batch([DB.prepare('DELETE FROM form_responses WHERE form_id = ?').bind(f.id), DB.prepare('DELETE FROM forms WHERE id = ?').bind(f.id)]);
+    const gid = (parse(f.google) || {}).id;
+    if (gid) await DB.prepare('INSERT OR REPLACE INTO gform_trash (google_id, at) VALUES (?, ?)').bind(gid, now()).run();   // también a la papelera de Google
     await audit(`Deleted the form “${f.title}” (${n} responses)`);
     return { ok: true };
   }

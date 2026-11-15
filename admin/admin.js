@@ -1662,26 +1662,39 @@
   let unseen = { total: 0, forms: {} };
   // al probar un rol, el aviso cuenta solo lo nuevo de los formularios que ese rol puede ver
   const badgeCount = () => preview ? visibleForms().reduce((a, f) => a + (f.unseen || 0), 0) : unseen.total;
+  let unseenReady = false;   // la primera vez solo se apunta lo que hay (sin avisos)
   async function checkUnseen() {
     if (!auth || preview || !showForms() || document.hidden) return;
     try {
-      const r = await api('GET', '/api/forms/unseen');
-      const grew = r.total !== unseen.total && r.total > unseen.total;
+      const r = await api('GET', '/api/forms/unseen'), old = unseen;
+      const grown = Object.keys(r.forms || {}).filter(id => (r.forms[id] || 0) > ((old.forms || {})[id] || 0));
+      const grew = r.total > old.total || grown.length > 0;
       unseen = r;
       const b = $('#forms-badge');
       if (b) { b.hidden = !r.total; b.innerHTML = `<span class="nb-n${r.total === 1 ? ' one' : ''}">${r.total > 99 ? '99+' : r.total}</span>`; }
       document.title = document.title.replace(/^\(\d+\+?\) /, '');
       if (r.total) document.title = `(${r.total}) ${document.title}`;
-      // lista de formularios: se actualiza por detrás, sin «Loading…» ni redibujar si nada cambió (así no parpadea)
-      if (grew && formsData) {
-        if (view === 'forms' && !formOpen && !formsLoading) {
-          const fresh = await api('GET', '/api/forms').catch(() => null);
-          if (fresh && JSON.stringify(fresh) !== JSON.stringify(formsData)) { formsData = fresh; if (view === 'forms' && !formOpen) render(); }
-        } else if (!formOpen) formsData = null;
+      const first = !unseenReady; unseenReady = true;
+      if (!grew || first) return;
+      // aviso en pantalla, aunque estés en otra sección
+      const names = grown.map(id => formsData?.forms.find(f => f.id === id)?.title).filter(Boolean);
+      toast(names.length ? `New response · ${names.join(', ')}` : 'New form response');
+      if (!formsData) return;
+      // los datos de los formularios (números) se refrescan por detrás, sin «Loading…» ni redibujar (no parpadea)
+      const fresh = await api('GET', '/api/forms').catch(() => null);
+      if (fresh) formsData = fresh;
+      if (view !== 'forms') return;
+      if (!formOpen) { render(); return; }
+      // respuestas de ese formulario abiertas: las nuevas aparecen solas en la lista
+      if (formOpen.mode === 'responses' && grown.includes(formOpen.id)) {
+        await searchResponses();
+        const f = formsData.forms.find(x => x.id === formOpen.id), cnt = document.querySelector('h1 .count');
+        if (f && cnt) cnt.textContent = f.total;
+        patchResps([]);   // botón «Mark all as seen»
       }
     } catch { /* sin aviso */ }
   }
-  setInterval(checkUnseen, 60e3);
+  setInterval(checkUnseen, 15e3);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUnseen(); });
   const showForms = () => can('forms') || (preview ? visibleForms().length > 0 : auth?.user?.formsCount > 0);
   async function loadForms() {
@@ -1967,7 +1980,13 @@
       const fid = formOpen.id, f = formsData?.forms.find(x => x.id === fid);
       const set = v => { for (const r of formOpen.responses) if (ids.includes(r.id)) r.seen = v; if (f) f.unseen = Math.max(0, (f.unseen || 0) + (v === seen ? 1 : -1) * (seen ? -ids.length : ids.length)); patchResps(ids); };
       set(seen);
-      try { await Promise.all(ids.map(rid => api('POST', `/api/forms/${encodeURIComponent(fid)}/responses/${rid}`, { seen }))); checkUnseen(); }
+      try {
+        await Promise.all(ids.map(rid => api('POST', `/api/forms/${encodeURIComponent(fid)}/responses/${rid}`, { seen })));
+        // lo cambias tú: se cuenta ya, para que no salte el aviso de «respuesta nueva»
+        const d = seen ? -ids.length : ids.length;
+        unseen = { total: Math.max(0, unseen.total + d), forms: { ...(unseen.forms || {}), [fid]: Math.max(0, ((unseen.forms || {})[fid] || 0) + d) } };
+        checkUnseen();
+      }
       catch (err) { if (formOpen?.id === fid) set(!seen); toast(err.message); }
     } else if (act === 'resp-del') {
       const rid = Number(t.closest('[data-resp]').dataset.resp);

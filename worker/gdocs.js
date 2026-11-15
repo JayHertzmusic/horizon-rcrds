@@ -58,13 +58,13 @@ function findBlanks(text) {
 }
 // texto de una pestaña del Doc con el índice de Google de cada carácter
 function docText(content) {
-  let text = ''; const idx = [];
+  let text = ''; const idx = [], sty = [];
   const walk = els => { for (const el of els || []) {
-    if (el.paragraph) for (const pe of el.paragraph.elements || []) { const t = pe.textRun?.content; if (t) for (let k = 0; k < t.length; k++) { text += t[k]; idx.push(pe.startIndex + k); } }
+    if (el.paragraph) for (const pe of el.paragraph.elements || []) { const t = pe.textRun?.content; if (t) for (let k = 0; k < t.length; k++) { text += t[k]; idx.push(pe.startIndex + k); sty.push(pe.textRun.textStyle || {}); } }
     if (el.table) for (const row of el.table.tableRows || []) for (const cell of row.tableCells || []) walk(cell.content);
   } };
   walk(content);
-  return { text, idx };
+  return { text, idx, sty };
 }
 const findTab = (tabs, id) => { for (const t of tabs || []) { if (t.tabProperties?.tabId === id) return t; const c = findTab(t.childTabs, id); if (c) return c; } return null; };
 const docParts = u => { const m = String(u).match(/docs\.google\.com\/document\/(?:u\/\d+\/)?d\/([\w-]{20,})/), t = String(u).match(/[?&#]tab=(t\.[\w]+)/); return m ? { id: m[1], tab: t ? t[1] : '' } : null; };
@@ -85,13 +85,24 @@ export async function docFromTemplate(env, docUrl, values, title) {
   const tabObj = tab ? findTab(full.tabs, tab) : full.tabs?.[0];
   if (!tabObj) throw new Error('Could not find the template tab in the copy.');
   tab = tabObj.tabProperties.tabId;
-  const { text, idx } = docText(tabObj.documentTab?.body?.content);
+  const { text, idx, sty } = docText(tabObj.documentTab?.body?.content);
   const requests = [];
   for (const b of findBlanks(text).reverse()) {
     const v = values[b.name];
     if (!v) continue;
-    const startIndex = idx[b.start], endIndex = idx[b.end - 1] + 1;
-    requests.push({ deleteContentRange: { range: { startIndex, endIndex, tabId: tab } } }, { insertText: { location: { index: startIndex, tabId: tab }, text: v } });
+    const line = /^(_+|X{3,}|XX\.XX\.XXXX)$/.test(String(b.value).trim());
+    const extra = 0;   // (los espacios de la plantilla se respetan: mueven el dato a su columna)
+    const startIndex = idx[b.start - extra], endIndex = idx[b.end - 1] + 1;
+    const pre = '';
+    requests.push({ deleteContentRange: { range: { startIndex, endIndex, tabId: tab } } }, { insertText: { location: { index: startIndex, tabId: tab }, text: pre + v } });
+    // si era una raya «____» (o XXX), el dato lleva la letra de su etiqueta («Artist Name:»…), sin subrayado ni cursiva
+    if (line) {
+      let k = b.start - 1 - extra; while (k > 0 && /\s/.test(text[k])) k--;
+      const ls = sty[k] || {}, style = { underline: false, italic: !!ls.italic, smallCaps: !!ls.smallCaps, strikethrough: false, bold: !!ls.bold };
+      const fields = ['underline', 'italic', 'smallCaps', 'strikethrough', 'bold'];
+      for (const f of ['weightedFontFamily', 'fontSize', 'foregroundColor']) if (ls[f]) { style[f] = ls[f]; fields.push(f); }
+      requests.push({ updateTextStyle: { range: { startIndex: startIndex + pre.length, endIndex: startIndex + pre.length + v.length, tabId: tab }, textStyle: style, fields: fields.join(',') } });
+    }
   }
   if (requests.length) await gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}:batchUpdate`, { requests });
   return `https://docs.google.com/document/d/${copy.id}/edit${tab ? '?tab=' + tab : ''}`;

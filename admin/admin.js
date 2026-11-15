@@ -2355,8 +2355,9 @@
       const lines = items.filter(it => /^[\s_]*_{8,}[\s_]*$/.test(it.s));
       let ink = null;   // la página dibujada, para encontrar la raya de verdad
       for (const lb of items) {
-        const m = lb.s.match(/signed by\s+(?:the\s+)?artist\s*(\d)?/i);
-        if (!m) continue;
+        // solo la etiqueta de la firma («Signed By Artist 1 (Or legal guardian)»), no frases del contrato
+        const m = lb.s.trim().match(/^signed by\s+(?:the\s+)?artist\s*(\d)?\s*(?:\(|$)/i);
+        if (!m || lb.s.trim().length > 60) continue;
         const mid = lb.x + lb.w / 2;
         // la línea justo encima de la etiqueta (la más cercana que la cubra)
         const ln = lines.filter(l => l.y < lb.y && lb.y - l.y < 40 && l.x - 20 < mid && l.x + l.w + 20 > mid).sort((a, b) => b.y - a.y)[0];
@@ -2372,6 +2373,7 @@
         spots.push({ n: m[1] ? Number(m[1]) : null, box: { page: i - 1, x: x / W, y: Math.max(0, (bottom - h) / H), w: w / W, h: h / H } });
       }
     }
+    for (let i = spots.length - 1; i >= 0; i--) if (spots.slice(i + 1).some(o => o.n === spots[i].n)) spots.splice(i, 1);
     // dos firmas en la misma fila (DUO): que los recuadros no se toquen
     for (const a of spots) {
       const cx = a.box.x + a.box.w / 2;

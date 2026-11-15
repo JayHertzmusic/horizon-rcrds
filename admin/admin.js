@@ -2081,7 +2081,8 @@
           <div class="field"><label for="u-rel">Release name</label><input id="u-rel" name="release_name" maxlength="160" autocomplete="off" placeholder="Track title"></div></div>
         <div class="row2 wide"><div class="field"><label for="u-title">Contract title</label><input id="u-title" name="title" maxlength="160" value="${esc(t.title)} — " autocomplete="off"></div>
           <div class="field"><label for="u-artist">Artist</label><input id="u-artist" name="artist" maxlength="160" autocomplete="off"></div></div>
-        ${t.signers.map((x, i) => `<div class="field"><label for="u-em${i}">${esc(x.label)} email</label><input id="u-em${i}" name="em${i}" type="email" maxlength="160" autocomplete="off"></div>`).join('')}
+        ${t.signers.length === 1 && copiesOf() > 1 ? copiesHtml() : t.signers.map((x, i) => `<div class="field"><label for="u-em${i}">${esc(x.label)} email</label><input id="u-em${i}" name="em${i}" type="email" maxlength="160" autocomplete="off"></div>`).join('')}
+        ${t.signers.length === 1 ? `<div class="copy-btns"><button type="button" class="btn ghost sm" data-ct="copy-add">+ Add artist (own copy)</button>${copiesOf() > 1 ? '<button type="button" class="btn ghost sm" data-ct="copy-del">Remove last</button>' : ''}</div>` : ''}
         <h2 class="ct-sub">Details that go in the contract</h2>
         ${!fields ? '<p class="info">Reading the template…</p>' : fields.length ? `<div class="ct-fields">${fields.map((f, i) => `
           <div class="field"><label for="u-f${i}">${esc(f.name)}</label><input id="u-f${i}" name="f${i}" maxlength="500" value="${esc(/date/i.test(f.name) && !/original/i.test(f.name) ? today() : f.current)}" autocomplete="off"></div>`).join('')}</div>
@@ -2091,6 +2092,15 @@
         <div class="ed-actions"><button type="submit" class="btn primary" ${fields ? '' : 'disabled'}>Create contract</button><button type="button" class="btn ghost" data-ct="back">Cancel</button></div>
         <p class="info">A copy of the template is made in your Google Drive with these details, and the PDF the artist signs comes from it. Each contract has its own Doc in case you want to tweak something.</p>
       </form>`;
+  }
+  /* Un contrato, una copia por artista (p. ej. «3 Artists»): mismos datos, cada uno firma la suya */
+  const copiesOf = () => ctOpen?.copies || Number((String(ctOpen?.tpl?.title || '').match(/(\d+)\s*artists/i) || [])[1]) || 1;
+  function copiesHtml() {
+    const n = copiesOf();
+    return `<div class="copies">${Array.from({ length: n }, (_, i) => `
+      <div class="row2 wide"><div class="field"><label for="u-cn${i}">Artist ${i + 1} name</label><input id="u-cn${i}" name="cn${i}" maxlength="60" autocomplete="off"></div>
+        <div class="field"><label for="u-em${i}">Artist ${i + 1} email</label><input id="u-em${i}" name="em${i}" type="email" maxlength="160" autocomplete="off"></div></div>`).join('')}
+      <p class="info">Each artist gets their own copy of this contract (same details) and signs it separately.</p></div>`;
   }
   const today = () => { const d = new Date(); return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`; };
   /* Release Form → datos del contrato (nombres artísticos, nombres reales, email, país, track) */
@@ -2121,6 +2131,7 @@
     if (!r || !f) return;
     const o = rfRead(r), artists = splitNames(o.artist), legals = splitNames(o.legal), set = (n, v) => { if (f.elements[n] && v) f.elements[n].value = v; };
     set('artist', o.artist); set('em0', o.email); set('release_name', o.track);
+    if (ctOpen.tpl.signers.length === 1 && copiesOf() > 1) artists.forEach((a, i) => set('cn' + i, a));
     if (o.track && o.artist) set('title', `${ctOpen.tpl.title} — ${o.artist} — ${o.track}`);
     // cada dato del contrato: lo que dice la respuesta; si la respuesta no lo tiene, se vacía (para no dejar datos de otro artista)
     (ctOpen.fields || []).forEach((x, i) => {
@@ -2612,6 +2623,7 @@
     if (a === 'back') { ctOpen = null; render(); loadContracts(); }
     else if (a === 'new') { ctOpen = { mode: 'new' }; render(); }
     else if (a === 'new-tpl') { ctOpen = { mode: 'new-tpl' }; render(); $('#tp-title')?.focus(); }
+    else if (a === 'copy-add' || a === 'copy-del') { const keep = ctFormValues(); ctOpen.copies = Math.max(1, Math.min(8, copiesOf() + (a === 'copy-add' ? 1 : -1))); render(); ctFormRestore(keep); }
     else if (a === 'tab-contracts' || a === 'tab-templates' || a === 'tab-signed') { ctTab = a.slice(4); render(); }
     else if (a === 'drive-all') { const list = ctData.contracts.filter(x => !isTpl(x) && x.status === 'signed' && !x.drive_url); await saveToDrive(list); ctData = null; loadContracts(); }
     else if (a === 'drive-one') { if (ctDrive === null) ctDrive = (await api('GET', '/api/contracts/settings').catch(() => ({}))).drive_folder || ''; await saveToDrive([c]); ctRefresh(); }
@@ -2734,10 +2746,27 @@
         const title = f.elements.title.value.trim();
         if (!title || /—\s*$/.test(title)) return fail('Complete the contract title.');
         const values = {}; fields.forEach((x, i) => { values[x.name] = f.elements['f' + i].value.trim(); });
+        const n = tpl.signers.length === 1 ? copiesOf() : 1;
+        const people = Array.from({ length: n }, (_, i) => ({ name: (f.elements['cn' + i]?.value || '').trim(), email: (f.elements['em' + i]?.value || '').trim() }));
+        if (n > 1 && people.some(p => !p.email)) return fail('Write the email of each artist.');
         const btn = $('button[type=submit]', f); btn.disabled = true; btn.textContent = 'Creando… (Google)';
         try {
           const tok = await googleToken();
           const docUrl = await docFromTemplate(tok, tpl, fields, values, title);
+          if (n > 1) {
+            // mismo Doc y mismos datos; un contrato por artista, cada uno con su firmante
+            for (const p of people) {
+              const t2 = p.name ? `${title} (${p.name})` : title;
+              const r = await ctAction(() => api('POST', '/api/contracts', { template: tpl.id, title: t2, artist: p.name || f.elements.artist.value, email: p.email, vars: values, release_cat: f.elements.release_cat.value, release_name: f.elements.release_name.value }));
+              await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/doc`, { url: docUrl }));
+              const full = await api('GET', `/api/contracts/${encodeURIComponent(r.id)}`);
+              await ctAction(() => api('POST', '/api/contracts', { id: r.id, title: t2, artist: p.name || f.elements.artist.value, email: p.email, signers: full.contract.signers.map(x => ({ id: x.id, label: p.name || x.label, email: p.email })) }));
+              await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, { token: tok }));
+            }
+            toast(`${n} contracts created, one per artist`);
+            ctTab = 'contracts'; ctData = null; ctOpen = null; render(); loadContracts();
+            return;
+          }
           const r = await ctAction(() => api('POST', '/api/contracts', { template: tpl.id, title, artist: f.elements.artist.value, email: f.elements.em0?.value || '', vars: values, release_cat: f.elements.release_cat.value, release_name: f.elements.release_name.value }));
           await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/doc`, { url: docUrl }));
           const emails = tpl.signers.map((x, i) => (f.elements['em' + i]?.value || '').trim());

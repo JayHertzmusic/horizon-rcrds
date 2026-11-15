@@ -884,3 +884,6 @@ html, body, * { scrollbar-width: none; }
 .mail-login .field { margin-bottom: 10px; }
 .ml-info { margin: 0 0 10px; font-size: 13px; line-height: 1.5; color: var(--muted); text-align: center; }
 .mail-login [hidden] { display: none !important; }
+/* Una copia por artista */
+.copy-btns { display: flex; gap: 8px; margin: -4px 0 6px; }
+.copies .info { margin: 0 0 10px; }

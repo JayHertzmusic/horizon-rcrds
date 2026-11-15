@@ -2217,27 +2217,45 @@
     const fieldHtml = (f, i, k = 0) => { const nm = fieldInput(i, fieldArtist(f.name, n, copies), k); return `<div class="field"><label for="u-${nm}">${label(f)}</label><input id="u-${nm}" name="${nm}" maxlength="500" value="${esc(fieldDefault(f))}" autocomplete="off"></div>`; };
     const all = (fields || []).map((f, i) => [f, i, fieldArtist(f.name, n, copies)]);
     const general = all.filter(([, , w]) => w === 0), mine = k => all.filter(([f, , w]) => (w === k || w === 'each') && !isDupField(f.name));
-    return `
-      <form id="ct-use" class="editor ct-ed" novalidate>
+    const picker = k => rf?.list?.length ? `<div class="field"><label for="u-from${k}">${n > 1 ? 'Fill from this artist’s Release Form' : 'Fill from a Release Form response'}</label><select id="u-from${k}" class="u-from" data-k="${k}"><option value="">Choose a response…</option>${rf.list.map(r => `<option value="${r.id}">${esc(rfLabel(r))}</option>`).join('')}</select></div>` : '';
+    const who = k => `<div class="row2 wide"><div class="field"><label for="u-cn${k - 1}">Artist name</label><input id="u-cn${k - 1}" name="cn${k - 1}" maxlength="60" autocomplete="off"></div>
+          <div class="field"><label for="u-em${k - 1}">Email (the signing link goes here)</label><input id="u-em${k - 1}" name="em${k - 1}" type="email" maxlength="160" autocomplete="off"></div></div>`;
+    const grid = l => l.length ? `<div class="ct-fields">${l.join('')}</div>` : '';
+    const head = `
         <button type="button" class="back" data-ct="back">← Contracts</button>
         <p class="eyebrow">New contract · template “${esc(t.title)}”</p>
-        <h1>CONTRACT DETAILS</h1>
-        ${rf?.list?.length ? Array.from({ length: n }, (_, x) => `<div class="field"><label for="u-from${x ? x + 1 : ''}">${n > 1 ? `Artist ${x + 1} · fill from their Release Form response` : 'Fill from a Release Form response'}</label><select id="u-from${x ? x + 1 : ''}" class="u-from" data-k="${x + 1}"><option value="">Choose a response…</option>${rf.list.map(r => `<option value="${r.id}">${esc(rfLabel(r))}</option>`).join('')}</select></div>`).join('') : ''}
+        <h1>CONTRACT DETAILS</h1>`;
+    const release = `
         <div class="row2 wide"><div class="field"><label for="u-cat">Release number</label><input id="u-cat" name="release_cat" maxlength="40" value="${esc(ctOpen.cat || '')}" autocomplete="off"></div>
           <div class="field"><label for="u-rel">Release name</label><input id="u-rel" name="release_name" maxlength="160" autocomplete="off" placeholder="Track title"></div></div>
-        <div class="field"><label for="u-title">Contract title</label><input id="u-title" name="title" maxlength="160" value="${esc(t.title)} — " autocomplete="off"></div>
-        ${Array.from({ length: n }, (_, x) => `
-        <div class="row2 wide"><div class="field"><label for="u-cn${x}">${n > 1 ? `Artist ${x + 1} name` : 'Artist name'}</label><input id="u-cn${x}" name="cn${x}" maxlength="60" autocomplete="off"></div>
-          <div class="field"><label for="u-em${x}">${n > 1 ? `Artist ${x + 1} email` : 'Artist email'}</label><input id="u-em${x}" name="em${x}" type="email" maxlength="160" autocomplete="off"></div></div>`).join('')}
-        ${t.signers.length === 1 ? `<div class="copy-btns"><button type="button" class="btn ghost sm" data-ct="copy-add">+ Add artist (own copy)</button>${n > 1 ? '<button type="button" class="btn ghost sm" data-ct="copy-del">Remove last</button>' : ''}</div>` : ''}
-        ${copies ? '<p class="info">Each artist gets their own copy of this contract, with their own details, and signs it separately.</p>' : ''}
-        <h2 class="ct-sub">Details that go in the contract</h2>
-        ${!fields ? '<p class="info">Reading the template…</p>' : `
-          ${general.length ? `<div class="ct-fields">${general.map(([f, i]) => fieldHtml(f, i)).join('')}</div>` : ''}
-          ${Array.from({ length: n }, (_, x) => mine(x + 1).length ? `${n > 1 ? `<p class="mini ct-who">Artist ${x + 1}</p>` : ''}<div class="ct-fields">${mine(x + 1).map(([f, i]) => fieldHtml(f, i, x + 1)).join('')}</div>` : '').join('')}
-          <p class="info">Everything above goes into the contract in every place it appears. A field left empty keeps what the template says.</p>`}
+        <div class="field"><label for="u-title">Contract title</label><input id="u-title" name="title" maxlength="160" value="${esc(t.title)} — " autocomplete="off"></div>`;
+    const end = `
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
-        <div class="ed-actions"><button type="submit" class="btn primary" ${fields ? '' : 'disabled'}>Create contract</button><button type="button" class="btn ghost" data-ct="back">Cancel</button></div>
+        <div class="ed-actions"><button type="submit" class="btn primary" ${fields ? '' : 'disabled'}>Create contract</button><button type="button" class="btn ghost" data-ct="back">Cancel</button></div>`;
+    const reading = !fields ? '<p class="info">Reading the template…</p>' : '';
+    // 1 artista: todo seguido, sin recuadros
+    if (n === 1) return `
+      <form id="ct-use" class="editor ct-ed" novalidate>${head}
+        ${picker(1)}${release}${who(1)}
+        ${t.signers.length === 1 ? '<div class="copy-btns"><button type="button" class="btn ghost sm" data-ct="copy-add">+ Add artist (own copy)</button></div>' : ''}
+        <h2 class="ct-sub">Details that go in the contract</h2>
+        ${reading}${grid([...general.map(([f, i]) => fieldHtml(f, i)), ...mine(1).map(([f, i]) => fieldHtml(f, i, 1))])}
+        ${fields ? '<p class="info">Everything above goes into the contract in every place it appears. A field left empty keeps what the template says.</p>' : ''}${end}
+      </form>`;
+    // varios artistas: un recuadro por artista con su Release Form, su nombre, su email y sus datos
+    return `
+      <form id="ct-use" class="editor ct-ed" novalidate>${head}
+        ${release}
+        <h2 class="ct-sub">Details that go in the contract</h2>
+        ${reading}${grid(general.map(([f, i]) => fieldHtml(f, i)))}
+        <h2 class="ct-sub">Artists · ${copies ? 'each one gets their own copy, with their own details, and signs it' : 'all of them sign this contract'}</h2>
+        ${Array.from({ length: n }, (_, x) => `
+        <fieldset class="ct-artist">
+          <legend>Artist ${x + 1}</legend>
+          ${picker(x + 1)}${who(x + 1)}${grid(mine(x + 1).map(([f, i]) => fieldHtml(f, i, x + 1)))}
+        </fieldset>`).join('')}
+        ${t.signers.length === 1 ? '<div class="copy-btns"><button type="button" class="btn ghost sm" data-ct="copy-add">+ Add artist (own copy)</button><button type="button" class="btn ghost sm" data-ct="copy-del">Remove last</button></div>' : ''}
+        ${fields ? '<p class="info">Everything goes into the contract in every place it appears. A field left empty keeps what the template says.</p>' : ''}${end}
       </form>`;
   }
   /* Un contrato, una copia por artista (p. ej. «3 Artists»): mismos datos, cada uno firma la suya */

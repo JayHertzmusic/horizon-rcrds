@@ -121,16 +121,19 @@ export async function formsApi(req, env, s, url, audit) {
     return { ok: true };
   }
   if (mm[2] === 'responses' && m === 'GET') {
-    const before = Number(url.searchParams.get('before')) || 9e15;
+    // Release Form: como la hoja de Google (#1 arriba, las nuevas debajo). El resto: la más nueva arriba.
+    const asc = f.slug === 'release-form';
+    const from = Number(url.searchParams.get('from') || url.searchParams.get('before')) || (asc ? 0 : 9e15);
     const q = String(url.searchParams.get('q') || '').trim().slice(0, 100);
     const like = '%' + q.replace(/[\\%_]/g, c => '\\' + c) + '%';
     // cada respuesta lleva su número (#1 = la primera que llegó), como las filas de Google; se puede buscar por él
     const num = /^#?\d{1,6}$/.test(q) ? Number(q.replace('#', '')) : -1;
-    const base = 'WITH t AS (SELECT id, at, data, seen, ROW_NUMBER() OVER (ORDER BY id) AS n FROM form_responses WHERE form_id = ?) SELECT * FROM t WHERE id < ?';
+    const base = `WITH t AS (SELECT id, at, data, seen, ROW_NUMBER() OVER (ORDER BY id) AS n FROM form_responses WHERE form_id = ?) SELECT * FROM t WHERE id ${asc ? '>' : '<'} ?`;
+    const tail = ` ORDER BY id ${asc ? 'ASC' : 'DESC'} LIMIT 101`;
     const rows = (q
-      ? await DB.prepare(base + " AND (data LIKE ? ESCAPE '\\' OR n = ?) ORDER BY id DESC LIMIT 51").bind(f.id, before, like, num).all()
-      : await DB.prepare(base + ' ORDER BY id DESC LIMIT 51').bind(f.id, before).all()).results;
-    return { responses: rows.slice(0, 50).map(r => ({ id: r.id, n: r.n, at: r.at, seen: !!r.seen, data: parse(r.data) || {} })), more: rows.length > 50 };
+      ? await DB.prepare(base + " AND (data LIKE ? ESCAPE '\\' OR n = ?)" + tail).bind(f.id, from, like, num).all()
+      : await DB.prepare(base + tail).bind(f.id, from).all()).results;
+    return { responses: rows.slice(0, 100).map(r => ({ id: r.id, n: r.n, at: r.at, seen: !!r.seen, data: parse(r.data) || {} })), more: rows.length > 100, asc };
   }
   if (mm[2] === 'responses' && mm[3] && m === 'POST') {
     const seen = (parse(await req.text()) || {}).seen ? 1 : 0;

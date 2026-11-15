@@ -140,7 +140,7 @@ export async function discordCalendarHook(req, env) {
   const msgs = Array.isArray(b.messages) ? b.messages.slice(0, 50) : [];
   // si una fecha sale varias veces (mensajes viejos y nuevos), vale la del mensaje más reciente
   const lines = [...new Map(parseDiscordCalendar(msgs).map(x => [x.kind + norm(x.artist) + norm(x.title), x])).values()];
-  const status = { at: Date.now(), messages: msgs.length, lines: lines.length, noText: msgs.length > 0 && msgs.every(m => !m.content) };
+  const status = { at: Date.now(), messages: msgs.length, lines: lines.length, noText: msgs.length > 0 && msgs.every(m => !m.content), noAccess: b.error === 'no-access' };
   await DB.prepare("INSERT OR REPLACE INTO panel_settings (key, value) VALUES ('calendar_discord', ?)").bind(JSON.stringify(status)).run();
   if (!lines.length) return { ok: true, ...status };
   await seed(DB);

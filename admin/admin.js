@@ -3010,6 +3010,7 @@
   function calSyncNote() {
     const d = calData.discord;
     if (!d) return '<p class="info cal-sync">Dates come from the Discord channel #horizon-calendar (checked every 10 minutes).</p>';
+    if (d.noAccess) return '<p class="login-error cal-sync">The Discord bot can’t see #horizon-calendar. In Discord, open the channel settings → Permissions → add the bot and allow <b>View Channel</b> and <b>Read Message History</b>.</p>';
     if (d.noText) return '<p class="login-error cal-sync">The Discord bot can’t read the text of #horizon-calendar. In the Discord Developer Portal → your bot → Bot, turn on <b>Message Content Intent</b>.</p>';
     const mins = Math.max(0, Math.round((Date.now() - d.at) / 60000));
     return `<p class="info cal-sync">Synced with Discord #horizon-calendar ${mins < 1 ? 'just now' : mins === 1 ? '1 minute ago' : mins + ' minutes ago'} · edit the dates there and they change here.</p>`;

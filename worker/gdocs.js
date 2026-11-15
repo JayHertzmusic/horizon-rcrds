@@ -1,0 +1,131 @@
+/* Google Docs y Drive con la cuenta de Horizon, hechos por el servidor (así cualquiera del equipo con permiso de
+   Contracts crea contratos sin iniciar sesión en Google). El permiso lo da el script de Apps Script de Horizon
+   (aplicación web, GSCRIPT_URL): devuelve un token de Google de la cuenta de Horizon; aquí se guarda ~50 min. */
+let cached = null;
+export async function horizonToken(env) {
+  if (cached && cached.exp > Date.now() + 60e3) return cached.token;
+  const kv = await env.FILES.get('google/token', { type: 'json' }).catch(() => null);
+  if (kv?.token && kv.exp > Date.now() + 60e3) { cached = kv; return kv.token; }
+  if (!env.GSCRIPT_URL || !env.GFORM_SECRET) throw new Error('Google is not connected yet (the Horizon script is missing).');
+  const r = await fetch(env.GSCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ secret: env.GFORM_SECRET, action: 'token' }), redirect: 'follow' });
+  const j = await r.json().catch(() => ({}));
+  if (!j.token) throw new Error('Google did not give access. Check the Horizon script (Deploy → Web app).');
+  cached = { token: j.token, exp: Date.now() + 50 * 60e3 };
+  await env.FILES.put('google/token', JSON.stringify(cached), { expirationTtl: 3000 });
+  return j.token;
+}
+async function gapi(tok, url, body) {
+  const r = await fetch(url, { method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${tok}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    if (r.status === 401) cached = null;
+    const msg = j.error?.message || `Error ${r.status}`;
+    throw new Error(/has not been used|is disabled|not been enabled/i.test(msg) ? 'The Google Docs/Drive API is not enabled in the Horizon script’s Google project.' : `Google: ${msg}`);
+  }
+  return j;
+}
+const DATA_NAMES = { 'artist name': 'Artist name', 'legal name': 'Legal name', 'e-mail address': 'Email', 'age': 'Age', 'street address, zip code': 'Address & zip code', 'city, country': 'City & country' };
+const BLANK_RULES = [
+  [/(\{\{\s*([^{}]{1,60}?)\s*\}\})/gd, m => [[1, m[2].replace(/\s+/g, ' ').trim()]]],
+  [/represented herein by\s+(.+?),\s*and hereinafter referred to as the\s*[“"]Label/gd, () => [[1, 'Label representative']]],
+  [/(?:^|\n|\.\s)\s*(?:\d+\.\d+\.\s*)?([^\n:.]+?),\s*also known as\s+(.+?),\s*and hereinafter referred to as the\s*[“"]Artists?[”"]/gd, () => [[1, 'Artist name'], [2, 'Legal name']]],
+  [/Artist (\d):\s*(.+?)\s+also known as\s+(.+?)\.(?=\s|$)/gd, m => [[2, `Artist ${m[1]} name`], [3, `Artist ${m[1]} legal name`]]],
+  [/musical work titled\s*["“]\s*(.+?)\s*["”]\s*recorded/gd, () => [[1, 'Track']]],
+  [/sound recording titled\s*["“](.+?)["”]/gd, () => [[1, 'Track']]],
+  [/AUTHORIZATION\s*[–-]\s*["“](.+?)["”]/gd, () => [[1, 'Header title']]],
+  [/Title:\s*["“](.+?)["”]/gd, () => [[1, 'Remix title']]],
+  [/Remixer:\s*["“](.+?)["”]/gd, () => [[1, 'Remixer']]],
+  [/(?:^|\n|\s)Artist:\s*(.+?)(?=\s*(?:\n|This Authorization))/gd, () => [[1, 'Artist name']]],
+  [/entered into on\s+(\d\d\.\d\d\.\d{4}|XX\.XX\.XXXX)/gd, () => [[1, 'Date']]],
+  [/entered into by the parties on\s+(\d\d\.\d\d\.\d{4}|XX\.XX\.XXXX)/gd, () => [[1, 'Original agreement date']]],
+  [/EFFECTIVE DATE\s+(\d\d\.\d\d\.\d{4}|XX\.XX\.XXXX)/gd, () => [[1, 'Date']]],
+  [/Signed By HORIZON RCRDS\s*\((.+?)\)/gd, () => [[1, 'Label signatory']]],
+  [/(Artist (\d) Name|Artist Name|Legal Name|E-Mail Address|Age|Street Address, Zip Code|City, Country):\s*(_{6,})/gd, (m, ctx) => {
+    if (m[2]) { ctx.who = `Artist ${m[2]} `; return [[3, `Artist ${m[2]} name`]]; }
+    const n = DATA_NAMES[m[1].toLowerCase()];
+    return [[3, ctx.who ? ctx.who + n.toLowerCase().replace(/^email$/, 'email') : n]];
+  }],
+];
+const isBlank = v => /^(X{3,}|XX\.XX\.XXXX|_+)$/.test(v.trim());
+function findBlanks(text) {
+  const out = [], ctx = {};
+  for (const [re, fn] of BLANK_RULES) for (const m of text.matchAll(re)) for (const [g, name] of fn(m, ctx)) {
+    const [start, end] = m.indices[g] || [];
+    if (start == null || end <= start || !name || out.some(b => start < b.end && end > b.start)) continue;
+    out.push({ name, start, end, value: m[g] });
+  }
+  return out.sort((a, b) => a.start - b.start);
+}
+// texto de una pestaña del Doc con el índice de Google de cada carácter
+function docText(content) {
+  let text = ''; const idx = [];
+  const walk = els => { for (const el of els || []) {
+    if (el.paragraph) for (const pe of el.paragraph.elements || []) { const t = pe.textRun?.content; if (t) for (let k = 0; k < t.length; k++) { text += t[k]; idx.push(pe.startIndex + k); } }
+    if (el.table) for (const row of el.table.tableRows || []) for (const cell of row.tableCells || []) walk(cell.content);
+  } };
+  walk(content);
+  return { text, idx };
+}
+const findTab = (tabs, id) => { for (const t of tabs || []) { if (t.tabProperties?.tabId === id) return t; const c = findTab(t.childTabs, id); if (c) return c; } return null; };
+const docParts = u => { const m = String(u).match(/docs\.google\.com\/document\/(?:u\/\d+\/)?d\/([\w-]{20,})/), t = String(u).match(/[?&#]tab=(t\.[\w]+)/); return m ? { id: m[1], tab: t ? t[1] : '' } : null; };
+const flatTabs = (tabs, out = []) => { for (const t of tabs || []) { out.push(t.tabProperties || {}); flatTabs(t.childTabs, out); } return out; };
+export async function docFromTemplate(env, docUrl, values, title) {
+  const tok = await horizonToken(env);
+  const d = docParts(docUrl);
+  if (!d) throw new Error('The template’s Google Doc link is not valid.');
+  const copy = await gapi(tok, `https://www.googleapis.com/drive/v3/files/${d.id}/copy?fields=id&supportsAllDrives=true`, { name: `HORIZON RCRDS — ${title}` });
+  let tab = d.tab;
+  const q = '?includeTabsContent=true&fields=tabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index))))';
+  if (tab) {
+    const [a, b] = await Promise.all([gapi(tok, `https://docs.googleapis.com/v1/documents/${d.id}${q}`), gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}${q}`)]);
+    const ta = flatTabs(a.tabs), tb = flatTabs(b.tabs);
+    if (!tb.some(t => t.tabId === tab)) tab = tb[ta.findIndex(t => t.tabId === tab)]?.tabId || '';
+  }
+  const full = await gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}?includeTabsContent=true`);
+  const tabObj = tab ? findTab(full.tabs, tab) : full.tabs?.[0];
+  if (!tabObj) throw new Error('Could not find the template tab in the copy.');
+  tab = tabObj.tabProperties.tabId;
+  const { text, idx } = docText(tabObj.documentTab?.body?.content);
+  const requests = [];
+  for (const b of findBlanks(text).reverse()) {
+    const v = values[b.name];
+    if (!v) continue;
+    const startIndex = idx[b.start], endIndex = idx[b.end - 1] + 1;
+    requests.push({ deleteContentRange: { range: { startIndex, endIndex, tabId: tab } } }, { insertText: { location: { index: startIndex, tabId: tab }, text: v } });
+  }
+  if (requests.length) await gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}:batchUpdate`, { requests });
+  return `https://docs.google.com/document/d/${copy.id}/edit${tab ? '?tab=' + tab : ''}`;
+}
+
+/* Guardar el contrato firmado en Drive: carpeta raíz → Año → «HRZ#xxx - Nombre» (se crean si no existen) */
+const FOLDER = 'application/vnd.google-apps.folder';
+async function gDrive(tok, path, opts = {}) {
+  const r = await fetch(`https://www.googleapis.com/drive/v3/${path}${path.includes('?') ? '&' : '?'}supportsAllDrives=true`, { ...opts, headers: { Authorization: `Bearer ${tok}`, ...(opts.json ? { 'Content-Type': 'application/json' } : {}), ...(opts.headers || {}) }, body: opts.json ? JSON.stringify(opts.json) : opts.body });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { if (r.status === 401) cached = null; throw new Error(`Google Drive: ${j.error?.message || 'error ' + r.status}`); }
+  return j;
+}
+async function subfolders(tok, parent) {
+  const q = encodeURIComponent(`'${parent}' in parents and mimeType='${FOLDER}' and trashed=false`);
+  return (await gDrive(tok, `files?q=${q}&fields=files(id,name)&pageSize=1000&includeItemsFromAllDrives=true`)).files || [];
+}
+const mkFolder = (tok, parent, name) => gDrive(tok, 'files?fields=id,name', { method: 'POST', json: { name, mimeType: FOLDER, parents: [parent] } });
+const catNum = v => { const m = String(v || '').match(/(\d+)\s*$/) || String(v || '').match(/(\d+)/); return m ? Number(m[1]) : null; };
+export async function saveToDrive(env, root, c, bytes) {
+  const tok = await horizonToken(env);
+  const year = String(new Date(c.signed_at || Date.now()).getFullYear());
+  const y = (await subfolders(tok, root)).find(f => f.name.trim() === year) || await mkFolder(tok, root, year);
+  let dest = y, path = year;
+  if (c.release_cat) {
+    const n = catNum(c.release_cat), rels = await subfolders(tok, y.id);
+    dest = rels.find(f => n !== null && catNum((f.name.match(/^[^\s-]*\d+/) || [''])[0]) === n) || await mkFolder(tok, y.id, [c.release_cat, c.release_name].filter(Boolean).join(' - '));
+    path += ' / ' + dest.name;
+  }
+  const name = `${String(c.title).replace(/[\/:*?"<>|]+/g, '').trim()} (signed).pdf`, B = 'hz' + crypto.randomUUID().replace(/-/g, '');
+  const head = `--${B}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [dest.id], mimeType: 'application/pdf' })}\r\n--${B}\r\nContent-Type: application/pdf\r\n\r\n`;
+  const body = new Blob([head, bytes, `\r\n--${B}--`]);
+  const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id', { method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': `multipart/related; boundary=${B}` }, body });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(`Google Drive: ${j.error?.message || 'error ' + r.status}`);
+  return { id: j.id, path };
+}

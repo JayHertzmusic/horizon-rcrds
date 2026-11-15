@@ -11,6 +11,7 @@
    Permiso: sección «contracts» de los roles (ver / editar). Los owners siempre. */
 
 import { inviteMail, doneMail } from './contract-mail.js';
+import { horizonToken, docFromTemplate, saveToDrive } from './gdocs.js';
 
 export class ContractError extends Error { constructor(status, message) { super(message); this.status = status; } }
 const parse = s => { try { return JSON.parse(s); } catch { return null; } };
@@ -131,6 +132,17 @@ export async function contractsApi(req, env, s, url, can, audit) {
     const r = await DB.prepare("SELECT value FROM panel_settings WHERE key = 'contracts_drive'").first();
     return { drive_folder: r?.value || '' };
   }
+  // contrato nuevo desde una plantilla: copia del Google Doc (en el Drive de Horizon) con los datos puestos
+  if (p === '/api/contracts/make-doc' && m === 'POST') {
+    edit();
+    const b = parse(await req.text()) || {};
+    const tpl = await DB.prepare(`SELECT doc_url FROM contracts WHERE id = ? AND kind = 'template'`).bind(String(b.template || '')).first();
+    if (!tpl?.doc_url) throw new ContractError(404, 'That template has no Google Doc.');
+    const values = {};
+    if (b.values && typeof b.values === 'object') for (const [k, v] of Object.entries(b.values).slice(0, 60)) values[clean(k, 60)] = clean(v, 500);
+    try { return { doc_url: await docFromTemplate(env, tpl.doc_url, values, clean(b.title, 160) || 'Contract') }; }
+    catch (e) { throw new ContractError(502, e.message); }
+  }
   if (p === '/api/contracts' && m === 'POST') {
     edit();
     const b = parse(await req.text()) || {};
@@ -178,7 +190,7 @@ export async function contractsApi(req, env, s, url, can, audit) {
     await audit(kind ? `Created the template “${title}”` : `Created the contract “${title}”${tpl ? ` from the template “${tpl.title}”` : ''}`);
     return { ok: true, id };
   }
-  const mm = p.match(/^\/api\/contracts\/([\w-]+)(?:\/(pdf|box|signers|send|void|unvoid|file|doc|from-doc|signed|finish|drive))?$/);
+  const mm = p.match(/^\/api\/contracts\/([\w-]+)(?:\/(pdf|box|signers|send|void|unvoid|file|doc|from-doc|signed|finish|drive|drive-save))?$/);
   if (!mm) throw new ContractError(404, 'Not found.');
   const c = await DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(mm[1]).first();
   if (!c) throw new ContractError(404, 'That contract no longer exists.');
@@ -226,7 +238,9 @@ export async function contractsApi(req, env, s, url, can, audit) {
     if (signed || anySigned) throw new ContractError(409, 'Someone already signed this contract: the PDF can’t be changed.');
     const d = parseDoc(c.doc_url || '');
     if (!d) throw new ContractError(400, 'This contract is not linked to a Google Doc tab.');
-    const tk = String((parse(await req.text()) || {}).token || '');
+    // permiso de Google: el del navegador (si lo manda) o el de la cuenta de Horizon desde el servidor
+    let tk = String((parse(await req.text()) || {}).token || '');
+    if (!tk) { try { tk = await horizonToken(env); } catch (e) { throw new ContractError(502, e.message); } }
     if (!/^[\w.\-~+/=]{20,4096}$/.test(tk)) throw new ContractError(400, 'Google permission missing.');
     const r = await fetch(`https://docs.google.com/document/d/${d.id}/export?format=pdf${d.tab ? '&tab=' + d.tab : ''}`, { headers: { Authorization: `Bearer ${tk}` } });
     if (r.status === 401 || r.status === 403) throw new ContractError(403, 'Google did not allow reading that Doc. Connect again with the Horizon account.');
@@ -348,6 +362,22 @@ export async function contractsApi(req, env, s, url, can, audit) {
     const r = await finalize(env, c.id, url.origin);
     const after = await DB.prepare('SELECT finish_error FROM contracts WHERE id = ?').bind(c.id).first();
     return { ok: r.ok, error: after?.finish_error || '' };
+  }
+  if (mm[2] === 'drive-save' && m === 'POST') {
+    // guardar el contrato firmado en el Drive de Horizon (lo hace el servidor)
+    edit();
+    if (!signed) throw new ContractError(400, 'Only signed contracts go to Drive.');
+    const root = (await DB.prepare("SELECT value FROM panel_settings WHERE key = 'contracts_drive'").first())?.value;
+    if (!root) throw new ContractError(400, 'Paste the Drive folder link first (Contracts → Signed).');
+    const key = c.signed_pdf || c.file;
+    if (!key) throw new ContractError(409, 'The signed PDF is not ready yet. Open the contract once and try again.');
+    const buf = await env.FILES.get(key, { type: 'arrayBuffer' });
+    if (!buf) throw new ContractError(404, 'PDF not found.');
+    let r;
+    try { r = await saveToDrive(env, root, c, new Uint8Array(buf)); } catch (e) { throw new ContractError(502, e.message); }
+    await DB.prepare('UPDATE contracts SET drive_id = ?, drive_url = ? WHERE id = ?').bind(r.id, `https://drive.google.com/file/d/${r.id}/view`, c.id).run();
+    await audit(`Saved the signed “${c.title}” in Google Drive (${r.path})`);
+    return { ok: true, drive_url: `https://drive.google.com/file/d/${r.id}/view` };
   }
   if (mm[2] === 'drive' && m === 'POST') {
     edit();

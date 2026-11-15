@@ -2298,184 +2298,7 @@
     }
     return [...map.values()];
   }
-  // texto de una pestaña del Doc con el índice de Google de cada carácter
-  function docText(content) {
-    let text = ''; const idx = [];
-    const walk = els => { for (const el of els || []) {
-      if (el.paragraph) for (const pe of el.paragraph.elements || []) { const t = pe.textRun?.content; if (t) for (let k = 0; k < t.length; k++) { text += t[k]; idx.push(pe.startIndex + k); } }
-      if (el.table) for (const row of el.table.tableRows || []) for (const cell of row.tableCells || []) walk(cell.content);
-    } };
-    walk(content);
-    return { text, idx };
-  }
-  const findTab = (tabs, id) => { for (const t of tabs || []) { if (t.tabProperties?.tabId === id) return t; const c = findTab(t.childTabs, id); if (c) return c; } return null; };
   const docParts = u => { const m = String(u).match(/docs\.google\.com\/document\/(?:u\/\d+\/)?d\/([\w-]{20,})/), t = String(u).match(/[?&#]tab=(t\.[\w]+)/); return m ? { id: m[1], tab: t ? t[1] : '' } : null; };
-  async function gapi(tok, url, body) {
-    const r = await fetch(url, { method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${tok}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      const msg = j.error?.message || `Error ${r.status}`;
-      if (r.status === 401) gToken = null;
-      throw new GhError(/has not been used|is disabled|not been enabled/i.test(msg) ? 'The Google Docs/Drive API is not enabled in the panel’s Google project.' : `Google: ${msg}`);
-    }
-    return j;
-  }
-  const flatTabs = (tabs, out = []) => { for (const t of tabs || []) { out.push(t.tabProperties || {}); flatTabs(t.childTabs, out); } return out; };
-  // copia la plantilla en el Drive de Horizon, pone los datos en sus huecos y devuelve el enlace de la pestaña de la copia
-  async function docFromTemplate(tok, tpl, fields, values, title) {
-    const d = docParts(tpl.doc_url);
-    if (!d) throw new GhError('The template’s Google Doc link is not valid.');
-    const copy = await gapi(tok, `https://www.googleapis.com/drive/v3/files/${d.id}/copy?fields=id&supportsAllDrives=true`, { name: `HORIZON RCRDS — ${title}` });
-    let tab = d.tab;
-    const q = '?includeTabsContent=true&fields=tabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index))))';
-    if (tab) {
-      const [a, b] = await Promise.all([gapi(tok, `https://docs.googleapis.com/v1/documents/${d.id}${q}`), gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}${q}`)]);
-      const ta = flatTabs(a.tabs), tb = flatTabs(b.tabs);
-      if (!tb.some(t => t.tabId === tab)) tab = tb[ta.findIndex(t => t.tabId === tab)]?.tabId || '';
-    }
-    const full = await gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}?includeTabsContent=true`);
-    const tabObj = tab ? findTab(full.tabs, tab) : full.tabs?.[0];
-    if (!tabObj) throw new GhError('Could not find the template tab in the copy.');
-    tab = tabObj.tabProperties.tabId;
-    const { text, idx } = docText(tabObj.documentTab?.body?.content);
-    const requests = [];
-    for (const b of findBlanks(text).reverse()) {
-      const v = values[b.name];
-      if (!v) continue;
-      const startIndex = idx[b.start], endIndex = idx[b.end - 1] + 1;
-      requests.push({ deleteContentRange: { range: { startIndex, endIndex, tabId: tab } } }, { insertText: { location: { index: startIndex, tabId: tab }, text: v } });
-    }
-    if (requests.length) await gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}:batchUpdate`, { requests });
-    return `https://docs.google.com/document/d/${copy.id}/edit${tab ? '?tab=' + tab : ''}`;
-  }
-  // permiso de Google (solo lectura de Docs) pedido en el momento, con la cuenta de Horizon; no se guarda
-  let gToken = null;
-  async function googleToken() {
-    if (gToken && gToken.exp > Date.now() + 60e3) return gToken.value;
-    serverCfg = serverCfg || await api('GET', '/api/auth/config');
-    await loadGis();
-    return new Promise((ok, ko) => {
-      const client = google.accounts.oauth2.initTokenClient({
-        client_id: serverCfg.clientId, scope: 'https://www.googleapis.com/auth/drive', hint: 'contacthorizonids@gmail.com', prompt: '',
-        callback: r => { if (r.error || !r.access_token) return ko(new GhError('Google did not grant access. Choose the Horizon account and accept.')); gToken = { value: r.access_token, exp: Date.now() + (Number(r.expires_in) || 3000) * 1000 }; ok(r.access_token); },
-        error_callback: () => ko(new GhError('The Google window was closed without granting access.')),
-      });
-      client.requestAccessToken();
-    });
-  }
-  /* Contrato firmado: PDF final, correo con la copia a cada firmante y Google Drive */
-  function ctDoneBlock(c, ed) {
-    const online = c.signers.length && c.signers.every(x => x.signed), mailOk = !!c.done_mail_at;
-    if (!online && !c.file) return '';
-    return `
-      <div class="ct-step done ct-done">
-        <span>${online ? `Signed by everyone · ${mailOk ? `download link emailed to ${c.signers.length > 1 ? 'each signer' : 'the artist'}` : 'signed copy not emailed yet'}` : 'Signed outside the site'}${c.drive_url ? ' · saved in Drive' : ''}</span>
-        <span class="docbox-btns">
-          ${ed && online && !mailOk ? `<button type="button" class="btn ghost sm" data-ct="finish">${c.finish_error ? 'Try again' : 'Send now'}</button>` : ''}
-          ${c.drive_url ? `<a class="btn ghost sm" href="${esc(c.drive_url)}" target="_blank" rel="noopener">Open in Drive ↗</a>` : ed ? '<button type="button" class="btn ghost sm" data-ct="drive-one">Save to Drive</button>' : ''}
-        </span>
-      </div>
-      ${c.finish_error ? `<p class="login-error" role="alert">${esc(c.finish_error)}</p>` : ''}`;
-  }
-  /* Google Drive: carpeta raíz (donde están las de cada año) → Año → «HRZ#xxx - Nombre» → PDF firmado */
-  let ctDrive = null;
-  const driveId = u => (String(u).match(/(?:folders\/|[?&]id=)([\w-]{10,})/) || String(u).match(/^([\w-]{10,})$/) || [])[1] || '';
-  function driveBox(ed, pending) {
-    if (ctDrive === null) { api('GET', '/api/contracts/settings').then(r => { ctDrive = r.drive_folder || ''; if (view === 'contracts' && !ctOpen && ctTab === 'signed') render(); }).catch(() => { ctDrive = ''; }); return ''; }
-    if (!ed) return '';
-    return `
-      <div class="docbox">
-        <div class="docbox-head">
-          <b>Google Drive</b>
-          <input class="drive-url" value="${ctDrive ? esc(`https://drive.google.com/drive/folders/${ctDrive}`) : ''}" placeholder="Link of the Drive folder that holds the year folders" aria-label="Drive folder link" spellcheck="false">
-          <span class="docbox-btns">
-            ${ctDrive ? `<a class="btn ghost sm" href="https://drive.google.com/drive/folders/${esc(ctDrive)}?authuser=contacthorizonids@gmail.com" target="_blank" rel="noopener">Open ↗</a>` : ''}
-            ${ctDrive && pending.length ? `<button type="button" class="btn primary sm" data-ct="drive-all">Save ${pending.length} to Drive</button>` : ''}
-          </span>
-        </div>
-        <p class="info">${!ctDrive ? 'Paste the link of your contracts folder in Drive. Each signed contract goes to <b>Year → Release number - Name</b> (the folders are created if they don’t exist).' : pending.length ? `${pending.length} signed contract${pending.length > 1 ? 's are' : ' is'} not in Drive yet.` : 'All signed contracts are in Drive.'}</p>
-      </div>`;
-  }
-  async function gDrive(tok, path, opts = {}) {
-    const r = await fetch(`https://www.googleapis.com/drive/v3/${path}${path.includes('?') ? '&' : '?'}supportsAllDrives=true`, { ...opts, headers: { Authorization: `Bearer ${tok}`, ...(opts.json ? { 'Content-Type': 'application/json' } : {}) }, body: opts.json ? JSON.stringify(opts.json) : opts.body });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) { if (r.status === 401) gToken = null; throw new GhError(`Google Drive: ${j.error?.message || 'error ' + r.status}`); }
-    return j;
-  }
-  const FOLDER = 'application/vnd.google-apps.folder';
-  async function subfolders(tok, parent) {
-    const q = encodeURIComponent(`'${parent}' in parents and mimeType='${FOLDER}' and trashed=false`);
-    return (await gDrive(tok, `files?q=${q}&fields=files(id,name)&pageSize=1000&includeItemsFromAllDrives=true`)).files || [];
-  }
-  const mkFolder = (tok, parent, name) => gDrive(tok, 'files?fields=id,name', { method: 'POST', json: { name, mimeType: FOLDER, parents: [parent] } });
-  const catNum = v => { const m = String(v || '').match(/(\d+)\s*$/) || String(v || '').match(/(\d+)/); return m ? Number(m[1]) : null; };
-  // PDF firmado oficial (original + firmas + certificado). Lo crea el panel la primera vez y queda guardado.
-  async function ensureSigned(c, orig) {
-    if (c.signed_pdf || !c.signers.length || !c.signers.every(x => x.signed)) return;
-    if (!c.signers[0].signature) c = (await api('GET', `/api/contracts/${encodeURIComponent(c.id)}`)).contract;
-    const bytes = orig || new Uint8Array(await (await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/pdf`)).arrayBuffer());
-    const out = await HZPDF.signed(bytes, { title: c.title, hash: c.pdf_hash,
-      signers: c.signers.map(x => ({ label: x.label, box: x.box, signed: { name: x.name, email: x.signer_email, at: x.signed_at, ip: x.ip, ua: x.ua, signature: x.signature, hash: c.pdf_hash } })) });
-    await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/signed`, { method: 'POST', body: out });
-    c.signed_pdf = true;
-  }
-  async function toDrive(tok, c) {
-    const online = c.signers.length && c.signers.every(x => x.signed);
-    if (online) await ensureSigned(c);
-    const year = String(new Date(c.signed_at || Date.now()).getFullYear());
-    const years = await subfolders(tok, ctDrive);
-    const y = years.find(f => f.name.trim() === year) || await mkFolder(tok, ctDrive, year);
-    let dest = y, path = year;
-    if (c.release_cat) {
-      const n = catNum(c.release_cat), rels = await subfolders(tok, y.id);
-      // carpeta del release: la que ya tenga ese número (sea cual sea el resto del nombre) o una nueva
-      dest = rels.find(f => n !== null && catNum((f.name.match(/^[^\s-]*\d+/) || [''])[0]) === n) || await mkFolder(tok, y.id, [c.release_cat, c.release_name].filter(Boolean).join(' - '));
-      path += ' / ' + dest.name;
-    }
-    const bytes = new Uint8Array(await (await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/${online ? 'signed' : 'file'}`)).arrayBuffer());
-    const name = `${c.title.replace(/[\\/:*?"<>|]+/g, '').trim()} (signed).pdf`, B = 'hz' + Math.random().toString(36).slice(2);
-    const body = new Blob([`--${B}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [dest.id], mimeType: 'application/pdf' })}\r\n--${B}\r\nContent-Type: application/pdf\r\n\r\n`, bytes, `\r\n--${B}--`]);
-    const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id', { method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': `multipart/related; boundary=${B}` }, body });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new GhError(`Google Drive: ${j.error?.message || 'error ' + r.status}`);
-    await api('POST', `/api/contracts/${encodeURIComponent(c.id)}/drive`, { id: j.id, path });
-  }
-  async function saveToDrive(list) {
-    if (!ctDrive) { toast('Paste the Drive folder link first (Contracts → Signed).'); return; }
-    busy = true;
-    try {
-      const tok = await googleToken();
-      let ok = 0;
-      for (const c of list) { await toDrive(tok, c); ok++; }
-      toast(ok === 1 ? 'Saved in Drive' : `${ok} contracts saved in Drive`);
-    } catch (e) { toast(e.message); }
-    finally { busy = false; }
-  }
-  /* Google Doc dentro del panel (editor de Google tal cual); si el navegador no lo deja, «Open in a new window» */
-  function docEditor(c) {
-    $('#doc-ov')?.remove();
-    const ed = ctCanEdit() && c.status !== 'signed' && !c.signers.some(x => x.signed);
-    document.body.insertAdjacentHTML('beforeend', `
-      <div class="doc-ov" id="doc-ov" role="dialog" aria-modal="true" aria-label="Google Doc">
-        <div class="doc-ov-bar">
-          <b>${esc(c.title)}</b>
-          <span class="docbox-btns">
-            <a class="btn ghost sm" href="${esc(docEditUrl(c.doc_url))}" target="_blank" rel="noopener">Open in a new window ↗</a>
-            ${ed ? '<button type="button" class="btn primary sm" data-doc="done">Done · update PDF</button>' : ''}
-            <button type="button" class="btn ghost sm" data-doc="close">Close</button>
-          </span>
-        </div>
-        <iframe src="${esc(docEditUrl(c.doc_url))}" title="Google Doc" allow="clipboard-read; clipboard-write"></iframe>
-      </div>`);
-    document.body.style.overflow = 'hidden';
-  }
-  document.addEventListener('click', e => {
-    const b = e.target.closest('[data-doc]');
-    if (!b) return;
-    $('#doc-ov')?.remove(); document.body.style.overflow = '';
-    if (b.dataset.doc === 'done') $('[data-ct="doc-pdf"]')?.click();
-  });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('#doc-ov')) { $('#doc-ov').remove(); document.body.style.overflow = ''; } });
   function signersBlock(c, ed) {
     const act = ctOpen.active ?? c.signers.findIndex(x => !x.box && !x.signed);
     return `
@@ -2693,8 +2516,7 @@
     else if (a === 'open') openContract(t.closest('[data-ctid]').dataset.ctid);
     else if (a === 'doc-pdf') {
       try {
-        const tok = await googleToken();
-        const r = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/from-doc`, { token: tok }), 'PDF updated from the Doc');
+        const r = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/from-doc`, {}), 'PDF updated from the Doc');
         ctOpen.bytes = null; ctOpen.fields = null;
         autoPlaceFor = c.id;
         ctRefresh();
@@ -2780,10 +2602,9 @@
         const doc = f.elements.doc.value.trim();
         if (!f.elements.title.value.trim()) return fail('Give the template a name.');
         if (!docParts(doc)) return fail('Paste the Google Doc tab link.');
-        const tok = await googleToken();
         const r = await ctAction(() => api('POST', '/api/contracts', { kind: 'template', title: f.elements.title.value }));
         await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/doc`, { url: doc }));
-        try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, { token: tok }), 'Template created'); } catch { /* aviso ya mostrado */ }
+        try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, {}), 'Template created'); } catch { /* aviso ya mostrado */ }
         ctTab = 'templates'; ctData = null; autoPlaceFor = r.id; openContract(r.id); loadContracts();
       } else if (f.id === 'ct-use') {
         const tpl = ctOpen.tpl, fields = ctOpen.fields || [];
@@ -2795,8 +2616,7 @@
         if (n > 1 && people.some(p => !p.email)) return fail('Write the email of each artist.');
         const btn = $('button[type=submit]', f); btn.disabled = true; btn.textContent = 'Creando… (Google)';
         try {
-          const tok = await googleToken();
-          const docUrl = await docFromTemplate(tok, tpl, fields, values, title);
+          const docUrl = (await ctAction(() => api('POST', '/api/contracts/make-doc', { template: tpl.id, title, values }))).doc_url;   // Google lo hace el servidor (cuenta de Horizon)
           if (n > 1) {
             // mismo Doc y mismos datos; un contrato por artista, cada uno con su firmante
             for (const p of people) {
@@ -2805,7 +2625,7 @@
               await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/doc`, { url: docUrl }));
               const full = await api('GET', `/api/contracts/${encodeURIComponent(r.id)}`);
               await ctAction(() => api('POST', '/api/contracts', { id: r.id, title: t2, artist: p.name || f.elements.artist.value, email: p.email, signers: full.contract.signers.map(x => ({ id: x.id, label: p.name || x.label, email: p.email })) }));
-              await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, { token: tok }));
+              await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, {}));
             }
             toast(`${n} contracts created, one per artist`);
             ctTab = 'contracts'; ctData = null; ctOpen = null; render(); loadContracts();
@@ -2818,7 +2638,7 @@
             const full = await api('GET', `/api/contracts/${encodeURIComponent(r.id)}`);
             await ctAction(() => api('POST', '/api/contracts', { id: r.id, title, artist: f.elements.artist.value, email: emails[0], signers: full.contract.signers.map((x, i) => ({ id: x.id, label: x.label, email: emails[i] || '' })) }));
           }
-          const g = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, { token: tok }), 'Contract created');
+          const g = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, {}), 'Contract created');
           ctTab = 'contracts'; ctData = null; autoPlaceFor = r.id; openContract(r.id); loadContracts();
         } catch (err) { if (!$('#ed-error:not([hidden])')) fail(err.message); btn.disabled = false; btn.textContent = 'Create contract'; }
       } else {

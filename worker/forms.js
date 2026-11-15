@@ -15,7 +15,80 @@ export const FORM_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS forms (id TEXT PRIMARY KEY, slug TEXT UNIQUE NOT NULL, title TEXT NOT NULL, description TEXT, fields TEXT NOT NULL DEFAULT '[]', position INTEGER NOT NULL DEFAULT 0, public INTEGER NOT NULL DEFAULT 0, on_site INTEGER NOT NULL DEFAULT 0, button TEXT, access TEXT NOT NULL DEFAULT '{}', created_at INTEGER, updated_at INTEGER)`,
   `CREATE TABLE IF NOT EXISTS form_responses (id INTEGER PRIMARY KEY AUTOINCREMENT, form_id TEXT NOT NULL, at INTEGER NOT NULL, data TEXT NOT NULL, seen INTEGER NOT NULL DEFAULT 0, ip TEXT)`,
   `CREATE INDEX IF NOT EXISTS form_responses_form ON form_responses (form_id, id)`,
+  // respuestas que la web copió a Google Forms (para no volver a meterlas cuando Google las devuelve)
+  `CREATE TABLE IF NOT EXISTS gform_sent (hash TEXT PRIMARY KEY, at INTEGER NOT NULL)`,
 ];
+
+/* ---------- Conexión con Google Forms (script de Apps Script en la cuenta de Horizon) ----------
+   - Google → web: cada respuesta de un Google Form llega aquí y se guarda en su formulario de la web.
+   - Web → Google: cada respuesta de la web se copia a su Google Form (copia de seguridad).
+   Las preguntas se emparejan por su texto. Clave compartida: secreto GFORM_SECRET. */
+const normQ = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const answerKey = v => Array.isArray(v) ? v.map(x => String(x).trim()).sort().join('|') : String(v ?? '').trim();
+async function respHash(formId, data) {
+  const body = formId + '\n' + Object.keys(data).sort().map(k => k + '=' + answerKey(data[k])).join('\n');
+  return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body)))].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+const okSecret = (env, s) => !!env.GFORM_SECRET && typeof s === 'string' && s.length === env.GFORM_SECRET.length && s === env.GFORM_SECRET;
+
+export async function gformHook(req, env, url) {
+  const DB = env.DB, b = parse(await req.text()) || {};
+  if (!okSecret(env, b.secret)) throw new FormError(403, 'Not allowed.');
+  if (url.pathname === '/api/hooks/gform/setup') {
+    // el script manda cada Google Form con sus preguntas (y el número «entry» de cada una)
+    const report = [];
+    for (const g of (Array.isArray(b.forms) ? b.forms : []).slice(0, 30)) {
+      const f = await DB.prepare('SELECT id, fields FROM forms WHERE slug = ?').bind(String(g.slug || '')).first();
+      if (!f) { report.push({ slug: g.slug, error: 'no web form with that link' }); continue; }
+      const fields = (parse(f.fields) || []).filter(x => x.type !== 'section'), byQ = new Map(fields.map(x => [normQ(x.label), x]));
+      const map = {}, missing = [];
+      for (const it of Array.isArray(g.items) ? g.items : []) {
+        const x = byQ.get(normQ(it.title));
+        if (x && /^\d+$/.test(String(it.entry || ''))) map[x.id] = String(it.entry); else missing.push(String(it.title).slice(0, 80));
+      }
+      const url2 = String(g.responseUrl || '');
+      const google = { id: String(g.googleId || '').slice(0, 100), url: /^https:\/\/docs\.google\.com\/forms\/(u\/\d+\/)?d\/e\/[\w-]+\/formResponse$/.test(url2) ? url2 : '', map };
+      await DB.prepare('UPDATE forms SET google = ? WHERE id = ?').bind(JSON.stringify(google), f.id).run();
+      report.push({ slug: g.slug, matched: Object.keys(map).length, notInWeb: missing, notInGoogle: fields.filter(x => !map[x.id]).map(x => x.label.slice(0, 80)) });
+    }
+    return { ok: true, report };
+  }
+  if (url.pathname === '/api/hooks/gform/response') {
+    const gid = String(b.googleId || '');
+    const f = gid ? (await DB.prepare('SELECT id, fields, google FROM forms WHERE google IS NOT NULL').all()).results.find(r => (parse(r.google) || {}).id === gid) : null;
+    if (!f) throw new FormError(404, 'That Google Form is not connected.');
+    const fields = (parse(f.fields) || []).filter(x => x.type !== 'section'), byQ = new Map(fields.map(x => [normQ(x.label), x]));
+    const data = {};
+    for (const a of Array.isArray(b.answers) ? b.answers : []) {
+      const x = byQ.get(normQ(a.title));
+      if (!x) continue;
+      data[x.id] = Array.isArray(a.value) ? a.value.map(v => clean(v, 300)) : clean(a.value, x.type === 'textarea' ? 8000 : 1000);
+    }
+    const hash = await respHash(f.id, data);
+    // la mandó la web hace poco: ya está guardada
+    const sent = await DB.prepare('SELECT at FROM gform_sent WHERE hash = ?').bind(hash).first();
+    if (sent && now() - sent.at < 30 * 60e3) return { ok: true, duplicate: true };
+    const at = Number(b.at) > 0 && Number(b.at) < now() + 60e3 ? Number(b.at) : now();
+    await DB.prepare('INSERT INTO form_responses (form_id, at, data, ip) VALUES (?, ?, ?, ?)').bind(f.id, at, JSON.stringify(data), 'google').run();
+    return { ok: true };
+  }
+  throw new FormError(404, 'Not found.');
+}
+// copia de una respuesta de la web en su Google Form
+async function toGoogle(env, f, data) {
+  const g = parse(f.google);
+  if (!g?.url || !g.map) return;
+  const body = new URLSearchParams();
+  for (const [fid, entry] of Object.entries(g.map)) {
+    const v = data[fid];
+    if (Array.isArray(v)) v.forEach(o => body.append('entry.' + entry, o));
+    else if (v) body.append('entry.' + entry, v);
+  }
+  const hash = await respHash(f.id, data);
+  await env.DB.batch([env.DB.prepare('DELETE FROM gform_sent WHERE at < ?').bind(now() - 86400e3), env.DB.prepare('INSERT OR REPLACE INTO gform_sent (hash, at) VALUES (?, ?)').bind(hash, now())]);
+  const r = await fetch(g.url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, redirect: 'manual' });
+  if (r.status >= 400) console.error('google form copy', f.id, r.status);
+}
 
 function normFields(list) {
   if (!Array.isArray(list)) throw new FormError(400, 'The questions are not valid.');
@@ -217,5 +290,6 @@ export async function publicFormsApi(req, env, url) {
     data[x.id] = v;
   }
   await DB.prepare('INSERT INTO form_responses (form_id, at, data, ip) VALUES (?, ?, ?, ?)').bind(f.id, now(), JSON.stringify(data), ipHash).run();
+  try { await toGoogle(env, f, data); } catch (e) { console.error('google form copy', e); }   // copia en Google Forms (si está conectado)
   return { ok: true };
 }

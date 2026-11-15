@@ -6,7 +6,7 @@
    - La sincronización con SoundCloud (GitHub Actions) se identifica con el token OIDC que GitHub da a ese
      workflow: no hay claves guardadas en ningún sitio. */
 import STATIC_FILES from './static-files.json';
-import { FORM_SCHEMA, FormError, formsApi, publicFormsApi, formsCount } from './forms.js';
+import { FORM_SCHEMA, FormError, formsApi, publicFormsApi, formsCount, gformHook } from './forms.js';
 import { CONTRACT_SCHEMA, CONTRACT_COLUMNS, SIGNER_COLUMNS, ContractError, contractsApi, signApi } from './contracts.js';
 import { EmailMessage } from 'cloudflare:email';
 import { loginCodeMail } from './contract-mail.js';
@@ -93,6 +93,7 @@ async function ensureSchema(env) {
   // perfil de SoundCloud (la foto se toma de ahí y se actualiza sola) y la última foto copiada
   for (const col of ['soundcloud TEXT', 'sc_pic TEXT']) { try { await env.DB.prepare(`ALTER TABLE panel_profiles ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
   try { await env.DB.prepare('ALTER TABLE panel_roles ADD COLUMN forms TEXT').run(); } catch { /* ya existe */ }
+  try { await env.DB.prepare('ALTER TABLE forms ADD COLUMN google TEXT').run(); } catch { /* ya existe */ }   // Google Form conectado
   for (const col of CONTRACT_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE contracts ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
   for (const col of SIGNER_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE contract_signers ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
   schemaReady = true;
@@ -637,6 +638,7 @@ async function api(req, env, p, ctx) {
     if (!f.value) throw new HttpError(404, 'Not found.');
     return new Response(f.value, { headers: { 'Content-Type': f.metadata?.type || 'image/jpeg', 'Cache-Control': 'public, max-age=31536000, immutable' } });
   }
+  if (p.startsWith('/api/hooks/gform/') && req.method === 'POST') return json(await gformHook(req, env, url));   // Google Forms ↔ web
   if (p.startsWith('/api/public/')) return json(await publicFormsApi(req, env, url));   // formularios públicos (sin sesión)
   const s = await session(req, env);
   if (p === '/api/auth/me' && req.method === 'GET') return json({ user: { ...userOut(s), formsCount: await formsCount(env, s) }, sections: await sections(env) });

@@ -10,7 +10,7 @@
    - Si está configurado el correo (binding MAIL), llega un aviso al Gmail de Horizon en cada firma.
    Permiso: sección «contracts» de los roles (ver / editar). Los owners siempre. */
 
-import { inviteMail, doneMail } from './contract-mail.js';
+import { inviteMail, doneMail, signCodeMail } from './contract-mail.js';
 import { horizonToken, docFromTemplate, saveToDrive } from './gdocs.js';
 
 export class ContractError extends Error { constructor(status, message) { super(message); this.status = status; } }
@@ -28,6 +28,10 @@ export const CONTRACT_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS contracts (id TEXT PRIMARY KEY, title TEXT NOT NULL, artist TEXT, email TEXT, template_id TEXT, html TEXT NOT NULL DEFAULT '', vars TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'draft', token TEXT UNIQUE, notes TEXT, file TEXT, created_by TEXT, created_at INTEGER, updated_at INTEGER, sent_at INTEGER, signed_at INTEGER, signer_name TEXT, signer_email TEXT, signature TEXT, sign_ip TEXT, sign_ua TEXT, doc_hash TEXT, countersigned_by TEXT)`,
   `CREATE TABLE IF NOT EXISTS contract_signers (id TEXT PRIMARY KEY, contract_id TEXT NOT NULL, idx INTEGER NOT NULL, label TEXT, email TEXT, box TEXT, token TEXT UNIQUE, signed_at INTEGER, name TEXT, signer_email TEXT, signature TEXT, ip TEXT, ua TEXT)`,
   `CREATE INDEX IF NOT EXISTS contract_signers_c ON contract_signers (contract_id, idx)`,
+  `CREATE TABLE IF NOT EXISTS sign_codes (signer_id TEXT PRIMARY KEY, hash TEXT NOT NULL, expires_at INTEGER NOT NULL, tries INTEGER NOT NULL DEFAULT 0, sent_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS sign_sessions (hash TEXT PRIMARY KEY, signer_id TEXT NOT NULL, expires_at INTEGER NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS contract_events (id INTEGER PRIMARY KEY AUTOINCREMENT, contract_id TEXT NOT NULL, signer_id TEXT, at INTEGER NOT NULL, event TEXT NOT NULL, ip TEXT, ua TEXT)`,
+  `CREATE INDEX IF NOT EXISTS contract_events_c ON contract_events (contract_id, id)`,
 ];
 // columnas del PDF (añadidas después: si ya existen, no pasa nada)
 export const CONTRACT_COLUMNS = ['pdf TEXT', 'pdf_hash TEXT', 'pdf_pages INTEGER', 'pdf_size INTEGER', 'sign_box TEXT', 'doc_url TEXT', 'kind TEXT',
@@ -43,7 +47,7 @@ function box(v) {
   return { page: Math.max(0, Math.floor(Number(b.page) || 0)), x: n(b.x), y: n(b.y), w: Math.max(0.03, n(b.w)), h: Math.max(0.02, n(b.h)), ...(b.manual ? { manual: 1 } : {}) };
 }
 const signerOut = (r, full) => ({
-  id: r.id, idx: r.idx, label: r.label || `Artista ${r.idx + 1}`, email: r.email || '', box: box(r.box), token: r.token || '',
+  id: r.id, idx: r.idx, label: r.label || `Artist ${r.idx + 1}`, email: r.email || '', box: box(r.box), token: r.token || '',
   signed: !!r.signed_at, signed_at: r.signed_at || null, name: r.name || '', signer_email: r.signer_email || '', ip: r.ip || '', ua: r.ua || '',
   emailed_at: r.emailed_at || null, email_error: r.email_error || '',
   ...(full ? { signature: r.signature || '' } : {}),
@@ -198,7 +202,10 @@ export async function contractsApi(req, env, s, url, can, audit) {
   const sg = await signersOf(env, c);
   const anySigned = sg.some(r => r.signed_at);
 
-  if (!mm[2] && m === 'GET') return { contract: out(c, sg, true) };
+  if (!mm[2] && m === 'GET') {
+    const events = (await DB.prepare('SELECT e.at, e.event, e.ip, e.ua, s.label, s.email FROM contract_events e LEFT JOIN contract_signers s ON s.id = e.signer_id WHERE e.contract_id = ? ORDER BY e.id DESC LIMIT 200').bind(c.id).all()).results;
+    return { contract: out(c, sg, true), events };
+  }
   if (!mm[2] && m === 'DELETE') {
     edit();
     if ((signed || anySigned) && !s.owner) throw new ContractError(403, 'Only owners can delete a signed contract.');
@@ -402,7 +409,7 @@ export async function contractsApi(req, env, s, url, can, audit) {
 const MAX_FAILS = 10;
 export async function signApi(req, env, url, mail, ctx) {
   const DB = env.DB;
-  const mm = url.pathname.match(/^\/api\/public\/sign\/([\w-]{20,64})(?:\/(pdf|signed))?$/);
+  const mm = url.pathname.match(/^\/api\/public\/sign\/([\w-]{20,64})(?:\/(pdf|signed|code|verify|event))?$/);
   if (!mm) throw new ContractError(404, 'Not found.');
   let me = await DB.prepare('SELECT * FROM contract_signers WHERE token = ?').bind(mm[1]).first();
   let c = me ? await DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(me.contract_id).first() : await DB.prepare('SELECT * FROM contracts WHERE token = ?').bind(mm[1]).first();
@@ -411,19 +418,59 @@ export async function signApi(req, env, url, mail, ctx) {
   let sg = await signersOf(env, c);
   if (!me) me = sg.find(r => r.token === mm[1]);
   if (!me) throw new ContractError(404, 'This contract link is not valid.');
+  const ip = req.headers.get('CF-Connecting-IP') || '', ua = clean(req.headers.get('User-Agent'), 300);
+  const log = (event, extra = '') => DB.prepare('INSERT INTO contract_events (contract_id, signer_id, at, event, ip, ua) VALUES (?, ?, ?, ?, ?, ?)').bind(c.id, me.id, now(), event + (extra ? ' ' + extra : ''), ip, ua).run();
+  const team = action => DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)').bind(now(), me.email || '', me.label || 'Artist', action, `IP ${ip}`).run();
 
-  // acceso con el email del firmante
-  const need = String(me.email || '').toLowerCase(), given = clean(req.headers.get('X-Signer-Email'), 160).toLowerCase();
+  // Acceso: el email al que se envió el contrato + un código de 6 cifras que llega a ese email.
+  // Quien tenga el enlace y sepa el email no entra sin el código. Tras 10 intentos fallidos, el enlace se bloquea.
+  const need = String(me.email || '').toLowerCase();
   if (need) {
     if ((me.fails || 0) >= MAX_FAILS) throw new ContractError(429, 'This link has been locked after too many attempts. Please contact HORIZON RCRDS to get a new one.');
-    if (!given) { if (mm[2]) throw new ContractError(401, 'Enter your email to open the contract.'); return { gate: true }; }
-    if (given !== need) {
-      await DB.prepare('UPDATE contract_signers SET fails = COALESCE(fails, 0) + 1 WHERE id = ?').bind(me.id).run();
-      throw new ContractError(403, 'That email does not match this contract. Use the email address where you received it.');
+    const fail = async msg => { await DB.prepare('UPDATE contract_signers SET fails = COALESCE(fails, 0) + 1 WHERE id = ?').bind(me.id).run(); throw new ContractError(403, msg); };
+    if (mm[2] === 'code' && req.method === 'POST') {
+      const email = clean((parse(await req.text()) || {}).email, 160).toLowerCase();
+      if (email !== need) await fail('That email does not match this contract. Use the email address where you received it.');
+      const old = await DB.prepare('SELECT sent_at FROM sign_codes WHERE signer_id = ?').bind(me.id).first();
+      if (!old || now() - old.sent_at > 45e3) {
+        const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1e6).padStart(6, '0');
+        await DB.prepare('INSERT INTO sign_codes (signer_id, hash, expires_at, tries, sent_at) VALUES (?, ?, ?, 0, ?) ON CONFLICT(signer_id) DO UPDATE SET hash = excluded.hash, expires_at = excluded.expires_at, tries = 0, sent_at = excluded.sent_at')
+          .bind(me.id, await sha256(new TextEncoder().encode(me.id + ':' + code)), now() + 15 * 60e3, now()).run();
+        try { await signCodeMail(env, c, me, code); } catch (e) { throw new ContractError(502, 'The code could not be sent. Please try again in a minute.'); }
+        await log('code sent');
+      }
+      return { ok: true };
     }
-    if (me.fails) await DB.prepare('UPDATE contract_signers SET fails = 0 WHERE id = ?').bind(me.id).run();
+    if (mm[2] === 'verify' && req.method === 'POST') {
+      const code = String((parse(await req.text()) || {}).code || '').replace(/\D/g, '');
+      const row = await DB.prepare('SELECT * FROM sign_codes WHERE signer_id = ?').bind(me.id).first();
+      if (!row || row.expires_at < now() || row.tries >= 5) throw new ContractError(400, 'That code has expired. Ask for a new one.');
+      if (code.length !== 6 || await sha256(new TextEncoder().encode(me.id + ':' + code)) !== row.hash) {
+        await DB.prepare('UPDATE sign_codes SET tries = tries + 1 WHERE signer_id = ?').bind(me.id).run();
+        await fail('That code is not correct.');
+      }
+      const sess = token(), t = now();
+      await DB.batch([
+        DB.prepare('DELETE FROM sign_codes WHERE signer_id = ?').bind(me.id),
+        DB.prepare('DELETE FROM sign_sessions WHERE expires_at < ?').bind(t),
+        DB.prepare('INSERT INTO sign_sessions (hash, signer_id, expires_at) VALUES (?, ?, ?)').bind(await sha256(new TextEncoder().encode(sess)), me.id, t + 12 * 3600e3),
+        DB.prepare('UPDATE contract_signers SET fails = 0 WHERE id = ?').bind(me.id),
+      ]);
+      await log('opened');
+      await team(`Opened the contract “${c.title}”`);
+      return { ok: true, session: sess };
+    }
+    const sess = String(req.headers.get('X-Sign-Session') || '');
+    const ok = sess && await DB.prepare('SELECT 1 FROM sign_sessions WHERE hash = ? AND signer_id = ? AND expires_at > ?').bind(await sha256(new TextEncoder().encode(sess)), me.id, now()).first();
+    if (!ok) { if (mm[2] || req.method !== 'GET') throw new ContractError(401, 'Please open the contract again with the code from your email.'); return { gate: true }; }
   }
-
+  if (mm[2] === 'event' && req.method === 'POST') {
+    // lo que hace el artista en la página (leído hasta el final, descargado…)
+    const ev = String((parse(await req.text()) || {}).event || '');
+    if (ev === 'read to the end') { await log(ev); await team(`Read the contract “${c.title}” to the end`); }
+    if (ev === 'downloaded the PDF') { await log(ev); await team(`Downloaded the contract “${c.title}”`); }
+    return { ok: true };
+  }
   if (mm[2] === 'pdf') {
     const f = await env.FILES.get(c.pdf, { type: 'arrayBuffer' });
     if (!f) throw new ContractError(404, 'Contract file not found.');
@@ -432,6 +479,7 @@ export async function signApi(req, env, url, mail, ctx) {
   if (mm[2] === 'signed') {
     const f = c.signed_pdf ? await env.FILES.get(c.signed_pdf, { type: 'arrayBuffer' }) : null;
     if (!f) throw new ContractError(404, 'The signed contract is not ready yet. Please try again in a moment.');
+    await log('downloaded the signed PDF'); await team(`Downloaded the signed contract “${c.title}”`);
     return pdfResponse(f, signedName(c).replace(/[^\w\- .()]+/g, ''));
   }
   const view = () => ({
@@ -453,7 +501,7 @@ export async function signApi(req, env, url, mail, ctx) {
   else if (clean(b.typed, 120)) signature = 'typed:' + clean(b.typed, 120);
   else throw new ContractError(400, 'Please sign (draw your signature or type your name).');
   if (String(b.hash || '') !== c.pdf_hash) throw new ContractError(409, 'The contract file changed while you were reading it. Please reload the page.');
-  const ip = req.headers.get('CF-Connecting-IP') || '', ua = clean(req.headers.get('User-Agent'), 300), at = now();
+  const at = now();
   const r = await DB.prepare('UPDATE contract_signers SET signed_at = ?, name = ?, signer_email = ?, signature = ?, ip = ?, ua = ? WHERE id = ? AND signed_at IS NULL')
     .bind(at, name, email, signature, ip, ua, me.id).run();
   if (!r.meta.changes) throw new ContractError(409, 'You have already signed this contract.');
@@ -463,19 +511,9 @@ export async function signApi(req, env, url, mail, ctx) {
   c = { ...c, status: all ? 'signed' : c.status };
   me = sg.find(x => x.id === me.id);
   await DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)').bind(at, email, name, `Signed the contract “${c.title}”${sg.length > 1 ? ` (${me.label || 'signer'})` : ''}`, `IP ${ip}`).run();
-  const after = async () => {
-    // todos han firmado: PDF firmado final + correo a cada firmante con su copia
-    if (all) { try { await finalize(env, c.id, url.origin); } catch (e) { console.error('finalize', e); } }
-    if (mail) {
-      try {
-        const left = sg.filter(x => !x.signed_at).map(x => x.label || 'firmante');
-        await mail(`${all ? 'Contrato firmado' : 'Nueva firma'}: ${c.title}`, `
-          <p><b>${escHtml(name)}</b>${sg.length > 1 ? ` (${escHtml(me.label || '')})` : ''} ha firmado <b>${escHtml(c.title)}</b>.</p>
-          <p>Email: ${escHtml(email)}<br>Fecha: ${new Date(at).toUTCString()}<br>IP: ${escHtml(ip)}<br>Huella del PDF (SHA-256): ${c.pdf_hash}</p>
-          <p>${all ? '<b>Ya han firmado todos.</b> El contrato firmado está en el panel → Contracts → Signed.' : `Falta: ${escHtml(left.join(', '))}.`}</p>`);
-      } catch (e) { console.error('mail', e); }
-    }
-  };
+  await log('signed', `as ${name}`);
+  // todos han firmado: correo a cada firmante con su enlace para descargar (a la cuenta de Horizon no le llega nada)
+  const after = async () => { if (all) { try { await finalize(env, c.id, url.origin); } catch (e) { console.error('finalize', e); } } };
   if (ctx?.waitUntil) ctx.waitUntil(after()); else await after();
   return view();
 }

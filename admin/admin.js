@@ -2222,6 +2222,7 @@
         ${!tpl && vars.length ? ctDataBlock(vars) : ''}
         ${docBlock(c, ed && !signed)}
         ${c.pdf ? signersBlock(c, ed && !signed) : ''}
+        ${tpl ? '' : ctActivity(ctOpen.events)}
         ${c.pdf ? `
           <div class="pdf-viewer" id="pdf-viewer"><p class="info">Loading PDF…</p></div>` : `<p class="ct-step">Upload the contract PDF (downloaded from Google Docs).</p>`}
         <div class="field" style="margin-top:18px"><label for="c-notes">Internal notes (the artist can’t see them)</label><textarea id="c-notes" name="notes" rows="2" maxlength="2000" ${ed ? '' : 'readonly'}>${esc(c.notes)}</textarea></div>
@@ -2246,8 +2247,18 @@
       : signed ? (c.drive_url ? 'Done: signed by everyone and saved in Drive. It is in Contracts → Signed.' : 'Signed by everyone. It is in Contracts → Signed. Press “Save to Drive” to keep a copy in your Drive.')
       : sent ? `Waiting for signatures: ${done} of ${n} signed. When everyone signs, it moves to Contracts → Signed and each artist gets their copy by email.`
       : 'Check the details and where each artist signs (the boxes on the document), then press “Send to sign”: each artist gets an email with their private link.';
-    return `<ol class="ct-steps">${steps.map((t, i) => `<li class="${i + 1 < at ? 'done' : i + 1 === at ? 'on' : ''}"><span>${i + 1 < at ? '✓' : i + 1}</span>${t}</li>`).join('')}</ol>
+    return `<ol class="ct-steps">${steps.map((t, i) => `<li class="${i + 1 < at ? 'done' : i + 1 === at ? 'on' : ''}"><button type="button" data-ct="step" data-step="${i + 1}"><span>${i + 1 < at ? '✓' : i + 1}</span>${t}</button></li>`).join('')}</ol>
       <p class="info ct-steps-note">${note}</p>`;
+  }
+  // lo que hace cada artista con su enlace (abrir, leer, firmar, descargar)
+  function ctActivity(evs) {
+    if (!evs) return '';
+    const what = e => e.replace(/^opened$/, 'Opened the contract').replace(/^code sent$/, 'Asked for the access code').replace(/^read to the end$/, 'Read it to the end')
+      .replace(/^signed as (.+)$/, 'Signed as $1').replace(/^signed$/, 'Signed').replace(/^downloaded the PDF$/, 'Downloaded the PDF').replace(/^downloaded the signed PDF$/, 'Downloaded the signed PDF');
+    const dev = ua => /iphone|ipad/i.test(ua) ? 'iPhone/iPad' : /android/i.test(ua) ? 'Android' : /windows/i.test(ua) ? 'Windows' : /mac os/i.test(ua) ? 'Mac' : /linux/i.test(ua) ? 'Linux' : '';
+    return `<div class="ct-log"><div class="signers-head"><b>Activity</b><span class="muted">What each artist does with their link.</span></div>
+      ${evs.length ? `<ol>${evs.map(e => `<li><time>${esc(fmtDate(e.at))}</time><b>${esc(e.label || e.email || 'Artist')}</b><span>${esc(what(e.event))}</span><span class="muted">${esc([dev(e.ua || ''), e.ip].filter(Boolean).join(' · '))}</span></li>`).join('')}</ol>`
+        : '<p class="info">Nothing yet. When an artist opens their link, reads, signs or downloads the contract, it shows here.</p>'}</div>`;
   }
   // opciones que casi no se usan, explicadas
   function ctMoreMenu(c, ed, signed, tpl) {
@@ -2515,10 +2526,10 @@
   async function openContract(id) {
     ctOpen = { mode: 'contract', id, contract: null };
     render();
-    try { const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); if (ctOpen?.id === id) { ctOpen.contract = r.contract; render(); } }
+    try { const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); if (ctOpen?.id === id) { ctOpen.contract = r.contract; ctOpen.events = r.events || []; render(); } }
     catch (e) { toast(e.message); ctOpen = null; render(); }
   }
-  async function ctRefresh() { const keep = ctOpen?.bytes; const id = ctOpen.id; const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); ctOpen = { mode: 'contract', id, contract: r.contract, bytes: keep, placing: null, fields: keep ? ctOpen.fields : null }; render(); }
+  async function ctRefresh() { const keep = ctOpen?.bytes; const id = ctOpen.id; const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); ctOpen = { mode: 'contract', id, contract: r.contract, events: r.events || [], bytes: keep, placing: null, fields: keep ? ctOpen.fields : null }; render(); }
   async function ctAction(fn, ok) {
     busy = true;
     try { const r = await fn(); if (ok) toast(ok); return r; }
@@ -2535,6 +2546,17 @@
     else if (a === 'new-tpl') { ctOpen = { mode: 'new-tpl' }; render(); $('#tp-title')?.focus(); }
     else if (a === 'copy-add' || a === 'copy-del') { const keep = ctFormValues(); ctOpen.copies = Math.max(1, Math.min(8, copiesOf() + (a === 'copy-add' ? 1 : -1))); render(); ctFormRestore(keep); }
     else if (a === 'tab-contracts' || a === 'tab-templates' || a === 'tab-signed') { ctTab = a.slice(4); render(); }
+    else if (a === 'step') {
+      // cada paso lleva a su sitio
+      const n = Number(t.dataset.step), signed = c.status === 'signed';
+      const go = el => { if (!el) return; el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1400); };
+      if (n === 1) { go($('.ct-data') || $('#c-title')?.closest('.row2')); $('#c-title')?.focus({ preventScroll: true }); }
+      else if (n === 2) go($('.signers'));
+      else if (n === 3) { if (signed) { ctOpen = null; ctTab = 'signed'; render(); loadContracts(); } else go($('.signers')); }
+      else if (c.drive_url) window.open(c.drive_url, '_blank', 'noopener');
+      else if (signed) go($('[data-ct="drive-one"]'));
+      else toast('It can be saved in Drive when everyone has signed.');
+    }
     else if (a === 'drive-all') { const list = ctData.contracts.filter(x => !isTpl(x) && x.status === 'signed' && !x.drive_url); await saveToDrive(list); ctData = null; loadContracts(); }
     else if (a === 'drive-one') { if (ctDrive === null) ctDrive = (await api('GET', '/api/contracts/settings').catch(() => ({}))).drive_folder || ''; await saveToDrive([c]); ctRefresh(); }
     else if (a === 'finish') { try { const r = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/finish`)); toast(r?.ok ? 'Signed copy emailed' : r?.error || 'The email could not be sent'); ctRefresh(); } catch { /* aviso ya mostrado */ } }
@@ -2658,23 +2680,27 @@
         const n = tpl.signers.length === 1 ? copiesOf() : 1;
         const people = Array.from({ length: n }, (_, i) => ({ name: (f.elements['cn' + i]?.value || '').trim(), email: (f.elements['em' + i]?.value || '').trim() }));
         if (n > 1 && people.some(p => !p.email)) return fail('Write the email of each artist.');
-        const btn = $('button[type=submit]', f); btn.disabled = true; btn.textContent = 'Creando… (Google)';
+        const btn = $('button[type=submit]', f); btn.disabled = true;
+        const stage = t => { btn.textContent = t; };   // en qué va (copiar la plantilla, poner los datos, hacer el PDF)
+        stage('Copying the template and filling in the details…');
         try {
           const docUrl = (await ctAction(() => api('POST', '/api/contracts/make-doc', { template: tpl.id, title, values }))).doc_url;   // Google lo hace el servidor (cuenta de Horizon)
           if (n > 1) {
             // mismo Doc y mismos datos; un contrato por artista, cada uno con su firmante
-            for (const p of people) {
+            for (const [k, p] of people.entries()) {
+              stage(`Making the PDF ${k + 1} of ${n}…`);
               const t2 = p.name ? `${title} (${p.name})` : title;
-              const r = await ctAction(() => api('POST', '/api/contracts', { template: tpl.id, title: t2, artist: p.name || f.elements.artist.value, email: p.email, vars: values, release_cat: f.elements.release_cat.value, release_name: f.elements.release_name.value }));
+              const r = await ctAction(() => api('POST', '/api/contracts', { template: tpl.id, title: t2, artist: f.elements.artist.value.trim() || p.name, email: p.email, vars: values, release_cat: f.elements.release_cat.value, release_name: f.elements.release_name.value }));
               await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/doc`, { url: docUrl }));
               const full = await api('GET', `/api/contracts/${encodeURIComponent(r.id)}`);
-              await ctAction(() => api('POST', '/api/contracts', { id: r.id, title: t2, artist: p.name || f.elements.artist.value, email: p.email, signers: full.contract.signers.map(x => ({ id: x.id, label: p.name || x.label, email: p.email })) }));
+              await ctAction(() => api('POST', '/api/contracts', { id: r.id, title: t2, artist: f.elements.artist.value.trim() || p.name, email: p.email, signers: full.contract.signers.map(x => ({ id: x.id, label: p.name || x.label, email: p.email })) }));
               await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, {}));
             }
             toast(`${n} contracts created, one per artist`);
             ctTab = 'contracts'; ctData = null; ctOpen = null; render(); loadContracts();
             return;
           }
+          stage('Saving the contract…');
           const r = await ctAction(() => api('POST', '/api/contracts', { template: tpl.id, title, artist: f.elements.artist.value, email: f.elements.em0?.value || '', vars: values, release_cat: f.elements.release_cat.value, release_name: f.elements.release_name.value }));
           await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/doc`, { url: docUrl }));
           // quién firma: el nombre del artista (no «Artist») y su email (el escrito, o el del contrato)
@@ -2683,6 +2709,7 @@
           const names = tpl.signers.map((x, i) => tpl.signers.length > 1 ? vget(new RegExp(`^artist ${i + 1} name`, 'i')) : f.elements.artist.value.trim() || vget(/^artist name$/i));
           const full = await api('GET', `/api/contracts/${encodeURIComponent(r.id)}`);
           await ctAction(() => api('POST', '/api/contracts', { id: r.id, title, artist: f.elements.artist.value, email: emails[0], signers: full.contract.signers.map((x, i) => ({ id: x.id, label: names[i] || x.label, email: emails[i] || '' })) }));
+          stage('Making the PDF…');
           const g = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, {}), 'Contract created');
           ctTab = 'contracts'; ctData = null; autoPlaceFor = r.id; openContract(r.id); loadContracts();
         } catch (err) { if (!$('#ed-error:not([hidden])')) fail(err.message); btn.disabled = false; btn.textContent = 'Create contract'; }

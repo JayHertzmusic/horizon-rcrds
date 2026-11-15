@@ -1,6 +1,7 @@
-/* HORIZON RCRDS — firma de contratos (/sign/<token>), al estilo DocuSign:
-   barra arriba con START → lleva a la pestaña amarilla «SIGN HERE» del documento → «Adopt your signature» (escrita o
-   dibujada) → FINISH. El documento es el PDF exacto del sello; cada firmante tiene su enlace y su recuadro. */
+/* HORIZON RCRDS — firma de contratos (/sign/<token>).
+   Acceso: email del firmante + código de 6 cifras que le llega a ese email. Se lee el contrato y, al final de la
+   página, se firma («Adopt your signature»: escrita, dibujada o subida) y se termina. La página no se recarga: solo
+   cambian las partes que hace falta. El documento es el PDF exacto del sello; cada firmante tiene su enlace y su recuadro. */
 (() => {
   const root = document.getElementById('root'), statusEl = document.getElementById('status');
   const token = (location.pathname.match(/^\/sign\/([\w-]{20,64})/) || [])[1] || '';
@@ -10,30 +11,59 @@
   // letras de firma (Google Fonts, cargadas en sign.html)
   const FONTS = ["'Mrs Saint Delafield', cursive", "'Herr Von Muellerhoff', cursive", "'Great Vibes', cursive", "'Allura', cursive", "'Dancing Script', cursive", "'Sacramento', cursive"];
   let data = null, pdfBytes = null, hash = '', view = null, adopted = null, drawn = false, font = 0;
-  // acceso: el email al que se envió el contrato (se recuerda en esta pestaña)
+  // acceso: sesión que da el código del email (se recuerda en esta pestaña)
   const KEY = 'hz_sign_' + token;
-  let who = '';
-  try { who = sessionStorage.getItem(KEY) || ''; } catch { /* nada */ }
-  const get = (path = '') => fetch(API + path, { cache: 'no-store', headers: who ? { 'X-Signer-Email': who } : {} });
+  let sess = '';
+  try { sess = sessionStorage.getItem(KEY) || ''; } catch { /* nada */ }
+  const hdr = () => (sess ? { 'X-Sign-Session': sess } : {});
+  const get = (path = '') => fetch(API + path, { cache: 'no-store', headers: hdr() });
+  const post = (path, body) => fetch(API + path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...hdr() }, body: JSON.stringify(body || {}) });
+  const isEmail = v => /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v);
 
-  function gate(message = '') {
+  // 1) email → 2) código
+  function gate(message = '', step = 'email', email = '') {
     statusEl.className = 'status'; statusEl.textContent = 'Private contract';
-    root.innerHTML = `
+    root.innerHTML = step === 'email' ? `
       <form class="panel gate" id="gate" novalidate>
         <h2>Open your contract</h2>
-        <p class="msg">For your security, enter the email address where you received this contract.</p>
-        <div class="field"><label for="g-email">Email</label><input id="g-email" name="email" type="email" autocomplete="email" maxlength="160" value="${esc(who)}"></div>
+        <p class="msg">For your security, enter the email address where you received this contract. We will send you a code.</p>
+        <div class="field"><label for="g-email">Email</label><input id="g-email" name="email" type="email" autocomplete="email" maxlength="160" value="${esc(email)}"></div>
         <p class="err" id="g-err" role="alert"${message ? '' : ' hidden'}>${esc(message)}</p>
-        <div class="actions"><button type="submit" class="btn">Continue</button></div>
+        <div class="actions"><button type="submit" class="btn">Send me a code</button></div>
+      </form>` : `
+      <form class="panel gate" id="gate" novalidate>
+        <h2>Enter your code</h2>
+        <p class="msg">We have sent a 6-digit code to <b>${esc(email)}</b>. It can take a minute; check your spam folder too.</p>
+        <div class="field"><label for="g-code">Code</label><input id="g-code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 digits"></div>
+        <p class="err" id="g-err" role="alert"${message ? '' : ' hidden'}>${esc(message)}</p>
+        <div class="actions"><button type="submit" class="btn">Open the contract</button></div>
+        <p class="msg gate-links"><button type="button" class="link-btn" id="g-again">Send the code again</button> · <button type="button" class="link-btn" id="g-other">Use another email</button></p>
       </form>`;
-    const f = document.getElementById('gate');
-    f.elements.email.focus();
-    f.addEventListener('submit', e => {
-      e.preventDefault();
-      const v = f.elements.email.value.trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v)) { const er = document.getElementById('g-err'); er.textContent = 'Please write a valid email.'; er.hidden = false; return; }
-      who = v; f.querySelector('.btn').disabled = true;
-      load();
+    const f = document.getElementById('gate'), err = document.getElementById('g-err'), btn = f.querySelector('.btn');
+    const show = t => { err.textContent = t; err.hidden = false; };
+    (f.elements.email || f.elements.code).focus();
+    const sendCode = async v => {
+      const r = await post('/code', { email: v }); const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.message || 'Something went wrong. Please try again.');
+    };
+    document.getElementById('g-again')?.addEventListener('click', async () => { try { await sendCode(email); show('We have sent you a new code.'); } catch (x) { show(x.message); } });
+    document.getElementById('g-other')?.addEventListener('click', () => gate('', 'email'));
+    f.addEventListener('submit', async e => {
+      e.preventDefault(); err.hidden = true; btn.disabled = true;
+      try {
+        if (step === 'email') {
+          const v = f.elements.email.value.trim().toLowerCase();
+          if (!isEmail(v)) throw new Error('Please write a valid email.');
+          await sendCode(v);
+          return gate('', 'code', v);
+        }
+        const code = f.elements.code.value.replace(/\D/g, '');
+        if (code.length !== 6) throw new Error('Please write the 6-digit code from the email.');
+        const r = await post('/verify', { code }); const j = await r.json().catch(() => ({}));
+        if (!r.ok || !j.session) throw new Error(j.message || 'That code is not correct.');
+        sess = j.session; try { sessionStorage.setItem(KEY, sess); } catch { /* nada */ }
+        load();
+      } catch (x) { show(x.message); btn.disabled = false; }
     });
   }
 
@@ -41,20 +71,19 @@
     try {
       const r = await get();
       const j = await r.json().catch(() => ({}));
-      if (r.status === 403 && who) { who = ''; try { sessionStorage.removeItem(KEY); } catch { /* nada */ } return gate(j.message); }
+      if (r.status === 401 || j.gate) { sess = ''; try { sessionStorage.removeItem(KEY); } catch { /* nada */ } return gate(); }
       if (!r.ok) throw new Error(j.message || 'This contract link is not valid.');
-      if (j.gate) return gate();
-      if (who) try { sessionStorage.setItem(KEY, who); } catch { /* nada */ }
       data = j;
       root.innerHTML = '<p class="msg">Loading the contract…</p>';
       const f = await get('/pdf');
       if (!f.ok) throw new Error('The contract file could not be loaded. Please reload the page.');
       pdfBytes = new Uint8Array(await f.arrayBuffer());
       hash = await HZPDF.sha256(pdfBytes);
-      await render();
+      await build();
     } catch (e) { root.innerHTML = `<h1>Contract</h1><p class="msg">${esc(e.message)}</p>`; }
   }
   const allSigned = () => data.signers.every(s => s.signed);
+  const myPage = () => (data.me.box ? data.me.box.page + 1 : null);
   const marks = () => data.signers.map((s, i) => {
     const mine = i === data.me.index;
     if (s.signed) return { box: s.box, sign: s.signed.signature, label: `Signed electronically by ${s.signed.name} - ${fmt(s.signed.at)}` };
@@ -63,24 +92,52 @@
     return { box: s.box, title: s.label ? `${s.label} signs here` : 'Another signer' };
   });
 
-  async function render() {
+  // la página se monta una vez; después solo cambian la barra, las firmas y el final (no se recarga nada)
+  async function build() {
     document.title = `${data.title} — HORIZON RCRDS`;
-    const done = data.me.signed, all = allSigned();
-    statusEl.className = 'status' + (all ? ' ok' : '');
-    statusEl.textContent = all ? 'Completed' : done ? 'Signed — waiting for others' : 'Needs your signature';
     root.innerHTML = `
-      <div class="ds-bar${done ? ' done' : ''}">
-        <p>${done ? (all ? 'Everyone has signed. You can download the signed contract.' : 'You have signed. The other signers have their own link; you can download your copy now.') : adopted ? 'Your signature is in place. Click <b>FINISH</b> to sign the contract.' : 'Please review the document below. When you are ready, click <b>START</b> to go to the place where you sign.'}</p>
-        ${done ? '<button type="button" class="btn" id="dl">Download signed PDF</button>' : adopted ? '<button type="button" class="btn" id="finish">Finish</button>' : '<button type="button" class="btn" id="start">Start</button>'}
-      </div>
+      <div class="ds-bar" id="bar"></div>
       <h1>${esc(data.title)}</h1>
       <div class="viewer" id="viewer"><p class="msg">Loading the contract…</p></div>
-      ${done ? `<div class="proof">${data.signers.filter(s => s.signed).map(s => `<b>${esc(s.signed.name)}</b>${s.label ? ` (${esc(s.label)})` : ''} signed on ${esc(fmt(s.signed.at))}`).join('<br>')}<br><code>Document fingerprint (SHA-256): ${esc(data.pdf_hash)}</code></div>` : ''}
-      <p class="err" id="err" role="alert" hidden></p>`;
+      <section class="panel ds-end" id="end"></section>`;
     view = await HZPDF.render(document.getElementById('viewer'), pdfBytes, { marks: marks() });
-    document.getElementById('start')?.addEventListener('click', goToSign);
+    refresh();
+    // «leído hasta el final» (para el registro del sello), una vez
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver(es => { if (es.some(x => x.isIntersecting)) { io.disconnect(); post('/event', { event: 'read to the end' }).catch(() => {}); } });
+      io.observe(document.getElementById('end'));
+    }
+  }
+  function refresh() {
+    const done = data.me.signed, all = allSigned(), pg = myPage();
+    statusEl.className = 'status' + (all ? ' ok' : '');
+    statusEl.textContent = all ? 'Completed' : done ? 'Signed — waiting for others' : 'Needs your signature';
+    const bar = document.getElementById('bar');
+    bar.className = 'ds-bar' + (done ? ' done' : '');
+    bar.innerHTML = done
+      ? `<p>${all ? 'Everyone has signed. You can download the signed contract.' : 'You have signed. Waiting for the other signers.'}</p><button type="button" class="btn" data-dl>Download${all ? ' signed' : ''} PDF</button>`
+      : `<p>Please read the whole contract. ${adopted ? 'Your signature is in place: finish at the end of the page.' : 'You sign at the end of the page.'}</p>`;
+    if (view) HZPDF.drawMarks(view.pages, marks());
+    const end = document.getElementById('end');
+    end.innerHTML = done ? `
+        <h2>${all ? 'The contract is signed' : 'You have signed'}</h2>
+        <p class="msg">${all ? 'Everyone has signed. We have also emailed you a link to download your copy at any time.' : 'The other signers have their own link. You will get an email when everyone has signed.'}</p>
+        <div class="proof">${data.signers.filter(s => s.signed).map(s => `<b>${esc(s.signed.name)}</b>${s.label ? ` (${esc(s.label)})` : ''} signed on ${esc(fmt(s.signed.at))}`).join('<br>')}<br><code>Document fingerprint (SHA-256): ${esc(data.pdf_hash)}</code></div>
+        <div class="actions"><button type="button" class="btn" data-dl>Download${all ? ' signed' : ''} PDF</button></div>`
+      : adopted ? `
+        <h2>Finish signing</h2>
+        <p class="msg">Your signature is in its box${pg ? ` on page ${pg}` : ''}. When you press <b>Finish and sign</b>, the contract is signed.</p>
+        <div class="actions"><button type="button" class="btn" id="finish">Finish and sign</button><button type="button" class="btn ghost" id="change">Change signature</button><button type="button" class="btn ghost" id="see">See my signature</button></div>
+        <p class="err" id="err" role="alert" hidden></p>`
+      : `
+        <h2>Sign the contract</h2>
+        <p class="msg">Have you read the whole contract? Your signature goes in the box${pg ? ` on page ${pg}` : ''}.</p>
+        <div class="actions"><button type="button" class="btn" id="sign">Sign</button></div>`;
+    root.querySelectorAll('[data-dl]').forEach(b => b.addEventListener('click', () => downloadSigned(b)));
+    document.getElementById('sign')?.addEventListener('click', openAdopt);
+    document.getElementById('change')?.addEventListener('click', openAdopt);
     document.getElementById('finish')?.addEventListener('click', finish);
-    document.getElementById('dl')?.addEventListener('click', downloadSigned);
+    document.getElementById('see')?.addEventListener('click', goToSign);
   }
   function goToSign() {
     const el = document.querySelector('.pdf-box.is-active');
@@ -99,7 +156,7 @@
         <h2>Adopt your signature</h2>
         <p class="msg">Confirm your name and your signature.</p>
         <div class="field"><label for="a-name">Full legal name</label><input id="a-name" name="name" type="text" autocomplete="name" maxlength="160" value="${esc(adopted?.name || '')}"></div>
-        <div class="field"><label for="a-email">Email</label><input id="a-email" name="email" type="email" autocomplete="email" maxlength="160" value="${esc(adopted?.email || data.email || who || '')}"${data.email ? ' readonly' : ''}></div>
+        <div class="field"><label for="a-email">Email</label><input id="a-email" name="email" type="email" autocomplete="email" maxlength="160" value="${esc(adopted?.email || data.email || '')}"${data.email ? ' readonly' : ''}></div>
         <div class="ds-tabs" role="tablist"><button type="button" class="on" data-tab="type" role="tab">Type</button><button type="button" data-tab="draw" role="tab">Draw</button><button type="button" data-tab="upload" role="tab">Upload</button></div>
         <div class="ds-pane" data-pane="type">
           <div class="ds-styles">${FONTS.map((f, i) => `<button type="button" class="ds-style${i === font ? ' on' : ''}" data-font="${i}" style="font-family:${f}">Your name</button>`).join('')}</div>
@@ -144,6 +201,7 @@
     m.querySelectorAll('[data-font]').forEach(b => b.addEventListener('click', () => { font = Number(b.dataset.font); m.querySelectorAll('[data-font]').forEach(x => x.classList.toggle('on', x === b)); }));
     const close = () => m.remove();
     m.querySelector('#a-cancel').addEventListener('click', close);
+    m.addEventListener('click', e => { if (e.target === m) close(); });   // clic fuera: se cierra sin firmar
     m.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
     f.addEventListener('submit', async e => {
       e.preventDefault();
@@ -157,7 +215,8 @@
       if (tab !== 'draw') try { await document.fonts.load(`64px ${FONTS[font]}`, name); } catch { /* letra del sistema */ }
       adopted = { name, email, signature: tab === 'draw' ? trimmed(m.querySelector('#pad')) : tab === 'upload' ? uploaded : typedImage(name, FONTS[font]) };
       close();
-      render().then(() => document.getElementById('finish')?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+      refresh();
+      document.getElementById('end').scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
   }
   function setupPad(c) {
@@ -227,27 +286,28 @@
     const btn = document.getElementById('finish'), err = document.getElementById('err');
     btn.disabled = true; btn.textContent = 'Signing…'; err.hidden = true;
     try {
-      const r = await fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(who ? { 'X-Signer-Email': who } : {}) },
-        body: JSON.stringify({ name: adopted.name, email: adopted.email, signature: adopted.signature, agree: true, hash }) });
+      const r = await post('', { name: adopted.name, email: adopted.email, signature: adopted.signature, agree: true, hash });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.message || 'Something went wrong. Please try again.');
-      data = j; adopted = null; await render(); window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (x) { err.textContent = x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Finish'; }
+      data = j; adopted = null; refresh();
+      document.getElementById('end').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } catch (x) { err.textContent = x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Finish and sign'; }
   }
-  async function downloadSigned() {
-    const btn = document.getElementById('dl');
+  async function downloadSigned(btn) {
+    const label = btn.textContent;
     btn.disabled = true; btn.textContent = 'Preparing…';
     try {
       const name = `${data.title.replace(/[^\w\- ]+/g, '').trim() || 'contract'} - signed.pdf`;
       if (allSigned()) {
         const r = await get('/signed');
-        if (r.ok) { HZPDF.download(new Uint8Array(await r.arrayBuffer()), name); btn.disabled = false; btn.textContent = 'Download signed PDF'; return; }
+        if (r.ok) { HZPDF.download(new Uint8Array(await r.arrayBuffer()), name); btn.disabled = false; btn.textContent = label; return; }
       }
       const out = await HZPDF.signed(pdfBytes, { title: data.title, hash: data.pdf_hash,
         signers: data.signers.map(s => ({ label: s.label, box: s.box, signed: s.signed ? { ...s.signed, hash: data.pdf_hash } : null })) });
       HZPDF.download(out, name);
+      post('/event', { event: 'downloaded the PDF' }).catch(() => {});
     } catch (e) { alert('The signed PDF could not be created: ' + e.message); }
-    btn.disabled = false; btn.textContent = 'Download signed PDF';
+    btn.disabled = false; btn.textContent = label;
   }
   load();
 })();

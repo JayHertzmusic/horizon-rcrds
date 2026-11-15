@@ -1,5 +1,5 @@
 /* Correos de contratos a los artistas (Resend).
-   Salen de contratos@horizonrcrds.com; las respuestas van al correo de Horizon y Horizon recibe copia oculta de cada uno. */
+   Salen de contratos@horizonrcrds.com y solo le llegan al artista; si responde, la respuesta llega al correo de Horizon. */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 // Fondo blanco, icono de Horizon (cuadrado negro con la H), nombre en letra fina espaciada, botón negro
@@ -27,13 +27,22 @@ function layout(title, body, button) {
 const textOf = html => html.replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{3,}/g, '\n\n').trim();
 // nombre del contrato en su propia línea, debajo de la frase
 const docTitle = t => `<div style="margin:10px 0 2px;font-size:17px;line-height:1.4;font-weight:700;color:#111111">${esc(t)}</div>`;
+// nombre del contrato en los correos: «HORIZON RCRDS RELEASE CONTRACT | Artista 1 & Artista 2 - Track»
+export function mailName(c) {
+  const vars = (() => { try { return JSON.parse(c.vars || '{}'); } catch { return {}; } })();
+  const kind = /remix/i.test(c.title || '') ? 'REMIX AUTHORIZATION' : 'RELEASE CONTRACT';
+  const artists = String(c.artist || '').split(/\s*(?:,|&|\band\b)\s*/i).map(x => x.trim()).filter(Boolean).join(' & ');
+  const track = String(c.release_name || vars.Track || vars.track || '').trim();
+  const who = [artists, track].filter(Boolean).join(' - ');
+  return `HORIZON RCRDS ${kind}${who ? ' | ' + who : ''}`;
+}
 const hello = sg => sg.label && !/^Artista?\s*\d*$/i.test(sg.label) ? `Hi ${esc(sg.label)},` : 'Hi,';
 
 // Resend (plan gratis: 3.000 correos/mes, 100/día). La clave va como secreto RESEND_API_KEY.
 async function send(env, msg) {
   const from = env.MAIL_FROM || 'contratos@horizonrcrds.com';
   const body = {
-    from: `HORIZON RCRDS <${from}>`, to: [msg.to], reply_to: env.MAIL_TO || from, ...(env.MAIL_TO && env.MAIL_TO !== msg.to && !msg.noBcc ? { bcc: [env.MAIL_TO] } : {}),
+    from: `HORIZON RCRDS <${from}>`, to: [msg.to], reply_to: env.MAIL_TO || from,   // solo al artista (sin copia a Horizon); si responde, llega a Horizon
     subject: msg.subject, html: msg.html, text: textOf(msg.html),
     ...(msg.attachments ? { attachments: msg.attachments.map(a => ({ filename: a.filename, content: a.content })) } : {}),
   };
@@ -59,16 +68,24 @@ export function loginCodeMail(env, email, code, area) {
   return send(env, { to: email, subject: `Your sign-in code: ${code}`, html: layout('Sign in to HORIZON RCRDS', body, null), noBcc: true });
 }
 
+// código para abrir el contrato (llega al email del artista)
+export function signCodeMail(env, c, sg, code) {
+  const body = `Use this code to open your contract with HORIZON RCRDS:${docTitle(mailName(c))}
+    <div style="margin:18px 0 6px;font-size:32px;line-height:1;font-weight:700;letter-spacing:10px;padding-left:10px;color:#111111">${esc(code)}</div>
+    <div style="font-size:13px;color:#6b7280">It expires in 15 minutes. If you did not try to open this contract, you can ignore this email.</div>`;
+  return send(env, { to: sg.email, subject: `Your code: ${code} · ${mailName(c)}`, html: layout('Your access code', body, null) });
+}
+
 // invitación a firmar
 export function inviteMail(env, c, sg, link) {
-  const body = `${hello(sg)}<br><br>HORIZON RCRDS has sent you a contract to review and sign:${docTitle(c.title)}<br>
-    Open it with the button below. To access it, enter this email address (<b>${esc(sg.email)}</b>). You can read the whole contract and sign it online.`;
-  return send(env, { to: sg.email, subject: `Contract to sign — ${c.title}`, html: layout('Your contract is ready to sign', body, { href: link, label: 'Review and sign' }) });
+  const body = `${hello(sg)}<br><br>HORIZON RCRDS has sent you a contract to review and sign:${docTitle(mailName(c))}<br>
+    Open it with the button below and enter this email address (<b>${esc(sg.email)}</b>): we will send you a code to open it. You can read the whole contract and sign it online.`;
+  return send(env, { to: sg.email, subject: mailName(c), html: layout('Your contract is ready to sign', body, { href: link, label: 'Review and sign' }) });
 }
 
 // contrato terminado (han firmado todos): enlace privado para descargar el PDF firmado
 export function doneMail(env, c, sg, link) {
-  const body = `${hello(sg)}<br><br>Everyone has signed this contract, so it is now complete:${docTitle(c.title)}<br>
-    Download your signed copy (PDF) from your private link below. Enter this email address (<b>${esc(sg.email)}</b>) to open it. The link stays available, so you can download it again at any time.`;
-  return send(env, { to: sg.email, subject: `Signed contract — ${c.title}`, html: layout('Your contract is signed', body, { href: link, label: 'Download signed contract' }) });
+  const body = `${hello(sg)}<br><br>Everyone has signed this contract, so it is now complete:${docTitle(mailName(c))}<br>
+    Download your signed copy (PDF) from your private link below. Enter this email address (<b>${esc(sg.email)}</b>) and the code we send you to open it. The link stays available, so you can download it again at any time.`;
+  return send(env, { to: sg.email, subject: `${mailName(c)} (signed)`, html: layout('Your contract is signed', body, { href: link, label: 'Download signed contract' }) });
 }

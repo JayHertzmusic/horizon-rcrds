@@ -74,15 +74,16 @@ export async function docFromTemplate(env, docUrl, values, title) {
   const d = docParts(docUrl);
   if (!d) throw new Error('The template’s Google Doc link is not valid.');
   const copy = await gapi(tok, `https://www.googleapis.com/drive/v3/files/${d.id}/copy?fields=id&supportsAllDrives=true`, { name: `HORIZON RCRDS — ${title}` });
+  // la copia conserva casi siempre los ids de las pestañas: se lee una vez y solo si no está la pestaña se busca por su posición
   let tab = d.tab;
-  const q = '?includeTabsContent=true&fields=tabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index))))';
-  if (tab) {
-    const [a, b] = await Promise.all([gapi(tok, `https://docs.googleapis.com/v1/documents/${d.id}${q}`), gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}${q}`)]);
-    const ta = flatTabs(a.tabs), tb = flatTabs(b.tabs);
-    if (!tb.some(t => t.tabId === tab)) tab = tb[ta.findIndex(t => t.tabId === tab)]?.tabId || '';
-  }
   const full = await gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}?includeTabsContent=true`);
-  const tabObj = tab ? findTab(full.tabs, tab) : full.tabs?.[0];
+  let tabObj = tab ? findTab(full.tabs, tab) : full.tabs?.[0];
+  if (!tabObj && tab) {
+    const q = '?includeTabsContent=true&fields=tabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index))))';
+    const ta = flatTabs((await gapi(tok, `https://docs.googleapis.com/v1/documents/${d.id}${q}`)).tabs), tb = flatTabs(full.tabs);
+    const id = tb[ta.findIndex(t => t.tabId === tab)]?.tabId;
+    tabObj = id ? findTab(full.tabs, id) : null;
+  }
   if (!tabObj) throw new Error('Could not find the template tab in the copy.');
   tab = tabObj.tabProperties.tabId;
   const { text, idx, sty } = docText(tabObj.documentTab?.body?.content);

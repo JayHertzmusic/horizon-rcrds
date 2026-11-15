@@ -121,8 +121,8 @@ export async function formsApi(req, env, s, url, audit) {
     return { ok: true };
   }
   if (mm[2] === 'responses' && m === 'GET') {
-    // Release Form: como la hoja de Google (#1 arriba, las nuevas debajo). El resto: la más nueva arriba.
-    const asc = f.slug === 'release-form';
+    // Release Form: la más nueva arriba. El resto: #1 arriba y cada nueva debajo.
+    const asc = f.slug !== 'release-form';
     const from = Number(url.searchParams.get('from') || url.searchParams.get('before')) || (asc ? 0 : 9e15);
     const q = String(url.searchParams.get('q') || '').trim().slice(0, 100);
     const like = '%' + q.replace(/[\\%_]/g, c => '\\' + c) + '%';

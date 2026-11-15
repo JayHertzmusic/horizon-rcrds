@@ -36,20 +36,8 @@
     "youtube_link": "https://www.youtube.com/watch?v=DDLs_0pZA1M"
   },
   {
-    "id": "hrz088",
-    "catalog": "HRZ#087",
-    "artist": "Stefi",
-    "title": "You And I",
-    "image": "hrz088.jpg",
-    "color": "#503fd1",
-    "stream_link": "https://too.fm/vvz0re5",
-    "spotify_link": "https://open.spotify.com/track/0MhK4Cff3cSTB8FkXjJF5m?si=e367dbcc85544b79",
-    "soundcloud_link": "https://soundcloud.com/horizonirecords/stefi-you-and-i",
-    "youtube_link": "https://www.youtube.com/watch?v=SD1RYXSsZmQ"
-  },
-  {
     "id": "hrz087",
-    "catalog": "HRZ#086",
+    "catalog": "HRZ#087",
     "artist": "King Drac & Jay Hertz",
     "title": "I Lost You",
     "image": "hrz087.jpg",
@@ -61,7 +49,7 @@
   },
   {
     "id": "hrz086",
-    "catalog": "HRZ#085",
+    "catalog": "HRZ#086",
     "artist": "Tired!!, kellapsage, prikkkk",
     "title": "Aether",
     "image": "hrz086.jpg",
@@ -73,7 +61,7 @@
   },
   {
     "id": "hrz085",
-    "catalog": "HRZ#084",
+    "catalog": "HRZ#085",
     "artist": "Xenox",
     "title": "Firefly",
     "image": "hrz085.jpg",
@@ -85,7 +73,7 @@
   },
   {
     "id": "hrz084",
-    "catalog": "HRZ#083",
+    "catalog": "HRZ#084",
     "artist": "RoaNn",
     "title": "Always Been You",
     "image": "hrz084.jpg",
@@ -97,7 +85,7 @@
   },
   {
     "id": "hrz083",
-    "catalog": "HRZ#082",
+    "catalog": "HRZ#083",
     "artist": "SunsetStation",
     "title": "Prisoner",
     "image": "hrz083.jpg",
@@ -106,6 +94,18 @@
     "spotify_link": "https://open.spotify.com/track/0xhZqX3dBl05GYAlbgYIUY?si=78b9f99d53994a50",
     "soundcloud_link": "https://soundcloud.com/horizonirecords/sunsetstation-prisoner?si=06ae376af2a1461fa088de2d8357e5a2&utm_source=clipboard&utm_medium=text&utm_campaign=social_sharing",
     "youtube_link": "https://www.youtube.com/watch?v=Q8unueuKkWo"
+  },
+  {
+    "id": "hrz088",
+    "catalog": "HRZ#082",
+    "artist": "Stefi",
+    "title": "You And I",
+    "image": "hrz088.jpg",
+    "color": "#503fd1",
+    "stream_link": "https://too.fm/vvz0re5",
+    "spotify_link": "https://open.spotify.com/track/0MhK4Cff3cSTB8FkXjJF5m?si=e367dbcc85544b79",
+    "soundcloud_link": "https://soundcloud.com/horizonirecords/stefi-you-and-i",
+    "youtube_link": "https://www.youtube.com/watch?v=SD1RYXSsZmQ"
   },
   {
     "id": "hrz081",

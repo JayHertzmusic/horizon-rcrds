@@ -2421,8 +2421,46 @@
       const ed = ctCanEdit() && c.status !== 'signed';
       ctOpen.view = await HZPDF.render(box, ctOpen.bytes, { marks: ctMarks(), maxWidth: 820, onPage: ed ? (page, x, y) => placeBox(page, x, y) : null });
       if (ctCanEdit() && c.status === 'signed' && !c.signed_pdf) ensureSigned(c, ctOpen.bytes).catch(() => { /* se reintenta la próxima vez */ });
+      if (ed && !c.signers.some(x => x.signed) && (autoPlaceFor === c.id || c.signers.some(x => !x.box))) { autoPlaceFor = null; autoPlace(c).catch(() => { /* se colocan a mano */ }); }
       if (isTpl(c) && !ctOpen.fields) { ctOpen.fields = await pdfFields(ctOpen.bytes); const el = $('.tpl-fields'); if (el) el.innerHTML = tplFieldsHtml(ctOpen.fields); }
     } catch (e) { box.innerHTML = `<p class="login-error">${esc(e.message)}</p>`; }
+  }
+  /* Dónde firma cada artista: encima de la línea «______» que tiene debajo «Signed By Artist» (o «Artist 1», «Artist 2»…) */
+  let autoPlaceFor = null;
+  async function signSpots(bytes) {
+    const pdf = await HZPDF.load(bytes), spots = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i), vp = page.getViewport({ scale: 1 }), W = vp.width, H = vp.height;
+      const items = (await page.getTextContent()).items.map(it => ({ s: it.str, x: it.transform[4], y: H - it.transform[5], w: it.width }));
+      const lines = items.filter(it => /^[\s_]*_{8,}[\s_]*$/.test(it.s));
+      for (const lb of items) {
+        const m = lb.s.match(/signed by\s+(?:the\s+)?artist\s*(\d)?/i);
+        if (!m) continue;
+        const mid = lb.x + lb.w / 2;
+        // la línea justo encima de la etiqueta (la más cercana que la cubra)
+        const ln = lines.filter(l => l.y < lb.y && lb.y - l.y < 40 && l.x - 20 < mid && l.x + l.w + 20 > mid).sort((a, b) => b.y - a.y)[0];
+        const x = ln ? ln.x : lb.x, w = ln ? ln.w : Math.max(lb.w, 150), bottom = ln ? ln.y - 1 : lb.y - 14, h = 50;
+        spots.push({ n: m[1] ? Number(m[1]) : null, box: { page: i - 1, x: Math.max(0, x / W), y: Math.max(0, (bottom - h) / H), w: Math.min(1, w / W), h: h / H } });
+      }
+    }
+    return spots;
+  }
+  async function autoPlace(c) {
+    const spots = await signSpots(ctOpen.bytes);
+    if (!spots.length) return;
+    const free = spots.filter(x => x.n === null), done = [];
+    for (const [i, sg] of c.signers.entries()) {
+      const sp = spots.find(x => x.n === i + 1) || (i === 0 ? spots.find(x => x.n === 1) : null) || free.shift();
+      if (!sp || sg.signed) continue;
+      const b = sp.box, old = sg.box;
+      if (old && Math.abs(old.page - b.page) + Math.abs(old.x - b.x) + Math.abs(old.y - b.y) + Math.abs(old.w - b.w) < 0.005) continue;
+      await api('POST', `/api/contracts/${encodeURIComponent(c.id)}/box`, { signer: sg.id, box: b });
+      sg.box = b; done.push(sg.label || `Artist ${i + 1}`);
+    }
+    if (!done.length || ctOpen?.contract !== c) return;
+    ctOpen.active = null;
+    ctSoftUpdate();
+    toast(`Signature placed above “Signed By Artist” (${done.join(', ')}). Use Place signature to move it.`);
   }
   // actualiza la lista de firmantes, los botones y los recuadros sin volver a pintar la página
   function ctSoftUpdate() {
@@ -2520,7 +2558,7 @@
         const tok = await googleToken();
         const r = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/from-doc`, { token: tok }), 'PDF updated from the Doc');
         ctOpen.bytes = null; ctOpen.fields = null;
-        if (r?.changedPages) toast('The page count changed: place the signatures again.');
+        autoPlaceFor = c.id;
         ctRefresh();
       } catch (err) { toast(err.message); }
     }
@@ -2608,7 +2646,7 @@
         const r = await ctAction(() => api('POST', '/api/contracts', { kind: 'template', title: f.elements.title.value }));
         await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/doc`, { url: doc }));
         try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, { token: tok }), 'Template created'); } catch { /* aviso ya mostrado */ }
-        ctTab = 'templates'; ctData = null; openContract(r.id); loadContracts();
+        ctTab = 'templates'; ctData = null; autoPlaceFor = r.id; openContract(r.id); loadContracts();
       } else if (f.id === 'ct-use') {
         const tpl = ctOpen.tpl, fields = ctOpen.fields || [];
         const title = f.elements.title.value.trim();
@@ -2626,8 +2664,7 @@
             await ctAction(() => api('POST', '/api/contracts', { id: r.id, title, artist: f.elements.artist.value, email: emails[0], signers: full.contract.signers.map((x, i) => ({ id: x.id, label: x.label, email: emails[i] || '' })) }));
           }
           const g = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, { token: tok }), 'Contract created');
-          if (g?.changedPages) toast('With these details the contract has a different page count: check where each person signs.');
-          ctTab = 'contracts'; ctData = null; openContract(r.id); loadContracts();
+          ctTab = 'contracts'; ctData = null; autoPlaceFor = r.id; openContract(r.id); loadContracts();
         } catch (err) { if (!$('#ed-error:not([hidden])')) fail(err.message); btn.disabled = false; btn.textContent = 'Create contract'; }
       } else {
         const c = ctOpen.contract;

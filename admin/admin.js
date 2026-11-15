@@ -1636,7 +1636,7 @@
         if (view === 'forms' && !formOpen && !formsLoading) {
           const fresh = await api('GET', '/api/forms').catch(() => null);
           if (fresh && JSON.stringify(fresh) !== JSON.stringify(formsData)) { formsData = fresh; if (view === 'forms' && !formOpen) render(); }
-        } else formsData = null;
+        } else if (!formOpen) formsData = null;
       }
     } catch { /* sin aviso */ }
   }
@@ -1715,13 +1715,26 @@
   const respOpen = (r, rs) => formOpen.openIds?.has(r.id) || (rs.length === 1 && !!(formOpen.q || '').trim());
   function respList(f) {
     const qs = f.fields.filter(x => x.type !== 'section'), own = canEditForm(f), rs = formOpen.responses, q = (formOpen.q || '').trim();
-    return `${!rs ? '<p class="info">Loading…</p>' : rs.length ? `${q ? `<p class="info">${rs.length}${formOpen.more ? '+' : ''} ${rs.length === 1 ? 'response matches' : 'responses match'} “${esc(q)}”</p>` : ''}<div class="resps">${rs.map(r => `
+    return `${!rs ? '<p class="info">Loading…</p>' : rs.length ? `${q ? `<p class="info">${rs.length}${formOpen.more ? '+' : ''} ${rs.length === 1 ? 'response matches' : 'responses match'} “${esc(q)}”</p>` : ''}<div class="resps">${rs.map(r => respItem(f, r, rs, q, qs, own)).join('')}</div>
+        ${formOpen.more ? '<button type="button" class="btn ghost log-more" data-act="resp-more">Show more</button>' : ''}` : `<p class="info">${q ? `Nothing matches “${esc(q)}”.` : 'No responses yet.'}</p>`}`;
+  }
+  function respItem(f, r, rs, q, qs, own) {
+    return `
         <article class="resp${r.seen ? '' : ' is-new'}${respOpen(r, rs) ? ' is-open' : ''}" data-resp="${r.id}">
           <header data-act="resp-toggle" title="Show / hide the answers"><span class="resp-num">#${r.n || ''}</span>${(() => { const w = respWho(f, r); return w.who ? `<span class="resp-who"><b>${mark(esc(w.who), q)}</b>${w.what ? `<span>${mark(esc(w.what), q)}</span>` : ''}</span>` : ''; })()}${r.seen ? '' : '<span class="new-pill">New</span>'}<span class="resp-date">${esc(fmtDate(r.at))}</span>
             <span class="resp-btns">${preview ? '' : r.seen ? '<button type="button" class="btn ghost sm" data-act="resp-unseen">Mark as new</button>' : '<button type="button" class="btn primary sm" data-act="resp-seen">Mark as seen</button>'}${own ? '<button type="button" class="btn ghost sm" data-act="resp-del">Delete</button>' : ''}</span></header>
           ${respOpen(r, rs) ? `<dl>${qs.map(x => `<dt>${esc(x.label)}</dt><dd>${mark(answerHtml(r.data[x.id]), q)}</dd>`).join('')}</dl>` : ''}
-        </article>`).join('')}</div>
-        ${formOpen.more ? '<button type="button" class="btn ghost log-more" data-act="resp-more">Show more</button>' : ''}` : `<p class="info">${q ? `Nothing matches “${esc(q)}”.` : 'No responses yet.'}</p>`}`;
+        </article>`;
+  }
+  // cambia solo esas respuestas y el botón «Mark all as seen» (sin redibujar la página: no parpadea)
+  function patchResps(ids) {
+    const f = formsData?.forms.find(x => x.id === formOpen?.id), rs = formOpen?.responses;
+    if (!f || !rs) return;
+    const qs = f.fields.filter(x => x.type !== 'section'), own = canEditForm(f), q = (formOpen.q || '').trim();
+    for (const r of rs) if (ids.includes(r.id)) { const el = document.querySelector(`.resp[data-resp="${r.id}"]`); if (el) el.outerHTML = respItem(f, r, rs, q, qs, own).trim(); }
+    const hb = document.querySelector('.head-btns[data-form]'), allBtn = hb?.querySelector('[data-act="resp-all-seen"]'), need = rs.some(r => !r.seen) && !preview;
+    if (hb && need && !allBtn) hb.insertAdjacentHTML('afterbegin', '<button type="button" class="btn ghost" data-act="resp-all-seen">Mark all as seen</button>');
+    if (allBtn && !need) allBtn.remove();
   }
   // resalta lo buscado dentro de las respuestas (sin tocar las etiquetas HTML)
   function mark(html, q) {
@@ -1891,17 +1904,16 @@
       const rid = Number(t.closest('[data-resp]').dataset.resp);
       formOpen.openIds = formOpen.openIds || new Set();
       if (formOpen.openIds.has(rid)) formOpen.openIds.delete(rid); else formOpen.openIds.add(rid);
-      $('#resp-list').innerHTML = respList(formsData.forms.find(x => x.id === formOpen.id));
+      patchResps([rid]);
     } else if (act === 'resp-seen' || act === 'resp-unseen' || act === 'resp-all-seen') {
       const all = act === 'resp-all-seen', seen = act !== 'resp-unseen';
       const ids = all ? formOpen.responses.filter(r => !r.seen).map(r => r.id) : [Number(t.closest('[data-resp]').dataset.resp)];
-      try {
-        await Promise.all(ids.map(rid => api('POST', `/api/forms/${encodeURIComponent(formOpen.id)}/responses/${rid}`, { seen })));
-        for (const r of formOpen.responses) if (ids.includes(r.id)) r.seen = seen;
-        const f = formsData?.forms.find(x => x.id === formOpen.id);
-        if (f) f.unseen = Math.max(0, (f.unseen || 0) + (seen ? -ids.length : ids.length));
-        render(); checkUnseen();
-      } catch (err) { toast(err.message); }
+      if (!ids.length) return;
+      const fid = formOpen.id, f = formsData?.forms.find(x => x.id === fid);
+      const set = v => { for (const r of formOpen.responses) if (ids.includes(r.id)) r.seen = v; if (f) f.unseen = Math.max(0, (f.unseen || 0) + (v === seen ? 1 : -1) * (seen ? -ids.length : ids.length)); patchResps(ids); };
+      set(seen);
+      try { await Promise.all(ids.map(rid => api('POST', `/api/forms/${encodeURIComponent(fid)}/responses/${rid}`, { seen }))); checkUnseen(); }
+      catch (err) { if (formOpen?.id === fid) set(!seen); toast(err.message); }
     } else if (act === 'resp-del') {
       const rid = Number(t.closest('[data-resp]').dataset.resp);
       if (!await confirmBox('Delete this response? This can’t be undone.', 'Delete')) return;

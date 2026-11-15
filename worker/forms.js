@@ -125,6 +125,12 @@ export async function formsApi(req, env, s, url, audit) {
     const rows = (await DB.prepare('SELECT id, at, data, seen FROM form_responses WHERE form_id = ? AND id < ? ORDER BY id DESC LIMIT 51').bind(f.id, before).all()).results;
     return { responses: rows.slice(0, 50).map(r => ({ id: r.id, at: r.at, seen: !!r.seen, data: parse(r.data) || {} })), more: rows.length > 50 };
   }
+  if (mm[2] === 'responses' && mm[3] && m === 'POST') {
+    const seen = (parse(await req.text()) || {}).seen ? 1 : 0;
+    const r = await DB.prepare('UPDATE form_responses SET seen = ? WHERE id = ? AND form_id = ?').bind(seen, Number(mm[3]), f.id).run();
+    if (!r.meta.changes) throw new FormError(404, 'That response no longer exists.');
+    return { ok: true, seen: !!seen };
+  }
   if (mm[2] === 'seen' && m === 'POST') {
     await DB.prepare('UPDATE form_responses SET seen = 1 WHERE form_id = ? AND seen = 0').bind(f.id).run();
     return { ok: true };

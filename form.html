@@ -108,6 +108,9 @@
   @media (max-width: 470px) { html.embed #f > .q.half { grid-column: 1 / -1; } }
   .send { text-indent: .24em; }
   html.embed .send { text-indent: .22em; }
+    /* sin barras de scroll visibles (se sigue pudiendo desplazar) */
+    html, body, * { scrollbar-width: none; }
+    ::-webkit-scrollbar { display: none; width: 0; height: 0; }
 </style>
 <script>/* incrustado en la portada: modo compacto desde el primer instante (sin enseñar la página completa) */
 if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.documentElement.classList.add('embed');</script>

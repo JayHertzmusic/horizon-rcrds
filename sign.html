@@ -104,6 +104,9 @@
   .ds-actions { display: flex; gap: 10px; flex-wrap: wrap; }
   .ds-card .btn { background: #ffd335; color: #000; }
   .ds-card .btn.ghost { background: none; color: #111; border: 1px solid #c9ccd3; }
+    /* sin barras de scroll visibles (se sigue pudiendo desplazar) */
+    html, body, * { scrollbar-width: none; }
+    ::-webkit-scrollbar { display: none; width: 0; height: 0; }
 </style>
 </head>
 <body>

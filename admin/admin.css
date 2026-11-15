@@ -789,3 +789,13 @@ a.lk.on:hover { color: #fff; background: rgba(255, 255, 255, .08); }
 /* la cifra se recorta a su altura real (de la base a lo alto de la cifra) y esa caja se centra: igual en Windows, Mac y móvil */
 .nb-n { display: block; line-height: 1; text-box: trim-both cap alphabetic; }
 .nb-n.one { transform: translateX(-0.05em); } /* el palo del «1» justo en el centro */
+
+/* sin barras de scroll visibles en el panel (se sigue pudiendo desplazar) */
+html, body, * { scrollbar-width: none; }
+::-webkit-scrollbar { display: none; width: 0; height: 0; }
+
+/* Respuestas: «New» hasta que se marquen como vistas */
+.resp header { flex-wrap: wrap; }
+.resp header .new-pill { height: 22px; }
+.resp-btns { margin-left: auto; display: flex; gap: 8px; }
+.resp.is-new { border-color: rgba(255, 59, 71, .5); box-shadow: inset 3px 0 0 #ff3b47; }

@@ -24,6 +24,9 @@
   p, li { color: var(--text); }
   ul { padding-left: 20px; }
   footer { margin-top: 56px; padding-top: 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; }
+    /* sin barras de scroll visibles (se sigue pudiendo desplazar) */
+    html, body, * { scrollbar-width: none; }
+    ::-webkit-scrollbar { display: none; width: 0; height: 0; }
 </style>
 </head>
 <body>

@@ -1575,7 +1575,7 @@
     if (!auth || preview || !showForms() || document.hidden) return;
     try {
       const r = await api('GET', '/api/forms/unseen');
-      const grew = r.total > unseen.total;
+      const grew = r.total !== unseen.total && r.total > unseen.total;
       unseen = r;
       const b = $('#forms-badge');
       if (b) { b.hidden = !r.total; b.innerHTML = `<span class="nb-n${r.total === 1 ? ' one' : ''}">${r.total > 99 ? '99+' : r.total}</span>`; }
@@ -1634,7 +1634,6 @@
       const r = await api('GET', `/api/forms/${encodeURIComponent(id)}/responses`);
       if (formOpen?.id !== id) return;
       formOpen.responses = r.responses; formOpen.more = r.more;
-      if (!preview) api('POST', `/api/forms/${encodeURIComponent(id)}/seen`).then(() => { const f = formsData.forms.find(x => x.id === id); if (f) f.unseen = 0; checkUnseen(); }).catch(() => {});
     } catch (e) { if (formOpen) formOpen.err = e.message; }
     if (view === 'forms') render();
   }
@@ -1651,11 +1650,12 @@
     return `
       <button type="button" class="back" data-act="form-back">← Forms</button>
       <div class="head"><div><p class="eyebrow">Responses</p><h1>${esc(f.title)} <span class="count">${f.total}</span></h1></div>
-        <div class="head-btns" data-form="${esc(f.id)}">${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Download (Excel / CSV)</button>' : ''}${can('forms', 'edit') && !preview ? '<button type="button" class="btn primary" data-act="form-edit">Edit form</button>' : ''}</div></div>
+        <div class="head-btns" data-form="${esc(f.id)}">${rs && rs.some(r => !r.seen) && !preview ? '<button type="button" class="btn ghost" data-act="resp-all-seen">Mark all as seen</button>' : ''}${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Download (Excel / CSV)</button>' : ''}${can('forms', 'edit') && !preview ? '<button type="button" class="btn primary" data-act="form-edit">Edit form</button>' : ''}</div></div>
       ${formOpen.err ? `<p class="login-error" role="alert">${esc(formOpen.err)}</p>` : ''}
       ${!rs ? '<p class="info">Loading…</p>' : rs.length ? `<div class="resps">${rs.map(r => `
         <article class="resp${r.seen ? '' : ' is-new'}" data-resp="${r.id}">
-          <header><b>${esc(fmtDate(r.at))}</b>${r.seen ? '' : '<span class="tag">New</span>'}${own ? '<button type="button" class="btn ghost sm push" data-act="resp-del">Delete</button>' : ''}</header>
+          <header>${r.seen ? '' : '<span class="new-pill">New</span>'}<b>${esc(fmtDate(r.at))}</b>
+            <span class="resp-btns">${preview ? '' : r.seen ? '<button type="button" class="btn ghost sm" data-act="resp-unseen">Mark as new</button>' : '<button type="button" class="btn primary sm" data-act="resp-seen">Mark as seen</button>'}${own ? '<button type="button" class="btn ghost sm" data-act="resp-del">Delete</button>' : ''}</span></header>
           <dl>${qs.map(q => `<dt>${esc(q.label)}</dt><dd>${answerHtml(r.data[q.id])}</dd>`).join('')}</dl>
         </article>`).join('')}</div>
         ${formOpen.more ? '<button type="button" class="btn ghost log-more" data-act="resp-more">Show more</button>' : ''}` : '<p class="info">No responses yet.</p>'}`;
@@ -1804,6 +1804,16 @@
     } else if (act === 'resp-more') {
       const last = formOpen.responses.at(-1)?.id;
       try { const r = await api('GET', `/api/forms/${encodeURIComponent(formOpen.id)}/responses?before=${last}`); formOpen.responses.push(...r.responses); formOpen.more = r.more; render(); } catch (err) { toast(err.message); }
+    } else if (act === 'resp-seen' || act === 'resp-unseen' || act === 'resp-all-seen') {
+      const all = act === 'resp-all-seen', seen = act !== 'resp-unseen';
+      const ids = all ? formOpen.responses.filter(r => !r.seen).map(r => r.id) : [Number(t.closest('[data-resp]').dataset.resp)];
+      try {
+        await Promise.all(ids.map(rid => api('POST', `/api/forms/${encodeURIComponent(formOpen.id)}/responses/${rid}`, { seen })));
+        for (const r of formOpen.responses) if (ids.includes(r.id)) r.seen = seen;
+        const f = formsData?.forms.find(x => x.id === formOpen.id);
+        if (f) f.unseen = Math.max(0, (f.unseen || 0) + (seen ? -ids.length : ids.length));
+        render(); checkUnseen();
+      } catch (err) { toast(err.message); }
     } else if (act === 'resp-del') {
       const rid = Number(t.closest('[data-resp]').dataset.resp);
       if (!await confirmBox('Delete this response? This can’t be undone.', 'Delete')) return;

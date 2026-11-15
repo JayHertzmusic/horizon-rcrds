@@ -95,10 +95,10 @@ export async function docFromTemplate(env, docUrl, values, title) {
     const startIndex = idx[b.start - extra], endIndex = idx[b.end - 1] + 1;
     const pre = '';
     requests.push({ deleteContentRange: { range: { startIndex, endIndex, tabId: tab } } }, { insertText: { location: { index: startIndex, tabId: tab }, text: pre + v } });
-    // si era una raya «____» (o XXX), el dato lleva la letra de su etiqueta («Artist Name:»…), sin subrayado ni cursiva
+    // si era una raya «____» (o XXX), el dato lleva la letra de su etiqueta («Artist Name:»…), en negrita y sin subrayado
     if (line) {
       let k = b.start - 1 - extra; while (k > 0 && /\s/.test(text[k])) k--;
-      const ls = sty[k] || {}, style = { underline: false, italic: !!ls.italic, smallCaps: !!ls.smallCaps, strikethrough: false, bold: !!ls.bold };
+      const ls = sty[k] || {}, style = { underline: false, italic: !!ls.italic, smallCaps: !!ls.smallCaps, strikethrough: false, bold: true };   // datos del artista siempre en negrita
       const fields = ['underline', 'italic', 'smallCaps', 'strikethrough', 'bold'];
       for (const f of ['weightedFontFamily', 'fontSize', 'foregroundColor']) if (ls[f]) { style[f] = ls[f]; fields.push(f); }
       requests.push({ updateTextStyle: { range: { startIndex: startIndex + pre.length, endIndex: startIndex + pre.length + v.length, tabId: tab }, textStyle: style, fields: fields.join(',') } });

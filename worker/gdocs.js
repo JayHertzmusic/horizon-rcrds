@@ -28,7 +28,7 @@ const DATA_NAMES = { 'artist name': 'Artist name', 'legal name': 'Legal name', '
 const BLANK_RULES = [
   [/(\{\{\s*([^{}]{1,60}?)\s*\}\})/gd, m => [[1, m[2].replace(/\s+/g, ' ').trim()]]],
   [/represented herein by\s+(.+?),\s*and hereinafter referred to as the\s*[“"]Label/gd, () => [[1, 'Label representative']]],
-  [/(?:^|\n|\.\s)\s*(?:\d+\.\d+\.\s*)?([^\n:.]+?),\s*also known as\s+(.+?),\s*and hereinafter referred to as the\s*[“"]Artists?[”"]/gd, () => [[1, 'Artist name'], [2, 'Legal name']]],
+  [/(?:^|\n|\.\s)\s*(?:\d+\.\d+\.\s*)?([^\n:.]+?),\s*also known as\s+(.+?),\s*and hereinafter referred to as the\s*[“"]Artists?[”"]/gd, () => [[1, 'Artists clause name'], [2, 'Artists clause legal']]],
   [/Artist (\d):\s*(.+?)\s+also known as\s+(.+?)\.(?=\s|$)/gd, m => [[2, `Artist ${m[1]} name`], [3, `Artist ${m[1]} legal name`]]],
   [/musical work titled\s*["“]\s*(.+?)\s*["”]\s*recorded/gd, () => [[1, 'Track']]],
   [/sound recording titled\s*["“](.+?)["”]/gd, () => [[1, 'Track']]],
@@ -89,7 +89,8 @@ export async function docFromTemplate(env, docUrl, values, title) {
   const { text, idx, sty } = docText(tabObj.documentTab?.body?.content);
   const requests = [];
   for (const b of findBlanks(text).reverse()) {
-    const v = values[b.name];
+    // cláusula 1.2 («Artista, also known as Nombre legal»): con varias copias lleva a todos los artistas; si no, el del contrato
+    const v = values[b.name] || (b.name === 'Artists clause name' ? values['Artist name'] : b.name === 'Artists clause legal' ? values['Legal name'] : '');
     if (!v) continue;
     const line = /^(_+|X{3,}|XX\.XX\.XXXX)$/.test(String(b.value).trim());
     const extra = 0;   // (los espacios de la plantilla se respetan: mueven el dato a su columna)

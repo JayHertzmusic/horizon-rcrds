@@ -2236,17 +2236,19 @@
     // 1 artista: todo seguido, sin recuadros
     if (n === 1) return `
       <form id="ct-use" class="editor ct-ed" novalidate>${head}
-        ${picker(1)}${release}${who(1)}
+        ${picker(1)}${release}
+        <h2 class="ct-sub">Release &amp; label</h2>
+        ${reading}${grid(general.map(([f, i]) => fieldHtml(f, i)))}
+        <h2 class="ct-sub">Artist</h2>
+        ${who(1)}${grid(mine(1).map(([f, i]) => fieldHtml(f, i, 1)))}
         ${t.signers.length === 1 ? '<div class="copy-btns"><button type="button" class="btn ghost sm" data-ct="copy-add">+ Add artist (own copy)</button></div>' : ''}
-        <h2 class="ct-sub">Details that go in the contract</h2>
-        ${reading}${grid([...general.map(([f, i]) => fieldHtml(f, i)), ...mine(1).map(([f, i]) => fieldHtml(f, i, 1))])}
-        ${fields ? '<p class="info">Everything above goes into the contract in every place it appears. A field left empty keeps what the template says.</p>' : ''}${end}
+        ${fields ? '<p class="info">Everything goes into the contract in every place it appears. A field left empty keeps what the template says.</p>' : ''}${end}
       </form>`;
     // varios artistas: un recuadro por artista con su Release Form, su nombre, su email y sus datos
     return `
       <form id="ct-use" class="editor ct-ed" novalidate>${head}
         ${release}
-        <h2 class="ct-sub">Details that go in the contract</h2>
+        <h2 class="ct-sub">Release &amp; label</h2>
         ${reading}${grid(general.map(([f, i]) => fieldHtml(f, i)))}
         <h2 class="ct-sub">Artists · ${copies ? 'each one gets their own copy, with their own details, and signs it' : 'all of them sign this contract'}</h2>
         ${Array.from({ length: n }, (_, x) => `
@@ -2902,7 +2904,7 @@
         if (bad) return fail(`The email of ${bad.name} is not valid.`);
         const artist = people.map(p => p.name).join(' & ');
         const jobs = copiesMode
-          ? people.map((p, x) => ({ values: valuesFor(x + 1), copies: [{ title: `${title} (${p.name})`, artist, signers: [{ label: p.name, email: p.email }] }] }))
+          ? people.map((p, x) => ({ values: { ...valuesFor(x + 1), 'Artists clause name': people.map(q => q.name).join(', '), 'Artists clause legal': people.map((q, y) => valuesFor(y + 1)['Legal name'] || '').filter(Boolean).join(', ') }, copies: [{ title: `${title} (${p.name})`, artist, signers: [{ label: p.name, email: p.email }] }] }))
           : [{ values: valuesFor(0), copies: [{ title, artist, signers: people.map(p => ({ label: p.name, email: p.email })) }] }];
         btn.disabled = true; stage('Making the contract and its PDF…');
         try {

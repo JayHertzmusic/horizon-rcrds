@@ -425,8 +425,8 @@
     return d;
   }
   const closeSheet = () => { const d = $('#sheet'); if (d?.open) d.close(); };
-  const LEVELS = [['', 'None'], ['view', 'View'], ['edit', 'Edit'], ['delete', 'All']];
-  const levelOf = (r, sec) => sec.actions.includes('delete') && r.perms?.[sec.id]?.delete ? 'delete' : r.perms?.[sec.id]?.edit ? 'edit' : r.perms?.[sec.id]?.view ? 'view' : '';
+  const LEVELS = [['', 'None'], ['view', 'View'], ['edit', 'Edit']];
+  const levelOf = (r, sec) => r.perms?.[sec.id]?.edit || r.perms?.[sec.id]?.delete ? 'edit' : r.perms?.[sec.id]?.view ? 'view' : '';
   function roleSummary(r) {
     const n = teamData.sections.filter(sec => levelOf(r, sec)).length;
     return n ? `${n} ${n === 1 ? 'section' : 'sections'}` : 'No sections';
@@ -453,7 +453,7 @@
     return n ? `${n} of ${formsData.forms.length} forms` : 'No forms';
   }
   function roleFormsPick(r) {
-    if (!formsData) loadForms().then(() => { const box = $('#sheet .role-form .perm-forms'), sum = $('#sheet .role-form .pf-sum .sm-txt'); if (box) box.innerHTML = roleFormRows(r); if (sum) sum.textContent = roleFormsSummary(r); });
+    if (!formsData) loadForms().then(() => { const box = $('#sheet .role-form .perm-forms'), sum = $('#sheet .role-form .pf-count'); if (box) box.innerHTML = roleFormRows(r); if (sum) sum.textContent = roleFormsSummary(r); });
     return `<div class="perm-forms" hidden>${roleFormRows(r)}</div>`;
   }
   function roleSheet(r) {
@@ -463,10 +463,11 @@
         <div class="sheet-head"><h2>${isNew ? 'New role' : 'Edit role'}</h2><button type="button" class="ic" data-act="sheet-close" aria-label="Close">✕</button></div>
         <input name="name" class="role-name" value="${esc(r.name || '')}" maxlength="40" placeholder="Role name (e.g. A&R)" aria-label="Role name" autocomplete="off">
         <div class="perm-list">${teamData.sections.map(sec => { const lv = levelOf(r, sec); return `
-          ${sec.id === 'forms' ? `<div class="perm-row pf-head" data-sec="forms" data-act="pf-toggle" role="button" tabindex="0" aria-expanded="false"><span class="perm-name"><button type="button" class="grip" aria-label="Drag to reorder ${esc(sec.label)}" title="Drag to reorder">${GRIP_SVG}</button>${esc(sec.label)}</span><span class="pf-sum"><span class="muted sm-txt">${roleFormsSummary(r)}</span><span class="pf-chev" aria-hidden="true">▾</span></span></div>${roleFormsPick(r)}` : `<div class="perm-row" data-sec="${esc(sec.id)}"><span class="perm-name"><button type="button" class="grip" aria-label="Drag to reorder ${esc(sec.label)}" title="Drag to reorder">${GRIP_SVG}</button>${esc(sec.label)}</span><span class="seg" role="radiogroup" aria-label="${esc(sec.label)}">${LEVELS.filter(([v]) => !v || sec.actions.includes(v)).map(([v, l]) => `
+          ${sec.id === 'forms' ? `<div class="perm-row pf-head" data-sec="forms"><span class="perm-name"><button type="button" class="grip" aria-label="Drag to reorder ${esc(sec.label)}" title="Drag to reorder">${GRIP_SVG}</button>${esc(sec.label)}<button type="button" class="pf-arrow" data-act="pf-toggle" aria-expanded="false" aria-label="Choose which forms" title="Choose which forms" ${lv ? '' : 'hidden'}><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button><span class="pf-count muted sm-txt"${lv ? '' : ' hidden'}>${roleFormsSummary(r)}</span></span><span class="seg" role="radiogroup" aria-label="${esc(sec.label)}">${LEVELS.map(([v, l]) => `
+            <label><input type="radio" name="forms" value="${v}" ${v === lv ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>${roleFormsPick(r)}` : `<div class="perm-row" data-sec="${esc(sec.id)}"><span class="perm-name"><button type="button" class="grip" aria-label="Drag to reorder ${esc(sec.label)}" title="Drag to reorder">${GRIP_SVG}</button>${esc(sec.label)}</span><span class="seg" role="radiogroup" aria-label="${esc(sec.label)}">${LEVELS.filter(([v]) => !v || sec.actions.includes(v)).map(([v, l]) => `
             <label><input type="radio" name="${esc(sec.id)}" value="${v}" ${v === lv ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>`}`; }).join('')}
         </div>
-        <p class="info sm-txt"><b>View</b>: only look. <b>Edit</b>: create and change. <b>All</b>: also delete. For forms, pick None / View / Edit on each one. Drag ⋮⋮ to change the order of the sections. Owners always have everything.</p>
+        <p class="info sm-txt"><b>View</b>: only look. <b>Edit</b>: create, change and delete. For Forms, use the arrow to choose which forms and what they can do in each. Drag ⋮⋮ to change the order of the sections. Owners always have everything.</p>
         <p class="ed-error" role="alert" hidden></p>
         <div class="confirm-actions">${isNew ? '' : '<button type="button" class="btn danger push-l" data-act="delete-role">Delete role</button>'}<button type="submit" class="btn primary">${isNew ? 'Create role' : 'Save'}</button></div>
       </form>`);
@@ -587,7 +588,7 @@
   }
 
   function rolePerms(form) {
-    const perms = {}, rank = { '': 0, view: 1, edit: 2, delete: 3 };
+    const perms = {}, rank = { '': 0, view: 1, edit: 2, delete: 2 }; // «Edit» incluye borrar
     for (const sec of teamData.sections) {
       const lv = rank[form.querySelector(`input[name="${sec.id}"]:checked`)?.value || ''];
       perms[sec.id] = {};
@@ -1419,8 +1420,7 @@
       case 'new-role': roleSheet({ perms: {} }); break;
       case 'sheet-close': closeSheet(); break;
       case 'pf-toggle': {
-        if (e.target.closest('.grip')) break;
-        const box = t.parentElement.querySelector('.perm-forms'), open = box.hidden;
+        const box = t.closest('.role-form').querySelector('.perm-forms'), open = box.hidden;
         box.hidden = !open; t.setAttribute('aria-expanded', String(open)); t.classList.toggle('open', open);
         break;
       }
@@ -1530,7 +1530,7 @@
       if (!name) { box.textContent = 'Give the role a name.'; box.hidden = false; form.elements.name.focus(); return; }
       const id = form.dataset.role || undefined;
       const forms = {};
-      form.querySelectorAll('.pf-row').forEach(row => { const v = row.querySelector('input:checked')?.value; if (v) forms[row.dataset.form] = v; });
+      if (form.querySelector('input[name="forms"]:checked')?.value) form.querySelectorAll('.pf-row').forEach(row => { const v = row.querySelector('input:checked')?.value; if (v) forms[row.dataset.form] = v; });
       if (!form.querySelector('.pf-row') && !form.querySelector('.pf-wait')) { /* sin formularios */ }
       teamAction(() => api('POST', '/api/team/roles', { id, name, perms: rolePerms(form), forms }), id ? 'Role saved' : 'Role created', box);
       return;
@@ -1563,8 +1563,16 @@
     if (t.id === 'ed-file' && t.files[0]) { setCover(t.files[0]); t.value = ''; }
     if (t.id === 'me-photo' && t.files[0]) { setMyPhoto(t.files[0]); t.value = ''; }
     if (t.id === 'me-color') setMyColor(t.value);
+    if (t.name === 'forms' && t.closest?.('.role-form')) {
+      const f = t.closest('.role-form'), arrow = f.querySelector('.pf-arrow'), cnt = f.querySelector('.pf-count'), box = f.querySelector('.perm-forms');
+      arrow.hidden = cnt.hidden = !t.value;
+      if (!t.value) { box.hidden = true; arrow.classList.remove('open'); }
+      f.querySelectorAll('.pf-row').forEach(r => { const i = r.querySelector(`input[value="${t.value}"]`); if (i) i.checked = true; });
+      const rows = [...f.querySelectorAll('.pf-row')], n = rows.filter(r => r.querySelector('input:checked')?.value).length;
+      cnt.textContent = n ? `${n} of ${rows.length} forms` : 'No forms';
+    }
     if (t.closest?.('.pf-row')) {
-      const f = t.closest('.role-form'), sum = f?.querySelector('.pf-sum .sm-txt'), rows = [...f.querySelectorAll('.pf-row')];
+      const f = t.closest('.role-form'), sum = f?.querySelector('.pf-count'), rows = [...f.querySelectorAll('.pf-row')];
       if (sum) { const n = rows.filter(r => r.querySelector('input:checked')?.value).length; sum.textContent = n ? `${n} of ${rows.length} forms` : 'No forms'; }
     }
     if (t.id === 'mx-file' && t.files[0]) { setMixAudio(t.files[0]); t.value = ''; }

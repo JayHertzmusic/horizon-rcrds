@@ -847,3 +847,13 @@ html, body, * { scrollbar-width: none; }
 .pf-chev { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid rgba(255, 255, 255, .14); border-radius: 6px; color: var(--muted); font-size: 11px; transition: transform .2s; }
 .pf-head.open .pf-chev { transform: rotate(180deg); color: #fff; }
 .perm-forms[hidden] { display: none; }
+
+/* Rol → Forms: flechita junto al nombre (sin caja) */
+.pf-head { cursor: default; }
+.pf-head:hover { background: none; }
+.pf-arrow { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 4px; padding: 0; border: 0; background: none; color: var(--muted); cursor: pointer; min-height: 0; box-shadow: none; }
+.pf-arrow svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s; }
+.pf-arrow:hover, .pf-arrow.open { color: #fff; }
+.pf-arrow.open svg { transform: rotate(180deg); }
+.pf-arrow[hidden], .pf-count[hidden] { display: none; }
+.pf-count { margin-left: 6px; font-weight: 400; font-size: 12px; }

@@ -124,15 +124,27 @@ async function subfolders(tok, parent) {
 }
 const mkFolder = (tok, parent, name) => gDrive(tok, 'files?fields=id,name', { method: 'POST', json: { name, mimeType: FOLDER, parents: [parent] } });
 const catNum = v => { const m = String(v || '').match(/(\d+)\s*$/) || String(v || '').match(/(\d+)/); return m ? Number(m[1]) : null; };
-export async function saveToDrive(env, root, c, bytes) {
+// carpeta de cada release: «[HRZ#105] Artista 1 & Artista 2 - Track», dentro del año en que sale.
+// Si ya existe una carpeta con ese número (en cualquier año), se usa esa.
+export async function saveToDrive(env, root, c, bytes, releaseYear) {
   const tok = await horizonToken(env);
-  const year = String(new Date(c.signed_at || Date.now()).getFullYear());
-  const y = (await subfolders(tok, root)).find(f => f.name.trim() === year) || await mkFolder(tok, root, year);
-  let dest = y, path = year;
-  if (c.release_cat) {
-    const n = catNum(c.release_cat), rels = await subfolders(tok, y.id);
-    dest = rels.find(f => n !== null && catNum((f.name.match(/^[^\s-]*\d+/) || [''])[0]) === n) || await mkFolder(tok, y.id, [c.release_cat, c.release_name].filter(Boolean).join(' - '));
-    path += ' / ' + dest.name;
+  const years = (await subfolders(tok, root)).sort((a, b) => b.name.localeCompare(a.name));
+  const n = catNum(c.release_cat);
+  let dest = null, path = '';
+  if (n !== null) for (const y of years) {
+    const f = (await subfolders(tok, y.id)).find(x => catNum((x.name.match(/^\[?[^\s\]-]*\d+/) || [''])[0]) === n);
+    if (f) { dest = f; path = `${y.name} / ${f.name}`; break; }
+  }
+  if (!dest) {
+    const year = String(releaseYear || new Date(c.signed_at || Date.now()).getFullYear());
+    const y = years.find(f => f.name.trim() === year) || await mkFolder(tok, root, year);
+    dest = y; path = year;
+    if (c.release_cat) {
+      const artists = String(c.artist || '').split(/\s*(?:,|&|\band\b)\s*/i).map(x => x.trim()).filter(Boolean).join(' & ');
+      const who = [artists, c.release_name].filter(Boolean).join(' - ');
+      dest = await mkFolder(tok, y.id, `[${c.release_cat}]${who ? ' ' + who : ''}`.split('/').join('-'));
+      path += ' / ' + dest.name;
+    }
   }
   const name = `${String(c.title).replace(/[\/:*?"<>|]+/g, '').trim()} (signed).pdf`, B = 'hz' + crypto.randomUUID().replace(/-/g, '');
   const head = `--${B}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [dest.id], mimeType: 'application/pdf' })}\r\n--${B}\r\nContent-Type: application/pdf\r\n\r\n`;

@@ -31,14 +31,23 @@ const SEED = [
   ['2027-04-02', 'release', 'SunsetStation & Mike Rivera', 'Follow Me', 0],
   ['2027-04-09', 'release', 'Synthesis', 'Beyond The World', 0],
 ];
+// números de release de esas fechas (los de las carpetas del Drive de contratos)
+const SEED_CATS = ['HRZ#091', 'HRZ#092', 'HRZ#093', 'HRZ#094', 'HRZ#095', 'HRZ#096', 'HRZ#097', 'HRZ#098', 'HRZ#099', 'HRZ#100', 'HRZ#101', 'HRZ#102', 'HRZ#103', 'HRZ#104'];
 async function seed(DB) {
   const done = await DB.prepare("SELECT value FROM panel_settings WHERE key = 'calendar_seeded'").first();
-  if (done) return;
+  if (done) {
+    if (done.value === '1') await DB.batch([
+      ...SEED_CATS.map((cat, i) => DB.prepare('UPDATE calendar SET cat = ? WHERE id = ? AND cat IS NULL').bind(cat, `cal_seed${i + 2}`)),
+      DB.prepare("UPDATE panel_settings SET value = '2' WHERE key = 'calendar_seeded'"),
+    ]);
+    return;
+  }
   const t = Date.now();
   await DB.batch([
     ...SEED.map(([date, kind, artist, title, prog], i) => DB.prepare('INSERT OR IGNORE INTO calendar (id, date, kind, artist, title, programmed, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(`cal_seed${i}`, date, kind, artist, title, prog, 'discord', t, t)),
-    DB.prepare("INSERT OR REPLACE INTO panel_settings (key, value) VALUES ('calendar_seeded', '1')"),
+    ...SEED_CATS.map((cat, i) => DB.prepare('UPDATE calendar SET cat = ? WHERE id = ?').bind(cat, `cal_seed${i + 2}`)),
+    DB.prepare("INSERT OR REPLACE INTO panel_settings (key, value) VALUES ('calendar_seeded', '2')"),
   ]);
 }
 

@@ -976,3 +976,6 @@ html, body, * { scrollbar-width: none; }
 .cal-ed input[type=date] { color-scheme: dark; }
 .danger-txt { color: #ff6b74 !important; }
 @media (max-width: 760px) { .row.cal { grid-template-columns: 64px minmax(0, 1fr) auto; } .row.cal .cal-tags { display: none; } .row.cal-todo { grid-template-columns: 1fr; } }
+.ct-log-all ol { max-height: none; }
+.ct-log-all li { grid-template-columns: 130px minmax(0, 200px) minmax(0, 1fr); }
+.ct-log .link { padding: 0; border: 0; background: none; color: #fff; font: inherit; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }

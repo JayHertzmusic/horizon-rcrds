@@ -160,7 +160,13 @@ export async function contractsApi(req, env, s, url, can, audit) {
   if (p === '/api/contracts' && m === 'GET') {
     const rows = (await DB.prepare('SELECT * FROM contracts ORDER BY created_at DESC').all()).results;
     const sg = (await DB.prepare('SELECT * FROM contract_signers ORDER BY idx').all()).results;
-    return { contracts: rows.map(c => out(c, sg.filter(r => r.contract_id === c.id), false)), canEdit: can('edit') && !s.sync };
+    const cats = (await DB.prepare('SELECT cat FROM calendar WHERE cat IS NOT NULL').all().catch(() => ({ results: [] }))).results.map(r => r.cat);
+    return { contracts: rows.map(c => out(c, sg.filter(r => r.contract_id === c.id), false)), cats, canEdit: can('edit') && !s.sync };
+  }
+  // lo que hacen los artistas con sus enlaces (todos los contratos): Contracts → Activity (no va al historial del equipo)
+  if (p === '/api/contracts/activity' && m === 'GET') {
+    const events = (await DB.prepare('SELECT e.at, e.event, e.ip, e.ua, e.contract_id, c.title, c.artist, c.release_name, c.kind, s.label, s.email FROM contract_events e LEFT JOIN contracts c ON c.id = e.contract_id LEFT JOIN contract_signers s ON s.id = e.signer_id ORDER BY e.id DESC LIMIT 300').all()).results;
+    return { events };
   }
   // carpeta de Drive donde están las carpetas de cada año
   if (p === '/api/contracts/settings') {
@@ -453,7 +459,9 @@ export async function contractsApi(req, env, s, url, can, audit) {
     const buf = await env.FILES.get(key, { type: 'arrayBuffer' });
     if (!buf) throw new ContractError(404, 'PDF not found.');
     let r;
-    try { r = await saveToDrive(env, root, c, new Uint8Array(buf)); } catch (e) { throw new ContractError(502, e.message); }
+    // año de salida: el del calendario (fecha ligada a este contrato o con el mismo número de release)
+    const cal = await DB.prepare("SELECT date FROM calendar WHERE contract_id = ? OR (? <> '' AND REPLACE(cat, ' ', '') = REPLACE(?, ' ', '')) ORDER BY contract_id = ? DESC LIMIT 1").bind(c.id, c.release_cat || '', c.release_cat || '', c.id).first().catch(() => null);
+    try { r = await saveToDrive(env, root, c, new Uint8Array(buf), cal?.date ? Number(cal.date.slice(0, 4)) : null); } catch (e) { throw new ContractError(502, e.message); }
     await DB.prepare('UPDATE contracts SET drive_id = ?, drive_url = ? WHERE id = ?').bind(r.id, `https://drive.google.com/file/d/${r.id}/view`, c.id).run();
     await audit(`Saved the signed “${c.title}” in Google Drive (${r.path})`);
     return { ok: true, drive_url: `https://drive.google.com/file/d/${r.id}/view` };
@@ -492,7 +500,6 @@ export async function signApi(req, env, url, mail, ctx) {
   if (!me) throw new ContractError(404, 'This contract link is not valid.');
   const ip = req.headers.get('CF-Connecting-IP') || '', ua = clean(req.headers.get('User-Agent'), 300);
   const log = (event, extra = '') => DB.prepare('INSERT INTO contract_events (contract_id, signer_id, at, event, ip, ua) VALUES (?, ?, ?, ?, ?, ?)').bind(c.id, me.id, now(), event + (extra ? ' ' + extra : ''), ip, ua).run();
-  const team = action => DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)').bind(now(), me.email || '', me.label || 'Artist', action, `IP ${ip}`).run();
 
   // Acceso: el enlace es único y solo se abre escribiendo el email al que se envió. Tras 10 intentos fallidos, se bloquea.
   const need = String(me.email || '').toLowerCase();
@@ -511,7 +518,6 @@ export async function signApi(req, env, url, mail, ctx) {
         DB.prepare('UPDATE contract_signers SET fails = 0 WHERE id = ?').bind(me.id),
       ]);
       await log('opened');
-      await team(`Opened the ${isDraftRow(c) ? 'draft' : 'contract'} “${c.title}”`);
       return { ok: true, session: sess };
     }
     const sess = String(req.headers.get('X-Sign-Session') || '');
@@ -523,7 +529,7 @@ export async function signApi(req, env, url, mail, ctx) {
   if (mm[2] === 'event' && req.method === 'POST') {
     // lo que hace el artista en la página (leído hasta el final, descargado…)
     const ev = String((parse(await req.text()) || {}).event || '');
-    if (ev === 'read to the end') { await log(ev); await team(`Read the ${draft ? 'draft' : 'contract'} “${c.title}” to the end`); }
+    if (ev === 'read to the end') await log(ev);
     return { ok: true };
   }
   if (mm[2] === 'pdf') {
@@ -534,7 +540,7 @@ export async function signApi(req, env, url, mail, ctx) {
   if (mm[2] === 'signed') {
     const f = c.signed_pdf ? await env.FILES.get(c.signed_pdf, { type: 'arrayBuffer' }) : null;
     if (!f || sg.some(r => !r.signed_at)) throw new ContractError(404, 'The signed contract is not ready yet. Please try again in a moment.');
-    await log('downloaded the signed PDF'); await team(`Downloaded the signed contract “${c.title}”`);
+    await log('downloaded the signed PDF');
     return pdfResponse(f, signedName(c).replace(/[^\w\- .()]+/g, ''));
   }
   const view = () => ({
@@ -566,7 +572,6 @@ export async function signApi(req, env, url, mail, ctx) {
   if (all) await DB.prepare(`UPDATE contracts SET status = 'signed', signed_at = ?, doc_hash = ?, updated_at = ? WHERE id = ?`).bind(at, c.pdf_hash, at, c.id).run();
   c = { ...c, status: all ? 'signed' : c.status };
   me = sg.find(x => x.id === me.id);
-  await DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)').bind(at, email, name, `Signed the contract “${c.title}”${sg.length > 1 ? ` (${me.label || 'signer'})` : ''}`, `IP ${ip}`).run();
   await log('signed', `as ${name}`);
   // todos han firmado: correo a cada firmante con su enlace para descargar (a la cuenta de Horizon no le llega nada)
   const after = async () => { if (all) { try { await finalize(env, c.id, url.origin); } catch (e) { console.error('finalize', e); } } };

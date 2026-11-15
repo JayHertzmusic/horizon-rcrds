@@ -2127,7 +2127,7 @@
         </li>`;
     const group = (name, rows, empty) => rows.length || empty ? `<h2 class="ct-group-h">${name} <span>${rows.length}</span></h2><ol class="list">${rows.length ? rows.map(row).join('') : `<li class="empty">${empty}</li>`}</ol>` : '';
     const byNew = (a, b) => (b.sent_at || b.created_at || 0) - (a.sent_at || a.created_at || 0);
-    const body = tab === 'templates' ? `<ol class="list">${tpls.length ? tpls.map(row).join('') : '<li class="empty">No templates yet.</li>'}</ol>`
+    const body = tab === 'activity' ? ctActivityAll() : tab === 'templates' ? `<ol class="list">${tpls.length ? tpls.map(row).join('') : '<li class="empty">No templates yet.</li>'}</ol>`
       : tab === 'signed' ? `<ol class="list">${done.length ? done.map(row).join('') : '<li class="empty">No signed contracts yet.</li>'}</ol>`
       : list.length ? [
         group('Waiting for signatures', list.filter(c => !isDraft(c) && c.status === 'sent').sort(byNew)),
@@ -2142,6 +2142,7 @@
         <button type="button" role="tab" class="${tab === 'contracts' ? 'on' : ''}" data-ct="tab-contracts">Contracts <span>${list.length}</span></button>
         <button type="button" role="tab" class="${tab === 'signed' ? 'on' : ''}" data-ct="tab-signed">Signed <span>${done.length}</span>${done.some(c => fresh.has(c.id)) ? '<i class="ct-dot"></i>' : ''}</button>
         <button type="button" role="tab" class="${tab === 'templates' ? 'on' : ''}" data-ct="tab-templates">Templates <span>${tpls.length}</span></button>
+        <button type="button" role="tab" class="${tab === 'activity' ? 'on' : ''}" data-ct="tab-activity">Activity</button>
       </div>
       ${tab === 'signed' ? driveBox(ed, noDrive) : ''}
       ${tab === 'templates' ? `<p class="info lead">Templates are your Google Docs contracts. The panel finds the artist details by itself (names, track, date…), or write a name between double braces in the Doc: <b>{{Nombre real}}</b>, <b>{{Nombre artístico}}</b>, <b>{{Track}}</b>, <b>{{Fecha}}</b>… When you create a contract the panel asks for those details and Google puts them in place (the text reflows by itself).</p>` : ''}
@@ -2332,6 +2333,15 @@
       : 'Check the details and where each artist signs (the boxes on the document), then press “Send to sign”: each artist gets an email with their private link.';
     return `<ol class="ct-steps">${steps.map((t, i) => `<li class="${i + 1 < at ? 'done' : i + 1 === at ? 'on' : ''}"><button type="button" data-ct="step" data-step="${i + 1}"><span>${i + 1 < at ? '✓' : i + 1}</span>${t}</button></li>`).join('')}</ol>
       <p class="info ct-steps-note">${note}</p>`;
+  }
+  // Contracts → Activity: lo que hacen los artistas en todos los contratos (abrir, leer, firmar, descargar)
+  let ctAct = null;
+  const evWhat = e => e.replace(/^opened$/, 'Opened').replace(/^read to the end$/, 'Read it to the end').replace(/^signed as (.+)$/, 'Signed as $1')
+    .replace(/^downloaded the signed PDF$/, 'Downloaded the signed PDF').replace(/^downloaded the PDF$/, 'Downloaded the PDF').replace(/^code sent$/, 'Asked for a code');
+  function ctActivityAll() {
+    if (!ctAct) { api('GET', '/api/contracts/activity').then(r => { ctAct = r.events; if (view === 'contracts' && !ctOpen && ctTab === 'activity') render(); }).catch(e => toast(e.message)); return '<p class="info">Loading…</p>'; }
+    if (!ctAct.length) return '<ol class="list"><li class="empty">Nothing yet. When an artist opens their link, reads, signs or downloads a contract, it shows here.</li></ol>';
+    return `<div class="ct-log ct-log-all"><ol>${ctAct.map(e => `<li><time>${esc(fmtDate(e.at))}</time><b>${esc(e.label || e.email || 'Artist')}</b><span>${esc(evWhat(e.event))} · <button type="button" class="link" data-ct="act-open" data-id="${esc(e.contract_id)}">${esc(e.title ? ctName(e) : 'Deleted contract')}</button></span></li>`).join('')}</ol></div>`;
   }
   // lo que hace cada artista con su enlace (abrir, leer, firmar, descargar)
   function ctActivity(evs) {
@@ -2711,7 +2721,8 @@
     else if (a === 'new') { ctOpen = { mode: 'new' }; render(); }
     else if (a === 'new-tpl') { ctOpen = { mode: 'new-tpl' }; render(); $('#tp-title')?.focus(); }
     else if (a === 'copy-add' || a === 'copy-del') { const keep = ctFormValues(); ctOpen.copies = Math.max(1, Math.min(8, copiesOf() + (a === 'copy-add' ? 1 : -1))); render(); ctFormRestore(keep); }
-    else if (a === 'tab-contracts' || a === 'tab-templates' || a === 'tab-signed') { ctTab = a.slice(4); render(); }
+    else if (a === 'tab-contracts' || a === 'tab-templates' || a === 'tab-signed' || a === 'tab-activity') { ctTab = a.slice(4); if (a === 'tab-activity') ctAct = null; render(); }
+    else if (a === 'act-open') openContract(t.dataset.id);
     else if (a === 'step') {
       // cada paso lleva a su sitio
       const n = Number(t.dataset.step), signed = c.status === 'signed';
@@ -2734,7 +2745,7 @@
       const id = t.closest('[data-ctid]')?.dataset.ctid || c?.id;
       const tpl = ctData.contracts.find(x => x.id === id) || c;
       const bytes = c?.id === id ? ctOpen.bytes : null, known = c?.id === id ? ctOpen.fields : null;
-      const used = ctData.contracts.filter(x => x.release_cat).map(x => ({ catalog: x.release_cat }));
+      const used = ctData.contracts.filter(x => x.release_cat).map(x => ({ catalog: x.release_cat })).concat((ctData.cats || []).map(x => ({ catalog: x })));
       ctOpen = { mode: 'use', tpl, fields: known, cat: nextCatalog([...(repo?.releases || []), ...used]) };
       render(); rfLoad();
       if (!known) try {

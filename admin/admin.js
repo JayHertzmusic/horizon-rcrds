@@ -1641,27 +1641,7 @@
   function answerHtml(v) {
     if (Array.isArray(v)) return v.length ? v.map(esc).join('<br>') : '<span class="muted">—</span>';
     if (!v) return '<span class="muted">—</span>';
-    return esc(v).replace(/https?:\/\/[^\s<>"',]+/g, u => `<a class="lnk" href="${u}" target="_blank" rel="noopener" title="${u}">${siteName(u)} ↗</a>`).replace(/\n/g, '<br>');
-  }
-  const SITES = { 'drive.google.com': 'Google Drive', 'docs.google.com': 'Google Docs', 'dropbox.com': 'Dropbox', 'soundcloud.com': 'SoundCloud', 'on.soundcloud.com': 'SoundCloud', 'open.spotify.com': 'Spotify', 'spotify.com': 'Spotify', 'music.apple.com': 'Apple Music', 'beatport.com': 'Beatport', 'youtube.com': 'YouTube', 'youtu.be': 'YouTube', 'instagram.com': 'Instagram', 'tiktok.com': 'TikTok', 'x.com': 'X', 'twitter.com': 'X', 'wetransfer.com': 'WeTransfer', 'we.tl': 'WeTransfer', 'facebook.com': 'Facebook' };
-  function siteName(u) {
-    try { const h = new URL(u.replace(/&amp;/g, '&')).hostname.replace(/^www\./, ''); return SITES[h] || SITES[h.split('.').slice(-2).join('.')] || h; } catch { return 'Link'; }
-  }
-  const plain = v => (Array.isArray(v) ? v.join(', ') : String(v || '')).trim();
-  // de qué va cada respuesta, para la fila resumida: artista y título del track (o los dos primeros datos)
-  function respSummary(f, r) {
-    const qs = f.fields.filter(x => x.type !== 'section');
-    const find = re => qs.find(x => re.test(x.label) && plain(r.data[x.id]));
-    const who = find(/artist|name|team/i) || qs.find(x => plain(r.data[x.id]));
-    const what = find(/track|title|song/i);
-    const mail = find(/e-?mail/i);
-    return { who: who ? plain(r.data[who.id]) : '', what: what && what !== who ? plain(r.data[what.id]) : '', mail: mail ? plain(r.data[mail.id]) : '' };
-  }
-  // los datos agrupados por los apartados del formulario
-  function respGroups(f) {
-    const out = [{ title: '', items: [] }];
-    for (const x of f.fields) { if (x.type === 'section') out.push({ title: x.label, items: [] }); else out[out.length - 1].items.push(x); }
-    return out.filter(g => g.items.length);
+    return esc(v).replace(/https?:\/\/[^\s<>"']+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`).replace(/\n/g, '<br>');
   }
   function formResponses() {
     const f = formsData.forms.find(x => x.id === formOpen.id);
@@ -1679,18 +1659,11 @@
   function respList(f) {
     const qs = f.fields.filter(x => x.type !== 'section'), own = can('forms', 'delete'), rs = formOpen.responses, q = (formOpen.q || '').trim();
     return `${!rs ? '<p class="info">Loading…</p>' : rs.length ? `${q ? `<p class="info">${rs.length}${formOpen.more ? '+' : ''} ${rs.length === 1 ? 'response matches' : 'responses match'} “${esc(q)}”</p>` : ''}<div class="resps">${rs.map(r => `
-        ${(() => { const sm = respSummary(f, r), open = formOpen.openIds?.has(r.id) || rs.length === 1; return `<article class="resp${r.seen ? '' : ' is-new'}${open ? ' is-open' : ''}" data-resp="${r.id}">
-          <div class="resp-row" data-act="resp-toggle" role="button" tabindex="0" aria-expanded="${open}">
-            <span class="resp-num">#${r.n || ''}</span>
-            <span class="resp-main"><b>${mark(esc(sm.who || '—'), q)}</b>${sm.what ? `<span>${mark(esc(sm.what), q)}</span>` : ''}</span>
-            <span class="resp-mail">${mark(esc(sm.mail), q)}</span>
-            <span class="resp-date">${esc(fmtDate(r.at))}</span>
-            ${r.seen ? '<span></span>' : '<span class="new-pill">New</span>'}
-            <span class="resp-btns">${preview ? '' : r.seen ? '<button type="button" class="btn ghost sm" data-act="resp-unseen">Mark as new</button>' : '<button type="button" class="btn primary sm" data-act="resp-seen">Mark as seen</button>'}${own ? '<button type="button" class="btn ghost sm" data-act="resp-del">Delete</button>' : ''}</span>
-            <span class="resp-chev" aria-hidden="true">▾</span>
-          </div>
-          ${open ? `<div class="resp-body">${respGroups(f).map(g => `<section class="resp-group">${g.title ? `<h3>${esc(g.title)}</h3>` : ''}<div class="resp-grid">${g.items.map(x => { const v = r.data[x.id], long = plain(v).length > 70 || x.type === 'textarea'; return `<div class="resp-item${long ? ' wide' : ''}${plain(v) ? '' : ' empty'}"><span>${esc(x.label)}</span><div>${mark(answerHtml(v), q)}</div></div>`; }).join('')}</div></section>`).join('')}</div>` : ''}
-        </article>`; })()}`).join('')}</div>
+        <article class="resp${r.seen ? '' : ' is-new'}" data-resp="${r.id}">
+          <header><span class="resp-num">#${r.n || ''}</span>${r.seen ? '' : '<span class="new-pill">New</span>'}<b>${esc(fmtDate(r.at))}</b>
+            <span class="resp-btns">${preview ? '' : r.seen ? '<button type="button" class="btn ghost sm" data-act="resp-unseen">Mark as new</button>' : '<button type="button" class="btn primary sm" data-act="resp-seen">Mark as seen</button>'}${own ? '<button type="button" class="btn ghost sm" data-act="resp-del">Delete</button>' : ''}</span></header>
+          <dl>${qs.map(x => `<dt>${esc(x.label)}</dt><dd>${mark(answerHtml(r.data[x.id]), q)}</dd>`).join('')}</dl>
+        </article>`).join('')}</div>
         ${formOpen.more ? '<button type="button" class="btn ghost log-more" data-act="resp-more">Show more</button>' : ''}` : `<p class="info">${q ? `Nothing matches “${esc(q)}”.` : 'No responses yet.'}</p>`}`;
   }
   // resalta lo buscado dentro de las respuestas (sin tocar las etiquetas HTML)
@@ -1856,12 +1829,6 @@
       const last = formOpen.responses.at(-1)?.id;
       const q = (formOpen.q || '').trim();
       try { const r = await api('GET', `/api/forms/${encodeURIComponent(formOpen.id)}/responses?before=${last}${q ? '&q=' + encodeURIComponent(q) : ''}`); formOpen.responses.push(...r.responses); formOpen.more = r.more; const f = formsData.forms.find(x => x.id === formOpen.id); $('#resp-list').innerHTML = respList(f); } catch (err) { toast(err.message); }
-    } else if (act === 'resp-toggle') {
-      if (e.target.closest('button, a')) return;
-      const rid = Number(t.closest('[data-resp]').dataset.resp);
-      formOpen.openIds = formOpen.openIds || new Set();
-      if (formOpen.openIds.has(rid)) formOpen.openIds.delete(rid); else formOpen.openIds.add(rid);
-      const f = formsData.forms.find(x => x.id === formOpen.id); $('#resp-list').innerHTML = respList(f);
     } else if (act === 'resp-seen' || act === 'resp-unseen' || act === 'resp-all-seen') {
       const all = act === 'resp-all-seen', seen = act !== 'resp-unseen';
       const ids = all ? formOpen.responses.filter(r => !r.seen).map(r => r.id) : [Number(t.closest('[data-resp]').dataset.resp)];

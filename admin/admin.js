@@ -344,6 +344,7 @@
   const emptyRepo = () => ({ head: '', treeSha: '', files: new Map(), truncated: false, releases: [], mixtapes: [], playlists: [], ignore: [] });
   function useSession(res) {
     auth = { token: res.token || auth?.token, user: res.user, sections: res.sections };
+    checkUnseen();   // el aviso de respuestas nuevas se pide ya, a la vez que se carga el resto
   }
   async function login(cred) {
     const card = $('.login-card'), remember = $('#remember')?.checked !== false;
@@ -1641,7 +1642,6 @@
   }
   setInterval(checkUnseen, 60e3);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUnseen(); });
-  setTimeout(checkUnseen, 1500);
   const showForms = () => can('forms') || (preview ? visibleForms().length > 0 : auth?.user?.formsCount > 0);
   async function loadForms() {
     if (formsLoading) return;

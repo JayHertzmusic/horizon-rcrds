@@ -1,0 +1,16 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "horizon-cloudflare",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "worker/wrangler.mjs",
+        "dev",
+        "--port",
+        "8787"
+      ],
+      "port": 8787
+    }
+  ]
+}

@@ -1261,6 +1261,9 @@
     if (ok) { for (const p of pending.values()) URL.revokeObjectURL(p.url); pending.clear(); }
     return ok;
   }
+  // la sección en la que estás se recuerda en esta pestaña (al refrescar no vuelve a Releases)
+  const VIEW_KEY = 'hz_view_' + MODE;
+  const lastView = () => { let v = ''; try { v = sessionStorage.getItem(VIEW_KEY) || ''; } catch { /* nada */ } return v && v !== 'none' ? v : firstView(); };
   function go(v, ed = null) {
     formOpen = null; ctOpen = null; calOpen = null;
     view = v; editing = ed; setDirtyBase(null);
@@ -1278,6 +1281,7 @@
     if (view === 'contracts' && !can('contracts')) view = firstView();
     if (view === 'calendar' && !can('calendar')) view = firstView();
     if ((view === 'team' || view === 'log') && (preview || !(MODE === 'admin' && auth.user.owner))) view = firstView();
+    if (!preview) try { sessionStorage.setItem(VIEW_KEY, view); } catch { /* nada */ }
     let inner;
     if (view === 'none') inner = noAccessView();
     else if (view === 'team') inner = teamView();
@@ -3262,7 +3266,7 @@
       const remembered = (() => { try { return !!localStorage.getItem(AUTH_KEY); } catch { return false; } })();
       saveAuth(auth, remembered);
       repo = firstView() === 'none' ? emptyRepo() : await loadRepo();
-      go(firstView());
+      go(lastView());   // al refrescar, sigues en la misma sección
     } catch (e) {
       if (e.status === 401 || e.status === 403 || e.status === 404) { logout(e.message); return; }
       app.innerHTML = `<main class="login"><div class="login-card"><p class="login-error" role="alert">${esc(e.message)}</p>

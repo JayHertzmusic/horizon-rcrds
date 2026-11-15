@@ -734,3 +734,13 @@ a.lk.on:hover { color: #fff; background: rgba(255, 255, 255, .08); }
 .prev-stage iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: #050505; }
 .prev-size { margin-left: 8px; }
 .prev-head { flex-wrap: wrap; }
+
+/* Respuestas nuevas */
+.nbadge { display: inline-grid; place-items: center; min-width: 18px; height: 18px; margin-left: 8px; padding: 0 5px; border-radius: 999px; background: #ff3b47; color: #fff; font: 700 10.5px/1 'Barlow', sans-serif; letter-spacing: 0; vertical-align: 1px; }
+.nbadge[hidden] { display: none; }
+.new-pill { justify-self: start; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; background: rgba(255, 59, 71, .14); border: 1px solid rgba(255, 59, 71, .45); color: #ff8a92; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.new-pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: #ff3b47; }
+.row.fm:has(.new-pill) { box-shadow: inset 2px 0 0 #ff3b47; }
+.row.fm { grid-template-columns: 34px minmax(0, 1fr) auto 120px auto auto; }
+@media (max-width: 1100px) { .row.fm { grid-template-columns: 34px minmax(0, 1fr) auto auto; } }
+@media (max-width: 640px) { .row.fm { grid-template-columns: minmax(0, 1fr) auto; } .row.fm .new-pill { grid-row: 2; } }

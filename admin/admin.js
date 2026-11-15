@@ -371,7 +371,7 @@
   }
 
   function shell(inner) {
-    const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}</button>`;
+    const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}${id === 'forms' ? `<span class="nbadge" id="forms-badge" ${unseen.total ? '' : 'hidden'}>${unseen.total > 99 ? '99+' : unseen.total}</span>` : ''}</button>`;
     const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', forms: 'Forms', contracts: 'Contracts' };
     const initials = (u.name || u.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
     return `
@@ -1569,6 +1569,25 @@
   const FTYPES = { text: 'Short text', textarea: 'Long text', email: 'Email', url: 'Link', radio: 'Single choice', checkbox: 'Varias opciones', select: 'Dropdown', section: 'Section (title)' };
   const isOwnerNow = () => !!auth?.user?.owner && !preview;
   const visibleForms = () => (formsData?.forms || []).filter(f => !preview || preview.perms?.forms?.view || f.access?.roles?.includes(preview.id));
+  /* Aviso de respuestas nuevas: número en «Forms» y en cada formulario; se mira cada minuto */
+  let unseen = { total: 0, forms: {} };
+  async function checkUnseen() {
+    if (!auth || preview || !showForms() || document.hidden) return;
+    try {
+      const r = await api('GET', '/api/forms/unseen');
+      const grew = r.total > unseen.total;
+      unseen = r;
+      const b = $('#forms-badge');
+      if (b) { b.hidden = !r.total; b.textContent = r.total > 99 ? '99+' : r.total; }
+      document.title = document.title.replace(/^\(\d+\+?\) /, '');
+      if (r.total) document.title = `(${r.total}) ${document.title}`;
+      if (grew && formsData) { formsData = null; if (view === 'forms' && !formOpen) loadForms(); }
+      if (grew && view === 'forms' && !formOpen) render();
+    } catch { /* sin aviso */ }
+  }
+  setInterval(checkUnseen, 60e3);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUnseen(); });
+  setTimeout(checkUnseen, 1500);
   const showForms = () => can('forms') || (preview ? visibleForms().length > 0 : auth?.user?.formsCount > 0);
   async function loadForms() {
     if (formsLoading) return;
@@ -1596,7 +1615,8 @@
           ${isOwnerNow() ? `<button type="button" class="grip" aria-label="Drag to reorder ${esc(f.title)}" title="Drag to reorder">${GRIP_SVG}</button>` : '<span></span>'}
           <span class="meta"><b>${esc(f.title)}</b><span>${f.public ? `<a href="${esc(publicUrl(f))}" target="_blank" rel="noopener">/forms/${esc(f.slug)}</a>` : `/forms/${esc(f.slug)}`}</span></span>
           <span class="badges">${f.public ? '<span class="tag">Open</span>' : '<span class="tag off">Closed</span>'}${f.on_site ? '<span class="tag">On the site</span>' : ''}</span>
-          <span class="resp-n"><b>${f.total}</b> ${f.total === 1 ? 'response' : 'responses'}${f.unseen ? ` <i>${f.unseen} new</i>` : ''}</span>
+          <span class="resp-n"><b>${f.total}</b> ${f.total === 1 ? 'response' : 'responses'}</span>
+          ${f.unseen ? `<span class="new-pill">${f.unseen} new</span>` : '<span></span>'}
           <span class="fm-btns">${f.public ? `<a class="btn ghost sm" href="${esc(publicUrl(f))}" target="_blank" rel="noopener">View ↗</a>` : ''}<button type="button" class="btn ghost sm" data-act="form-resp">Responses</button>${own ? '<button type="button" class="btn primary sm" data-act="form-edit">Edit</button>' : ''}</span>
         </li>`).join('') : '<li class="empty">No forms.</li>'}
       </ol>`;
@@ -1609,7 +1629,7 @@
       const r = await api('GET', `/api/forms/${encodeURIComponent(id)}/responses`);
       if (formOpen?.id !== id) return;
       formOpen.responses = r.responses; formOpen.more = r.more;
-      if (!preview) api('POST', `/api/forms/${encodeURIComponent(id)}/seen`).then(() => { const f = formsData.forms.find(x => x.id === id); if (f) f.unseen = 0; }).catch(() => {});
+      if (!preview) api('POST', `/api/forms/${encodeURIComponent(id)}/seen`).then(() => { const f = formsData.forms.find(x => x.id === id); if (f) f.unseen = 0; checkUnseen(); }).catch(() => {});
     } catch (e) { if (formOpen) formOpen.err = e.message; }
     if (view === 'forms') render();
   }

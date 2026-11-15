@@ -57,6 +57,12 @@ export async function formsApi(req, env, s, url, audit) {
   const DB = env.DB, m = req.method, p = url.pathname;
   const ownerOnly = (act = 'edit') => { if (s.sync || !(s.owner || s.perms?.forms?.[act])) throw new FormError(403, 'You do not have permission to change forms.'); };
 
+  // respuestas sin ver (para el aviso del panel), solo de los formularios que esta persona puede ver
+  if (p === '/api/forms/unseen' && m === 'GET') {
+    const forms = (await DB.prepare('SELECT id, access FROM forms').all()).results.filter(f => canSeeForm(s, f)).map(f => f.id);
+    const rows = (await DB.prepare('SELECT form_id, COUNT(*) AS n FROM form_responses WHERE seen = 0 GROUP BY form_id').all()).results.filter(r => forms.includes(r.form_id));
+    return { total: rows.reduce((a, r) => a + r.n, 0), forms: Object.fromEntries(rows.map(r => [r.form_id, r.n])) };
+  }
   if (p === '/api/forms' && m === 'GET') {
     const forms = (await DB.prepare('SELECT * FROM forms ORDER BY position, created_at').all()).results.filter(f => canSeeForm(s, f));
     const counts = (await DB.prepare('SELECT form_id, COUNT(*) AS total, SUM(CASE WHEN seen = 0 THEN 1 ELSE 0 END) AS unseen FROM form_responses GROUP BY form_id').all()).results;

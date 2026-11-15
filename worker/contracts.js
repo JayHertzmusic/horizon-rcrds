@@ -461,9 +461,12 @@ export async function contractsApi(req, env, s, url, can, audit) {
     const buf = await env.FILES.get(key, { type: 'arrayBuffer' });
     if (!buf) throw new ContractError(404, 'PDF not found.');
     let r;
-    // año de salida: el del calendario (fecha ligada a este contrato o con el mismo número de release)
-    const cal = await DB.prepare("SELECT date FROM calendar WHERE contract_id = ? OR (? <> '' AND REPLACE(cat, ' ', '') = REPLACE(?, ' ', '')) ORDER BY contract_id = ? DESC LIMIT 1").bind(c.id, c.release_cat || '', c.release_cat || '', c.id).first().catch(() => null);
-    try { r = await saveToDrive(env, root, c, new Uint8Array(buf), cal?.date ? Number(cal.date.slice(0, 4)) : null); } catch (e) { throw new ContractError(502, e.message); }
+    // año de salida: el del calendario (fecha de este contrato o de su número de release); si no, lo deduce por el número
+    const cal = (await DB.prepare('SELECT date, cat, contract_id FROM calendar').all().catch(() => ({ results: [] }))).results;
+    const num = v => { const x = String(v || '').match(/(\d+)\s*$/); return x ? Number(x[1]) : null; };
+    const mine = cal.find(x => x.contract_id === c.id) || (num(c.release_cat) !== null ? cal.find(x => num(x.cat) === num(c.release_cat)) : null);
+    const known = cal.filter(x => num(x.cat) !== null).map(x => ({ n: num(x.cat), year: Number(x.date.slice(0, 4)) }));
+    try { r = await saveToDrive(env, root, c, new Uint8Array(buf), { year: mine ? Number(mine.date.slice(0, 4)) : null, known }); } catch (e) { throw new ContractError(502, e.message); }
     await DB.prepare('UPDATE contracts SET drive_id = ?, drive_url = ? WHERE id = ?').bind(r.id, `https://drive.google.com/file/d/${r.id}/view`, c.id).run();
     await audit(`Saved the signed “${c.title}” in Google Drive (${r.path})`);
     return { ok: true, drive_url: `https://drive.google.com/file/d/${r.id}/view` };

@@ -1,3 +1,4 @@
+import { mailName } from './contract-mail.js';
 /* Google Docs y Drive con la cuenta de Horizon, hechos por el servidor (así cualquiera del equipo con permiso de
    Contracts crea contratos sin iniciar sesión en Google). El permiso lo da el script de Apps Script de Horizon
    (aplicación web, GSCRIPT_URL): devuelve un token de Google de la cuenta de Horizon; aquí se guarda ~50 min. */
@@ -127,27 +128,35 @@ const mkFolder = (tok, parent, name) => gDrive(tok, 'files?fields=id,name', { me
 const catNum = v => { const m = String(v || '').match(/(\d+)\s*$/) || String(v || '').match(/(\d+)/); return m ? Number(m[1]) : null; };
 // carpeta de cada release: «[HRZ#105] Artista 1 & Artista 2 - Track», dentro del año en que sale.
 // Si ya existe una carpeta con ese número (en cualquier año), se usa esa.
-export async function saveToDrive(env, root, c, bytes, releaseYear) {
+// cal: { year } si el calendario tiene la fecha de este release; known: [{ n, year }] releases del calendario con su año.
+// Si no está en el calendario, va al año del release anterior más cercano por número (calendario o carpetas del Drive):
+// los números van en orden, así que el HRZ#105 va donde está el HRZ#104 (o después). Si no existe la carpeta del año, se crea.
+export async function saveToDrive(env, root, c, bytes, cal = {}) {
   const tok = await horizonToken(env);
-  const years = (await subfolders(tok, root)).sort((a, b) => b.name.localeCompare(a.name));
-  const n = catNum(c.release_cat);
+  const years = (await subfolders(tok, root)).filter(y => /^\d{4}$/.test(y.name.trim())).sort((a, b) => b.name.localeCompare(a.name));
+  const n = catNum(c.release_cat), known = [...(cal.known || [])];
   let dest = null, path = '';
   if (n !== null) for (const y of years) {
-    const f = (await subfolders(tok, y.id)).find(x => catNum((x.name.match(/^\[?[^\s\]-]*\d+/) || [''])[0]) === n);
-    if (f) { dest = f; path = `${y.name} / ${f.name}`; break; }
+    const rels = await subfolders(tok, y.id);
+    for (const x of rels) { const k = catNum((x.name.match(/^\[?[^\s\]-]*\d+/) || [''])[0]); if (k !== null) known.push({ n: k, year: Number(y.name) }); }
+    const f = rels.find(x => catNum((x.name.match(/^\[?[^\s\]-]*\d+/) || [''])[0]) === n);
+    if (f && (!cal.year || String(cal.year) === y.name.trim())) { dest = f; path = `${y.name} / ${f.name}`; break; }
   }
   if (!dest) {
-    const year = String(releaseYear || new Date(c.signed_at || Date.now()).getFullYear());
+    const prev = n === null ? null : known.filter(x => x.n < n).sort((a, b) => b.n - a.n || b.year - a.year)[0];
+    const year = String(cal.year || prev?.year || new Date(c.signed_at || Date.now()).getFullYear());
     const y = years.find(f => f.name.trim() === year) || await mkFolder(tok, root, year);
     dest = y; path = year;
     if (c.release_cat) {
       const artists = String(c.artist || '').split(/\s*(?:,|&|\band\b)\s*/i).map(x => x.trim()).filter(Boolean).join(' & ');
       const who = [artists, c.release_name].filter(Boolean).join(' - ');
-      dest = await mkFolder(tok, y.id, `[${c.release_cat}]${who ? ' ' + who : ''}`.split('/').join('-'));
+      const name = `[${c.release_cat}]${who ? ' ' + who : ''}`.split('/').join('-');
+      dest = (await subfolders(tok, y.id)).find(x => catNum((x.name.match(/^\[?[^\s\]-]*\d+/) || [''])[0]) === n) || await mkFolder(tok, y.id, name);
       path += ' / ' + dest.name;
     }
   }
-  const name = `${String(c.title).replace(/[\/:*?"<>|]+/g, '').trim()} (signed).pdf`, B = 'hz' + crypto.randomUUID().replace(/-/g, '');
+  // como el asunto de los correos: «HORIZON RCRDS RELEASE CONTRACT ｜ Artista - Track.pdf»
+  const name = `${mailName(c).replace(/\|/g, '｜').replace(/[\/:*?"<>]+/g, '').trim()}.pdf`, B = 'hz' + crypto.randomUUID().replace(/-/g, '');
   const head = `--${B}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [dest.id], mimeType: 'application/pdf' })}\r\n--${B}\r\nContent-Type: application/pdf\r\n\r\n`;
   const body = new Blob([head, bytes, `\r\n--${B}--`]);
   const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id', { method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': `multipart/related; boundary=${B}` }, body });

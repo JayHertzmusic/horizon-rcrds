@@ -22,7 +22,7 @@ function layout(title, body, button) {
 <tr><td align="center" style="padding:22px 10px 0;font-size:12px;line-height:1.6;color:#9ca3af">${button ? 'This link is private and only for you. Any questions? Just reply to this email.' : 'Sent by HORIZON RCRDS.'}<br>
   <a href="${SITE}" style="color:#6b7280;text-decoration:none;letter-spacing:2px;padding-left:2px">horizonrcrds.com</a></td></tr>
 </table></td></tr></table></center>
-<div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#ffffff;opacity:0">${crypto.randomUUID()}</div></body></html>`;
+</body></html>`;
 }
 const textOf = html => html.replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{3,}/g, '\n\n').trim();
 // nombre del contrato en su propia línea, debajo de la frase

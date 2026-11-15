@@ -84,7 +84,7 @@
   .pdf-box.is-signed.is-active { border: 1px dashed rgba(0,0,0,.4); background: none; }
   .pdf-box.is-active.pulse { animation: ds-pulse .6s ease-in-out 3; }
   @keyframes ds-pulse { 50% { box-shadow: 0 0 0 8px rgba(0, 0, 0, .25); } }
-  .pdf-flag { position: absolute; left: -2px; top: -2px; transform: translateY(-100%); padding: 5px 9px; border-radius: 3px 3px 0 0; background: #111; color: #fff; font: 700 10px/1 Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
+  .pdf-box .pdf-flag { margin: 0; position: absolute; left: -2px; top: -2px; transform: translateY(-100%); padding: 5px 9px; border-radius: 3px 3px 0 0; background: #111; color: #fff; font: 700 10px/1 Arial, sans-serif; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
   .pdf-box:not(.is-active):not(.is-signed) { border: 1px dashed #9aa0aa; background: rgba(150, 150, 150, .08); }
   .pdf-box:not(.is-active):not(.is-signed) .pdf-flag { background: #d4d4d8; color: #111; }
   .ds-modal { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, .7); }

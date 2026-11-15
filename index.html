@@ -462,16 +462,7 @@
         linear-gradient(180deg, #0a0a0a 0%, transparent 16%, transparent 84%, #0a0a0a 100%);
     }
 
-    .dx-grid { display: grid; grid-template-columns: minmax(0, 1fr); max-width: 860px; margin: 0 auto; }
-    /* cerrado: todo centrado; al abrir LabelRadar o el formulario, el texto pasa a la izquierda */
-    .dx-copy { text-align: center; }
-    .dx-copy .label-tag, #dx-actions, .dx-tags { justify-content: center; }
-    .dx-copy .dx-lead { margin-left: auto; margin-right: auto; }
-    .dx.dx-open .dx-copy { text-align: left; }
-    .dx.dx-open .dx-copy .label-tag, .dx.dx-open #dx-actions, .dx.dx-open .dx-tags { justify-content: flex-start; }
-    .dx.dx-open .dx-copy .dx-lead { margin-left: 0; margin-right: 0; }
-    .dx:not(.dx-open) .dx-shade { background: radial-gradient(ellipse 50% 60% at 50% 50%, rgba(10,10,10,0.9) 0%, rgba(10,10,10,0.72) 55%, rgba(10,10,10,0.45) 100%), radial-gradient(ellipse 70% 60% at 50% 60%, rgba(var(--accent-color-rgb), 0.16), transparent 70%), linear-gradient(180deg, #0a0a0a 0%, transparent 16%, transparent 84%, #0a0a0a 100%); }
-    .dx-facts { margin-left: auto; margin-right: auto; }
+    .dx-grid { display: grid; grid-template-columns: minmax(0, 1fr); max-width: 640px; }
     .dx-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(3.5rem, 8.8vw, 8.4rem); line-height: 0.84; letter-spacing: 0.005em; color: #fff; margin: 0; }
     .dx-outline { color: transparent; -webkit-text-stroke: 2px rgba(255,255,255,0.85); }
     .dx-accent { color: var(--accent-color); text-shadow: 0 0 60px rgba(var(--accent-color-rgb), 0.45); }
@@ -494,12 +485,6 @@
     .dx-grid.has-form .dx-form { display: block; animation: dx-in .45s cubic-bezier(.2, .8, .2, 1); }
     @keyframes dx-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
     .dx-form { width: 100%; max-width: 460px; justify-self: end; }
-    .dx-form.lr { max-width: none; }
-    .dx-form.lr iframe { background: #fff; }
-    .dx-form-tools { display: flex; align-items: center; gap: 10px; }
-    .dx-form-ext { font-size: 0.66rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #9ca3af; text-decoration: none; white-space: nowrap; }
-    .dx-form-ext:hover { color: #fff; }
-    .dx-form.lr .dx-form-head { padding-bottom: 14px; }
     .dx-form-card { position: relative; border: 1px solid #1f1f1f; border-top: 2px solid var(--accent-color); border-radius: 2px; background: rgba(10,10,10,0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); overflow: hidden; }
     .dx-form-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 16px 0 24px; }
     .dx-form-head span { font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; line-height: 1; letter-spacing: 0.03em; color: #fff; }
@@ -509,9 +494,6 @@
     .dx-form iframe.loading { opacity: 0; }
     .dx-btn-on { border-color: var(--accent-color) !important; color: #fff !important; background: rgba(var(--accent-color-rgb), 0.14) !important; }
     @media (max-width: 1023px) {
-      .dx.dx-open .dx-copy { text-align: center; }
-      .dx.dx-open .dx-copy .label-tag, .dx.dx-open #dx-actions, .dx.dx-open .dx-tags { justify-content: center; }
-      .dx.dx-open .dx-copy .dx-lead { margin-left: auto; margin-right: auto; }
       .dx-grid.has-form { grid-template-columns: minmax(0, 1fr); }
       .dx-grid.has-form .dx-form { margin-top: 36px; max-width: none; justify-self: stretch; }
       .dx-grid { grid-template-columns: minmax(0, 1fr); }
@@ -1218,21 +1200,21 @@
   <div class="dx-inner max-w-7xl mx-auto w-full relative px-6 md:px-12">
     <div class="dx-grid">
 
-      <div class="reveal dx-copy">
+      <div class="reveal">
         <div class="label-tag mb-6 flex items-center gap-3"><span class="pulse-dot"></span>Open submissions</div>
         <h2 class="dx-title">SEND <span class="dx-outline">YOUR</span><br /><span class="dx-accent">DEMO.</span></h2>
         <p class="dx-lead">
           We're looking for powerful club records with strong identity, clean production and real energy. If your track is built for festivals, clubs or emotional moments — send it.
         </p>
-        <div class="flex flex-wrap items-center gap-4 mb-9" id="dx-actions">
-          <a href="https://www.labelradar.com/labels/horizonrcrds/portal" target="_blank" rel="noopener noreferrer" data-panel="lr" data-title="LabelRadar" class="btn-primary" style="font-size:0.75rem;padding:17px 38px;">
+        <div class="flex flex-wrap items-center gap-4 mb-9">
+          <a href="https://www.labelradar.com/labels/horizonrcrds/portal" target="_blank" rel="noopener noreferrer" class="btn-primary" style="font-size:0.75rem;padding:17px 38px;">
             <i class="fa-solid fa-paper-plane"></i> Submit via LabelRadar
           </a>
           <a id="dx-form-btn" href="/forms/demo-submission" data-title="Demo Submission" class="btn-outline dx-ghost" style="font-size:0.75rem;padding:16px 30px;">
             <i class="fa-solid fa-file-lines"></i> Submit via Form
           </a>
         </div>
-        <div class="flex flex-wrap gap-2 dx-tags">
+        <div class="flex flex-wrap gap-2">
           <span class="genre-tag">Future House</span>
           <span class="genre-tag">Future Bounce</span>
           <span class="genre-tag">Progressive House</span>
@@ -1244,7 +1226,7 @@
 
       <div class="dx-form" id="dx-form" aria-live="polite">
         <div class="dx-form-card">
-          <div class="dx-form-head"><span id="dx-form-name">Demo submission</span><span class="dx-form-tools"><a id="dx-form-ext" class="dx-form-ext" target="_blank" rel="noopener noreferrer" hidden>Open in new tab <i class="fa-solid fa-arrow-up-right-from-square"></i></a><button type="button" class="dx-form-x" id="dx-form-x" aria-label="Close"><i class="fa-solid fa-xmark"></i></button></span></div>
+          <div class="dx-form-head"><span id="dx-form-name">Demo submission</span><button type="button" class="dx-form-x" id="dx-form-x" aria-label="Close the form"><i class="fa-solid fa-xmark"></i></button></div>
           <iframe id="dx-form-frame" title="Demo submission form" scrolling="no"></iframe>
         </div>
       </div>
@@ -2317,51 +2299,31 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.remove();
   }).catch(function () {});
 })();
-/* «Submit via LabelRadar» y «Submit via Form» se abren ahí mismo: el texto se va a la izquierda y el panel aparece a la derecha
-   (con Ctrl o el botón del medio siguen abriendo la página aparte) */
+/* «Submit via Form» abre el formulario ahí mismo, al lado del texto (con el ratón del medio o Ctrl sigue abriendo la página aparte) */
 (function () {
-  var sec = document.getElementById('demos'), grid = document.querySelector('#demos .dx-grid'), box = document.getElementById('dx-form'),
-      frame = document.getElementById('dx-form-frame'), name = document.getElementById('dx-form-name'), ext = document.getElementById('dx-form-ext');
-  if (!sec || !grid || !box || !frame) return;
-  var current = null, still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  // el texto se desliza a su nuevo sitio en vez de saltar
-  function flip(change) {
-    var els = [].slice.call(sec.querySelectorAll('.dx-copy .label-tag, .dx-copy .dx-title, .dx-copy .dx-lead, #dx-actions > a, .dx-tags > span'));
-    var before = els.map(function (el) { return el.getBoundingClientRect(); });
-    change();
-    if (still || !els[0] || !els[0].animate) return;
-    els.forEach(function (el, i) {
-      var r = el.getBoundingClientRect(), dx = before[i].left - r.left, dy = before[i].top - r.top;
-      if (Math.abs(dx) > 1 || Math.abs(dy) > 1) el.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px)' }, { transform: 'none' }], { duration: 600, easing: 'cubic-bezier(.2,.8,.2,1)' });
-    });
-  }
-  function unmark() { sec.querySelectorAll('.dx-btn-on').forEach(function (b) { b.classList.remove('dx-btn-on'); b.setAttribute('aria-expanded', 'false'); }); }
+  var grid = document.querySelector('#demos .dx-grid'), box = document.getElementById('dx-form'),
+      frame = document.getElementById('dx-form-frame'), name = document.getElementById('dx-form-name');
+  if (!grid || !box || !frame) return;
+  var current = null;
   function close() {
-    flip(function () { grid.classList.remove('has-form'); sec.classList.remove('dx-open'); });
-    frame.removeAttribute('src'); current = null; unmark();
+    grid.classList.remove('has-form'); frame.removeAttribute('src'); current = null;
+    document.querySelectorAll('#demos .dx-btn-on').forEach(function (b) { b.classList.remove('dx-btn-on'); b.setAttribute('aria-expanded', 'false'); });
   }
   document.addEventListener('click', function (e) {
-    var a = e.target.closest && e.target.closest('#demos a[href^="/forms/"], #demos a[data-panel="lr"]');
+    var a = e.target.closest && e.target.closest('#demos a[href^="/forms/"]');
     if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;
     e.preventDefault();
-    var href = a.getAttribute('href'), lr = a.getAttribute('data-panel') === 'lr';
+    var href = a.getAttribute('href');
     if (current === href) { close(); return; }
-    var wasOpen = !!current;
-    unmark(); current = href;
-    if (lr) { frame.src = href; frame.style.height = '720px'; }
-    else {
-      var acc = (getComputedStyle(document.documentElement).getPropertyValue('--accent-color') || '').trim();
-      frame.style.height = '600px';
-      frame.src = href + (href.indexOf('?') < 0 ? '?' : '&') + 'embed=1' + (/^#[0-9a-f]{3,6}$/i.test(acc) ? '&accent=' + encodeURIComponent(acc) : '');
-    }
-    frame.title = lr ? 'LabelRadar submission' : 'Demo submission form';
-    frame.setAttribute('scrolling', lr ? 'yes' : 'no');
-    frame.classList.add('loading');
-    box.classList.toggle('lr', lr);
+    close();
+    current = href;
+    frame.style.height = '640px';
+    var acc = (getComputedStyle(document.documentElement).getPropertyValue('--accent-color') || '').trim();
+    frame.src = href + (href.indexOf('?') < 0 ? '?' : '&') + 'embed=1' + (/^#[0-9a-f]{3,6}$/i.test(acc) ? '&accent=' + encodeURIComponent(acc) : '');
     name.textContent = a.getAttribute('data-title') || 'Demo submission';
-    ext.hidden = !lr; if (lr) ext.href = href;
+    frame.classList.add('loading');
     a.classList.add('dx-btn-on'); a.setAttribute('aria-expanded', 'true');
-    if (!wasOpen) flip(function () { grid.classList.add('has-form'); sec.classList.add('dx-open'); });
+    grid.classList.add('has-form');
     if (window.innerWidth < 1024) setTimeout(function () { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60);
   });
   frame.addEventListener('load', function () { setTimeout(function () { frame.classList.remove('loading'); }, 60); });

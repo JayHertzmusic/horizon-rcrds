@@ -3005,6 +3005,10 @@
   const calDay = d => { const [y, m, x] = d.split('-'); return `${x}.${m}.${y.slice(2)}`; };
   const calWeekday = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short' });
   const calMonth = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  // días que faltan (según la fecha de hoy en este ordenador)
+  const calDaysLeft = d => { const t = new Date(); t.setHours(12, 0, 0, 0); return Math.round((new Date(d + 'T12:00:00') - t) / 864e5); };
+  const calLeftTxt = n => n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : n > 1 ? `${n} days` : n === -1 ? 'Yesterday' : `${-n} days ago`;
+  const calBits = d => { const x = new Date(d + 'T12:00:00'); return { day: x.getDate(), mon: x.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase(), wd: x.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase(), yr: x.getFullYear() }; };
   function calendarPage() {
     if (!calData) {
       if (!calErr) setTimeout(loadCalendar, 0);
@@ -3013,13 +3017,26 @@
     if (calOpen) return calForm();
     const ed = calCanEdit(), today = todayIso();
     const next = calData.items.filter(x => x.date >= today), past = calData.items.filter(x => x.date < today).reverse();
-    const row = x => `
-        <li class="row cal" data-cal="${esc(x.id)}">
-          <span class="cal-date"><b>${calDay(x.date)}</b><small>${calWeekday(x.date)}</small></span>
-          <span class="meta"><b>${x.artist ? esc(x.artist) + ' - ' : ''}${esc(x.title)}</b><span>${[x.cat, x.note].filter(Boolean).map(esc).join(' · ')}</span></span>
-          <span class="cal-tags"><span class="tag ${x.kind === 'mixtape' ? '' : 'off'}">${CAL_KIND[x.kind] || x.kind}</span>${x.programmed ? '<span class="tag ok">Programmed</span>' : ''}</span>
+    const row = x => {
+      const b = calBits(x.date), n = calDaysLeft(x.date);
+      return `
+        <li class="row cal${n === 0 ? ' is-today' : n > 0 && n <= 7 ? ' is-soon' : ''}${n < 0 ? ' is-past' : ''}" data-cal="${esc(x.id)}">
+          <span class="cal-day"><small>${b.wd}</small><b>${b.day}</b><small>${b.mon}${b.yr !== new Date().getFullYear() ? ' ' + String(b.yr).slice(2) : ''}</small></span>
+          <span class="meta"><span class="cal-kicker">${x.cat ? `<span class="cal-cat">${esc(x.cat)}</span>` : ''}${CAL_KIND[x.kind] || x.kind}${x.programmed ? ' · <span class="cal-prog">Programmed</span>' : ''}</span>
+            <b>${x.artist ? esc(x.artist) + ' - ' : ''}${esc(x.title)}</b>${x.note ? `<span>${esc(x.note)}</span>` : ''}</span>
+          <span class="cal-left">${calLeftTxt(n)}</span>
           <span class="row-btns">${ed ? '<button type="button" class="btn ghost sm" data-cal-act="edit">Edit</button>' : ''}</span>
         </li>`;
+    };
+    // lo próximo, en grande arriba
+    const nextOf = k => next.find(x => x.kind === k);
+    const hero = x => { if (!x) return ''; const n = calDaysLeft(x.date), b = calBits(x.date); return `
+        <div class="cal-hero${n === 0 ? ' is-today' : ''}">
+          <p class="mini">Next ${x.kind === 'mixtape' ? 'mixtape' : 'release'}</p>
+          <div class="cal-count"><b>${n <= 0 ? 'TODAY' : n}</b>${n > 0 ? `<small>${n === 1 ? 'day' : 'days'}</small>` : ''}</div>
+          <p class="cal-hero-t">${x.artist ? esc(x.artist) + ' - ' : ''}${esc(x.title)}</p>
+          <p class="cal-hero-s">${x.cat ? `<span class="cal-cat">${esc(x.cat)}</span>` : ''}${b.wd} ${b.day} ${b.mon} ${b.yr}</p>
+        </div>`; };
     const months = {};
     for (const x of next) (months[calMonth(x.date)] ||= []).push(x);
     const todo = ed ? calData.unscheduled : [];
@@ -3027,6 +3044,7 @@
       <div class="head"><div><p class="eyebrow">Schedule</p><h1>CALENDAR</h1></div>
         <div class="head-btns">${ed ? '<button type="button" class="btn primary" data-cal-act="new">+ Add date</button>' : ''}</div></div>
       ${calSyncNote()}
+      ${nextOf('release') || nextOf('mixtape') ? `<div class="cal-heros">${hero(nextOf('release'))}${hero(nextOf('mixtape'))}</div>` : ''}
       ${todo.length ? `<h2 class="ct-group-h">Signed contracts without a date <span>${todo.length}</span></h2>
         <ol class="list">${todo.map(c => `
           <li class="row cal-todo" data-ctid="${esc(c.id)}">

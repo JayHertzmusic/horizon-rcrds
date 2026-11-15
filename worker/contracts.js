@@ -172,6 +172,7 @@ export async function contractsApi(req, env, s, url, can, audit) {
   if (p === '/api/contracts/settings') {
     if (m === 'POST') {
       edit();
+      if (!s.owner) throw new ContractError(403, 'Only owners can change the Drive folder.');
       const b = parse(await req.text()) || {};
       const id = String(b.drive_folder || '').trim();
       if (id && !/^[\w-]{10,100}$/.test(id)) throw new ContractError(400, 'That Drive folder link is not valid.');
@@ -179,7 +180,8 @@ export async function contractsApi(req, env, s, url, can, audit) {
       await audit(id ? 'Set the Drive folder for signed contracts' : 'Removed the Drive folder for signed contracts');
     }
     const r = await DB.prepare("SELECT value FROM panel_settings WHERE key = 'contracts_drive'").first();
-    return { drive_folder: r?.value || '' };
+    // la carpeta solo la ven los owners; los demás solo saben si está puesta
+    return { drive_folder: s.owner ? r?.value || '' : '', ready: !!r?.value };
   }
   // contrato nuevo desde una plantilla: copia del Google Doc (en el Drive de Horizon) con los datos puestos
   if (p === '/api/contracts/make-doc' && m === 'POST') {

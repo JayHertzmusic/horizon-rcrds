@@ -2396,11 +2396,12 @@
       ${c.finish_error ? `<p class="login-error" role="alert">${esc(c.finish_error)}</p>` : ''}`;
   }
   /* Google Drive: carpeta raíz (donde están las de cada año) → Año → «HRZ#xxx - Nombre» → PDF firmado */
-  let ctDrive = null;
+  let ctDrive = null, ctDriveReady = false;
+  const ctDriveLoad = async () => { const r = await api('GET', '/api/contracts/settings').catch(() => ({})); ctDrive = r.drive_folder || ''; ctDriveReady = !!r.ready; };
   const driveId = u => (String(u).match(/(?:folders\/|[?&]id=)([\w-]{10,})/) || String(u).match(/^([\w-]{10,})$/) || [])[1] || '';
   function driveBox(ed, pending) {
-    if (ctDrive === null) { api('GET', '/api/contracts/settings').then(r => { ctDrive = r.drive_folder || ''; if (view === 'contracts' && !ctOpen && ctTab === 'signed') render(); }).catch(() => { ctDrive = ''; }); return ''; }
-    if (!ed) return '';
+    if (!isOwnerNow()) return '';   // la carpeta de Drive solo la ven y cambian los owners
+    if (ctDrive === null) { ctDriveLoad().then(() => { if (view === 'contracts' && !ctOpen && ctTab === 'signed') render(); }); return ''; }
     return `
       <div class="docbox">
         <div class="docbox-head">
@@ -2425,8 +2426,8 @@
   }
   // guardar en Drive: lo hace el servidor con la cuenta de Horizon (antes se asegura el PDF firmado oficial)
   async function saveToDrive(list) {
-    if (ctDrive === null) ctDrive = (await api('GET', '/api/contracts/settings').catch(() => ({}))).drive_folder || '';
-    if (!ctDrive) { toast('Paste the Drive folder link first (Contracts → Signed).'); return; }
+    if (ctDrive === null) await ctDriveLoad();
+    if (!ctDriveReady) { toast(isOwnerNow() ? 'Paste the Drive folder link first (Contracts → Signed).' : 'The Drive folder is not set yet. An owner sets it.'); return; }
     busy = true;
     try {
       let ok = 0;
@@ -2764,7 +2765,7 @@
       else toast('It can be saved in Drive when everyone has signed.');
     }
     else if (a === 'drive-all') { const list = ctData.contracts.filter(x => !isTpl(x) && x.status === 'signed' && !x.drive_url); await saveToDrive(list); ctData = null; loadContracts(); }
-    else if (a === 'drive-one') { if (ctDrive === null) ctDrive = (await api('GET', '/api/contracts/settings').catch(() => ({}))).drive_folder || ''; await saveToDrive([c]); ctRefresh(); }
+    else if (a === 'drive-one') { await saveToDrive([c]); ctRefresh(); }
     else if (a === 'finish') { try { const r = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/finish`)); toast(r?.ok ? 'Signed copy emailed' : r?.error || 'The email could not be sent'); ctRefresh(); } catch { /* aviso ya mostrado */ } }
     else if (a === 'sg-mail') {
       const sg = c.signers[Number(t.closest('[data-i]').dataset.i)];
@@ -2836,7 +2837,7 @@
     if (e.target.classList?.contains('drive-url')) {
       const v = e.target.value.trim(), id = driveId(v);
       if (v && !id) { toast('Paste the link of a Drive folder (drive.google.com/drive/folders/…).'); return; }
-      try { await ctAction(() => api('POST', '/api/contracts/settings', { drive_folder: id }), id ? 'Drive folder saved' : 'Drive folder removed'); ctDrive = id; render(); } catch { /* aviso ya mostrado */ }
+      try { await ctAction(() => api('POST', '/api/contracts/settings', { drive_folder: id }), id ? 'Drive folder saved' : 'Drive folder removed'); ctDrive = id; ctDriveReady = !!id; render(); } catch { /* aviso ya mostrado */ }
       return;
     }
     if (e.target.classList?.contains('doc-url')) {

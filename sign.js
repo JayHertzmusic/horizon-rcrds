@@ -89,7 +89,7 @@
     }
   }
   function refresh() {
-    const bar = document.getElementById('bar'), end = document.getElementById('end'), pg = myPage();
+    const bar = document.getElementById('bar'), end = document.getElementById('end');
     if (data.draft) {
       setStatus('Draft');
       bar.innerHTML = '<p>This is a draft for you to review. There is nothing to sign yet.</p>';
@@ -99,7 +99,7 @@
     setStatus('Needs your signature');
     bar.innerHTML = adopted
       ? '<p>Your signature is in place. Send it with the button at the end of the page.</p>'
-      : `<p>Please read the whole contract and sign in the <b>SIGN HERE</b> box${pg ? ` on page ${pg}` : ''}.</p>`;
+      : '<p>Please read the whole contract and sign in the <b>SIGN HERE</b> box.</p>';
     if (view) HZPDF.drawMarks(view.pages, marks());
     end.innerHTML = adopted ? `
       <button type="button" class="btn" id="finish">Send signed contract</button>

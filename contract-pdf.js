@@ -33,6 +33,13 @@
       c.width = Math.round(vp.width); c.height = Math.round(vp.height);
       c.style.cssText = 'display:block;width:100%;height:100%';
       wrap.appendChild(c);
+      // número de página, pequeño, abajo a la derecha (el mismo sitio que en el PDF firmado)
+      if (!opts.noNumbers) {
+        const num = document.createElement('span');
+        num.className = 'pdf-num'; num.textContent = i;
+        num.style.cssText = `position:absolute;right:${40 * scale}px;bottom:${24 * scale}px;font:${8 * scale}px/1 Arial,sans-serif;color:#777;pointer-events:none`;
+        wrap.appendChild(num);
+      }
       container.appendChild(wrap);
       // intent 'print': no espera a requestAnimationFrame (si no, se queda parado con la pestaña en segundo plano)
       await page.render({ canvasContext: c.getContext('2d'), viewport: vp, intent: 'print' }).promise;
@@ -87,6 +94,11 @@
     const doc = await PDFDocument.load(bytes.slice(0));
     const helv = await doc.embedFont(StandardFonts.Helvetica), bold = await doc.embedFont(StandardFonts.HelveticaBold), ital = await doc.embedFont(StandardFonts.TimesRomanItalic);
     const list = data.signers || [{ box: data.box, signed: data.signed }];
+    // número de página en cada hoja del contrato (no en el certificado)
+    doc.getPages().forEach((pg, i) => {
+      const t = String(i + 1), { width: W } = pg.getSize();
+      pg.drawText(t, { x: W - 40 - helv.widthOfTextAtSize(t, 8), y: 24, size: 8, font: helv, color: rgb(0.47, 0.47, 0.47) });
+    });
     for (const one of list) {
       const s = one.signed, b = one.box;
       if (!s || !b) continue;

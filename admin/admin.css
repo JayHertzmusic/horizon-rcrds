@@ -857,3 +857,14 @@ html, body, * { scrollbar-width: none; }
 .pf-arrow.open svg { transform: rotate(180deg); }
 .pf-arrow[hidden], .pf-count[hidden] { display: none; }
 .pf-count { margin-left: 6px; font-weight: 400; font-size: 12px; }
+
+/* Rol → Forms: los formularios son subcarpetas (más pequeños que las secciones) */
+.perm-forms { padding: 2px 0 8px 20px; margin-left: 12px; border-left: 1px solid rgba(255, 255, 255, .1); border-bottom: 1px solid var(--line); }
+.pf-row { padding: 3px 0 3px 12px; border-bottom: 0; }
+.pf-name { font-size: 12.5px; font-weight: 500; color: var(--muted); }
+.pf-row:has(input[value="view"]:checked) .pf-name, .pf-row:has(input[value="edit"]:checked) .pf-name { color: #fff; }
+.pf-row .seg { border-radius: 6px; }
+.pf-row .seg span { padding: 3px 8px; font-size: 10.5px; }
+/* flecha sin recuadro, también al pulsarla */
+.pf-arrow, .pf-arrow:focus, .pf-arrow:hover, .pf-arrow:active { border: 0 !important; background: none !important; box-shadow: none !important; outline: none; }
+.pf-arrow:focus-visible { outline: 1px solid rgba(255, 255, 255, .6); outline-offset: 2px; border-radius: 4px; }

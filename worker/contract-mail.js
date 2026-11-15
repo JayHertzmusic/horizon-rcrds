@@ -2,16 +2,25 @@
    Salen de contratos@horizonrcrds.com; las respuestas van al correo de Horizon y Horizon recibe copia oculta de cada uno. */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
+// Estilo de la web: negro, logo de Horizon, títulos en mayúsculas espaciadas, botón blanco
+const SITE = 'https://horizonrcrds.com';
+const FONT = "'Barlow',Helvetica,Arial,sans-serif";
 function layout(title, body, button) {
-  return `<!doctype html><html><body style="margin:0;padding:0;background:#f2f2f2">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f2f2;padding:32px 12px"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:8px;overflow:hidden;font-family:Arial,Helvetica,sans-serif;color:#111">
-<tr><td style="background:#050505;padding:22px 28px;color:#ffffff;font-size:18px;font-weight:700;letter-spacing:4px">HORIZON RCRDS</td></tr>
-<tr><td style="padding:30px 28px 8px;font-size:22px;font-weight:700;line-height:1.3">${title}</td></tr>
-<tr><td style="padding:8px 28px 4px;font-size:15px;line-height:1.6;color:#333">${body}</td></tr>
-${button ? `<tr><td style="padding:22px 28px 8px"><a href="${esc(button.href)}" style="display:inline-block;background:#111;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;letter-spacing:2px;text-transform:uppercase;padding:15px 30px;border-radius:4px">${esc(button.label)}</a></td></tr>
-<tr><td style="padding:10px 28px 0;font-size:12px;line-height:1.5;color:#777">If the button does not work, copy this link into your browser:<br><a href="${esc(button.href)}" style="color:#555;word-break:break-all">${esc(button.href)}</a></td></tr>` : ''}
-<tr><td style="padding:26px 28px 28px;font-size:12px;line-height:1.5;color:#999">This link is private and only for you. Any questions? Just reply to this email.<br>HORIZON RCRDS</td></tr>
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="supported-color-schemes" content="dark">
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow:wght@400;700&display=swap" rel="stylesheet"></head>
+<body style="margin:0;padding:0;background:#050505">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#050505;padding:36px 12px 28px"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;font-family:${FONT};color:#e5e7eb">
+<tr><td align="center" style="padding:0 0 26px"><a href="${SITE}" style="text-decoration:none"><img src="${SITE}/assets/logo.png" width="56" height="56" alt="HORIZON RCRDS" style="display:block;margin:0 auto;border:0;width:56px;height:56px"></a>
+  <div style="margin-top:14px;font-family:'Bebas Neue',${FONT};font-size:22px;font-weight:700;letter-spacing:6px;color:#ffffff">HORIZON RCRDS</div></td></tr>
+<tr><td style="background:#0d0d0d;border:1px solid #1f1f1f;border-radius:10px;padding:34px 30px 30px">
+  <div style="font-family:'Bebas Neue',${FONT};font-size:30px;line-height:1.05;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#ffffff">${title}</div>
+  <div style="margin-top:18px;font-size:15px;line-height:1.65;color:#c7c9ce">${body}</div>
+  ${button ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:28px"><tr><td style="background:#ffffff;border-radius:3px"><a href="${esc(button.href)}" style="display:inline-block;padding:16px 34px;font-family:${FONT};font-size:13px;font-weight:700;letter-spacing:3px;text-transform:uppercase;color:#000000;text-decoration:none">${esc(button.label)}</a></td></tr></table>
+  <div style="margin-top:22px;padding-top:18px;border-top:1px solid #1f1f1f;font-size:12px;line-height:1.55;color:#6b7280">If the button does not work, copy this link into your browser:<br><a href="${esc(button.href)}" style="color:#8b8f98;word-break:break-all">${esc(button.href)}</a></div>` : ''}
+</td></tr>
+<tr><td align="center" style="padding:24px 10px 0;font-size:12px;line-height:1.6;color:#6b7280">This link is private and only for you. Any questions? Just reply to this email.<br>
+  <a href="${SITE}" style="color:#8b8f98;text-decoration:none;letter-spacing:2px;text-transform:uppercase;font-weight:700">horizonrcrds.com</a></td></tr>
 </table></td></tr></table></body></html>`;
 }
 const textOf = html => html.replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{3,}/g, '\n\n').trim();

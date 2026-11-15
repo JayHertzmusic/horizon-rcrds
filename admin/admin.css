@@ -926,3 +926,18 @@ html, body, * { scrollbar-width: none; }
 .ct-mi:hover { background: #181818; }
 .ct-mi.danger b { color: var(--danger); }
 @media (min-width: 1300px) { .main:has(> .ct-ed) { padding-right: 72px; } }   /* contrato centrado de verdad en el espacio libre */
+/* Datos del contrato en grupos */
+.ct-data { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 0 28px; margin: 0 0 16px; padding: 16px 18px; border: 1px solid var(--line-2); border-radius: 8px; }
+.ct-group .mini { margin: 0 0 8px; }
+.ct-group dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 14px; margin: 0; }
+.ct-group dt { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #9a9a9a); font-weight: 600; line-height: 1.7; }
+.ct-group dd { margin: 0; font-size: 14px; color: #fff; overflow-wrap: anywhere; }
+@media (max-width: 900px) { .ct-data { grid-template-columns: 1fr; gap: 14px; } }
+.ct-help { margin: -6px 0 16px; }
+/* Quién firma: título pequeño encima de cada campo y modo «colocar firma» */
+.sg-f { display: grid; gap: 4px; min-width: 0; }
+.sg-f > span { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted, #9a9a9a); font-weight: 600; }
+.signer { align-items: end; }
+.signer .sg-n, .signer .sg-state, .signer .sg-btns { align-self: center; }
+.pdf-viewer:not(.placing) .pdf-page { cursor: default !important; }
+.signers.is-placing .signers-head .muted { color: #fff; }

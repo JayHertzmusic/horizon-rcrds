@@ -2206,9 +2206,10 @@
             ${tpl ? '' : `<div class="field"><label for="c-artist">Artist</label><input id="c-artist" name="artist" value="${esc(c.artist)}" maxlength="160" autocomplete="off"></div>`}</div>
           ` : ''}
         ${!tpl && ed ? `<div class="row2 wide"><div class="field"><label for="c-cat">Release number</label><input id="c-cat" name="release_cat" value="${esc(c.release_cat)}" maxlength="40" autocomplete="off"></div>
-            <div class="field"><label for="c-rel">Release name</label><input id="c-rel" name="release_name" value="${esc(c.release_name)}" maxlength="160" autocomplete="off"></div></div>` : ''}
+            <div class="field"><label for="c-rel">Release name</label><input id="c-rel" name="release_name" value="${esc(c.release_name)}" maxlength="160" autocomplete="off"></div></div>
+          <p class="info sm-txt ct-help">Release number and name are only used to file the signed contract in Drive: Year → Release number - Name.</p>` : ''}
         ${signed && !tpl ? ctDoneBlock(c, ed) : ''}
-        ${!tpl && vars.length ? `<div class="ct-vars">${vars.map(([k, v]) => `<span><b>${esc(k)}</b>${esc(v)}</span>`).join('')}</div>` : ''}
+        ${!tpl && vars.length ? ctDataBlock(vars) : ''}
         ${docBlock(c, ed && !signed)}
         ${c.pdf ? signersBlock(c, ed && !signed) : ''}
         ${c.pdf ? `
@@ -2252,19 +2253,19 @@
   /* El texto del contrato se edita en su pestaña del Google Doc, dentro del panel; el PDF lo genera Google. */
   const docEditUrl = u => { try { const x = new URL(u); x.searchParams.set('authuser', 'contacthorizonids@gmail.com'); x.pathname = x.pathname.replace(/\/(edit|view|preview)?$/, '/edit'); return x.href; } catch { return ''; } };
   function docBlock(c, ed) {
-    if (!ed && !c.doc_url) return '';
     const tpl = isTpl(c);
+    if (!isOwnerNow() || (!ed && !c.doc_url) || (!tpl && !c.doc_url)) return '';   // solo owners (y si el contrato tiene su Google Doc)
     return `
       <div class="docbox">
         <div class="docbox-head">
           <b>${tpl ? 'Template text' : 'Contract text'}</b>
-          ${ed ? `<input class="doc-url" value="${esc(c.doc_url)}" placeholder="Google Doc tab link (docs.google.com/document/d/…?tab=…)" aria-label="Google Doc tab link" spellcheck="false">` : '<span></span>'}
+          ${ed && tpl ? `<input class="doc-url" value="${esc(c.doc_url)}" placeholder="Google Doc tab link (docs.google.com/document/d/…?tab=…)" aria-label="Google Doc tab link" spellcheck="false">` : '<span></span>'}
           <span class="docbox-btns">
             ${c.doc_url ? '<button type="button" class="btn ghost sm" data-ct="doc-open">Edit in Google Docs</button>' : ''}
             ${ed && c.doc_url ? '<button type="button" class="btn primary sm" data-ct="doc-pdf">Update PDF from Doc</button>' : ''}
           </span>
         </div>
-        ${tpl ? `<div class="tpl-fields">${tplFieldsHtml(ctOpen.fields)}</div>` : c.doc_url && ed ? '<p class="info">Edit the text in Google Docs (it opens here, full screen), then press <b>Done · update PDF</b>: the artist signs that PDF.</p>' : ''}
+        ${tpl ? `<div class="tpl-fields">${tplFieldsHtml(ctOpen.fields)}</div>` : c.doc_url && ed ? '<p class="info">Only if you need to change the wording of this contract: edit it in Google Docs (it opens here), then press <b>Done · update PDF</b>.</p>' : ''}
       </div>`;
   }
   function tplFieldsHtml(fields) {
@@ -2322,19 +2323,19 @@
   }
   const docParts = u => { const m = String(u).match(/docs\.google\.com\/document\/(?:u\/\d+\/)?d\/([\w-]{20,})/), t = String(u).match(/[?&#]tab=(t\.[\w]+)/); return m ? { id: m[1], tab: t ? t[1] : '' } : null; };
   function signersBlock(c, ed) {
-    const act = ctOpen.active ?? c.signers.findIndex(x => !x.box && !x.signed);
+    const act = ctOpen.placing ?? -1, tpl = isTpl(c);
     return `
-      <div class="signers">
-        <div class="signers-head"><b>Signers</b><span class="muted">${ed ? 'Pick a signer and click on the document where they sign. Each one gets their own link.' : ''}</span></div>
+      <div class="signers${act >= 0 ? ' is-placing' : ''}">
+        <div class="signers-head"><b>Who signs</b><span class="muted">${act >= 0 ? `Click on the document where <b>${esc(c.signers[act]?.label || 'this person')}</b> signs, or press Cancel.` : ed ? 'Each person gets their own private link by email and signs in their box on the document.' : ''}</span></div>
         ${c.signers.map((x, i) => `
-          <div class="signer${i === act && ed && !x.signed ? ' is-on' : ''}" data-sg="${esc(x.id)}" data-i="${i}">
+          <div class="signer${i === act ? ' is-on' : ''}" data-sg="${esc(x.id)}" data-i="${i}">
             <span class="sg-n">${i + 1}</span>
-            ${ed && !x.signed ? `<input class="sg-label" value="${esc(x.label)}" maxlength="60" aria-label="Signer ${i + 1} name" placeholder="Artist ${i + 1}">
-              ${isTpl(c) ? '<span></span>' : `<input class="sg-email" type="email" value="${esc(x.email)}" maxlength="160" aria-label="Signer ${i + 1} email" placeholder="artist email">`}`
+            ${ed && !x.signed ? `<label class="sg-f"><span>Name</span><input class="sg-label" value="${esc(x.label)}" maxlength="60" placeholder="Artist name"></label>
+              ${tpl ? '<span></span>' : `<label class="sg-f"><span>Signing link is sent to</span><input class="sg-email" type="email" value="${esc(x.email)}" maxlength="160" placeholder="artist@email.com"></label>`}`
               : `<span class="sg-txt"><b>${esc(x.label)}</b><span>${esc(x.email || '')}</span></span><span></span>`}
             <span class="sg-state ${x.signed ? 'ok' : x.email_error && !x.emailed_at ? '' : x.box ? 'set' : ''}" ${x.email_error && !x.signed ? `title="${esc(x.email_error)}"` : ''}>${x.signed ? `✓ Signed · ${esc(x.name)} · ${esc(fmtDate(x.signed_at))}` : x.email_error && !x.emailed_at ? 'Email not sent' : x.emailed_at ? `Emailed · ${esc(fmtDate(x.emailed_at))}` : x.box ? `Signs on page ${x.box.page + 1}` : 'Signature spot not set'}</span>
             <span class="sg-btns">
-              ${ed && !x.signed ? `<button type="button" class="btn ghost sm" data-ct="sg-pick">${i === act ? 'Placing…' : 'Place signature'}</button>` : ''}
+              ${ed && !x.signed ? (i === act ? '<button type="button" class="btn primary sm" data-ct="sg-cancel">Cancel</button>' : `<button type="button" class="btn ghost sm" data-ct="sg-pick" ${act >= 0 ? 'disabled' : ''}>${x.box ? 'Move signature' : 'Place signature'}</button>`) : ''}
               ${x.token && !x.signed && c.status !== 'void' ? `<button type="button" class="btn ghost sm" data-ct="sg-copy" title="${esc(signerUrl(x))}">Copy link</button>${ed ? `<button type="button" class="btn ghost sm" data-ct="sg-mail">${x.emailed_at ? 'Resend email' : 'Send email'}</button>` : ''}` : ''}
               ${x.signed && x.token ? `<a class="btn ghost sm" href="${esc(signerUrl(x))}" target="_blank" rel="noopener">View</a>` : ''}
               ${ed && !x.signed && c.signers.length > 1 ? '<button type="button" class="ic danger" data-ct="sg-del" aria-label="Remove signer">✕</button>' : ''}
@@ -2342,6 +2343,13 @@
           </div>`).join('')}
         ${ed ? '<button type="button" class="btn ghost sm" data-ct="sg-add">+ Add signer</button>' : ''}
       </div>`;
+  }
+  // datos del contrato, ordenados en grupos
+  function ctDataBlock(vars) {
+    const groups = { Artist: [], Release: [], Label: [] };
+    for (const [k, v] of vars) (/label|signatory|representative/i.test(k) ? groups.Label : /track|date|title|remix/i.test(k) ? groups.Release : groups.Artist).push([k, v]);
+    return `<div class="ct-data">${Object.entries(groups).filter(([, l]) => l.length).map(([g, l]) => `
+      <div class="ct-group"><p class="mini">${g}</p><dl>${l.map(([k, v]) => `<dt>${esc(k.replace(/^Artist (\d) /, 'A$1 · '))}</dt><dd>${esc(v) || '<span class="muted">—</span>'}</dd>`).join('')}</dl></div>`).join('')}</div>`;
   }
   function contractsPage() {
     if (!ctData) {
@@ -2442,7 +2450,7 @@
       sg.box = b; done.push(sg.label || `Artist ${i + 1}`);
     }
     if (!done.length || ctOpen?.contract !== c) return;
-    ctOpen.active = null;
+    ctOpen.placing = null;
     ctSoftUpdate();
     toast(`Signature placed above “Signed By Artist” (${done.join(', ')}). Use Place signature to move it.`);
   }
@@ -2456,20 +2464,22 @@
     const el = $('.signers');
     if (el) el.outerHTML = signersBlock(c, ed);
     if (ctOpen.view) HZPDF.drawMarks(ctOpen.view.pages, ctMarks());
+    $('#pdf-viewer')?.classList.toggle('placing', ctOpen.placing != null);
     const send = $('[data-ct=send]'), canSend = ed && !isTpl(c) && c.status !== 'void' && c.pdf && c.signers.every(x => x.box) && c.signers.some(x => !x.emailed_at && !x.signed);
     if (canSend && !send) { const at = $('.ed-actions [type=submit]'); const html = '<button type="button" class="btn primary" data-ct="send" title="Each artist gets an email with their private link to read and sign">Send to sign</button>'; if (at) at.insertAdjacentHTML('afterend', html); else $('.ed-actions')?.insertAdjacentHTML('afterbegin', html); }
   }
   function ctMarks() {
-    const c = ctOpen.contract, act = ctOpen.active ?? c.signers.findIndex(x => !x.box && !x.signed);
+    const c = ctOpen.contract, act = ctOpen.placing ?? -1;
     return c.signers.map((x, i) => x.signed
       ? { box: x.box, sign: x.signature, label: `Signed electronically by ${x.name}` }
       : { box: x.box, title: x.label || `Artist ${i + 1}`, active: i === act });
   }
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && view === 'contracts' && ctOpen?.placing != null) { ctOpen.placing = null; ctSoftUpdate(); } });
   async function placeBox(page, x, y) {
-    const c = ctOpen.contract;
-    const act = ctOpen.active ?? c.signers.findIndex(s => !s.box && !s.signed);
-    const sg = c.signers[act >= 0 ? act : 0];
-    if (!sg || sg.signed) { toast('Pick a signer first (“Place signature”).'); return; }
+    const c = ctOpen.contract, act = ctOpen.placing ?? -1;
+    if (act < 0) return;   // solo después de pulsar «Place signature» (un clic suelto en el documento no mueve nada)
+    const sg = c.signers[act];
+    if (!sg || sg.signed) return;
     const old = sg.box;
     const w = old?.w || (c.signers.length > 2 ? 0.24 : 0.3), h = old?.h || 0.07;
     const b = { page, x: Math.min(Math.max(0, x - w / 2), 1 - w), y: Math.min(Math.max(0, y - h * 0.75), 1 - h), w, h, manual: 1 };   // movida a mano: no se recoloca sola
@@ -2477,9 +2487,8 @@
     HZPDF.drawMarks(ctOpen.view.pages, ctMarks());
     try {
       await api('POST', `/api/contracts/${encodeURIComponent(c.id)}/box`, { signer: sg.id, box: b });
-      toast(`Firma de ${sg.label || 'firmante'} colocada`);
-      const next = c.signers.findIndex(s => !s.box && !s.signed);
-      ctOpen.active = next >= 0 ? next : act;
+      toast(`Signature placed for ${sg.label || 'the signer'}`);
+      ctOpen.placing = null;
       ctSoftUpdate();   // sin redibujar la página ni el PDF (no se pierde la posición)
     } catch (e) { toast(e.message); sg.box = old; HZPDF.drawMarks(ctOpen.view.pages, ctMarks()); }
   }
@@ -2499,7 +2508,7 @@
     try { const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); if (ctOpen?.id === id) { ctOpen.contract = r.contract; render(); } }
     catch (e) { toast(e.message); ctOpen = null; render(); }
   }
-  async function ctRefresh() { const keep = ctOpen?.bytes; const id = ctOpen.id; const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); ctOpen = { mode: 'contract', id, contract: r.contract, bytes: keep, active: ctOpen.active, fields: keep ? ctOpen.fields : null }; render(); }
+  async function ctRefresh() { const keep = ctOpen?.bytes; const id = ctOpen.id; const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`); ctOpen = { mode: 'contract', id, contract: r.contract, bytes: keep, placing: null, fields: keep ? ctOpen.fields : null }; render(); }
   async function ctAction(fn, ok) {
     busy = true;
     try { const r = await fn(); if (ok) toast(ok); return r; }
@@ -2546,13 +2555,14 @@
         ctRefresh();
       } catch (err) { toast(err.message); }
     }
-    else if (a === 'sg-pick') { ctOpen.active = Number(t.closest('[data-i]').dataset.i); ctSoftUpdate(); toast('Click on the document where they sign'); }
+    else if (a === 'sg-pick') { ctOpen.placing = Number(t.closest('[data-i]').dataset.i); ctSoftUpdate(); }
+    else if (a === 'sg-cancel') { ctOpen.placing = null; ctSoftUpdate(); }
     else if (a === 'sg-copy') { const sg = c.signers[Number(t.closest('[data-i]').dataset.i)]; try { await navigator.clipboard.writeText(signerUrl(sg)); toast('Link copied'); } catch { toast(signerUrl(sg)); } }
-    else if (a === 'sg-add') { try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/signers`, { action: 'add' }), 'Signer added'); ctOpen.active = c.signers.length; ctRefresh(); } catch { /* aviso ya mostrado */ } }
+    else if (a === 'sg-add') { try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/signers`, { action: 'add' }), 'Signer added'); ctOpen.placing = null; ctRefresh(); } catch { /* aviso ya mostrado */ } }
     else if (a === 'sg-del') {
       const sg = c.signers[Number(t.closest('[data-i]').dataset.i)];
       if (!await confirmBox(`Remove ${sg.label || 'this signer'}?`, 'Remove')) return;
-      try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/signers`, { action: 'remove', signer: sg.id }), 'Signer removed'); ctOpen.active = null; ctRefresh(); } catch { /* aviso ya mostrado */ }
+      try { await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/signers`, { action: 'remove', signer: sg.id }), 'Signer removed'); ctOpen.placing = null; ctRefresh(); } catch { /* aviso ya mostrado */ }
     }
     else if (a === 'send') {
       // guarda antes los emails escritos y luego envía a cada firmante su enlace por correo
@@ -2657,11 +2667,12 @@
           }
           const r = await ctAction(() => api('POST', '/api/contracts', { template: tpl.id, title, artist: f.elements.artist.value, email: f.elements.em0?.value || '', vars: values, release_cat: f.elements.release_cat.value, release_name: f.elements.release_name.value }));
           await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/doc`, { url: docUrl }));
-          const emails = tpl.signers.map((x, i) => (f.elements['em' + i]?.value || '').trim());
-          if (emails.some(Boolean)) {
-            const full = await api('GET', `/api/contracts/${encodeURIComponent(r.id)}`);
-            await ctAction(() => api('POST', '/api/contracts', { id: r.id, title, artist: f.elements.artist.value, email: emails[0], signers: full.contract.signers.map((x, i) => ({ id: x.id, label: x.label, email: emails[i] || '' })) }));
-          }
+          // quién firma: el nombre del artista (no «Artist») y su email (el escrito, o el del contrato)
+          const vget = re => { const k = Object.keys(values).find(n => re.test(n)); return k ? values[k] : ''; };
+          const emails = tpl.signers.map((x, i) => (f.elements['em' + i]?.value || '').trim() || (tpl.signers.length > 1 ? vget(new RegExp(`^artist ${i + 1} e-?mail`, 'i')) : vget(/^e-?mail$/i)));
+          const names = tpl.signers.map((x, i) => tpl.signers.length > 1 ? vget(new RegExp(`^artist ${i + 1} name`, 'i')) : f.elements.artist.value.trim() || vget(/^artist name$/i));
+          const full = await api('GET', `/api/contracts/${encodeURIComponent(r.id)}`);
+          await ctAction(() => api('POST', '/api/contracts', { id: r.id, title, artist: f.elements.artist.value, email: emails[0], signers: full.contract.signers.map((x, i) => ({ id: x.id, label: names[i] || x.label, email: emails[i] || '' })) }));
           const g = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(r.id)}/from-doc`, {}), 'Contract created');
           ctTab = 'contracts'; ctData = null; autoPlaceFor = r.id; openContract(r.id); loadContracts();
         } catch (err) { if (!$('#ed-error:not([hidden])')) fail(err.message); btn.disabled = false; btn.textContent = 'Create contract'; }

@@ -184,9 +184,20 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
       </form>`;
     if (target === root) progress();
   }
+  // enlace personal (formularios privados): ?k=… y una clave de este dispositivo (el enlace solo vale en el primero que lo abre)
+  const KEY = new URLSearchParams(location.search).get('k') || '';
+  const device = (() => {
+    if (!KEY) return '';
+    const name = 'hz_fd_' + KEY.slice(0, 24);
+    let v = ''; try { v = localStorage.getItem(name) || ''; } catch { /* nada */ }
+    if (!v) { const u = crypto.getRandomValues(new Uint8Array(24)); v = btoa(String.fromCharCode(...u)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); try { localStorage.setItem(name, v); } catch { /* nada */ } }
+    return v;
+  })();
+  const linkHeaders = KEY ? { 'X-Form-Device': device } : {};
+  const apiUrl = () => '/api/public/forms/' + encodeURIComponent(slug) + (KEY ? '?k=' + encodeURIComponent(KEY) : '');
   async function load() {
     try {
-      const r = await fetch('/api/public/forms/' + encodeURIComponent(slug), { cache: 'no-store' });
+      const r = await fetch(apiUrl(), { cache: 'no-store', headers: linkHeaders });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.message || 'This form is not available.');
       form = j; draw(false);
@@ -263,7 +274,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     }
     btn.disabled = true; btn.textContent = 'Sending…'; err.hidden = true;
     try {
-      const r = await fetch('/api/public/forms/' + encodeURIComponent(slug), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ answers: a, _hp: f.elements._hp.value }) });
+      const r = await fetch(apiUrl(), { method: 'POST', headers: { 'Content-Type': 'application/json', ...linkHeaders }, body: JSON.stringify({ answers: a, _hp: f.elements._hp.value, k: KEY }) });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.message || 'Something went wrong. Please try again.');
       document.getElementById('bar').style.width = '100%';

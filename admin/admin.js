@@ -1796,7 +1796,7 @@
     return `
       <button type="button" class="back" data-act="form-back">← Forms</button>
       <div class="head"><div><p class="eyebrow">Responses</p><h1>${esc(f.title)} <span class="count">${f.total}</span></h1></div>
-        <div class="head-btns" data-form="${esc(f.id)}">${rs && rs.some(r => !r.seen) && !preview ? '<button type="button" class="btn ghost" data-act="resp-all-seen">Mark all as seen</button>' : ''}${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Download (Excel / CSV)</button>' : ''}${canEditForm(f) && !preview ? '<button type="button" class="btn primary" data-act="form-edit">Edit form</button>' : ''}</div></div>
+        <div class="head-btns" data-form="${esc(f.id)}">${rs && rs.some(r => !r.seen) && !preview ? '<button type="button" class="btn ghost" data-act="resp-all-seen">Mark all as seen</button>' : ''}${f.invite && !preview ? '<button type="button" class="btn ghost" data-act="form-links">Generate link</button>' : ''}${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Download (Excel / CSV)</button>' : ''}${canEditForm(f) && !preview ? '<button type="button" class="btn primary" data-act="form-edit">Edit form</button>' : ''}</div></div>
       ${formOpen.err ? `<p class="login-error" role="alert">${esc(formOpen.err)}</p>` : ''}
       ${f.total ? `<div class="resp-search"><input class="search" type="search" id="resp-filter" placeholder="Search by #number, name, track, email…" aria-label="Search responses" value="${esc(formOpen.q || '')}" autocomplete="off"></div>` : ''}
       <div id="resp-list">${respList(f)}</div>`;
@@ -1964,6 +1964,37 @@
     prevTimer = setTimeout(() => { syncDraft(); sendPreview(e.target.closest('.qe')?.dataset.id); }, 150);
   });
   document.addEventListener('focusin', e => { const q = view === 'forms' && e.target.closest?.('#form-ed .qe'); if (q) sendPreview(q.dataset.id); });
+  /* Enlaces personales de un formulario privado (Release Form): cada enlace es para una persona, vale para un solo
+     envío, solo en el primer dispositivo que lo abre y durante 30 días */
+  const LINK_STATE = { unused: ['Not opened yet', 'off'], opened: ['Opened', ''], sent: ['Sent', 'ok'], expired: ['Expired', 'off'] };
+  async function linksSheet(f, made = null) {
+    const d = sheet(`<h2 class="sheet-t">Personal link · ${esc(f.title)}</h2>
+      <p class="info">Each link is for one artist: it only works on the first device that opens it, only to send the form once, and for 30 days.</p>
+      <form id="link-new" class="link-new" novalidate>
+        <input name="note" maxlength="120" placeholder="Who is it for? (e.g. artist name) — optional" aria-label="Who is it for" autocomplete="off">
+        <button type="submit" class="btn primary">Generate link</button>
+      </form>
+      ${made ? `<div class="link-made"><input readonly value="${esc(made.url)}" aria-label="New link"><button type="button" class="btn ghost sm" data-link-copy>Copy</button></div>
+        <p class="sm-txt link-ok">Copied. Send it to the artist. It works until ${esc(new Date(made.expires_at).toLocaleDateString('en-GB', { dateStyle: 'long' }))}.</p>` : ''}
+      <p class="mini">Recent links</p><ol class="link-list"><li class="muted">Loading…</li></ol>
+      <div class="confirm-actions"><button type="button" class="btn ghost" data-link-close>Close</button></div>`);
+    d.querySelector('[data-link-close]').onclick = closeSheet;
+    d.querySelector('[data-link-copy]')?.addEventListener('click', () => { navigator.clipboard?.writeText(made.url).then(() => toast('Link copied')).catch(() => {}); d.querySelector('.link-made input').select(); });
+    d.querySelector('#link-new').onsubmit = async e => {
+      e.preventDefault();
+      const btn = e.target.querySelector('button'); btn.disabled = true;
+      try {
+        const r = await api('POST', `/api/forms/${encodeURIComponent(f.id)}/links`, { note: e.target.elements.note.value.trim() });
+        try { await navigator.clipboard.writeText(r.url); } catch { /* se copia a mano */ }
+        linksSheet(f, r);
+      } catch (x) { toast(x.message); btn.disabled = false; }
+    };
+    try {
+      const r = await api('GET', `/api/forms/${encodeURIComponent(f.id)}/links`);
+      const ol = d.querySelector('.link-list');
+      if (ol) ol.innerHTML = r.links.length ? r.links.map(l => `<li><span><b>${esc(l.note || 'Link')}</b><small>${esc(fmtDate(l.created_at))} · ${esc(l.by || '')}</small></span><span class="tag ${LINK_STATE[l.state]?.[1] || ''}">${LINK_STATE[l.state]?.[0] || l.state}</span></li>`).join('') : '<li class="muted">No links yet.</li>';
+    } catch { /* sin lista */ }
+  }
   async function formAction(fn, ok) {
     busy = true;
     try { await fn(); if (ok) toast(ok); }
@@ -1997,6 +2028,8 @@
       formsData.forms.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
       render();
       try { await formAction(() => api('POST', '/api/forms/order', { ids })); } catch { loadForms(); }
+    } else if (act === 'form-links') {
+      linksSheet(formsData.forms.find(x => x.id === formOpen.id));
     } else if (act === 'form-csv') {
       const f = formsData.forms.find(x => x.id === formOpen.id);
       try {

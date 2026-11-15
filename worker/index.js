@@ -97,6 +97,8 @@ async function ensureSchema(env) {
   for (const col of ['soundcloud TEXT', 'sc_pic TEXT']) { try { await env.DB.prepare(`ALTER TABLE panel_profiles ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
   try { await env.DB.prepare('ALTER TABLE panel_roles ADD COLUMN forms TEXT').run(); } catch { /* ya existe */ }
   try { await env.DB.prepare('ALTER TABLE forms ADD COLUMN google TEXT').run(); } catch { /* ya existe */ }   // Google Form conectado
+  // formulario privado (solo con enlace personal). El Release Form lo es desde el principio.
+  try { await env.DB.prepare('ALTER TABLE forms ADD COLUMN invite INTEGER NOT NULL DEFAULT 0').run(); await env.DB.prepare("UPDATE forms SET invite = 1 WHERE slug = 'release-form'").run(); } catch { /* ya existe */ }
   for (const col of CONTRACT_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE contracts ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
   for (const col of SIGNER_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE contract_signers ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
   schemaReady = true;

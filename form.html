@@ -86,7 +86,8 @@
   html.embed .help { margin: 4px 0 0; font-size: 12.5px; }
   html.embed .q > label + input, html.embed .q > label + textarea, html.embed .q > label + select { margin-top: 2px; }
   html.embed input[type=text], html.embed input[type=email], html.embed input[type=url] { min-height: 40px; padding: 8px 0; font-size: 15px; border-bottom-color: #2a2a2a; }
-  html.embed textarea { min-height: 70px; height: 70px; margin-top: 8px; border-radius: 2px; border-color: #2a2a2a; font-size: 15px; }
+  html.embed, html.embed body { overflow: hidden; }
+  html.embed textarea { resize: none; min-height: 70px; height: 70px; margin-top: 8px; border-radius: 2px; border-color: #2a2a2a; font-size: 15px; }
   html.embed select { border-radius: 2px; }
   html.embed input:focus, html.embed textarea:focus, html.embed select:focus { border-color: var(--acc); }
   html.embed .opt { padding: 9px 12px; border-radius: 2px; font-size: 14px; }
@@ -106,6 +107,8 @@
   @media (max-width: 380px) { html.embed main { padding: 18px 16px 20px; } }
   @media (max-width: 470px) { html.embed #f > .q.half { grid-column: 1 / -1; } }
 </style>
+<script>/* incrustado en la portada: modo compacto desde el primer instante (sin enseñar la página completa) */
+if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.documentElement.classList.add('embed');</script>
 </head>
 <body>
 <div class="bar" id="bar" aria-hidden="true"></div>

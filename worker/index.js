@@ -468,9 +468,12 @@ async function team(req, env, s, p) {
     }
     const role = await DB.prepare('SELECT id, name FROM panel_roles WHERE id = ?').bind(String(body.role_id || '')).first();
     if (!role) throw new HttpError(400, 'Choose a role.');
+    const before = exists ? await DB.prepare('SELECT role_id FROM panel_members WHERE email = ?').bind(email).first() : null;
     if (exists) await DB.prepare('UPDATE panel_members SET role_id = ?' + (label !== undefined ? ', label = ?' : '') + ' WHERE email = ?').bind(...(label !== undefined ? [role.id, label || null, email] : [role.id, email])).run();
     else await DB.prepare('INSERT INTO panel_members (email, role_id, label, color, added_by, added_at) VALUES (?, ?, ?, ?, ?, ?)').bind(email, role.id, label || null, color, s.email, now()).run();
-    await audit(env, s, exists ? `Changed the role of ${email} to ${role.name}` : `Added ${email}${label ? ' (' + label + ')' : ''} as ${role.name}`);
+    // el color que pone el owner es el que se ve (también por encima del que eligiera la persona)
+    if (exists && color) await DB.batch([DB.prepare('UPDATE panel_members SET color = ? WHERE email = ?').bind(color, email), DB.prepare('UPDATE panel_profiles SET color = ? WHERE email = ?').bind(color, email)]);
+    if (!exists || before?.role_id !== role.id) await audit(env, s, exists ? `Changed the role of ${email} to ${role.name}` : `Added ${email}${label ? ' (' + label + ')' : ''} as ${role.name}`);
     return json({ ok: true });
   }
   if (p === '/api/team/members' && m === 'DELETE') {

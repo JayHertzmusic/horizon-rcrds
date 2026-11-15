@@ -2473,15 +2473,23 @@
     const pdf = await HZPDF.load(bytes), spots = [];
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i), vp = page.getViewport({ scale: 1 }), W = vp.width, H = vp.height;
-      const items = (await page.getTextContent()).items.map(it => ({ s: it.str, x: it.transform[4], y: H - it.transform[5], w: it.width }));
+      const items = (await page.getTextContent()).items.map(it => ({ s: it.str, x: it.transform[4], y: H - it.transform[5], w: it.width, h: Math.abs(it.transform[3]) || it.height }));
       const lines = items.filter(it => /^[\s_]*_{8,}[\s_]*$/.test(it.s));
+      let ink = null;   // la página dibujada, para encontrar la raya de verdad
       for (const lb of items) {
         const m = lb.s.match(/signed by\s+(?:the\s+)?artist\s*(\d)?/i);
         if (!m) continue;
         const mid = lb.x + lb.w / 2;
         // la línea justo encima de la etiqueta (la más cercana que la cubra)
         const ln = lines.filter(l => l.y < lb.y && lb.y - l.y < 40 && l.x - 20 < mid && l.x + l.w + 20 > mid).sort((a, b) => b.y - a.y)[0];
-        const cx = ln ? ln.x + ln.w / 2 : mid, w = Math.max(0.3 * W, ln ? ln.w : lb.w), bottom = ln ? ln.y - 1 : lb.y - 14, h = 0.07 * H;
+        let cx = ln ? ln.x + ln.w / 2 : mid, lineW = ln ? ln.w : lb.w, bottom = ln ? ln.y - 1 : lb.y - 14;
+        // ajuste fino con los píxeles: la raya horizontal más cercana encima de la etiqueta (borde de arriba y centro exactos)
+        try {
+          ink = ink || await pageInk(page);
+          const r = findRule(ink, mid, lb.y - (lb.h || 8), 40);
+          if (r) { cx = (r.x0 + r.x1) / 2; lineW = r.x1 - r.x0; bottom = r.top; }
+        } catch { /* se queda con la posición del texto */ }
+        const w = Math.max(0.3 * W, lineW), h = 0.07 * H;
         const x = Math.min(Math.max(0, cx - w / 2), W - w);
         spots.push({ n: m[1] ? Number(m[1]) : null, box: { page: i - 1, x: x / W, y: Math.max(0, (bottom - h) / H), w: w / W, h: h / H } });
       }
@@ -2495,6 +2503,29 @@
       }
     }
     return spots;
+  }
+  // página en píxeles (3 por punto) para medir rayas
+  async function pageInk(page) {
+    const k = 3, vp = page.getViewport({ scale: k }), c = document.createElement('canvas');
+    c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+    const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height);
+    await page.render({ canvasContext: x, viewport: vp, intent: 'print' }).promise;
+    return { k, w: c.width, h: c.height, d: x.getImageData(0, 0, c.width, c.height).data };
+  }
+  // la raya horizontal (oscura, ≥ 50 pt) más cercana por encima de «above», que pase por «cx»; en puntos
+  function findRule(ink, cx, above, maxUp) {
+    const { k, w, d } = ink, dark = (x, y) => { const i = (y * w + x) * 4; return d[i] + d[i + 1] + d[i + 2] < 200; };
+    const px = Math.round(cx * k);
+    for (let y = Math.round(above * k); y > Math.round((above - maxUp) * k) && y > 0; y--) {
+      if (!dark(px, y)) continue;
+      let x0 = px, x1 = px;
+      while (x0 > 0 && (dark(x0 - 1, y) || dark(x0 - 2, y) || dark(x0 - 3, y))) x0--;
+      while (x1 < w - 1 && (dark(x1 + 1, y) || dark(x1 + 2, y) || dark(x1 + 3, y))) x1++;
+      if ((x1 - x0) / k < 50) continue;   // no es una raya (letra, etc.)
+      let top = y; while (top > 0 && dark(px, top - 1)) top--;   // grosor: borde de arriba
+      return { x0: x0 / k, x1: (x1 + 1) / k, top: top / k };
+    }
+    return null;
   }
   async function autoPlace(c) {
     const spots = await signSpots(ctOpen.bytes);

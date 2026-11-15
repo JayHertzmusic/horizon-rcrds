@@ -71,6 +71,17 @@
   footer.sig { position: relative; padding: 0 16px 40px; text-align: center; color: var(--faint); font-size: 12px; letter-spacing: .2em; text-transform: uppercase; }
   @media (max-width: 560px) { .q { padding: 20px 18px; } main { padding-top: 40px; } .send { width: 100%; } }
   html.preview .send { pointer-events: none; }
+  /* incrustado en la portada: sin cabecera ni pie, fondo transparente, más compacto */
+  html.embed, html.embed body { background: transparent; min-height: 0; }
+  html.embed body::before, html.embed header.top, html.embed footer.sig, html.embed .bar, html.embed .eyebrow { display: none; }
+  html.embed main { width: 100%; padding: 26px 22px 24px; }
+  html.embed h1 { font-size: clamp(38px, 6vw, 56px); margin-bottom: 14px; }
+  html.embed .desc { margin-bottom: 26px; font-size: 15px; }
+  html.embed .q { padding: 18px 20px; }
+  html.embed .done { padding: 48px 22px; }
+  html.embed .done a { display: none; }
+  @media (max-width: 760px) { html.embed #f > .q.half { grid-column: auto; } }
+  @media (max-width: 470px) { html.embed #f > .q.half { grid-column: 1 / -1; } }
 </style>
 </head>
 <body>
@@ -84,6 +95,14 @@
 (() => {
   const root = document.getElementById('root');
   const PREVIEW = new URLSearchParams(location.search).has('preview');
+  const EMBED = new URLSearchParams(location.search).has('embed') && parent !== window;
+  if (EMBED) {
+    document.documentElement.classList.add('embed');
+    // la portada ajusta el alto del recuadro al del formulario
+    const tell = () => parent.postMessage({ type: 'hz-form-h', h: document.documentElement.scrollHeight }, location.origin);
+    new ResizeObserver(tell).observe(document.documentElement);
+    addEventListener('load', tell);
+  }
   if (PREVIEW) document.documentElement.classList.add('preview');
   const slug = (location.pathname.match(/^\/forms\/([a-z0-9-]+)/) || [])[1] || new URLSearchParams(location.search).get('f') || '';
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -215,6 +234,7 @@
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.message || 'Something went wrong. Please try again.');
       document.getElementById('bar').style.width = '100%';
+      if (EMBED) parent.postMessage({ type: 'hz-form-sent' }, location.origin);
       root.innerHTML = `<div class="done"><h2>Thank you!</h2><p>Your answer has been sent to HORIZON RCRDS.<br>We’ll get back to you soon.</p><a href="/">Back to the website</a></div>`;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (x) { err.textContent = x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Send'; }

@@ -479,7 +479,22 @@
     .dx-facts span { font-family: 'Bebas Neue', sans-serif; font-size: 1.05rem; letter-spacing: 0.04em; color: var(--accent-color); }
     .dx-facts p { font-size: 0.78rem; color: #6b7280; line-height: 1.6; margin: 4px 0 0; }
 
+    /* formulario abierto en la propia sección (a la derecha; en móvil, debajo) */
+    .dx-grid.has-form { max-width: none; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); column-gap: clamp(32px, 5vw, 80px); align-items: start; }
+    .dx-form { display: none; }
+    .dx-grid.has-form .dx-form { display: block; animation: dx-in .45s cubic-bezier(.2, .8, .2, 1); }
+    @keyframes dx-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+    .dx-form-card { position: relative; border: 1px solid #262626; border-radius: 18px; background: rgba(10,10,10,0.86); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: 0 30px 80px rgba(0,0,0,0.55); overflow: hidden; }
+    .dx-form-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px 14px 22px; border-bottom: 1px solid #1f1f1f; }
+    .dx-form-head span { font-size: 0.68rem; font-weight: 700; letter-spacing: 0.28em; text-transform: uppercase; color: #9ca3af; }
+    .dx-form-x { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #2a2a2a; border-radius: 10px; background: none; color: #d1d5db; cursor: pointer; transition: border-color .2s, color .2s; }
+    .dx-form-x:hover { border-color: #fff; color: #fff; }
+    .dx-form iframe { display: block; width: 100%; height: 640px; border: 0; background: transparent; transition: height .25s ease; }
+    .dx-btn-on { border-color: #fff !important; background: #fff !important; color: #0a0a0a !important; }
+    .dx-btn-on i { color: #0a0a0a !important; }
     @media (max-width: 1023px) {
+      .dx-grid.has-form { grid-template-columns: minmax(0, 1fr); }
+      .dx-grid.has-form .dx-form { margin-top: 36px; }
       .dx-grid { grid-template-columns: minmax(0, 1fr); }
      .dx-col { width: 140px; }
       .dx-shade { background: linear-gradient(180deg, #0a0a0a 0%, rgba(10,10,10,0.82) 12%, rgba(10,10,10,0.88) 60%, rgba(10,10,10,0.7) 85%, #0a0a0a 100%), radial-gradient(ellipse 80% 40% at 50% 80%, rgba(var(--accent-color-rgb), 0.2), transparent 70%); }
@@ -1205,6 +1220,13 @@
           <span class="genre-tag">Bass House</span>
           <span class="genre-tag">Melodic Club</span>
           <span class="genre-tag">Dance / EDM Crossovers</span>
+        </div>
+      </div>
+
+      <div class="dx-form" id="dx-form" aria-live="polite">
+        <div class="dx-form-card">
+          <div class="dx-form-head"><span id="dx-form-name">Demo submission</span><button type="button" class="dx-form-x" id="dx-form-x" aria-label="Close the form"><i class="fa-solid fa-xmark"></i></button></div>
+          <iframe id="dx-form-frame" title="Demo submission form"></iframe>
         </div>
       </div>
 
@@ -2274,6 +2296,38 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.insertAdjacentHTML('afterend', html);
     btn.remove();
   }).catch(function () {});
+})();
+/* «Submit via Form» abre el formulario ahí mismo, al lado del texto (con el ratón del medio o Ctrl sigue abriendo la página aparte) */
+(function () {
+  var grid = document.querySelector('#demos .dx-grid'), box = document.getElementById('dx-form'),
+      frame = document.getElementById('dx-form-frame'), name = document.getElementById('dx-form-name');
+  if (!grid || !box || !frame) return;
+  var current = null;
+  function close() {
+    grid.classList.remove('has-form'); frame.removeAttribute('src'); current = null;
+    document.querySelectorAll('#demos .dx-btn-on').forEach(function (b) { b.classList.remove('dx-btn-on'); b.setAttribute('aria-expanded', 'false'); });
+  }
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('#demos a[href^="/forms/"]');
+    if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;
+    e.preventDefault();
+    var href = a.getAttribute('href');
+    if (current === href) { close(); return; }
+    close();
+    current = href;
+    frame.style.height = '640px';
+    frame.src = href + (href.indexOf('?') < 0 ? '?' : '&') + 'embed=1';
+    name.textContent = (a.textContent || 'Form').trim();
+    a.classList.add('dx-btn-on'); a.setAttribute('aria-expanded', 'true');
+    grid.classList.add('has-form');
+    if (window.innerWidth < 1024) setTimeout(function () { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60);
+  });
+  document.getElementById('dx-form-x').addEventListener('click', close);
+  window.addEventListener('message', function (e) {
+    if (e.origin !== location.origin || e.source !== frame.contentWindow || !e.data) return;
+    if (e.data.type === 'hz-form-h') frame.style.height = Math.max(320, Math.min(e.data.h, 6000)) + 'px';
+    if (e.data.type === 'hz-form-sent') { var r = box.getBoundingClientRect(); if (r.top < 0) box.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  });
 })();
 </script>
 </body>

@@ -2189,6 +2189,7 @@
   // rellenar los datos de un contrato nuevo a partir de una plantilla
   const isDraftTpl = t => /draft/i.test(t?.title || '');
   const isDraft = c => c?.kind === 'draft';
+  const sendBtn = c => isDraft(c) ? '<button type="button" class="btn primary" data-ct="send">Send for review</button>' : '<button type="button" class="btn primary" data-ct="send" title="Each artist gets an email with their private link to read and sign">Send to sign</button>';
   // cuántos artistas tiene el contrato (firmantes del mismo contrato, o una copia por artista)
   const artistsOf = t => t.signers.length > 1 ? t.signers.length : copiesOf();
   // a qué artista pertenece cada dato («Artist 2 legal name» → 2; en contratos de 1 artista, los datos personales → 1)
@@ -2341,7 +2342,7 @@
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions">
           ${ed ? '<button type="submit" class="btn primary">Save changes</button>' : ''}
-          ${!tpl && ed && !signed && c.status !== 'void' && c.pdf && (isDraft(c) || c.signers.every(x => x.box)) && c.signers.some(x => !x.emailed_at && !x.signed) ? '<button type="button" class="btn primary" data-ct="send" title="Each artist gets an email with their private link to read and sign">Send to sign</button>' : ''}
+          ${!tpl && ed && !signed && c.status !== 'void' && c.pdf && (isDraft(c) || c.signers.every(x => x.box)) && c.signers.some(x => !x.emailed_at && !x.signed) ? sendBtn(c) : ''}
           ${c.signers.some(x => x.signed) && !(signed && c.file && !c.signed_pdf) ? `<button type="button" class="btn ghost" data-ct="dl-signed">${signed ? 'Download signed PDF' : 'Download PDF (signatures so far)'}</button>` : c.pdf ? '<button type="button" class="btn ghost" data-ct="dl-orig">Download PDF</button>' : ''}
           ${!tpl && signed && ed ? (c.drive_url ? `<a class="btn ghost" href="${esc(c.drive_url)}" target="_blank" rel="noopener">Open in Drive ↗</a>` : '<button type="button" class="btn ghost" data-ct="drive-one" title="Saves the signed PDF in Drive: Year → Release number - Name">Save to Drive</button>') : ''}
           ${ctMoreMenu(c, ed, signed, tpl)}
@@ -2550,7 +2551,7 @@
     const act = ctOpen.placing ?? -1, tpl = isTpl(c);
     return `
       <div class="signers${act >= 0 ? ' is-placing' : ''}">
-        <div class="signers-head"><b>Who signs</b><span class="muted">${act >= 0 ? `Click on the document where <b>${esc(c.signers[act]?.label || 'this person')}</b> signs, or press Cancel.` : ed ? 'Each person gets their own private link by email and signs in their box on the document.' : ''}</span></div>
+        <div class="signers-head"><b>${isDraft(c) ? 'Sent to (review only)' : 'Who signs'}</b><span class="muted">${isDraft(c) ? 'A draft is only to read online: no signing and no download.' : act >= 0 ? `Click on the document where <b>${esc(c.signers[act]?.label || 'this person')}</b> signs, or press Cancel.` : ed ? 'Each person gets their own private link by email and signs in their box on the document.' : ''}</span></div>
         ${c.signers.map((x, i) => `
           <div class="signer${i === act ? ' is-on' : ''}" data-sg="${esc(x.id)}" data-i="${i}">
             <span class="sg-n">${i + 1}</span>
@@ -2690,7 +2691,7 @@
     if (ctOpen.view) HZPDF.drawMarks(ctOpen.view.pages, ctMarks());
     $('#pdf-viewer')?.classList.toggle('placing', ctOpen.placing != null);
     const send = $('[data-ct=send]'), canSend = ed && !isTpl(c) && c.status !== 'void' && c.pdf && c.signers.every(x => x.box) && c.signers.some(x => !x.emailed_at && !x.signed);
-    if (canSend && !send) { const at = $('.ed-actions [type=submit]'); const html = '<button type="button" class="btn primary" data-ct="send" title="Each artist gets an email with their private link to read and sign">Send to sign</button>'; if (at) at.insertAdjacentHTML('afterend', html); else $('.ed-actions')?.insertAdjacentHTML('afterbegin', html); }
+    if (canSend && !send) { const at = $('.ed-actions [type=submit]'); const html = sendBtn(c); if (at) at.insertAdjacentHTML('afterend', html); else $('.ed-actions')?.insertAdjacentHTML('afterbegin', html); }
   }
   function ctMarks() {
     const c = ctOpen.contract, act = ctOpen.placing ?? -1;
@@ -2806,7 +2807,7 @@
       const f = $('#ct-ed'), signers = $$('.signer', f).map(el => ({ id: el.dataset.sg, label: el.querySelector('.sg-label')?.value, email: el.querySelector('.sg-email')?.value })).filter(x => x.label !== undefined);
       try {
         if (signers.length) await ctAction(() => api('POST', '/api/contracts', { id: c.id, title: f.elements.title?.value ?? c.title, artist: f.elements.artist?.value ?? c.artist, email: signers[0]?.email ?? c.email, notes: f.elements.notes.value, signers }));
-        if (!await confirmBox(`Send “${c.title}” to sign? ${c.signers.length > 1 ? 'Each signer gets' : 'The artist gets'} an email with a private link.`, 'Send')) return;
+        if (!await confirmBox(isDraft(c) ? `Send this draft to ${c.signers[0]?.email || 'the artist'}? They can only read it online.` : `Send “${c.title}” to sign? ${c.signers.length > 1 ? 'Each signer gets' : 'The artist gets'} an email with a private link.`, 'Send')) return;
         const r = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/send`));
         toast(r?.ok ? `Sent: ${r.sent} email${r.sent === 1 ? '' : 's'}` : r?.error || 'The email could not be sent');
         if (r?.ok) { ctOpen = null; ctTab = 'contracts'; ctData = null; render(); loadContracts(); } else ctRefresh();

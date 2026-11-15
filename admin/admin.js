@@ -371,7 +371,7 @@
   }
 
   function shell(inner) {
-    const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}${id === 'forms' ? `<span class="nbadge" id="forms-badge" ${unseen.total ? '' : 'hidden'}>${unseen.total > 99 ? '99+' : unseen.total}</span>` : ''}</button>`;
+    const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}${id === 'forms' ? `<span class="nbadge" id="forms-badge" ${unseen.total ? '' : 'hidden'}><span class="nb-n">${unseen.total > 99 ? '99+' : unseen.total}</span></span>` : ''}</button>`;
     const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', forms: 'Forms', contracts: 'Contracts' };
     const initials = (u.name || u.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
     return `
@@ -1578,7 +1578,7 @@
       const grew = r.total > unseen.total;
       unseen = r;
       const b = $('#forms-badge');
-      if (b) { b.hidden = !r.total; b.textContent = r.total > 99 ? '99+' : r.total; }
+      if (b) { b.hidden = !r.total; b.innerHTML = `<span class="nb-n">${r.total > 99 ? '99+' : r.total}</span>`; }
       document.title = document.title.replace(/^\(\d+\+?\) /, '');
       if (r.total) document.title = `(${r.total}) ${document.title}`;
       // lista de formularios: se actualiza por detrás, sin «Loading…» ni redibujar si nada cambió (así no parpadea)

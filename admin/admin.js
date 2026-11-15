@@ -1566,7 +1566,8 @@
     if (t.name === 'forms' && t.closest?.('.role-form')) {
       const f = t.closest('.role-form'), arrow = f.querySelector('.pf-arrow'), cnt = f.querySelector('.pf-count'), box = f.querySelector('.perm-forms');
       arrow.hidden = cnt.hidden = !t.value;
-      if (!t.value) { box.hidden = true; arrow.classList.remove('open'); }
+      // View o Edit: la lista se abre sola para elegir qué formularios; None: se cierra
+      box.hidden = !t.value; arrow.classList.toggle('open', !!t.value); arrow.setAttribute('aria-expanded', String(!!t.value));
       f.querySelectorAll('.pf-row').forEach(r => { const i = r.querySelector(`input[value="${t.value}"]`); if (i) i.checked = true; });
       const rows = [...f.querySelectorAll('.pf-row')], n = rows.filter(r => r.querySelector('input:checked')?.value).length;
       cnt.textContent = n ? `${n} of ${rows.length} forms` : 'No forms';

@@ -887,3 +887,6 @@ html, body, * { scrollbar-width: none; }
 /* Una copia por artista */
 .copy-btns { display: flex; gap: 8px; margin: -4px 0 6px; }
 .copies .info { margin: 0 0 10px; }
+/* Tu perfil: enlace de SoundCloud */
+.me-sc { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.me-sc input { min-height: 36px !important; padding: 6px 10px !important; font-size: 13px; }

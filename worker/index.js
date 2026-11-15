@@ -90,6 +90,8 @@ async function ensureSchema(env) {
   try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN label TEXT').run(); } catch { /* ya existe */ }
   try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN color TEXT').run(); } catch { /* ya existe */ }
   try { await env.DB.prepare('ALTER TABLE panel_profiles ADD COLUMN color TEXT').run(); } catch { /* ya existe */ }
+  // perfil de SoundCloud (la foto se toma de ahí y se actualiza sola) y la última foto copiada
+  for (const col of ['soundcloud TEXT', 'sc_pic TEXT']) { try { await env.DB.prepare(`ALTER TABLE panel_profiles ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
   try { await env.DB.prepare('ALTER TABLE panel_roles ADD COLUMN forms TEXT').run(); } catch { /* ya existe */ }
   for (const col of CONTRACT_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE contracts ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
   for (const col of SIGNER_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE contract_signers ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
@@ -205,16 +207,52 @@ async function session(req, env) {
     await env.DB.prepare('DELETE FROM panel_sessions WHERE hash = ?').bind(hash).run();
     throw new HttpError(401, 'You no longer have access to this panel.');
   }
-  const pf = await env.DB.prepare('SELECT p.avatar, COALESCE(p.color, m.color) AS color FROM (SELECT ? AS email) e LEFT JOIN panel_profiles p ON p.email = e.email LEFT JOIN panel_members m ON m.email = e.email').bind(s.email).first();
-  return { hash, area: s.area, email: s.email, picture: pf?.avatar ? avatarUrl(pf.avatar) : s.picture || '', color: pf?.color || '', ...who, name: who.label || s.name || '' };
+  const pf = await env.DB.prepare('SELECT p.avatar, p.soundcloud, COALESCE(p.color, m.color) AS color FROM (SELECT ? AS email) e LEFT JOIN panel_profiles p ON p.email = e.email LEFT JOIN panel_members m ON m.email = e.email').bind(s.email).first();
+  return { hash, area: s.area, email: s.email, picture: pf?.avatar ? avatarUrl(pf.avatar) : s.picture || '', color: pf?.color || '', soundcloud: pf?.soundcloud || '', ...who, name: who.label || s.name || '' };
 }
 const avatarUrl = id => `/api/public/avatar/${id}`;
 const AVATAR_SQL = `CASE WHEN p.avatar IS NOT NULL THEN '/api/public/avatar/' || p.avatar END`;
+/* Foto desde SoundCloud: se guarda el perfil y se copia su foto; cada 30 min se mira si ha cambiado (cron). */
+const SC_URL = /^https:\/\/(?:www\.|m\.)?soundcloud\.com\/([\w-]{2,100})\/?$/i;
+const normSc = u => { const m = String(u || '').trim().match(SC_URL); return m ? `https://soundcloud.com/${m[1].toLowerCase()}` : null; };
+async function scPhoto(env, email, force = false) {
+  const row = await env.DB.prepare('SELECT avatar, soundcloud, sc_pic FROM panel_profiles WHERE email = ?').bind(email).first();
+  if (!row?.soundcloud) return false;
+  const r = await fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(row.soundcloud)}`, { headers: { Accept: 'application/json' } });
+  if (!r.ok) throw new HttpError(400, 'That SoundCloud profile was not found.');
+  const thumb = String((await r.json()).thumbnail_url || '');
+  if (!/^https:\/\/i\d?\.sndcdn\.com\/avatars-[\w-]+\.(jpg|png)$/i.test(thumb)) return false;   // sin foto (la de por defecto)
+  const pic = thumb.replace(/-(t\d+x\d+|large|crop|original)\./, '-t300x300.');
+  if (!force && pic === row.sc_pic && row.avatar) return false;
+  const img = await fetch(pic);
+  if (!img.ok) return false;
+  const buf = await img.arrayBuffer(), type = img.headers.get('Content-Type') || 'image/jpeg';
+  if (!buf.byteLength || buf.byteLength > 400 * 1024 || !/^image\//.test(type)) return false;
+  const id = crypto.randomUUID().replace(/-/g, '');
+  await env.FILES.put('avatars/' + id, buf, { metadata: { type } });
+  await env.DB.prepare('UPDATE panel_profiles SET avatar = ?, sc_pic = ?, updated_at = ? WHERE email = ?').bind(id, pic, now(), email).run();
+  if (row.avatar) await env.FILES.delete('avatars/' + row.avatar);
+  return true;
+}
+async function setSoundcloud(env, email, url) {
+  const sc = url ? normSc(url) : null;
+  if (url && !sc) throw new HttpError(400, 'Paste the SoundCloud profile link (soundcloud.com/name).');
+  await env.DB.prepare('INSERT INTO panel_profiles (email, soundcloud, sc_pic, updated_at) VALUES (?, ?, NULL, ?) ON CONFLICT(email) DO UPDATE SET soundcloud = excluded.soundcloud, sc_pic = NULL, updated_at = excluded.updated_at').bind(email, sc, now()).run();
+  if (sc) await scPhoto(env, email, true);
+  return sc;
+}
+async function refreshScPhotos(env) {
+  await ensureSchema(env);
+  const rows = (await env.DB.prepare('SELECT email FROM panel_profiles WHERE soundcloud IS NOT NULL').all()).results;
+  for (const r of rows) { try { await scPhoto(env, r.email); } catch (e) { console.error('sc photo', r.email, e.message); } }
+}
 /* Foto de perfil: cada uno sube la suya (JPEG/PNG/WebP pequeño, ya recortado en el navegador). */
 async function avatarApi(req, env, s) {
   if (s.sync) throw new HttpError(403, 'Not available.');
   const DB = env.DB;
-  const old = await DB.prepare('SELECT avatar FROM panel_profiles WHERE email = ?').bind(s.email).first();
+  const old = await DB.prepare('SELECT avatar, soundcloud FROM panel_profiles WHERE email = ?').bind(s.email).first();
+  // las fotos del equipo las ponen los owners (desde SoundCloud): los demás no las cambian ni las quitan
+  if (!s.owner) throw new HttpError(403, 'Only owners can change profile photos.');
   if (req.method === 'DELETE') {
     if (old?.avatar) await env.FILES.delete('avatars/' + old.avatar);
     await DB.prepare('UPDATE panel_profiles SET avatar = NULL WHERE email = ?').bind(s.email).run();
@@ -228,7 +266,7 @@ async function avatarApi(req, env, s) {
   const id = crypto.randomUUID().replace(/-/g, '');
   await env.FILES.put('avatars/' + id, buf, { metadata: { type } });
   if (old?.avatar) await env.FILES.delete('avatars/' + old.avatar);
-  await DB.prepare('INSERT INTO panel_profiles (email, avatar, updated_at) VALUES (?, ?, ?) ON CONFLICT(email) DO UPDATE SET avatar = excluded.avatar, updated_at = excluded.updated_at').bind(s.email, id, now()).run();
+  await DB.prepare('INSERT INTO panel_profiles (email, avatar, updated_at) VALUES (?, ?, ?) ON CONFLICT(email) DO UPDATE SET avatar = excluded.avatar, soundcloud = NULL, sc_pic = NULL, updated_at = excluded.updated_at').bind(s.email, id, now()).run();
   return { ok: true, picture: avatarUrl(id) };
 }
 async function colorApi(req, env, s) {
@@ -238,7 +276,7 @@ async function colorApi(req, env, s) {
   await env.DB.prepare('INSERT INTO panel_profiles (email, color, updated_at) VALUES (?, ?, ?) ON CONFLICT(email) DO UPDATE SET color = excluded.color, updated_at = excluded.updated_at').bind(s.email, c, now()).run();
   return { ok: true, color: c };
 }
-const userOut = s => ({ email: s.email, name: s.name, picture: s.picture, color: s.color, owner: s.owner, role: s.role, perms: s.perms });
+const userOut = s => ({ email: s.email, name: s.name, picture: s.picture, color: s.color, soundcloud: s.soundcloud || '', owner: s.owner, role: s.role, perms: s.perms });
 
 /* ---------------- Datos y archivos de la web ---------------- */
 async function readData(env) {
@@ -387,7 +425,7 @@ async function team(req, env, s, p) {
   const body = m === 'POST' ? parse(await req.text()) || {} : null;
   if (p === '/api/team' && m === 'GET') {
     const [members, roles] = await Promise.all([
-      DB.prepare(`SELECT m.email, m.role_id, m.label, COALESCE(p.color, m.color) AS color, m.name, COALESCE(${AVATAR_SQL}, m.picture) AS picture, m.added_at, m.last_login FROM panel_members m LEFT JOIN panel_profiles p ON p.email = m.email ORDER BY m.added_at`).all(),
+      DB.prepare(`SELECT m.email, m.role_id, m.label, COALESCE(p.color, m.color) AS color, m.name, COALESCE(${AVATAR_SQL}, m.picture) AS picture, p.soundcloud, m.added_at, m.last_login FROM panel_members m LEFT JOIN panel_profiles p ON p.email = m.email ORDER BY m.added_at`).all(),
       DB.prepare('SELECT id, name, perms, forms FROM panel_roles ORDER BY created_at').all(),
     ]);
     const profs = (await DB.prepare(`SELECT p.email, ${AVATAR_SQL} AS picture, p.color FROM panel_profiles p`).all()).results, pics = Object.fromEntries(profs.map(r => [r.email, r.picture])), cols = Object.fromEntries(profs.map(r => [r.email, r.color]));
@@ -418,6 +456,10 @@ async function team(req, env, s, p) {
     const exists = await DB.prepare('SELECT email FROM panel_members WHERE email = ?').bind(email).first();
     const label = 'label' in body ? clean(body.label, 40) : undefined;
     const color = /^#[0-9a-f]{6}$/i.test(body.color || '') ? body.color.toLowerCase() : null;
+    if ('soundcloud' in body) {
+      const cur = await DB.prepare('SELECT soundcloud FROM panel_profiles WHERE email = ?').bind(email).first();
+      if ((normSc(body.soundcloud) || null) !== (cur?.soundcloud || null)) await setSoundcloud(env, email, body.soundcloud);
+    }
     // solo cambiar el nombre o el color
     if (exists && !body.role_id) {
       if (label !== undefined) await DB.prepare('UPDATE panel_members SET label = ? WHERE email = ?').bind(label || null, email).run();
@@ -607,6 +649,12 @@ async function api(req, env, p, ctx) {
   if (p === '/api/chat') return chat(req, env, s, url);
   if (p === '/api/me/avatar') return json(await avatarApi(req, env, s));
   if (p === '/api/me/color') return json(await colorApi(req, env, s));
+  if (p === '/api/me/soundcloud' && req.method === 'POST') {
+    if (s.sync || !s.owner) throw new HttpError(403, 'Only owners can set SoundCloud profiles.');
+    const sc = await setSoundcloud(env, s.email, (parse(await req.text()) || {}).url);
+    const pf = await env.DB.prepare('SELECT avatar FROM panel_profiles WHERE email = ?').bind(s.email).first();
+    return json({ ok: true, soundcloud: sc, picture: pf?.avatar ? avatarUrl(pf.avatar) : '' });
+  }
   if (p === '/api/contracts' || p.startsWith('/api/contracts/')) {
     const r = await contractsApi(req, env, s, url, act => can(s, 'contracts', act), action => audit(env, s, action));
     return r instanceof Response ? r : json(r);
@@ -620,6 +668,8 @@ async function api(req, env, p, ctx) {
 }
 
 export default {
+  // cada 30 min: fotos de SoundCloud del equipo al día
+  async scheduled(event, env, ctx) { ctx.waitUntil(refreshScPhotos(env)); },
   async fetch(req, env, ctx) {
     const url = new URL(req.url), p = url.pathname;
     try {

@@ -493,6 +493,7 @@
           <div class="field"><label for="m-label">Name</label><input id="m-label" name="label" value="${esc(m.label || '')}" maxlength="40" placeholder="${esc(m.name || 'e.g. Kris m')}" autocomplete="off"></div>
           <div class="field"><label for="m-color">Colour</label><label class="color-dot big" style="--c:${esc(m.color || '#ffffff')}"><input id="m-color" type="color" name="color" value="${esc(m.color || '#ffffff')}"></label></div>
         </div>
+        <div class="field"><label for="m-sc">SoundCloud profile</label><input id="m-sc" name="soundcloud" value="${esc(m.soundcloud || '')}" placeholder="https://soundcloud.com/name" autocomplete="off" spellcheck="false"><p class="info sm-txt">Their photo is taken from SoundCloud and updates by itself when they change it.</p></div>
         <div class="field"><label for="m-role">Role</label>${roles.length ? `<select id="m-role" name="role_id">${roles.map(r => `<option value="${esc(r.id)}" ${r.id === m.role_id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>` : '<p class="info">Create a role first.</p>'}</div>
         <p class="ed-error" role="alert" hidden></p>
         <div class="confirm-actions">${isNew ? '' : '<button type="button" class="btn danger push-l" data-act="remove-member">Remove from team</button>'}<button type="submit" class="btn primary" ${roles.length ? '' : 'disabled'}>${isNew ? 'Add' : 'Save'}</button></div>
@@ -507,7 +508,10 @@
         <div class="sheet-head"><h2>Your profile</h2><button type="button" class="ic" data-act="sheet-close" aria-label="Close">✕</button></div>
         <div class="me-top">${avatar(u.picture, nm, col).replace('class="av"', 'class="av xl"')}
           <div><b class="me-name" style="color:${esc(col)}">${esc(nm)}</b><span class="muted sm-txt">${esc(u.email)}</span>
-            <div class="me-btns"><label class="btn ghost sm" for="me-photo">${u.picture ? 'Change photo' : 'Upload photo'}</label><input type="file" id="me-photo" accept="image/*" class="sr-only">${u.picture ? '<button type="button" class="btn ghost sm" data-act="me-nophoto">Remove</button>' : ''}</div></div></div>
+            ${!u.owner ? '' : `<div class="me-btns"><label class="btn ghost sm" for="me-photo">${u.picture ? 'Change photo' : 'Upload photo'}</label><input type="file" id="me-photo" accept="image/*" class="sr-only">${u.picture ? '<button type="button" class="btn ghost sm" data-act="me-nophoto">Remove</button>' : ''}</div>`}</div></div>
+        ${u.owner ? `<p class="mini">SoundCloud</p>
+        <form class="me-sc" id="me-sc" novalidate><input name="url" value="${esc(u.soundcloud || '')}" placeholder="https://soundcloud.com/your-name" aria-label="Your SoundCloud profile" autocomplete="off" spellcheck="false"><button type="submit" class="btn ghost sm">Save</button></form>
+        <p class="info sm-txt">Your photo is taken from your SoundCloud profile and updates by itself when you change it there.</p>` : u.soundcloud ? '<p class="info sm-txt">Your photo comes from your SoundCloud profile and updates by itself.</p>' : ''}
         <p class="mini">Your colour</p>
         <div class="swatches">${SWATCHES.map(c => `<button type="button" class="sw${c === col ? ' on' : ''}" data-act="me-color" data-c="${c}" style="--c:${c}" aria-label="${c}"></button>`).join('')}
           <label class="sw custom${SWATCHES.includes(col) ? '' : ' on'}" style="--c:${esc(col)}" title="Custom colour"><input type="color" id="me-color" value="${esc(col)}"><span>+</span></label></div>
@@ -1525,6 +1529,15 @@
     const form = e.target;
     if (form.method === 'dialog') return;   // la ventana de confirmar se cierra sola
     e.preventDefault();
+    if (form.id === 'me-sc') {
+      try {
+        const r = await api('POST', '/api/me/soundcloud', { url: form.elements.url.value.trim() });
+        auth.user.soundcloud = r.soundcloud || ''; if (r.picture) auth.user.picture = r.picture;
+        saveMe({ soundcloud: auth.user.soundcloud, picture: auth.user.picture }); teamData = null; render(); meSheet();
+        toast(r.soundcloud ? 'Photo taken from SoundCloud' : 'SoundCloud link removed');
+      } catch (err) { toast(err.message); }
+      return;
+    }
     if (form.id === 'dev-login') { const email = form.elements.email.value.trim(); if (email) login({ email }); return; }
     if (form.id === 'mail-login') {
       const mail = form.elements.email.value.trim().toLowerCase(), codeF = $('#ml-code-f'), info = $('#ml-info'), btn = $('#ml-btn');
@@ -1552,7 +1565,7 @@
       const isNew = !form.dataset.email;
       const email = isNew ? form.elements.email.value.trim().toLowerCase() : form.dataset.email;
       if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) { box.textContent = 'Enter a valid email.'; box.hidden = false; form.elements.email.focus(); return; }
-      teamAction(() => api('POST', '/api/team/members', { email, label: form.elements.label.value.trim(), color: form.elements.color.value, role_id: form.elements.role_id?.value }), isNew ? `${email} added to the team` : 'Saved', box);
+      teamAction(() => api('POST', '/api/team/members', { email, label: form.elements.label.value.trim(), color: form.elements.color.value, role_id: form.elements.role_id?.value, soundcloud: form.elements.soundcloud.value.trim() }), isNew ? `${email} added to the team` : 'Saved', box);
       return;
     }
     if (form.classList.contains('role-form')) {

@@ -721,3 +721,10 @@ a.lk.on:hover { color: #fff; background: rgba(255, 255, 255, .08); }
 }
 .row.tm .role-tag::before { content: ''; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--c, #fff); }
 .row.tm .role-tag.owner { color: #fff; border-color: rgba(255, 255, 255, .22); }
+
+/* Lista de formularios: fila entera clicable y asa para ordenar */
+.row.fm { cursor: pointer; }
+.row.fm .grip { justify-self: center; }
+.forms-list.sorting .row.fm { cursor: grabbing; }
+.row.fm.dragging { background: rgba(255, 255, 255, .06); border-radius: 8px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .18); position: relative; z-index: 1; }
+@media (max-width: 640px) { .row.fm .grip { display: none; } }

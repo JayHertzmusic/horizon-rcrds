@@ -1714,14 +1714,26 @@
             </div>
           </div>
           <aside class="fe-prev">
-            <div class="prev-head"><b>Preview</b><span class="muted sm-txt">How people see it on the site${d.public ? '' : ' (closed right now)'}</span>${!isNew && d.public ? `<a class="btn ghost sm" href="${esc(publicUrl(d))}" target="_blank" rel="noopener">Open ↗</a>` : ''}</div>
-            <iframe id="fe-prev" src="/form?preview=1" title="Form preview"></iframe>
+            <div class="prev-head"><b>Preview</b><span class="seg prev-size" role="radiogroup" aria-label="Preview size"><label><input type="radio" name="prev-size" value="desktop" ${prevSize === 'desktop' ? 'checked' : ''}><span>Desktop</span></label><label><input type="radio" name="prev-size" value="phone" ${prevSize === 'phone' ? 'checked' : ''}><span>Phone</span></label></span><span class="muted sm-txt">How people see it on the site${d.public ? '' : ' (closed right now)'}</span>${!isNew && d.public ? `<a class="btn ghost sm" href="${esc(publicUrl(d))}" target="_blank" rel="noopener">Open ↗</a>` : ''}</div>
+            <div class="prev-stage"><iframe id="fe-prev" src="/form?preview=1" title="Form preview"></iframe></div>
           </aside>
         </div>
       </form>`;
   }
   // vista previa en vivo: se manda el borrador a la página real del formulario (iframe)
-  let prevTimer = 0;
+  let prevTimer = 0, prevSize = 'desktop';
+  // la vista previa se dibuja al ancho real (escritorio 1280 px o móvil 390 px) y se escala para caber
+  function fitPreview() {
+    const st = $('.prev-stage'), fr = $('#fe-prev');
+    if (!st || !fr) return;
+    const W = prevSize === 'phone' ? 390 : 1280, k = Math.min(1, st.clientWidth / W);
+    fr.style.width = W + 'px'; fr.style.height = (st.clientHeight / k) + 'px';
+    fr.style.transform = `scale(${k})`;
+    fr.style.left = prevSize === 'phone' ? `${Math.max(0, (st.clientWidth - W * k) / 2)}px` : '0';
+  }
+  window.addEventListener('resize', fitPreview);
+  document.addEventListener('change', e => { if (e.target.name === 'prev-size') { prevSize = e.target.value; fitPreview(); } });
+  new MutationObserver(() => { if ($('.prev-stage') && !$('.prev-stage').dataset.fit) { $('.prev-stage').dataset.fit = 1; fitPreview(); } }).observe(document.body, { childList: true, subtree: true });
   function sendPreview(focus) {
     const fr = $('#fe-prev'), d = formOpen?.draft;
     if (!fr?.contentWindow || !d) return;

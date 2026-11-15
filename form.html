@@ -20,10 +20,14 @@
   .home { display: inline-flex; align-items: center; gap: 12px; color: #fff; text-decoration: none; }
   .home img { height: 30px; }
   .home span { font: 400 21px/1 'Bebas Neue', sans-serif; letter-spacing: .16em; }
-  main { position: relative; width: min(720px, 100%); margin: 0 auto; padding: 56px 16px 110px; }
+  main { position: relative; width: min(1040px, 100%); margin: 0 auto; padding: 56px 16px 110px; }
+  #f { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
+  #f > * { grid-column: 1 / -1; }
+  #f > .q.half { grid-column: auto; }
+  @media (max-width: 760px) { #f > .q.half { grid-column: 1 / -1; } }
   .eyebrow { margin: 0 0 14px; font-size: 11px; font-weight: 700; letter-spacing: .32em; text-transform: uppercase; color: var(--muted); text-align: center; }
   h1 { margin: 0 0 22px; font: 400 clamp(46px, 9vw, 84px)/.92 'Bebas Neue', sans-serif; letter-spacing: .02em; color: #fff; text-align: center; overflow-wrap: anywhere; }
-  .desc { margin: 0 auto 46px; max-width: 600px; color: #b9b9b9; white-space: pre-line; text-align: center; font-size: 16.5px; }
+  .desc { margin: 0 auto 46px; max-width: 680px; color: #b9b9b9; white-space: pre-line; text-align: center; font-size: 16.5px; }
   .desc a, .help a { color: #fff; }
   .q { margin: 0 0 14px; padding: 24px 26px; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(180deg, var(--card-2), var(--card)); transition: border-color .2s; }
   .q:focus-within { border-color: #3a3a3a; }
@@ -41,7 +45,7 @@
   select { padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 8px; background: #0a0a0a; }
   input:focus, textarea:focus, select:focus { border-color: #fff; }
   ::placeholder { color: var(--faint); }
-  .opts { display: grid; gap: 8px; margin-top: 6px; }
+  .opts { display: grid; gap: 8px; margin-top: 6px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
   .opt { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: 9px; cursor: pointer; transition: border-color .15s, background .15s; }
   .opt:hover { border-color: #444; }
   .opt:has(input:checked) { border-color: #fff; background: rgba(255, 255, 255, .05); }
@@ -86,6 +90,17 @@
   const linky = s => esc(s).replace(/https?:\/\/[^\s<>"']+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
   let form = null;
 
+  // preguntas cortas seguidas van de dos en dos (como en un formulario de escritorio)
+  const SHORT = new Set(['text', 'email', 'url', 'select']);
+  function halves(fields) {
+    const out = new Set();
+    for (let i = 0; i < fields.length - 1; i++) {
+      const a = fields[i], b = fields[i + 1];
+      if (SHORT.has(a.type) && SHORT.has(b.type)) { out.add(a.id); out.add(b.id); i++; }
+    }
+    return out;
+  }
+  let HALF = new Set();
   function field(f) {
     if (f.type === 'section') return `<div class="sec"><h2>${esc(f.label)}</h2>${f.help ? `<p>${linky(f.help)}</p>` : ''}</div>`;
     const id = 'f-' + f.id, req = f.required ? '<span class="req" aria-hidden="true">*</span>' : '';
@@ -100,11 +115,12 @@
         ${f.other ? `<label class="opt"><input type="${f.type}" name="${esc(f.id)}" value="__other"><span>Other:</span><input type="text" data-other="${esc(f.id)}" maxlength="300" aria-label="Other"></label>` : ''}</div>`;
       return `<div class="q" data-q="${esc(f.id)}"><span class="lbl" id="${id}-l">${esc(f.label)}${req}</span>${help}${input}</div>`;
     } else input = `<input id="${id}" name="${esc(f.id)}" type="${f.type === 'email' ? 'email' : f.type === 'url' ? 'url' : 'text'}" ${aria} maxlength="1000" autocomplete="${f.type === 'email' ? 'email' : 'off'}" placeholder="${f.type === 'url' ? 'https://' : f.type === 'email' ? 'name@email.com' : 'Your answer'}">`;
-    return `<div class="q" data-q="${esc(f.id)}"><label for="${id}">${esc(f.label)}${req}</label>${help}${input}</div>`;
+    return `<div class="q${HALF.has(f.id) ? ' half' : ''}" data-q="${esc(f.id)}"><label for="${id}">${esc(f.label)}${req}</label>${help}${input}</div>`;
   }
   function draw(closed) {
     document.title = `${form.title || 'Form'} — HORIZON RCRDS`;
     const hasReq = form.fields.some(x => x.required);
+    HALF = halves(form.fields);
     root.innerHTML = `<p class="eyebrow">HORIZON RCRDS</p><h1>${esc(form.title || 'Untitled form')}</h1>
       ${closed ? '<p style="text-align:center"><span class="closed">Closed — preview</span></p>' : ''}
       ${form.description ? `<p class="desc">${linky(form.description)}</p>` : ''}

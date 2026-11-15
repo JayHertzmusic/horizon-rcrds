@@ -728,3 +728,9 @@ a.lk.on:hover { color: #fff; background: rgba(255, 255, 255, .08); }
 .forms-list.sorting .row.fm { cursor: grabbing; }
 .row.fm.dragging { background: rgba(255, 255, 255, .06); border-radius: 8px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .18); position: relative; z-index: 1; }
 @media (max-width: 640px) { .row.fm .grip { display: none; } }
+
+/* Vista previa del formulario a tamaño real (escritorio o móvil), escalada */
+.prev-stage { position: relative; flex: 1; overflow: hidden; background: #050505; }
+.prev-stage iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: #050505; }
+.prev-size { margin-left: 8px; }
+.prev-head { flex-wrap: wrap; }

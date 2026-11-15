@@ -1288,7 +1288,7 @@
     app.innerHTML = shell(inner);
     chatStart();
     const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', team: 'Team', log: 'History', forms: 'Forms', contracts: 'Contracts', none: 'Team' };
-    document.title = `${editing ? (editing.orig?.title || 'New') + ' · ' : ''}${names[view] || ''} — Panel HORIZON RCRDS`;
+    document.title = `${unseen.total && !preview ? `(${unseen.total > 99 ? '99+' : unseen.total}) ` : ''}${editing ? (editing.orig?.title || 'New') + ' · ' : ''}${names[view] || ''} — Panel HORIZON RCRDS`;
   }
   function busyOn(scope, btn, label) {
     busy = true;
@@ -1663,6 +1663,19 @@
   // al probar un rol, el aviso cuenta solo lo nuevo de los formularios que ese rol puede ver
   const badgeCount = () => preview ? visibleForms().reduce((a, f) => a + (f.unseen || 0), 0) : unseen.total;
   let unseenReady = false;   // la primera vez solo se apunta lo que hay (sin avisos)
+  function paintBadge() {
+    const n = badgeCount(), b = $('#forms-badge');
+    if (b) { b.hidden = !n; b.innerHTML = `<span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span>`; }
+    document.title = document.title.replace(/^\(\d+\+?\) /, '');
+    if (n) document.title = `(${n > 99 ? '99+' : n}) ${document.title}`;
+  }
+  // la lista de formularios trae sus «nuevas»: el número rojo sale de los mismos datos (siempre coinciden)
+  function unseenFromForms() {
+    if (!formsData || preview) return;
+    const forms = {}; let total = 0;
+    for (const f of formsData.forms) if (f.unseen) { forms[f.id] = f.unseen; total += f.unseen; }
+    unseen = { total, forms }; paintBadge();
+  }
   async function checkUnseen() {
     if (!auth || preview || !showForms() || document.hidden) return;
     try {
@@ -1670,10 +1683,7 @@
       const grown = Object.keys(r.forms || {}).filter(id => (r.forms[id] || 0) > ((old.forms || {})[id] || 0));
       const grew = r.total > old.total || grown.length > 0;
       unseen = r;
-      const b = $('#forms-badge');
-      if (b) { b.hidden = !r.total; b.innerHTML = `<span class="nb-n${r.total === 1 ? ' one' : ''}">${r.total > 99 ? '99+' : r.total}</span>`; }
-      document.title = document.title.replace(/^\(\d+\+?\) /, '');
-      if (r.total) document.title = `(${r.total}) ${document.title}`;
+      paintBadge();
       const first = !unseenReady; unseenReady = true;
       if (!grew || first) return;
       // aviso en pantalla, aunque estés en otra sección
@@ -1682,7 +1692,7 @@
       if (!formsData) return;
       // los datos de los formularios (números) se refrescan por detrás, sin «Loading…» ni redibujar (no parpadea)
       const fresh = await api('GET', '/api/forms').catch(() => null);
-      if (fresh) formsData = fresh;
+      if (fresh) { formsData = fresh; unseenFromForms(); }
       if (view !== 'forms') return;
       if (!formOpen) { render(); return; }
       // respuestas de ese formulario abiertas: las nuevas aparecen solas en la lista
@@ -1700,7 +1710,7 @@
   async function loadForms() {
     if (formsLoading) return;
     formsLoading = true;
-    try { formsData = await api('GET', '/api/forms'); formsErr = ''; }
+    try { formsData = await api('GET', '/api/forms'); formsErr = ''; unseenFromForms(); }
     catch (e) { formsErr = e.message; if (e.status === 401) { formsLoading = false; logout(e.message); return; } }
     formsLoading = false;
     if (view === 'forms') render();

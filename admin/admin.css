@@ -839,3 +839,11 @@ html, body, * { scrollbar-width: none; }
 .pf-row { padding: 6px 0; border-bottom: 1px dashed rgba(255, 255, 255, .06); }
 .pf-row:last-child { border-bottom: 0; }
 .pf-name { font-size: 13.5px; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Rol → Forms plegado: se abre con la flecha */
+.pf-head { cursor: pointer; }
+.pf-head:hover { background: rgba(255, 255, 255, .03); }
+.pf-sum { display: inline-flex; align-items: center; gap: 10px; }
+.pf-chev { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1px solid rgba(255, 255, 255, .14); border-radius: 6px; color: var(--muted); font-size: 11px; transition: transform .2s; }
+.pf-head.open .pf-chev { transform: rotate(180deg); color: #fff; }
+.perm-forms[hidden] { display: none; }

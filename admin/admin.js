@@ -446,9 +446,15 @@
       <div class="perm-row pf-row" data-form="${esc(f.id)}"><span class="pf-name">${esc(f.title)}</span><span class="seg" role="radiogroup" aria-label="${esc(f.title)}">${FORM_LEVELS.map(([v, l]) => `
         <label><input type="radio" name="form:${esc(f.id)}" value="${v}" ${v === lv ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>`; }).join('');
   }
+  // resumen en la fila «Forms» (la lista está plegada hasta que se pulsa)
+  function roleFormsSummary(r) {
+    if (!formsData) return 'Show forms';
+    const n = formsData.forms.filter(f => roleFormLevel(r, f)).length;
+    return n ? `${n} of ${formsData.forms.length} forms` : 'No forms';
+  }
   function roleFormsPick(r) {
-    if (!formsData) loadForms().then(() => { const box = $('#sheet .role-form .perm-forms'); if (box) box.innerHTML = roleFormRows(r); });
-    return `<div class="perm-forms">${roleFormRows(r)}</div>`;
+    if (!formsData) loadForms().then(() => { const box = $('#sheet .role-form .perm-forms'), sum = $('#sheet .role-form .pf-sum .sm-txt'); if (box) box.innerHTML = roleFormRows(r); if (sum) sum.textContent = roleFormsSummary(r); });
+    return `<div class="perm-forms" hidden>${roleFormRows(r)}</div>`;
   }
   function roleSheet(r) {
     const isNew = !r.id;
@@ -457,7 +463,7 @@
         <div class="sheet-head"><h2>${isNew ? 'New role' : 'Edit role'}</h2><button type="button" class="ic" data-act="sheet-close" aria-label="Close">✕</button></div>
         <input name="name" class="role-name" value="${esc(r.name || '')}" maxlength="40" placeholder="Role name (e.g. A&R)" aria-label="Role name" autocomplete="off">
         <div class="perm-list">${teamData.sections.map(sec => { const lv = levelOf(r, sec); return `
-          ${sec.id === 'forms' ? `<div class="perm-row pf-head" data-sec="forms"><span class="perm-name"><button type="button" class="grip" aria-label="Drag to reorder ${esc(sec.label)}" title="Drag to reorder">${GRIP_SVG}</button>${esc(sec.label)}</span><span class="muted sm-txt">Pick per form</span></div>${roleFormsPick(r)}` : `<div class="perm-row" data-sec="${esc(sec.id)}"><span class="perm-name"><button type="button" class="grip" aria-label="Drag to reorder ${esc(sec.label)}" title="Drag to reorder">${GRIP_SVG}</button>${esc(sec.label)}</span><span class="seg" role="radiogroup" aria-label="${esc(sec.label)}">${LEVELS.filter(([v]) => !v || sec.actions.includes(v)).map(([v, l]) => `
+          ${sec.id === 'forms' ? `<div class="perm-row pf-head" data-sec="forms" data-act="pf-toggle" role="button" tabindex="0" aria-expanded="false"><span class="perm-name"><button type="button" class="grip" aria-label="Drag to reorder ${esc(sec.label)}" title="Drag to reorder">${GRIP_SVG}</button>${esc(sec.label)}</span><span class="pf-sum"><span class="muted sm-txt">${roleFormsSummary(r)}</span><span class="pf-chev" aria-hidden="true">▾</span></span></div>${roleFormsPick(r)}` : `<div class="perm-row" data-sec="${esc(sec.id)}"><span class="perm-name"><button type="button" class="grip" aria-label="Drag to reorder ${esc(sec.label)}" title="Drag to reorder">${GRIP_SVG}</button>${esc(sec.label)}</span><span class="seg" role="radiogroup" aria-label="${esc(sec.label)}">${LEVELS.filter(([v]) => !v || sec.actions.includes(v)).map(([v, l]) => `
             <label><input type="radio" name="${esc(sec.id)}" value="${v}" ${v === lv ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>`}`; }).join('')}
         </div>
         <p class="info sm-txt"><b>View</b>: only look. <b>Edit</b>: create and change. <b>All</b>: also delete. For forms, pick None / View / Edit on each one. Drag ⋮⋮ to change the order of the sections. Owners always have everything.</p>
@@ -1412,6 +1418,12 @@
       case 'open-role': { const r = teamData.roles.find(x => x.id === t.closest('[data-role]').dataset.role); if (r) roleSheet(r); break; }
       case 'new-role': roleSheet({ perms: {} }); break;
       case 'sheet-close': closeSheet(); break;
+      case 'pf-toggle': {
+        if (e.target.closest('.grip')) break;
+        const box = t.parentElement.querySelector('.perm-forms'), open = box.hidden;
+        box.hidden = !open; t.setAttribute('aria-expanded', String(open)); t.classList.toggle('open', open);
+        break;
+      }
       case 'me': meSheet(); break;
       case 'me-color': setMyColor(t.dataset.c); break;
       case 'me-nophoto': try { await authFetch('/api/me/avatar', { method: 'DELETE' }); auth.user.picture = ''; saveMe({ picture: '' }); teamData = null; render(); meSheet(); } catch (err) { toast(err.message); } break;
@@ -1551,6 +1563,10 @@
     if (t.id === 'ed-file' && t.files[0]) { setCover(t.files[0]); t.value = ''; }
     if (t.id === 'me-photo' && t.files[0]) { setMyPhoto(t.files[0]); t.value = ''; }
     if (t.id === 'me-color') setMyColor(t.value);
+    if (t.closest?.('.pf-row')) {
+      const f = t.closest('.role-form'), sum = f?.querySelector('.pf-sum .sm-txt'), rows = [...f.querySelectorAll('.pf-row')];
+      if (sum) { const n = rows.filter(r => r.querySelector('input:checked')?.value).length; sum.textContent = n ? `${n} of ${rows.length} forms` : 'No forms'; }
+    }
     if (t.id === 'mx-file' && t.files[0]) { setMixAudio(t.files[0]); t.value = ''; }
     if (t.id === 'f-sc') scFill(!editing?.key);
     if (t.classList.contains('log-who')) { logState.who = t.value; logState.items = []; logState.loaded = false; loadLog(false); render(); }

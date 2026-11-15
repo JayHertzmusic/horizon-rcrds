@@ -89,10 +89,10 @@ export async function formsApi(req, env, s, url, audit) {
     // crear: solo owners; cambiar: quien tenga «Edit» en ese formulario
     if (s.sync) throw new FormError(403, 'Not allowed.');
     if (!s.owner) {
-      const cur = b.id ? await DB.prepare('SELECT id, access, slug, public, on_site, button FROM forms WHERE id = ?').bind(String(b.id)).first() : null;
+      const cur = b.id ? await DB.prepare('SELECT id, access, on_site, button FROM forms WHERE id = ?').bind(String(b.id)).first() : null;
       if (!cur || formLevel(s, cur) !== 'edit') throw new FormError(403, 'Your role can’t edit this form.');
-      // lo público (abierto, en la web, enlace y texto del botón) solo lo cambian los owners
-      Object.assign(b, { slug: cur.slug, public: !!cur.public, on_site: !!cur.on_site, button: cur.button || '' });
+      // salir en la web oficial (y el texto de su botón) solo lo cambian los owners
+      Object.assign(b, { on_site: !!cur.on_site, button: cur.button || '' });
     }
     const title = clean(b.title, 140);
     if (!title) throw new FormError(400, 'Give it a title.');

@@ -1794,7 +1794,8 @@
     const f = $('#form-ed'), d = formOpen?.draft;
     if (!f || !d) return;
     d.title = f.elements.title.value; d.slug = f.elements.slug.value.trim().toLowerCase(); d.description = f.elements.description.value;
-    if (f.elements.public) { d.public = f.elements.public.checked; d.on_site = f.elements.on_site.checked; d.button = f.elements.button.value; }   // solo owners
+    d.public = f.elements.public.checked;
+    if (f.elements.on_site) { d.on_site = f.elements.on_site.checked; d.button = f.elements.button.value; }   // solo owners
     d.access = { roles: [], emails: $$('input[name="acc-email"]:checked', f).map(i => i.value) };
     d.fields = $$('.qe', f).map(q => {
       const type = q.querySelector('[name=type]').value;
@@ -1832,22 +1833,18 @@
         <div class="fe-grid">
           <div class="fe-main">
             <div class="field"><label for="fe-title">Title</label><input id="fe-title" name="title" value="${esc(d.title)}" maxlength="140" autocomplete="off"></div>
-            <div class="field"><label for="fe-slug">Link</label><div class="slug-row"><span>${esc(location.host)}/forms/</span><input id="fe-slug" name="slug" value="${esc(d.slug)}" maxlength="60" placeholder="demo-submission" autocomplete="off" spellcheck="false" ${isOwnerNow() ? '' : 'readonly'}></div></div>
+            <div class="field"><label for="fe-slug">Link</label><div class="slug-row"><span>${esc(location.host)}/forms/</span><input id="fe-slug" name="slug" value="${esc(d.slug)}" maxlength="60" placeholder="demo-submission" autocomplete="off" spellcheck="false"></div></div>
             <div class="field"><label for="fe-desc">Description</label><textarea id="fe-desc" name="description" rows="4" maxlength="4000">${esc(d.description || '')}</textarea></div>
           <div class="fe-side">
-              ${!isOwnerNow() ? `<div class="fe-box">
-                <b class="fe-h">On the web</b>
-                <p class="badges">${d.public ? '<span class="tag">Open</span>' : '<span class="tag off">Closed</span>'}${d.on_site ? '<span class="tag">On the site</span>' : ''}</p>
-                ${d.public ? `<p class="copy-row"><a href="${esc(publicUrl(d))}" target="_blank" rel="noopener">${esc(publicUrl(d).replace(/^https?:\/\//, ''))}</a> <button type="button" class="btn ghost sm" data-act="copy-link">Copy</button></p>` : ''}
-                <p class="info">Only owners can open or close a form, put it on the site or change its link.</p>
-              </div>` : `<div class="fe-box">
+              <div class="fe-box">
                 <label class="switch"><input type="checkbox" name="public" ${d.public ? 'checked' : ''}><span></span><b>Public link</b></label>
                 <p class="info">Open: anyone with the link can fill it in. Closed: nobody can send responses.</p>
                 ${!isNew && d.public ? `<p class="copy-row"><a href="${esc(publicUrl(d))}" target="_blank" rel="noopener">${esc(publicUrl(d).replace(/^https?:\/\//, ''))}</a> <button type="button" class="btn ghost sm" data-act="copy-link">Copy</button></p>` : ''}
-                <label class="switch"><input type="checkbox" name="on_site" ${d.on_site ? 'checked' : ''}><span></span><b>On the site</b></label>
+                ${isOwnerNow() ? `<label class="switch"><input type="checkbox" name="on_site" ${d.on_site ? 'checked' : ''}><span></span><b>On the site</b></label>
                 <p class="info">Shows as a button in “Send your demo” on the homepage (it has to be open).</p>
-                <div class="field"><label for="fe-btn">Button text</label><input id="fe-btn" name="button" value="${esc(d.button || '')}" maxlength="60" placeholder="Submit via Form" autocomplete="off"></div>
-              </div>`}
+                <div class="field"><label for="fe-btn">Button text</label><input id="fe-btn" name="button" value="${esc(d.button || '')}" maxlength="60" placeholder="Submit via Form" autocomplete="off"></div>`
+                  : `<p class="info">${d.on_site ? 'It shows on the homepage. ' : ''}Only owners can put a form on horizonrcrds.com.</p>`}
+              </div>
               ${isOwnerNow() ? `<div class="fe-box">
                 <b class="fe-h">Who sees the responses</b>
                 <p class="info">Owners always. Tap the people who also see them:</p>

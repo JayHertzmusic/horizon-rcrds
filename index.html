@@ -355,7 +355,7 @@
       color: var(--track-color);
       background: rgba(var(--track-color-rgb), 0.1);
       border: 1px solid rgba(var(--track-color-rgb), 0.25);
-      border-radius: 2px; padding: 1px 7px; white-space: nowrap;
+      border-radius: 2px; padding: 3px 7px 0; white-space: nowrap;
       transition: color 0.4s, background 0.4s, border-color 0.4s;
     }
 
@@ -958,6 +958,11 @@
       .release-card:hover .card-cover img, .playlist-card:hover .playlist-cover img { transform: none; }
       .release-card:hover .card-play-overlay { opacity: 0; }
     }
+
+    /* centrado exacto: el espaciado de letras deja hueco tras la última letra; se compensa delante */
+    .lsx { margin-right: -0.25em; }
+    .genre-tag { text-indent: 0.18em; }
+    .num-badge { text-indent: 0.1em; }
   </style>
   <!-- Smooth scroll (Lenis, MIT: assets/vendor/LENIS-LICENSE.txt). Desktop mouse/trackpad only. -->
   <link rel="stylesheet" href="./assets/smooth-scroll.css?v=1"/>
@@ -2274,6 +2279,22 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.insertAdjacentHTML('afterend', html);
     btn.remove();
   }).catch(function () {});
+})();
+</script>
+<script>
+/* centrado exacto de botones con letras espaciadas: se quita el hueco que deja la última letra */
+(function () {
+  var SEL = '.btn-primary, .btn-outline, .share-btn';
+  function fix(root) {
+    (root.matches && root.matches(SEL) ? [root] : []).concat([].slice.call(root.querySelectorAll ? root.querySelectorAll(SEL) : [])).forEach(function (b) {
+      [].slice.call(b.childNodes).forEach(function (n) {
+        if (n.nodeType !== 3 || !n.textContent.trim()) return;
+        var s = document.createElement('span'); s.className = 'lsx'; n.parentNode.replaceChild(s, n); s.appendChild(n);
+      });
+    });
+  }
+  fix(document);
+  new MutationObserver(function (ms) { ms.forEach(function (m) { m.addedNodes.forEach(function (n) { if (n.nodeType === 1) fix(n); }); }); }).observe(document.body, { childList: true, subtree: true });
 })();
 </script>
 </body>

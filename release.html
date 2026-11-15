@@ -149,7 +149,7 @@
       -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; overflow-wrap: anywhere;
     }
     .hr-artist { font-size: 0.8rem; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: #9ca3af; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 14px 0 0; }
-    .num-badge { font-family: 'Bebas Neue', sans-serif; font-size: 0.82rem; letter-spacing: 0.1em; color: var(--track-color, var(--accent-color)); background: rgba(var(--track-color-rgb, var(--accent-color-rgb)), 0.1); border: 1px solid rgba(var(--track-color-rgb, var(--accent-color-rgb)), 0.25); border-radius: 2px; padding: 1px 7px; white-space: nowrap; }
+    .num-badge { font-family: 'Bebas Neue', sans-serif; font-size: 0.82rem; letter-spacing: 0.1em; color: var(--track-color, var(--accent-color)); background: rgba(var(--track-color-rgb, var(--accent-color-rgb)), 0.1); border: 1px solid rgba(var(--track-color-rgb, var(--accent-color-rgb)), 0.25); border-radius: 2px; padding: 3px 7px 0; white-space: nowrap; }
 
     /* ── PLAYER (same look as the home hero player; plays the full track from SoundCloud) ── */
     .hc-player { display: flex; align-items: center; gap: 16px; margin-top: 30px; max-width: 32rem; }
@@ -294,6 +294,10 @@
     }
     @keyframes float-flat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
     @media (hover: none) { .platform:hover { transform: none; } }
+
+    /* centrado exacto: el espaciado de letras deja hueco tras la última letra; se compensa delante */
+    .lsx { margin-right: -0.25em; }
+    .num-badge { text-indent: 0.1em; }
   </style>
   <link rel="stylesheet" href="./assets/smooth-scroll.css?v=1"/>
   <script src="./assets/vendor/lenis.min.js?v=1.3.26" defer></script>
@@ -704,6 +708,22 @@ new IntersectionObserver(([e]) => e.target.classList.toggle('is-off', !e.isInter
   /* reveal */
   const obs = new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); }), { threshold: 0.08 });
   document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
+})();
+</script>
+<script>
+/* centrado exacto de botones con letras espaciadas: se quita el hueco que deja la última letra */
+(function () {
+  var SEL = '.btn-primary, .btn-outline, .share-btn';
+  function fix(root) {
+    (root.matches && root.matches(SEL) ? [root] : []).concat([].slice.call(root.querySelectorAll ? root.querySelectorAll(SEL) : [])).forEach(function (b) {
+      [].slice.call(b.childNodes).forEach(function (n) {
+        if (n.nodeType !== 3 || !n.textContent.trim()) return;
+        var s = document.createElement('span'); s.className = 'lsx'; n.parentNode.replaceChild(s, n); s.appendChild(n);
+      });
+    });
+  }
+  fix(document);
+  new MutationObserver(function (ms) { ms.forEach(function (m) { m.addedNodes.forEach(function (n) { if (n.nodeType === 1) fix(n); }); }); }).observe(document.body, { childList: true, subtree: true });
 })();
 </script>
 </body>

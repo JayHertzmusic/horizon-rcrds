@@ -1581,8 +1581,13 @@
       if (b) { b.hidden = !r.total; b.textContent = r.total > 99 ? '99+' : r.total; }
       document.title = document.title.replace(/^\(\d+\+?\) /, '');
       if (r.total) document.title = `(${r.total}) ${document.title}`;
-      if (grew && formsData) { formsData = null; if (view === 'forms' && !formOpen) loadForms(); }
-      if (grew && view === 'forms' && !formOpen) render();
+      // lista de formularios: se actualiza por detrás, sin «Loading…» ni redibujar si nada cambió (así no parpadea)
+      if (grew && formsData) {
+        if (view === 'forms' && !formOpen && !formsLoading) {
+          const fresh = await api('GET', '/api/forms').catch(() => null);
+          if (fresh && JSON.stringify(fresh) !== JSON.stringify(formsData)) { formsData = fresh; if (view === 'forms' && !formOpen) render(); }
+        } else formsData = null;
+      }
     } catch { /* sin aviso */ }
   }
   setInterval(checkUnseen, 60e3);

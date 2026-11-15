@@ -1369,7 +1369,7 @@
     const t = e.target.closest('[data-act], [data-view]');
     if (!t || busy) return;
     if (t.dataset.view) {
-      if (t.dataset.view === view && !editing) return;
+      if (t.dataset.view === view && !editing && !formOpen && !ctOpen) return;
       if (!await leaveOk()) return;
       filter = ''; go(t.dataset.view);
       return;

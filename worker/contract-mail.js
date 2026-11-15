@@ -23,6 +23,8 @@ function layout(title, body, button) {
 </table></td></tr></table></body></html>`;
 }
 const textOf = html => html.replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{3,}/g, '\n\n').trim();
+// nombre del contrato en su propia línea, debajo de la frase
+const docTitle = t => `<div style="margin:10px 0 2px;font-size:17px;line-height:1.4;font-weight:700;color:#111111">${esc(t)}</div>`;
 const hello = sg => sg.label && !/^Artista?\s*\d*$/i.test(sg.label) ? `Hi ${esc(sg.label)},` : 'Hi,';
 
 // Resend (plan gratis: 3.000 correos/mes, 100/día). La clave va como secreto RESEND_API_KEY.
@@ -49,14 +51,14 @@ async function send(env, msg) {
 
 // invitación a firmar
 export function inviteMail(env, c, sg, link) {
-  const body = `${hello(sg)}<br><br>HORIZON RCRDS has sent you a contract to review and sign: <b>${esc(c.title)}</b>.<br><br>
+  const body = `${hello(sg)}<br><br>HORIZON RCRDS has sent you a contract to review and sign:${docTitle(c.title)}<br>
     Open it with the button below. To access it, enter this email address (<b>${esc(sg.email)}</b>). You can read the whole contract and sign it online.`;
   return send(env, { to: sg.email, subject: `Contract to sign — ${c.title}`, html: layout('Your contract is ready to sign', body, { href: link, label: 'Review and sign' }) });
 }
 
 // contrato terminado (han firmado todos): enlace privado para descargar el PDF firmado
 export function doneMail(env, c, sg, link) {
-  const body = `${hello(sg)}<br><br>Everyone has signed <b>${esc(c.title)}</b>. The contract is now complete.<br><br>
+  const body = `${hello(sg)}<br><br>Everyone has signed this contract, so it is now complete:${docTitle(c.title)}<br>
     Download your signed copy (PDF) from your private link below. Enter this email address (<b>${esc(sg.email)}</b>) to open it. The link stays available, so you can download it again at any time.`;
   return send(env, { to: sg.email, subject: `Signed contract — ${c.title}`, html: layout('Your contract is signed', body, { href: link, label: 'Download signed contract' }) });
 }

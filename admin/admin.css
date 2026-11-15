@@ -511,7 +511,7 @@ select:focus { border-color: rgba(var(--accent-rgb), .7); }
 .pdf-box { border: 2px dashed rgba(var(--accent-rgb), .95); background: rgba(var(--accent-rgb), .14); border-radius: 3px; display: flex; flex-direction: column; justify-content: flex-end; }
 .pdf-box span { margin: auto; font: 700 11px/1 'Barlow', sans-serif; letter-spacing: .12em; text-transform: uppercase; color: #6d4fd6; }
 .pdf-box.is-signed { border: 0; background: none; }
-.pdf-typed { font: italic 400 26px/1 'Brush Script MT', 'Segoe Script', cursive; color: #0d0d33; white-space: nowrap; overflow: hidden; }
+.pdf-typed { position: absolute; left: 0; right: 0; bottom: 0; text-align: center; font: italic 400 26px/1 'Brush Script MT', 'Segoe Script', cursive; color: #0d0d33; white-space: nowrap; overflow: hidden; }
 .pdf-sig-label { font: 400 8px/1.1 Arial, sans-serif; color: #444; }
 .ct-step { margin: 0 0 12px; padding: 12px 14px; border: 1px solid rgba(var(--accent-rgb), .45); border-radius: 6px; background: rgba(var(--accent-rgb), .07); font-size: 14px; }
 .ct-step.done { border-color: rgba(61, 220, 132, .4); background: rgba(61, 220, 132, .05); }

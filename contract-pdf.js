@@ -62,11 +62,12 @@
         if (mk.sign.startsWith('typed:')) {
           const t = document.createElement('div'); t.className = 'pdf-typed'; t.textContent = mk.sign.slice(6); el.appendChild(t);
         } else {
+          // igual que en el PDF firmado: centrada y apoyada sobre la línea
           const im = new Image(); im.src = mk.sign; im.alt = 'Signature';
-          im.style.cssText = 'width:100%;height:78%;object-fit:contain;object-position:left bottom;display:block';
+          im.style.cssText = 'position:absolute;left:7.5%;bottom:-1px;width:85%;height:46%;object-fit:contain;object-position:center bottom;display:block';
           el.appendChild(im);
         }
-        if (mk.label) { const sl = document.createElement('div'); sl.className = 'pdf-sig-label'; sl.textContent = mk.label; el.appendChild(sl); }
+        if (mk.label) el.title = mk.label;
       } else {
         const t = document.createElement('span'); t.className = 'pdf-flag'; t.textContent = mk.title || 'Sign here'; el.appendChild(t);
       }
@@ -92,18 +93,17 @@
       const page = doc.getPage(Math.min(b.page, doc.getPageCount() - 1));
       const { width: W, height: H } = page.getSize();
       const bx = b.x * W, bw = b.w * W, bh = b.h * H, by = H - b.y * H - bh;
-      const labelH = Math.min(9, bh * 0.22);
+      // como una firma a mano: centrada sobre la línea y apoyada en ella (los datos van en el certificado)
       if (s.signature.startsWith('typed:')) {
         const txt = latin1(s.signature.slice(6));
-        let size = Math.min(bh * 0.6, 28);
-        while (size > 6 && ital.widthOfTextAtSize(txt, size) > bw) size -= 1;
-        page.drawText(txt, { x: bx, y: by + labelH + 2, size, font: ital, color: rgb(0.05, 0.05, 0.2) });
+        let size = Math.min(bh * 0.55, 24);
+        while (size > 6 && ital.widthOfTextAtSize(txt, size) > bw * 0.9) size -= 1;
+        page.drawText(txt, { x: bx + (bw - ital.widthOfTextAtSize(txt, size)) / 2, y: by + 2, size, font: ital, color: rgb(0.05, 0.05, 0.2) });
       } else {
         const png = await doc.embedPng(s.signature);
-        const k = Math.min(bw / png.width, (bh - labelH - 2) / png.height);
-        page.drawImage(png, { x: bx, y: by + labelH + 2, width: png.width * k, height: png.height * k });
+        const k = Math.min(bw * 0.85 / png.width, bh * 0.46 / png.height), iw = png.width * k, ih = png.height * k;
+        page.drawImage(png, { x: bx + (bw - iw) / 2, y: by - 1, width: iw, height: ih });
       }
-      page.drawText(latin1(`Signed electronically by ${s.name} - ${fmt(s.at)}`), { x: bx, y: by, size: Math.max(5, labelH * 0.8), font: helv, color: rgb(0.25, 0.25, 0.25) });
     }
 
     // Certificado

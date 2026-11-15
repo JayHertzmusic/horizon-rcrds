@@ -88,6 +88,7 @@ async function ensureSchema(env) {
   try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN label TEXT').run(); } catch { /* ya existe */ }
   try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN color TEXT').run(); } catch { /* ya existe */ }
   try { await env.DB.prepare('ALTER TABLE panel_profiles ADD COLUMN color TEXT').run(); } catch { /* ya existe */ }
+  try { await env.DB.prepare('ALTER TABLE panel_roles ADD COLUMN forms TEXT').run(); } catch { /* ya existe */ }
   for (const col of CONTRACT_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE contracts ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
   schemaReady = true;
 }
@@ -115,9 +116,10 @@ function normPerms(p) {
 const fullPerms = () => Object.fromEntries(SECTIONS.map(s => [s.id, Object.fromEntries(s.actions.map(a => [a, true]))]));
 async function resolve(env, email) {
   if (owners(env).includes(email)) return { owner: true, role: { id: 'owner', name: 'Owner' }, perms: fullPerms() };
-  const m = await env.DB.prepare('SELECT m.email, m.role_id, m.label, r.name AS role_name, r.perms FROM panel_members m LEFT JOIN panel_roles r ON r.id = m.role_id WHERE m.email = ?').bind(email).first();
+  const m = await env.DB.prepare('SELECT m.email, m.role_id, m.label, r.name AS role_name, r.perms, r.forms FROM panel_members m LEFT JOIN panel_roles r ON r.id = m.role_id WHERE m.email = ?').bind(email).first();
   if (!m) return null;
-  return { owner: false, label: m.label || '', role: m.role_name ? { id: m.role_id, name: m.role_name } : null, perms: normPerms(m.role_name ? parse(m.perms) : null) };
+  const forms = parse(m.forms);
+  return { owner: false, label: m.label || '', role: m.role_name ? { id: m.role_id, name: m.role_name, forms: Array.isArray(forms) ? forms : null } : null, perms: normPerms(m.role_name ? parse(m.perms) : null) };
 }
 const can = (s, sec, act) => s.owner || !!s.perms?.[sec]?.[act];
 const anyCan = (s, act) => s.owner || SECTIONS.some(x => s.perms?.[x.id]?.[act]);
@@ -383,10 +385,10 @@ async function team(req, env, s, p) {
   if (p === '/api/team' && m === 'GET') {
     const [members, roles] = await Promise.all([
       DB.prepare(`SELECT m.email, m.role_id, m.label, COALESCE(p.color, m.color) AS color, m.name, COALESCE(${AVATAR_SQL}, m.picture) AS picture, m.added_at, m.last_login FROM panel_members m LEFT JOIN panel_profiles p ON p.email = m.email ORDER BY m.added_at`).all(),
-      DB.prepare('SELECT id, name, perms FROM panel_roles ORDER BY created_at').all(),
+      DB.prepare('SELECT id, name, perms, forms FROM panel_roles ORDER BY created_at').all(),
     ]);
     const profs = (await DB.prepare(`SELECT p.email, ${AVATAR_SQL} AS picture, p.color FROM panel_profiles p`).all()).results, pics = Object.fromEntries(profs.map(r => [r.email, r.picture])), cols = Object.fromEntries(profs.map(r => [r.email, r.color]));
-    return json({ owners: owners(env), ownerPics: Object.fromEntries(owners(env).map(e => [e, pics[e] || ''])), ownerColors: Object.fromEntries(owners(env).map(e => [e, cols[e] || ''])), sections: await sections(env), members: members.results, roles: roles.results.map(r => ({ id: r.id, name: r.name, perms: normPerms(parse(r.perms)) })) });
+    return json({ owners: owners(env), ownerPics: Object.fromEntries(owners(env).map(e => [e, pics[e] || ''])), ownerColors: Object.fromEntries(owners(env).map(e => [e, cols[e] || ''])), sections: await sections(env), members: members.results, roles: roles.results.map(r => ({ id: r.id, name: r.name, perms: normPerms(parse(r.perms)), forms: Array.isArray(parse(r.forms)) ? parse(r.forms) : null })) });
   }
   if (p === '/api/team/audit' && m === 'GET') {
     // historial completo, de 100 en 100 (before = id del último que ya se ve), de todos o de una persona
@@ -442,10 +444,12 @@ async function team(req, env, s, p) {
     const dup = await DB.prepare('SELECT id FROM panel_roles WHERE lower(name) = lower(?) AND id != ?').bind(name, id).first();
     if (dup) throw new HttpError(400, `There is already a role called ${name}.`);
     const perms = JSON.stringify(normPerms(body.perms));
+    // formularios que ve el rol: null = todos; si no, solo esos
+    const forms = Array.isArray(body.forms) ? JSON.stringify(body.forms.map(String).slice(0, 200)) : null;
     if (body.id) {
-      const r = await DB.prepare('UPDATE panel_roles SET name = ?, perms = ?, updated_at = ? WHERE id = ?').bind(name, perms, now(), id).run();
+      const r = await DB.prepare('UPDATE panel_roles SET name = ?, perms = ?, forms = ?, updated_at = ? WHERE id = ?').bind(name, perms, forms, now(), id).run();
       if (!r.meta.changes) throw new HttpError(404, 'That role no longer exists.');
-    } else await DB.prepare('INSERT INTO panel_roles (id, name, perms, created_at, updated_at) VALUES (?, ?, ?, ?, ?)').bind(id, name, perms, now(), now()).run();
+    } else await DB.prepare('INSERT INTO panel_roles (id, name, perms, forms, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, name, perms, forms, now(), now()).run();
     await audit(env, s, `${body.id ? 'Changed' : 'Created'} the role ${name}`);
     return json({ ok: true, id });
   }

@@ -822,3 +822,13 @@ html, body, * { scrollbar-width: none; }
 .resp header::after { content: '▾'; margin-left: 6px; color: var(--faint); transition: transform .2s; }
 .resp.is-open header::after { transform: rotate(180deg); }
 .resp:not(.is-open):hover { background: rgba(255, 255, 255, .03); }
+
+/* Rol: qué formularios ve */
+.perm-forms { padding: 4px 0 12px 32px; border-bottom: 1px solid var(--line); display: grid; gap: 8px; }
+.perm-forms[hidden], .pf-list[hidden] { display: none; }
+.pf-all { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); cursor: pointer; }
+.pf-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.pf-chip { position: relative; display: inline-flex; align-items: center; padding: 5px 12px; border: 1px solid rgba(255, 255, 255, .14); border-radius: 999px; font-size: 12.5px; color: var(--muted); cursor: pointer; }
+.pf-chip input { position: absolute; opacity: 0; pointer-events: none; }
+.pf-chip:has(input:checked) { color: #0a0a0a; background: #fff; border-color: #fff; font-weight: 600; }
+.pf-chip:has(input:focus-visible) { outline: 2px solid #fff; outline-offset: 2px; }

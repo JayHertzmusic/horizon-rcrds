@@ -431,6 +431,21 @@
     const n = teamData.sections.filter(sec => levelOf(r, sec)).length;
     return n ? `${n} ${n === 1 ? 'section' : 'sections'}` : 'No sections';
   }
+  // qué formularios ve el rol: todos o solo algunos
+  function roleFormsPick(r, lv) {
+    const list = formsData?.forms || [];
+    // la lista de formularios se carga aparte y se pinta en su sitio al llegar (sin rehacer la ventana)
+    if (!formsData) loadForms().then(() => {
+      const box = $('#sheet .role-form .perm-forms .pf-list');
+      if (!box || box.querySelector('[name="forms-pick"]')) return;
+      box.innerHTML = (formsData?.forms || []).map(f => `<label class="pf-chip"><input type="checkbox" name="forms-pick" value="${esc(f.id)}" ${(r.forms || []).includes(f.id) ? 'checked' : ''}><span>${esc(f.title)}</span></label>`).join('') || '<span class="muted sm-txt">No forms yet.</span>';
+    });
+    const all = !Array.isArray(r.forms), sel = new Set(r.forms || []);
+    return `<div class="perm-forms"${lv ? '' : ' hidden'}>
+      <label class="pf-all"><input type="checkbox" name="forms-all" ${all ? 'checked' : ''}><span>All forms</span></label>
+      <div class="pf-list"${all ? ' hidden' : ''}>${list.length ? list.map(f => `<label class="pf-chip"><input type="checkbox" name="forms-pick" value="${esc(f.id)}" ${sel.has(f.id) ? 'checked' : ''}><span>${esc(f.title)}</span></label>`).join('') : '<span class="muted sm-txt">Loading forms…</span>'}</div>
+    </div>`;
+  }
   function roleSheet(r) {
     const isNew = !r.id;
     return sheet(`
@@ -439,7 +454,7 @@
         <input name="name" class="role-name" value="${esc(r.name || '')}" maxlength="40" placeholder="Role name (e.g. A&R)" aria-label="Role name" autocomplete="off">
         <div class="perm-list">${teamData.sections.map(sec => { const lv = levelOf(r, sec); return `
           <div class="perm-row" data-sec="${esc(sec.id)}"><span class="perm-name"><button type="button" class="grip" aria-label="Drag to reorder ${esc(sec.label)}" title="Drag to reorder">${GRIP_SVG}</button>${esc(sec.label)}</span><span class="seg" role="radiogroup" aria-label="${esc(sec.label)}">${LEVELS.filter(([v]) => !v || sec.actions.includes(v)).map(([v, l]) => `
-            <label><input type="radio" name="${esc(sec.id)}" value="${v}" ${v === lv ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>`; }).join('')}
+            <label><input type="radio" name="${esc(sec.id)}" value="${v}" ${v === lv ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>${sec.id === 'forms' ? roleFormsPick(r, lv) : ''}`; }).join('')}
         </div>
         <p class="info sm-txt"><b>View</b>: only look. <b>Edit</b>: create and change. <b>All</b>: also delete. Drag ⋮⋮ to change the order of the sections. Owners always have everything.</p>
         <p class="ed-error" role="alert" hidden></p>
@@ -1385,7 +1400,7 @@
       case 'preview-role': {
         const r = teamData?.roles.find(x => x.id === t.closest('[data-role]')?.dataset.role);
         if (!r) return;
-        preview = { id: r.id, name: r.name, perms: r.perms };
+        preview = { id: r.id, name: r.name, perms: r.perms, forms: r.forms };
         filter = ''; go(firstView());
         break;
       }
@@ -1498,7 +1513,8 @@
       const name = form.elements.name.value.trim();
       if (!name) { box.textContent = 'Give the role a name.'; box.hidden = false; form.elements.name.focus(); return; }
       const id = form.dataset.role || undefined;
-      teamAction(() => api('POST', '/api/team/roles', { id, name, perms: rolePerms(form) }), id ? 'Role saved' : 'Role created', box);
+      const forms = form.querySelector('[name="forms-all"]')?.checked !== false ? null : [...form.querySelectorAll('[name="forms-pick"]:checked')].map(x => x.value);
+      teamAction(() => api('POST', '/api/team/roles', { id, name, perms: rolePerms(form), forms }), id ? 'Role saved' : 'Role created', box);
       return;
     }
     if (form.id !== 'ed' || busy) return;
@@ -1529,6 +1545,11 @@
     if (t.id === 'ed-file' && t.files[0]) { setCover(t.files[0]); t.value = ''; }
     if (t.id === 'me-photo' && t.files[0]) { setMyPhoto(t.files[0]); t.value = ''; }
     if (t.id === 'me-color') setMyColor(t.value);
+    if (t.closest?.('.role-form')) {
+      const f = t.closest('.role-form'), box = f.querySelector('.perm-forms');
+      if (box && t.name === 'forms') box.hidden = !t.value;
+      if (box && t.name === 'forms-all') box.querySelector('.pf-list').hidden = t.checked;
+    }
     if (t.id === 'mx-file' && t.files[0]) { setMixAudio(t.files[0]); t.value = ''; }
     if (t.id === 'f-sc') scFill(!editing?.key);
     if (t.classList.contains('log-who')) { logState.who = t.value; logState.items = []; logState.loaded = false; loadLog(false); render(); }
@@ -1569,7 +1590,7 @@
   let formsData = null, formsErr = '', formsLoading = false, formOpen = null;
   const FTYPES = { text: 'Short text', textarea: 'Long text', email: 'Email', url: 'Link', radio: 'Single choice', checkbox: 'Varias opciones', select: 'Dropdown', section: 'Section (title)' };
   const isOwnerNow = () => !!auth?.user?.owner && !preview;
-  const visibleForms = () => (formsData?.forms || []).filter(f => !preview || preview.perms?.forms?.view || f.access?.roles?.includes(preview.id));
+  const visibleForms = () => (formsData?.forms || []).filter(f => !preview || (preview.perms?.forms?.view && (!Array.isArray(preview.forms) || preview.forms.includes(f.id))) || f.access?.roles?.includes(preview.id));
   /* Aviso de respuestas nuevas: número en «Forms» y en cada formulario; se mira cada minuto */
   let unseen = { total: 0, forms: {} };
   async function checkUnseen() {

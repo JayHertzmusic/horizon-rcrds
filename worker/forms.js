@@ -35,10 +35,11 @@ function normFields(list) {
   });
 }
 const access = f => { const a = parse(f.access) || {}; return { roles: Array.isArray(a.roles) ? a.roles : [], emails: Array.isArray(a.emails) ? a.emails : [] }; };
-export const canSeeForm = (s, f) => !!s.owner || !!s.perms?.forms?.view || access(f).roles.includes(s.role?.id) || access(f).emails.includes(s.email);
+// el rol ve los formularios si tiene «Forms» y (todos, o este en concreto); además los que se le den uno a uno
+export const canSeeForm = (s, f) => !!s.owner || (!!s.perms?.forms?.view && (!Array.isArray(s.role?.forms) || s.role.forms.includes(f.id))) || access(f).roles.includes(s.role?.id) || access(f).emails.includes(s.email);
 export async function formsCount(env, s) {
-  if (s.owner || s.perms?.forms?.view) return (await env.DB.prepare('SELECT COUNT(*) AS n FROM forms').first())?.n || 0;
-  const rows = (await env.DB.prepare('SELECT access FROM forms').all()).results;
+  if (s.owner) return (await env.DB.prepare('SELECT COUNT(*) AS n FROM forms').first())?.n || 0;
+  const rows = (await env.DB.prepare('SELECT id, access FROM forms').all()).results;
   return rows.filter(f => canSeeForm(s, f)).length;
 }
 
@@ -65,6 +66,7 @@ export async function formsApi(req, env, s, url, audit) {
   }
   if (p === '/api/forms' && m === 'GET') {
     const forms = (await DB.prepare('SELECT * FROM forms ORDER BY position, created_at').all()).results.filter(f => canSeeForm(s, f));
+    // un rol limitado a algunos formularios no crea nuevos (no los vería)
     const counts = (await DB.prepare('SELECT form_id, COUNT(*) AS total, SUM(CASE WHEN seen = 0 THEN 1 ELSE 0 END) AS unseen FROM form_responses GROUP BY form_id').all()).results;
     return {
       owner: !!s.owner,

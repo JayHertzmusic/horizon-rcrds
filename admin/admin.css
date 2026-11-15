@@ -744,3 +744,10 @@ a.lk.on:hover { color: #fff; background: rgba(255, 255, 255, .08); }
 .row.fm { grid-template-columns: 34px minmax(0, 1fr) auto 120px auto auto; }
 @media (max-width: 1100px) { .row.fm { grid-template-columns: 34px minmax(0, 1fr) auto auto; } }
 @media (max-width: 640px) { .row.fm { grid-template-columns: minmax(0, 1fr) auto; } .row.fm .new-pill { grid-row: 2; } }
+
+/* Editor de formularios: usa todo el ancho; la vista previa se queda con el espacio sobrante */
+.editor.fe { max-width: none; }
+@media (min-width: 1201px) {
+  .fe-grid { grid-template-columns: minmax(440px, 620px) minmax(0, 1fr); gap: 32px; }
+}
+@media (min-width: 1700px) { .main:has(.editor.fe) { padding-right: clamp(28px, 2.5vw, 48px); } }

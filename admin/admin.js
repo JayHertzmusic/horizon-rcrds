@@ -2192,7 +2192,11 @@
   // cuántos artistas tiene el contrato (firmantes del mismo contrato, o una copia por artista)
   const artistsOf = t => t.signers.length > 1 ? t.signers.length : copiesOf();
   // a qué artista pertenece cada dato («Artist 2 legal name» → 2; en contratos de 1 artista, los datos personales → 1)
-  const fieldArtist = (name, n) => { const k = Number((String(name).match(/^artist (\d)/i) || [])[1]) || 0; if (k) return k; return n === 1 && /^(artist name|legal name|e-?mail|age|address|city)/i.test(name) ? 1 : 0; };
+  const PERSONAL = /^(artist name|legal name|e-?mail|age|address|city)/i;
+  const fieldArtist = (name, n, copies) => { const k = Number((String(name).match(/^artist (\d)/i) || [])[1]) || 0; if (k) return k; if (!PERSONAL.test(name)) return 0; return copies ? 'each' : n === 1 ? 1 : 0; };
+  const isCopies = t => t.signers.length === 1 && artistsOf(t) > 1;
+  // nombre del campo en el formulario (los «each» van una vez por artista)
+  const fieldInput = (i, who, k) => who === 'each' ? `f${i}_${k}` : `f${i}`;
   // el nombre y el email de cada artista se escriben una vez (arriba de su bloque) y van también al contrato
   const isDupField = name => /^artist( \d)? name$|^(artist \d )?e-?mail$/i.test(name);
   const fieldDefault = f => /date/i.test(f.name) && !/original/i.test(f.name) ? today() : /^label (representative|signatory)$/i.test(f.name) ? f.current : '';
@@ -2208,32 +2212,30 @@
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions"><button type="submit" class="btn primary">Send draft</button><button type="button" class="btn ghost" data-ct="back">Cancel</button></div>
       </form>`;
-    const n = artistsOf(t), copies = t.signers.length === 1 && n > 1;
-    const fieldHtml = (f, i) => `<div class="field"><label for="u-f${i}">${esc(f.name.replace(/^Artist \d /i, '').replace(/^./, x => x.toUpperCase()))}</label><input id="u-f${i}" name="f${i}" maxlength="500" value="${esc(fieldDefault(f))}" autocomplete="off"></div>`;
-    const of = k => (fields || []).map((f, i) => [f, i]).filter(([f]) => fieldArtist(f.name, n) === k && !(k && isDupField(f.name)));
-    const artistBlock = k => `
-      <fieldset class="ct-artist">
-        <legend>Artist ${k}</legend>
-        ${rf?.list?.length ? `<div class="field"><label for="u-from${k}">Fill from this artist’s Release Form</label><select id="u-from${k}" class="u-from" data-k="${k}"><option value="">Choose a response…</option>${rf.list.map(r => `<option value="${r.id}">${esc(rfLabel(r))}</option>`).join('')}</select></div>` : ''}
-        <div class="row2 wide"><div class="field"><label for="u-cn${k - 1}">Artist name</label><input id="u-cn${k - 1}" name="cn${k - 1}" maxlength="60" autocomplete="off"></div>
-          <div class="field"><label for="u-em${k - 1}">Email (the signing link goes here)</label><input id="u-em${k - 1}" name="em${k - 1}" type="email" maxlength="160" autocomplete="off"></div></div>
-        ${of(k).length ? `<div class="ct-fields">${of(k).map(([f, i]) => fieldHtml(f, i)).join('')}</div>` : ''}
-      </fieldset>`;
+    const n = artistsOf(t), copies = isCopies(t);
+    const label = f => esc(f.name.replace(/^Artist \d /i, '').replace(/^./, x => x.toUpperCase()));
+    const fieldHtml = (f, i, k = 0) => { const nm = fieldInput(i, fieldArtist(f.name, n, copies), k); return `<div class="field"><label for="u-${nm}">${label(f)}</label><input id="u-${nm}" name="${nm}" maxlength="500" value="${esc(fieldDefault(f))}" autocomplete="off"></div>`; };
+    const all = (fields || []).map((f, i) => [f, i, fieldArtist(f.name, n, copies)]);
+    const general = all.filter(([, , w]) => w === 0), mine = k => all.filter(([f, , w]) => (w === k || w === 'each') && !isDupField(f.name));
     return `
       <form id="ct-use" class="editor ct-ed" novalidate>
         <button type="button" class="back" data-ct="back">← Contracts</button>
         <p class="eyebrow">New contract · template “${esc(t.title)}”</p>
         <h1>CONTRACT DETAILS</h1>
-        <h2 class="ct-sub">Release</h2>
+        ${rf?.list?.length ? Array.from({ length: n }, (_, x) => `<div class="field"><label for="u-from${x ? x + 1 : ''}">${n > 1 ? `Artist ${x + 1} · fill from their Release Form response` : 'Fill from a Release Form response'}</label><select id="u-from${x ? x + 1 : ''}" class="u-from" data-k="${x + 1}"><option value="">Choose a response…</option>${rf.list.map(r => `<option value="${r.id}">${esc(rfLabel(r))}</option>`).join('')}</select></div>`).join('') : ''}
         <div class="row2 wide"><div class="field"><label for="u-cat">Release number</label><input id="u-cat" name="release_cat" maxlength="40" value="${esc(ctOpen.cat || '')}" autocomplete="off"></div>
           <div class="field"><label for="u-rel">Release name</label><input id="u-rel" name="release_name" maxlength="160" autocomplete="off" placeholder="Track title"></div></div>
-        <div class="field"><label for="u-title">Contract title (only for the panel)</label><input id="u-title" name="title" maxlength="160" value="${esc(t.title)} — " autocomplete="off"></div>
-        ${of(0).length ? `<div class="ct-fields">${of(0).map(([f, i]) => fieldHtml(f, i)).join('')}</div>` : ''}
-        ${!fields ? '<p class="info">Reading the template…</p>' : ''}
-        <h2 class="ct-sub">${n > 1 ? `Artists${copies ? ' · each one gets their own copy and signs it' : ' · both sign this contract'}` : 'Artist'}</h2>
-        ${Array.from({ length: n }, (_, i) => artistBlock(i + 1)).join('')}
+        <div class="field"><label for="u-title">Contract title</label><input id="u-title" name="title" maxlength="160" value="${esc(t.title)} — " autocomplete="off"></div>
+        ${Array.from({ length: n }, (_, x) => `
+        <div class="row2 wide"><div class="field"><label for="u-cn${x}">${n > 1 ? `Artist ${x + 1} name` : 'Artist name'}</label><input id="u-cn${x}" name="cn${x}" maxlength="60" autocomplete="off"></div>
+          <div class="field"><label for="u-em${x}">${n > 1 ? `Artist ${x + 1} email` : 'Artist email'}</label><input id="u-em${x}" name="em${x}" type="email" maxlength="160" autocomplete="off"></div></div>`).join('')}
         ${t.signers.length === 1 ? `<div class="copy-btns"><button type="button" class="btn ghost sm" data-ct="copy-add">+ Add artist (own copy)</button>${n > 1 ? '<button type="button" class="btn ghost sm" data-ct="copy-del">Remove last</button>' : ''}</div>` : ''}
-        <p class="info">Everything goes into the contract in every place it appears. A field left empty keeps what the template says.</p>
+        ${copies ? '<p class="info">Each artist gets their own copy of this contract, with their own details, and signs it separately.</p>' : ''}
+        <h2 class="ct-sub">Details that go in the contract</h2>
+        ${!fields ? '<p class="info">Reading the template…</p>' : `
+          ${general.length ? `<div class="ct-fields">${general.map(([f, i]) => fieldHtml(f, i)).join('')}</div>` : ''}
+          ${Array.from({ length: n }, (_, x) => mine(x + 1).length ? `${n > 1 ? `<p class="mini ct-who">Artist ${x + 1}</p>` : ''}<div class="ct-fields">${mine(x + 1).map(([f, i]) => fieldHtml(f, i, x + 1)).join('')}</div>` : '').join('')}
+          <p class="info">Everything above goes into the contract in every place it appears. A field left empty keeps what the template says.</p>`}
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions"><button type="submit" class="btn primary" ${fields ? '' : 'disabled'}>Create contract</button><button type="button" class="btn ghost" data-ct="back">Cancel</button></div>
       </form>`;
@@ -2268,13 +2270,13 @@
   function rfFill(k, id) {
     const r = ctOpen.rf?.list.find(x => String(x.id) === String(id)), f = $('#ct-use');
     if (!r || !f) return;
-    const o = rfRead(r), n = artistsOf(ctOpen.tpl);
+    const o = rfRead(r), n = artistsOf(ctOpen.tpl), copies = isCopies(ctOpen.tpl);
     const set = (name, v, force) => { const el = f.elements[name]; if (el && v && (force || !el.value.trim() || /—\s*$/.test(el.value))) el.value = v; };
     set('cn' + (k - 1), o.artist, true); set('em' + (k - 1), o.email, true); set('release_name', o.track);
     (ctOpen.fields || []).forEach((x, i) => {
-      const nm = x.name.toLowerCase(), el = f.elements['f' + i], who = fieldArtist(x.name, n);
+      const nm = x.name.toLowerCase(), who = fieldArtist(x.name, n, copies), el = f.elements[fieldInput(i, who, k)];
       if (!el) return;
-      if (who === k) {
+      if (who === k || who === 'each') {
         const v = /legal/.test(nm) ? o.legal : /e-?mail/.test(nm) ? o.email : /\bage\b/.test(nm) ? o.age : /address/.test(nm) ? o.address
           : /city/.test(nm) ? [o.city, o.country].filter(Boolean).join(', ') : /country/.test(nm) ? o.country : /name/.test(nm) ? o.artist : undefined;
         if (v !== undefined) el.value = v || '';
@@ -2865,19 +2867,29 @@
         }
         const title = f.elements.title.value.trim();
         if (!title || /—\s*$/.test(title)) return fail('Complete the contract title.');
-        const n = artistsOf(tpl), values = {};
-        fields.forEach((x, i) => { const k = fieldArtist(x.name, n); values[x.name] = k && isDupField(x.name) ? (f.elements[(/mail/i.test(x.name) ? 'em' : 'cn') + (k - 1)]?.value || '').trim() : (f.elements['f' + i]?.value || '').trim(); });
+        const n = artistsOf(tpl), copiesMode = isCopies(tpl);
         const people = Array.from({ length: n }, (_, i) => ({ name: (f.elements['cn' + i]?.value || '').trim(), email: (f.elements['em' + i]?.value || '').trim() }));
+        const valuesFor = k => {
+          const v = {};
+          fields.forEach((x, i) => {
+            const who = fieldArtist(x.name, n, copiesMode);
+            if (who === 'each' && !k) return;
+            const a = who === 'each' ? k : who;
+            v[x.name] = a && isDupField(x.name) ? (people[a - 1]?.[/mail/i.test(x.name) ? 'email' : 'name'] || '') : (f.elements[fieldInput(i, who, k)]?.value || '').trim();
+          });
+          return v;
+        };
         if (people.some(p => !p.name)) return fail(`Write the name of ${n > 1 ? 'each artist' : 'the artist'}.`);
         const bad = people.find(p => p.email && !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(p.email));
         if (bad) return fail(`The email of ${bad.name} is not valid.`);
         const artist = people.map(p => p.name).join(' & ');
-        const copies = tpl.signers.length > 1 || n === 1
-          ? [{ title, artist, signers: people.map(p => ({ label: p.name, email: p.email })) }]
-          : people.map(p => ({ title: `${title} (${p.name})`, artist, signers: [{ label: p.name, email: p.email }] }));
+        const jobs = copiesMode
+          ? people.map((p, x) => ({ values: valuesFor(x + 1), copies: [{ title: `${title} (${p.name})`, artist, signers: [{ label: p.name, email: p.email }] }] }))
+          : [{ values: valuesFor(0), copies: [{ title, artist, signers: people.map(p => ({ label: p.name, email: p.email })) }] }];
         btn.disabled = true; stage('Making the contract and its PDF…');
         try {
-          const r = await ctAction(() => api('POST', '/api/contracts/make', { template: tpl.id, values, copies, release_cat: f.elements.release_cat.value, release_name: f.elements.release_name.value }));
+          const rs = await ctAction(() => Promise.all(jobs.map(jb => api('POST', '/api/contracts/make', { template: tpl.id, ...jb, release_cat: f.elements.release_cat.value, release_name: f.elements.release_name.value }))));
+          const r = { ids: rs.flatMap(x => x.ids) };
           toast(r.ids.length > 1 ? `${r.ids.length} contracts created, one per artist` : 'Contract created');
           ctTab = 'contracts'; ctData = null;
           if (r.ids.length > 1) { ctOpen = null; render(); loadContracts(); }

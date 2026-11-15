@@ -1709,10 +1709,11 @@
         <li class="row fm" data-form="${esc(f.id)}" title="See responses">
           ${isOwnerNow() ? `<button type="button" class="grip" aria-label="Drag to reorder ${esc(f.title)}" title="Drag to reorder">${GRIP_SVG}</button>` : '<span></span>'}
           <span class="meta"><b>${esc(f.title)}</b><span>${f.public ? `<a href="${esc(publicUrl(f))}" target="_blank" rel="noopener">/forms/${esc(f.slug)}</a>` : `/forms/${esc(f.slug)}`}</span></span>
-          <span class="badges">${f.public ? '<span class="tag">Open</span>' : '<span class="tag off">Closed</span>'}${f.on_site ? '<span class="tag">On the site</span>' : ''}</span>
           <span class="resp-n"><b>${f.total}</b> ${f.total === 1 ? 'response' : 'responses'}</span>
           ${f.unseen ? `<span class="new-pill">${f.unseen} new</span>` : '<span></span>'}
-          <span class="fm-btns">${f.public ? `<a class="btn ghost sm" href="${esc(publicUrl(f))}" target="_blank" rel="noopener">View ↗</a>` : ''}<button type="button" class="btn ghost sm" data-act="form-resp">Responses</button>${canEditForm(f) ? '<button type="button" class="btn primary sm" data-act="form-edit">Edit</button>' : ''}</span>
+          <span class="fm-site">${f.on_site ? '<span class="tag">On the site</span>' : ''}</span>
+          <span class="fm-state">${isOwnerNow() ? `<button type="button" class="pub-sw${f.public ? ' on' : ''}" data-act="form-public" aria-pressed="${f.public}" title="${f.public ? 'Open: anyone with the link can send it. Click to close it.' : 'Closed: nobody can send it. Click to open it.'}"><span class="pub-knob" aria-hidden="true"></span>${f.public ? 'Open' : 'Closed'}</button>` : f.public ? '<span class="tag">Open</span>' : '<span class="tag off">Closed</span>'}</span>
+          <span class="fm-btns"><a class="btn ghost sm${f.public ? '' : ' is-off'}" href="${esc(publicUrl(f))}" target="_blank" rel="noopener" ${f.public ? '' : 'tabindex="-1" aria-hidden="true"'}>View ↗</a><button type="button" class="btn ghost sm" data-act="form-resp">Responses</button>${canEditForm(f) ? '<button type="button" class="btn primary sm" data-act="form-edit">Edit</button>' : ''}</span>
         </li>`).join('') : '<li class="empty">No forms.</li>'}
       </ol>`;
   }
@@ -1807,7 +1808,7 @@
     const f = $('#form-ed'), d = formOpen?.draft;
     if (!f || !d) return;
     d.title = f.elements.title.value; d.slug = f.elements.slug.value.trim().toLowerCase(); d.description = f.elements.description.value;
-    d.public = f.elements.public.checked;
+    if (f.elements.public) d.public = f.elements.public.checked;   // solo owners
     if (f.elements.on_site) { d.on_site = f.elements.on_site.checked; d.button = f.elements.button.value; }   // solo owners
     d.access = { roles: [], emails: $$('input[name="acc-email"]:checked', f).map(i => i.value) };
     d.fields = $$('.qe', f).map(q => {
@@ -1850,13 +1851,13 @@
             <div class="field"><label for="fe-desc">Description</label><textarea id="fe-desc" name="description" rows="4" maxlength="4000">${esc(d.description || '')}</textarea></div>
           <div class="fe-side">
               <div class="fe-box">
-                <label class="switch"><input type="checkbox" name="public" ${d.public ? 'checked' : ''}><span></span><b>Public link</b></label>
-                <p class="info">Open: anyone with the link can fill it in. Closed: nobody can send responses.</p>
+                ${isOwnerNow() ? `<label class="switch"><input type="checkbox" name="public" ${d.public ? 'checked' : ''}><span></span><b>Public link</b></label>
+                <p class="info">Open: anyone with the link can fill it in. Closed: nobody can send responses.</p>` : `<p class="badges">${d.public ? '<span class="tag">Open</span>' : '<span class="tag off">Closed</span>'}</p>`}
                 ${!isNew && d.public ? `<p class="copy-row"><a href="${esc(publicUrl(d))}" target="_blank" rel="noopener">${esc(publicUrl(d).replace(/^https?:\/\//, ''))}</a> <button type="button" class="btn ghost sm" data-act="copy-link">Copy</button></p>` : ''}
                 ${isOwnerNow() ? `<label class="switch"><input type="checkbox" name="on_site" ${d.on_site ? 'checked' : ''}><span></span><b>On the site</b></label>
                 <p class="info">Shows as a button in “Send your demo” on the homepage (it has to be open).</p>
                 <div class="field"><label for="fe-btn">Button text</label><input id="fe-btn" name="button" value="${esc(d.button || '')}" maxlength="60" placeholder="Submit via Form" autocomplete="off"></div>`
-                  : `<p class="info">${d.on_site ? 'It shows on the homepage. ' : ''}Only owners can put a form on horizonrcrds.com.</p>`}
+                  : `<p class="info">${d.on_site ? 'It shows on the homepage. ' : ''}Only owners can open or close a form and put it on horizonrcrds.com.</p>`}
               </div>
               ${isOwnerNow() ? `<div class="fe-box">
                 <b class="fe-h">Who sees the responses</b>
@@ -1922,6 +1923,17 @@
     if (act === 'form-new') openEditor(null);
     else if (act === 'form-edit') openEditor(formsData.forms.find(f => f.id === id));
     else if (act === 'form-resp') openResponses(id);
+    else if (act === 'form-public') {
+      // abrir / cerrar el formulario desde la lista (no cambia nada más)
+      const f = formsData.forms.find(x => x.id === id), open = !f.public;
+      busy = true;
+      try {
+        await api('POST', '/api/forms', { id: f.id, title: f.title, slug: f.slug, description: f.description, fields: f.fields, public: open, on_site: f.on_site, button: f.button, access: f.access });
+        f.public = open; render();
+        toast(open ? `${f.title} is open: ${publicUrl(f).replace(/^https?:\/\//, '')}` : `${f.title} is closed`);
+      } catch (err) { toast(err.message); }
+      finally { busy = false; }
+    }
     else if (act === 'form-back') { formOpen = null; render(); loadForms(); }
     else if (act === 'form-up' || act === 'form-down') {
       const ids = formsData.forms.map(f => f.id), i = ids.indexOf(id), j = act === 'form-up' ? i - 1 : i + 1;

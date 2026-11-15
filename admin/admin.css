@@ -783,8 +783,9 @@ a.lk.on:hover { color: #fff; background: rgba(255, 255, 255, .08); }
 @media (max-width: 640px) { .row.fm { grid-template-columns: minmax(0, 1fr) auto; } }
 
 /* Número de respuestas nuevas: números de ancho fijo (el «1» queda centrado a ojo, no solo en la medida) */
-.nbadge { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-width: 20px; height: 20px; padding: 0 5px; font: 700 11px/1 'Barlow', sans-serif; font-variant-numeric: tabular-nums lining-nums; vertical-align: middle; position: relative; top: -1.5px; }
+.nbadge { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; min-width: 20px; height: 20px; padding: 0 5px; font: 700 11px/1 'Barlow', sans-serif; vertical-align: middle; position: relative; top: -1.5px; }
 .new-pill { font-variant-numeric: tabular-nums; }
 
 /* la cifra se recorta a su altura real (de la base a lo alto de la cifra) y esa caja se centra: igual en Windows, Mac y móvil */
 .nb-n { display: block; line-height: 1; text-box: trim-both cap alphabetic; }
+.nb-n.one { transform: translateX(-0.05em); } /* el palo del «1» justo en el centro */

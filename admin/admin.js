@@ -371,7 +371,7 @@
   }
 
   function shell(inner) {
-    const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}${id === 'forms' ? `<span class="nbadge" id="forms-badge" ${unseen.total ? '' : 'hidden'}><span class="nb-n">${unseen.total > 99 ? '99+' : unseen.total}</span></span>` : ''}</button>`;
+    const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}${id === 'forms' ? `<span class="nbadge" id="forms-badge" ${unseen.total ? '' : 'hidden'}><span class="nb-n${unseen.total === 1 ? ' one' : ''}">${unseen.total > 99 ? '99+' : unseen.total}</span></span>` : ''}</button>`;
     const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', forms: 'Forms', contracts: 'Contracts' };
     const initials = (u.name || u.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
     return `
@@ -1306,7 +1306,7 @@
   document.addEventListener('click', e => {
     const row = e.target.closest('.row.fm');
     if (!row || busy || e.target.closest('a, button, input, label')) return;
-    const b = row.querySelector(can('forms', 'edit') && !preview ? '[data-act="form-edit"]' : '[data-act="form-resp"]');
+    const b = row.querySelector('[data-act="form-resp"]');
     b?.click();
   });
   async function saveSectionOrder(list) {
@@ -1578,7 +1578,7 @@
       const grew = r.total > unseen.total;
       unseen = r;
       const b = $('#forms-badge');
-      if (b) { b.hidden = !r.total; b.innerHTML = `<span class="nb-n">${r.total > 99 ? '99+' : r.total}</span>`; }
+      if (b) { b.hidden = !r.total; b.innerHTML = `<span class="nb-n${r.total === 1 ? ' one' : ''}">${r.total > 99 ? '99+' : r.total}</span>`; }
       document.title = document.title.replace(/^\(\d+\+?\) /, '');
       if (r.total) document.title = `(${r.total}) ${document.title}`;
       // lista de formularios: se actualiza por detrás, sin «Loading…» ni redibujar si nada cambió (así no parpadea)
@@ -1614,9 +1614,9 @@
     return `
       <div class="head"><div><p class="eyebrow">Responses and links</p><h1>FORMS <span class="count">${list.length}</span></h1></div>
         ${own ? '<button type="button" class="btn primary" data-act="form-new">+ New form</button>' : ''}</div>
-      <p class="info lead">${own ? 'Click a form to edit it with a live preview of how it looks on the site. Owners drag ⋮⋮ to set the order everyone sees. Each form has its own public link (when open) and can appear as a button in “Send your demo” on the site.' : 'The forms you have access to.'}</p>
+      <p class="info lead">${own ? 'Click a form to see its responses; “Edit” changes it with a live preview of how it looks on the site. Owners drag ⋮⋮ to set the order everyone sees. Each form has its own public link (when open) and can appear as a button in “Send your demo” on the site.' : 'The forms you have access to.'}</p>
       <ol class="list forms-list">${list.length ? list.map((f, i) => `
-        <li class="row fm" data-form="${esc(f.id)}" title="${own ? 'Open to edit' : 'See responses'}">
+        <li class="row fm" data-form="${esc(f.id)}" title="See responses">
           ${isOwnerNow() ? `<button type="button" class="grip" aria-label="Drag to reorder ${esc(f.title)}" title="Drag to reorder">${GRIP_SVG}</button>` : '<span></span>'}
           <span class="meta"><b>${esc(f.title)}</b><span>${f.public ? `<a href="${esc(publicUrl(f))}" target="_blank" rel="noopener">/forms/${esc(f.slug)}</a>` : `/forms/${esc(f.slug)}`}</span></span>
           <span class="badges">${f.public ? '<span class="tag">Open</span>' : '<span class="tag off">Closed</span>'}${f.on_site ? '<span class="tag">On the site</span>' : ''}</span>
@@ -1651,7 +1651,7 @@
     return `
       <button type="button" class="back" data-act="form-back">← Forms</button>
       <div class="head"><div><p class="eyebrow">Responses</p><h1>${esc(f.title)} <span class="count">${f.total}</span></h1></div>
-        ${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Download (Excel / CSV)</button>' : ''}</div>
+        <div class="head-btns" data-form="${esc(f.id)}">${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Download (Excel / CSV)</button>' : ''}${can('forms', 'edit') && !preview ? '<button type="button" class="btn primary" data-act="form-edit">Edit form</button>' : ''}</div></div>
       ${formOpen.err ? `<p class="login-error" role="alert">${esc(formOpen.err)}</p>` : ''}
       ${!rs ? '<p class="info">Loading…</p>' : rs.length ? `<div class="resps">${rs.map(r => `
         <article class="resp${r.seen ? '' : ' is-new'}" data-resp="${r.id}">

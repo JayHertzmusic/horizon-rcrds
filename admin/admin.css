@@ -763,3 +763,12 @@ a.lk.on:hover { color: #fff; background: rgba(255, 255, 255, .08); }
   .editor.fe .fe-prev { position: relative; top: 0; height: auto; min-height: 0; }
   .editor.fe .fe-actions { position: sticky; bottom: 0; margin-top: 24px; }
 }
+@media (min-width: 1201px) {
+  /* la vista previa ocupa toda la altura, desde arriba (al nivel de «← Forms») */
+  .editor.fe { display: grid; grid-template-columns: minmax(440px, 620px) minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); column-gap: 32px; }
+  .editor.fe .fe-grid { display: contents; }
+  .editor.fe > .back { grid-column: 1; grid-row: 1; justify-self: start; }
+  .editor.fe > h1 { grid-column: 1; grid-row: 2; }
+  .editor.fe .fe-main { grid-column: 1; grid-row: 3; }
+  .editor.fe .fe-prev { grid-column: 2; grid-row: 1 / -1; }
+}

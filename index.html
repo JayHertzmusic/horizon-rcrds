@@ -479,23 +479,33 @@
     .dx-facts span { font-family: 'Bebas Neue', sans-serif; font-size: 1.05rem; letter-spacing: 0.04em; color: var(--accent-color); }
     .dx-facts p { font-size: 0.78rem; color: #6b7280; line-height: 1.6; margin: 4px 0 0; }
 
-    /* formulario abierto en la propia sección (a la derecha; en móvil, debajo) */
-    .dx-grid.has-form { max-width: none; grid-template-columns: minmax(0, 560px) minmax(0, 1fr); column-gap: clamp(32px, 5vw, 80px); align-items: center; }
-    .dx-form { display: none; }
-    .dx-grid.has-form .dx-form { display: block; animation: dx-in .45s cubic-bezier(.2, .8, .2, 1); }
-    @keyframes dx-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
-    .dx-form { width: 100%; max-width: 460px; justify-self: end; }
-    .dx-form-card { position: relative; border: 1px solid #1f1f1f; border-top: 2px solid var(--accent-color); border-radius: 2px; background: rgba(10,10,10,0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); overflow: hidden; }
-    .dx-form-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 16px 0 24px; }
-    .dx-form-head span { font-family: 'Bebas Neue', sans-serif; font-size: 1.7rem; line-height: 1; letter-spacing: 0.03em; color: #fff; }
-    .dx-form-x { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid #262626; border-radius: 2px; background: none; color: #9ca3af; cursor: pointer; transition: border-color .2s, color .2s; }
-    .dx-form-x:hover { border-color: #fff; color: #fff; }
-    .dx-form iframe { display: block; width: 100%; height: 640px; border: 0; background: transparent; transition: height .25s ease, opacity .25s ease; }
-    .dx-form iframe.loading { opacity: 0; }
+    /* panel lateral: entra desde la derecha por encima de las covers; el texto no se mueve */
+    .dx-drawer { position: fixed; inset: 0 0 0 auto; width: min(520px, 100vw); height: 100vh; height: 100dvh; max-width: 100vw; max-height: none; margin: 0; padding: 0; border: 0; border-left: 1px solid #1f1f1f; background: #0b0b0b; color: #fff; flex-direction: column; overflow: hidden; }
+    .dx-drawer[open] { display: flex; animation: dx-slide-in .45s cubic-bezier(.2, .8, .2, 1); }
+    .dx-drawer.leaving { animation: dx-slide-out .4s cubic-bezier(.4, 0, .6, 1) forwards; }
+    .dx-drawer[open]::backdrop { animation: dx-fade .45s ease; }
+    .dx-drawer.leaving::backdrop { animation: dx-fade .4s ease reverse forwards; }
+    @keyframes dx-slide-in { from { transform: translateX(100%); } to { transform: none; } }
+    @keyframes dx-slide-out { from { transform: none; } to { transform: translateX(100%); } }
+    @keyframes dx-fade { from { opacity: 0; } to { opacity: 1; } }
+    .dx-drawer::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: var(--accent-color); }
+    .dx-drawer::backdrop { background: rgba(0, 0, 0, 0.35); }
+    .dx-drawer-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 22px 22px 18px 30px; border-bottom: 1px solid #1a1a1a; }
+    .dx-drawer-head small { display: block; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; color: var(--accent-color); margin-bottom: 6px; }
+    .dx-drawer-head b { display: block; font-family: 'Bebas Neue', sans-serif; font-weight: 400; font-size: 2.1rem; line-height: 1; letter-spacing: 0.03em; }
+    .dx-drawer-tools { display: flex; align-items: center; gap: 14px; }
+    .dx-drawer-ext { font-size: 0.64rem; font-weight: 700; letter-spacing: 0.18em; text-transform: uppercase; color: #9ca3af; text-decoration: none; white-space: nowrap; }
+    .dx-drawer-ext:hover { color: #fff; }
+    .dx-drawer-x { display: grid; place-items: center; width: 38px; height: 38px; border: 1px solid #262626; border-radius: 2px; background: none; color: #d1d5db; cursor: pointer; transition: border-color .2s, color .2s; }
+    .dx-drawer-x:hover { border-color: #fff; color: #fff; }
+    .dx-drawer-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-left: 6px; }
+    .dx-drawer.lr .dx-drawer-body { overflow: hidden; padding-left: 0; }
+    .dx-drawer iframe { display: block; width: 100%; height: 600px; border: 0; background: transparent; transition: opacity .25s ease; }
+    .dx-drawer.lr iframe { height: 100%; }
+    .dx-drawer iframe.loading { opacity: 0; }
+    @media (prefers-reduced-motion: reduce) { .dx-drawer[open], .dx-drawer.leaving, .dx-drawer::backdrop { animation: none !important; } }
     .dx-btn-on { border-color: var(--accent-color) !important; color: #fff !important; background: rgba(var(--accent-color-rgb), 0.14) !important; }
     @media (max-width: 1023px) {
-      .dx-grid.has-form { grid-template-columns: minmax(0, 1fr); }
-      .dx-grid.has-form .dx-form { margin-top: 36px; max-width: none; justify-self: stretch; }
       .dx-grid { grid-template-columns: minmax(0, 1fr); }
      .dx-col { width: 140px; }
       .dx-shade { background: linear-gradient(180deg, #0a0a0a 0%, rgba(10,10,10,0.82) 12%, rgba(10,10,10,0.88) 60%, rgba(10,10,10,0.7) 85%, #0a0a0a 100%), radial-gradient(ellipse 80% 40% at 50% 80%, rgba(var(--accent-color-rgb), 0.2), transparent 70%); }
@@ -1207,7 +1217,7 @@
           We're looking for powerful club records with strong identity, clean production and real energy. If your track is built for festivals, clubs or emotional moments — send it.
         </p>
         <div class="flex flex-wrap items-center gap-4 mb-9">
-          <a href="https://www.labelradar.com/labels/horizonrcrds/portal" target="_blank" rel="noopener noreferrer" class="btn-primary" style="font-size:0.75rem;padding:17px 38px;">
+          <a href="https://www.labelradar.com/labels/horizonrcrds/portal" target="_blank" rel="noopener noreferrer" data-panel="lr" data-title="LabelRadar" class="btn-primary" style="font-size:0.75rem;padding:17px 38px;">
             <i class="fa-solid fa-paper-plane"></i> Submit via LabelRadar
           </a>
           <a id="dx-form-btn" href="/forms/demo-submission" data-title="Demo Submission" class="btn-outline dx-ghost" style="font-size:0.75rem;padding:16px 30px;">
@@ -1224,12 +1234,6 @@
         </div>
       </div>
 
-      <div class="dx-form" id="dx-form" aria-live="polite">
-        <div class="dx-form-card">
-          <div class="dx-form-head"><span id="dx-form-name">Demo submission</span><button type="button" class="dx-form-x" id="dx-form-x" aria-label="Close the form"><i class="fa-solid fa-xmark"></i></button></div>
-          <iframe id="dx-form-frame" title="Demo submission form" scrolling="no"></iframe>
-        </div>
-      </div>
 
     </div>
 
@@ -1240,6 +1244,14 @@
     </div>
   </div>
 </section>
+  <dialog class="dx-drawer" id="dx-drawer" aria-labelledby="dx-drawer-name">
+    <div class="dx-drawer-head">
+      <div><small>Send your demo</small><b id="dx-drawer-name">Demo Submission</b></div>
+      <div class="dx-drawer-tools"><a id="dx-drawer-ext" class="dx-drawer-ext" target="_blank" rel="noopener noreferrer" hidden>Open in new tab <i class="fa-solid fa-arrow-up-right-from-square"></i></a><button type="button" class="dx-drawer-x" id="dx-drawer-x" aria-label="Close"><i class="fa-solid fa-xmark"></i></button></div>
+    </div>
+    <div class="dx-drawer-body" data-lenis-panel><iframe id="dx-drawer-frame" title="Demo submission form" scrolling="no"></iframe></div>
+  </dialog>
+
 
 <!-- ═══════════════════════════════════════
      PLAYLISTS — Curated by HORIZON
@@ -2299,39 +2311,52 @@ document.addEventListener('DOMContentLoaded', () => {
     btn.remove();
   }).catch(function () {});
 })();
-/* «Submit via Form» abre el formulario ahí mismo, al lado del texto (con el ratón del medio o Ctrl sigue abriendo la página aparte) */
+/* «Submit via LabelRadar» y «Submit via Form» abren un panel que entra desde la derecha (el texto y las covers no se mueven).
+   Con Ctrl o el botón del medio siguen abriendo la página aparte. */
 (function () {
-  var grid = document.querySelector('#demos .dx-grid'), box = document.getElementById('dx-form'),
-      frame = document.getElementById('dx-form-frame'), name = document.getElementById('dx-form-name');
-  if (!grid || !box || !frame) return;
-  var current = null;
+  var drawer = document.getElementById('dx-drawer'), frame = document.getElementById('dx-drawer-frame'),
+      name = document.getElementById('dx-drawer-name'), ext = document.getElementById('dx-drawer-ext');
+  if (!drawer || !frame || typeof drawer.showModal !== 'function') return;
+  var current = null, opener = null, closing = 0;
   function close() {
-    grid.classList.remove('has-form'); frame.removeAttribute('src'); current = null;
-    document.querySelectorAll('#demos .dx-btn-on').forEach(function (b) { b.classList.remove('dx-btn-on'); b.setAttribute('aria-expanded', 'false'); });
+    if (!drawer.open || closing) return;
+    drawer.classList.add('leaving');
+    closing = setTimeout(function () { closing = 0; drawer.classList.remove('leaving'); drawer.close(); }, 420);
   }
+  drawer.addEventListener('close', function () { frame.removeAttribute('src'); current = null; if (opener) opener.focus({ preventScroll: true }); });
+  drawer.addEventListener('cancel', function (e) { e.preventDefault(); close(); });
+  drawer.addEventListener('click', function (e) { if (e.target === drawer) close(); }); // clic fuera del panel
+  document.getElementById('dx-drawer-x').addEventListener('click', close);
   document.addEventListener('click', function (e) {
-    var a = e.target.closest && e.target.closest('#demos a[href^="/forms/"]');
+    var a = e.target.closest && e.target.closest('#demos a[href^="/forms/"], #demos a[data-panel="lr"]');
     if (!a || e.ctrlKey || e.metaKey || e.shiftKey || e.button) return;
     e.preventDefault();
-    var href = a.getAttribute('href');
-    if (current === href) { close(); return; }
-    close();
-    current = href;
-    frame.style.height = '640px';
-    var acc = (getComputedStyle(document.documentElement).getPropertyValue('--accent-color') || '').trim();
-    frame.src = href + (href.indexOf('?') < 0 ? '?' : '&') + 'embed=1' + (/^#[0-9a-f]{3,6}$/i.test(acc) ? '&accent=' + encodeURIComponent(acc) : '');
-    name.textContent = a.getAttribute('data-title') || 'Demo submission';
-    frame.classList.add('loading');
-    a.classList.add('dx-btn-on'); a.setAttribute('aria-expanded', 'true');
-    grid.classList.add('has-form');
-    if (window.innerWidth < 1024) setTimeout(function () { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60);
+    var href = a.getAttribute('href'), lr = a.getAttribute('data-panel') === 'lr';
+    opener = a;
+    if (current !== href) {
+      current = href;
+      frame.classList.add('loading');
+      if (lr) { frame.style.height = ''; frame.src = href; }
+      else {
+        var acc = (getComputedStyle(document.documentElement).getPropertyValue('--accent-color') || '').trim();
+        frame.style.height = '600px';
+        frame.src = href + (href.indexOf('?') < 0 ? '?' : '&') + 'embed=1' + (/^#[0-9a-f]{3,6}$/i.test(acc) ? '&accent=' + encodeURIComponent(acc) : '');
+      }
+      frame.title = lr ? 'LabelRadar submission' : 'Demo submission form';
+      frame.setAttribute('scrolling', lr ? 'yes' : 'no');
+      drawer.classList.toggle('lr', lr);
+      name.textContent = a.getAttribute('data-title') || 'Demo Submission';
+      ext.hidden = !lr; if (lr) ext.href = href;
+    }
+    if (closing) { clearTimeout(closing); closing = 0; }
+    drawer.classList.remove('leaving');
+    if (!drawer.open) drawer.showModal();
   });
   frame.addEventListener('load', function () { setTimeout(function () { frame.classList.remove('loading'); }, 60); });
-  document.getElementById('dx-form-x').addEventListener('click', close);
   window.addEventListener('message', function (e) {
     if (e.origin !== location.origin || e.source !== frame.contentWindow || !e.data) return;
-    if (e.data.type === 'hz-form-h') frame.style.height = Math.max(320, Math.min(e.data.h, 6000)) + 'px';
-    if (e.data.type === 'hz-form-sent') { var r = box.getBoundingClientRect(); if (r.top < 0) box.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    if (e.data.type === 'hz-form-h' && !drawer.classList.contains('lr')) frame.style.height = Math.max(320, Math.min(e.data.h, 6000)) + 'px';
+    if (e.data.type === 'hz-form-sent') frame.parentElement.scrollTop = 0;
   });
 })();
 </script>

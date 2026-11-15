@@ -8,8 +8,9 @@ const FONT = "Helvetica,Arial,sans-serif";
 function layout(title, body, button) {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"></head>
 <body style="margin:0;padding:0;background:#ffffff">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;padding:36px 12px 28px"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;font-family:${FONT};color:#111111">
+<center style="width:100%;background:#ffffff">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;background:#ffffff"><tr><td align="center" style="padding:36px 12px 28px">
+<table role="presentation" align="center" width="560" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;margin:0 auto;font-family:${FONT};color:#111111">
 <tr><td align="center" style="padding:0 0 24px"><a href="${SITE}" style="text-decoration:none"><img src="${SITE}/assets/favicon_icon.png" width="52" height="52" alt="HORIZON RCRDS" style="display:block;margin:0 auto;border:0;width:52px;height:52px;border-radius:12px"></a>
   <div style="margin-top:14px;font-family:${FONT};font-size:13px;font-weight:400;letter-spacing:6px;padding-left:6px;color:#111111">HORIZON RCRDS</div></td></tr>
 <tr><td style="background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;padding:32px 30px 28px">
@@ -20,7 +21,8 @@ function layout(title, body, button) {
 </td></tr>
 <tr><td align="center" style="padding:22px 10px 0;font-size:12px;line-height:1.6;color:#9ca3af">This link is private and only for you. Any questions? Just reply to this email.<br>
   <a href="${SITE}" style="color:#6b7280;text-decoration:none;letter-spacing:2px;padding-left:2px">horizonrcrds.com</a></td></tr>
-</table></td></tr></table></body></html>`;
+</table></td></tr></table></center>
+<div style="display:none;max-height:0;overflow:hidden;font-size:1px;line-height:1px;color:#ffffff;opacity:0">${crypto.randomUUID()}</div></body></html>`;
 }
 const textOf = html => html.replace(/<br\s*\/?>/g, '\n').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\n{3,}/g, '\n\n').trim();
 // nombre del contrato en su propia línea, debajo de la frase

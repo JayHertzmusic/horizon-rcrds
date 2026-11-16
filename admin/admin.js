@@ -258,7 +258,7 @@
   function text(form, name, label, { max = 120, missing = '' } = {}) {
     const v = String(form.elements[name]?.value ?? '').replace(/\s+/g, ' ').trim();
     if (missing && !v) throw new FieldError(name, missing);
-    if (/[<>]/.test(v)) throw new FieldError(name, `${label}: don’t use the characters < ni > (the site reads them as code).`);
+    if (/[<>]/.test(v)) throw new FieldError(name, `${label}: don’t use the characters < or > (the site reads them as code).`);
     if (v.length > max) throw new FieldError(name, `${label}: maximum ${max} characters.`);
     return v;
   }
@@ -746,7 +746,7 @@
     const isNew = !editing.key, orig = editing.orig || {};
     const v = {
       title: text(form, 'title', 'Title', { missing: 'Title missing.' }),
-      artist: text(form, 'artist', 'Artistas', { max: 160, missing: 'Artists missing.' }),
+      artist: text(form, 'artist', 'Artists', { max: 160, missing: 'Artists missing.' }),
       catalog: text(form, 'catalog', 'Catalogue no.', { max: 20, missing: 'Catalogue number missing.' }),
       stream_link: link(form, 'stream_link', 'Stream', null),
       spotify_link: link(form, 'spotify_link', 'Spotify', HOSTS.spotify),
@@ -1005,7 +1005,7 @@
     const v = {
       soundcloud_link: link(form, 'soundcloud_link', 'SoundCloud', HOSTS.soundcloud, 'SoundCloud link missing.'),
       title: text(form, 'title', 'Title', { missing: 'Title missing.' }),
-      number: normNumber(text(form, 'number', 'Nº', { max: 12, missing: 'Number missing.' })),
+      number: normNumber(text(form, 'number', 'Number', { max: 12, missing: 'Number missing.' })),
       artist: text(form, 'artist', 'Guest artist', { max: 120 }),
       youtube_link: link(form, 'youtube_link', 'YouTube', HOSTS.youtube),
     };
@@ -1042,7 +1042,7 @@
         .filter(f => f && safeFile(f) && !used(f)).map(f => P('assets/' + f));
       return { mixtapes: list, remove };
     });
-    afterPublish(res, isNew ? 'Mixtape publicado' : 'Changes saved', [jsonProbe('mixtapes.json', res.out.mixtapes), ...uploads.map(u => fileProbe(u.path.split('/').pop(), u.blob))]);
+    afterPublish(res, isNew ? 'Mixtape published' : 'Changes saved', [jsonProbe('mixtapes.json', res.out.mixtapes), ...uploads.map(u => fileProbe(u.path.split('/').pop(), u.blob))]);
     go('radio');
   }
   async function deleteMixtape(exclude) {
@@ -1062,7 +1062,7 @@
         ignore: exclude ? ignoreEntry(fresh, gone, gone.title || `Mixtape ${gone.number || ''}`, 'mixtape') : undefined,
       };
     });
-    afterPublish(res, exclude ? 'Mixtape excluido' : 'Mixtape eliminado', [jsonProbe('mixtapes.json', res.out.mixtapes)]);
+    afterPublish(res, exclude ? 'Mixtape excluido' : 'Mixtape deleted', [jsonProbe('mixtapes.json', res.out.mixtapes)]);
     go('radio');
     return true;
   }
@@ -1148,7 +1148,7 @@
       const old = idx >= 0 ? fresh.playlists[idx].image : null;
       return { playlists: list, remove: old && old !== image && safeFile(old) && !list.some(p => p.image === old) && !fresh.releases.some(r => r.image === old) ? [P('assets/' + old)] : [] };
     });
-    afterPublish(res, isNew ? 'Playlist publicada' : 'Changes saved', [jsonProbe('playlists.json', res.out.playlists), ...uploads.map(u => fileProbe(image, u.blob))]);
+    afterPublish(res, isNew ? 'Playlist published' : 'Changes saved', [jsonProbe('playlists.json', res.out.playlists), ...uploads.map(u => fileProbe(image, u.blob))]);
     go('playlists');
   }
   async function deletePlaylist() {
@@ -1159,7 +1159,7 @@
       const [gone] = list.splice(idx, 1);
       return { playlists: list, remove: gone.image && safeFile(gone.image) && !list.some(x => x.image === gone.image) && !fresh.releases.some(r => r.image === gone.image) ? [P('assets/' + gone.image)] : [] };
     });
-    afterPublish(res, 'Playlist eliminada', [jsonProbe('playlists.json', res.out.playlists)]);
+    afterPublish(res, 'Playlist deleted', [jsonProbe('playlists.json', res.out.playlists)]);
     go('playlists');
     return true;
   }
@@ -1629,7 +1629,7 @@
     if (t.id === 'mx-file' && t.files[0]) { setMixAudio(t.files[0]); t.value = ''; }
     if (t.id === 'f-sc') scFill(!editing?.key);
     if (t.classList.contains('log-who')) { logState.who = t.value; logState.items = []; logState.loaded = false; loadLog(false); render(); }
-    if (t.classList.contains('color-in') && !busy) teamAction(() => api('POST', '/api/team/members', { email: t.dataset.member, color: t.value }), 'Color guardado');
+    if (t.classList.contains('color-in') && !busy) teamAction(() => api('POST', '/api/team/members', { email: t.dataset.member, color: t.value }), 'Colour saved');
     if (t.classList.contains('name-in') && !busy) teamAction(() => api('POST', '/api/team/members', { email: t.dataset.member, label: t.value.trim() }), 'Name saved');
     if (t.classList.contains('role-sel') && t.value && !busy) teamAction(() => api('POST', '/api/team/members', { email: t.dataset.member, role_id: t.value }), 'Role changed');
     // Editar o Eliminar llevan Ver; sin Ver no hay nada más
@@ -2199,7 +2199,8 @@
     } else if (['q-add', 'q-sec', 'q-up', 'q-down', 'q-del'].includes(act)) {
       syncDraft();
       const fs = formOpen.draft.fields, qi = fs.findIndex(x => x.id === t.closest('.qe')?.dataset.id);
-      const nid = () => { let k = fs.length + 1; while (fs.some(x => x.id === 'q' + k)) k++; return 'q' + k; };
+      // id que no se repite nunca (si fuera el de una pregunta borrada, sus respuestas antiguas saldrían en la nueva)
+      const nid = () => { let id; do { id = 'q' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5); } while (fs.some(x => x.id === id)); return id; };
       if (act === 'q-add') fs.push({ id: nid(), type: 'text', label: '', help: '', required: false });
       if (act === 'q-sec') fs.push({ id: nid(), type: 'section', label: '', help: '' });
       if (act === 'q-del') fs.splice(qi, 1);
@@ -2225,7 +2226,7 @@
     const d = formOpen.draft;
     if (!d.slug && d.title) d.slug = d.title.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
     try {
-      const r = await formAction(() => api('POST', '/api/forms', { id: formOpen.id || undefined, ...d }), formOpen.id ? 'Formulario guardado' : 'Formulario creado');
+      const r = await formAction(() => api('POST', '/api/forms', { id: formOpen.id || undefined, ...d }), formOpen.id ? 'Form saved' : 'Form created');
       formOpen = null; formsData = null; render();
     } catch { /* aviso ya mostrado */ }
   }, true);

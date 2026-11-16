@@ -89,7 +89,8 @@ function mergeFields(web, google) {
     const k = left.findIndex(w => normQ(w.label) === normQ(gq.label) && (w.type === 'section') === (gq.type === 'section'));
     const old = k >= 0 ? left.splice(k, 1)[0] : null;
     let id = old?.id;
-    if (!id) { while (used.has('q' + n)) n++; id = 'q' + n; used.add(id); }
+    // pregunta nueva: un id que no se repite nunca (uno de una pregunta borrada mezclaría sus respuestas antiguas)
+    if (!id) { do { id = 'q' + Date.now().toString(36) + (n++).toString(36); } while (used.has(id)); used.add(id); }
     const type = old && ['email', 'url'].includes(old.type) && gq.type === 'text' ? old.type : gq.type;
     return { ...gq, id, type };
   });

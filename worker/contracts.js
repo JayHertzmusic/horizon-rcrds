@@ -420,6 +420,7 @@ export async function contractsApi(req, env, s, url, can, audit, ctx) {
       const idx = sg.length ? Math.max(...sg.map(r => r.idx)) + 1 : 0;
       await DB.prepare('INSERT INTO contract_signers (id, contract_id, idx, label) VALUES (?, ?, ?, ?)').bind('s_' + crypto.randomUUID().slice(0, 10), c.id, idx, clean(body.label, 60) || `Artist ${idx + 1}`).run();
       if (sg.length === 1 && sg[0].label === 'Artist') await DB.prepare('UPDATE contract_signers SET label = ? WHERE id = ?').bind('Artist 1', sg[0].id).run();
+      await audit(`Added a signer to “${c.title}”`);
       return { ok: true };
     }
     if (body.action === 'remove') {
@@ -428,6 +429,16 @@ export async function contractsApi(req, env, s, url, can, audit, ctx) {
       if (r.signed_at) throw new ContractError(409, 'That person has already signed: they can’t be removed.');
       if (sg.length <= 1) throw new ContractError(400, 'A contract needs at least one signer.');
       await DB.prepare('DELETE FROM contract_signers WHERE id = ?').bind(r.id).run();
+      await audit(`Removed the signer “${r.label || r.email || 'Artist'}” from “${c.title}”`);
+      // si los que quedan ya habían firmado todos, el contrato queda firmado (antes se quedaba esperando a nadie)
+      const rest = sg.filter(x => x.id !== r.id);
+      if (c.status === 'sent' && rest.every(x => x.signed_at)) {
+        const at = Math.max(...rest.map(x => x.signed_at));
+        await DB.prepare(`UPDATE contracts SET status = 'signed', signed_at = ?, doc_hash = ?, updated_at = ? WHERE id = ?`).bind(at, c.pdf_hash, now(), c.id).run();
+        const job = finalize(env, c.id, url.origin).catch(e => console.error('finalize', e));
+        if (ctx?.waitUntil) ctx.waitUntil(job); else await job;
+        return { ok: true, signed: true };
+      }
       return { ok: true };
     }
     throw new ContractError(400, 'Invalid action.');

@@ -420,7 +420,7 @@ async function publish(req, env, s) {
   if (!s.owner) checkChange(s, old, next, uploads.map(u => u.name), removes);
   if (!changed.length && !uploads.length && !removes.length) return json({ unchanged: true, version: old.version });
 
-  const t = now(), version = old.version + 1, who = s.sync ? 'sync' : s.email, message = clean(meta.message, 300) || 'Cambio en la web';
+  const t = now(), version = old.version + 1, who = s.sync ? 'sync' : s.email, message = clean(meta.message, 300) || 'Changed the site';
   for (const u of uploads) await env.FILES.put('f/' + u.name, u.data, { metadata: { type: u.type, at: t } });
   const q = [env.DB.prepare(`UPDATE site_meta SET v = ? WHERE k = 'version'`).bind(version)];
   for (const k of changed) {

@@ -11,7 +11,7 @@
    Permiso: sección «contracts» de los roles (ver / editar). Los owners siempre. */
 
 import { inviteMail, doneMail, mailName } from './contract-mail.js';
-import { horizonToken, docFromTemplate, saveToDrive } from './gdocs.js';
+import { horizonToken, docFromTemplate, saveToDrive, docValues } from './gdocs.js';
 
 export class ContractError extends Error { constructor(status, message) { super(message); this.status = status; } }
 const parse = s => { try { return JSON.parse(s); } catch { return null; } };
@@ -393,6 +393,16 @@ export async function contractsApi(req, env, s, url, can, audit, ctx) {
     if (c.pdf && c.pdf !== key) await env.FILES.delete(c.pdf);
     await DB.prepare('UPDATE contracts SET pdf = ?, pdf_hash = ?, pdf_pages = ?, pdf_size = ?, pdf_state = NULL, updated_at = ? WHERE id = ?').bind(key, hash, pages, buf.byteLength, now(), c.id).run();
     if (!(c.pdf_pages && c.pdf_pages === pages)) await DB.prepare('UPDATE contract_signers SET box = NULL WHERE contract_id = ?').bind(c.id).run();
+    // contrato (no plantilla): sus datos se ponen al día con lo que dice ahora el Doc → el artista firma con el nombre legal correcto
+    if (c.kind !== 'template') try {
+      const now_ = await docValues(env, c.doc_url), vars = parse(c.vars) || {};
+      let changed = false;
+      for (const [k, v] of Object.entries(now_)) {
+        const key = k === 'Artists clause name' ? null : k === 'Artists clause legal' ? null : k;   // (la cláusula junta a todos: no es un dato suelto)
+        if (key && key in vars && vars[key] !== v) { vars[key] = v; changed = true; }
+      }
+      if (changed) await DB.prepare('UPDATE contracts SET vars = ? WHERE id = ?').bind(JSON.stringify(vars), c.id).run();
+    } catch (e) { console.error('doc values', e.message); }
     await audit(`Generated the PDF of “${c.title}” from the Google Doc (${pages} pages)`);
     return { ok: true, pages, changedPages: !(c.pdf_pages && c.pdf_pages === pages) };
   }

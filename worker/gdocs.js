@@ -134,6 +134,21 @@ export async function docFromTemplate(env, docUrl, values, title) {
   return `https://docs.google.com/document/d/${copy.id}/edit${tab ? '?tab=' + tab : ''}`;
 }
 
+// los datos que pone ahora el Doc de un contrato (si se corrigió algo a mano en Google Docs, p. ej. un nombre legal)
+export async function docValues(env, docUrl) {
+  const tok = await horizonToken(env), d = docParts(docUrl);
+  if (!d) return {};
+  const src = await gapi(tok, `https://docs.googleapis.com/v1/documents/${d.id}?includeTabsContent=true&fields=${DOC_FIELDS}`);
+  const tab = d.tab ? findTab(src.tabs, d.tab) : src.tabs?.[0];
+  if (!tab) return {};
+  const { text } = docText(tab.documentTab?.body?.content), out = {};
+  for (const b of findBlanks(text)) {
+    const v = b.value.replace(/\s+/g, ' ').trim();
+    if (v && !isBlank(v) && !/^\{\{/.test(v) && !(b.name in out)) out[b.name] = v;
+  }
+  return out;
+}
+
 /* Guardar el contrato firmado en Drive: carpeta raíz → Año → «HRZ#xxx - Nombre» (se crean si no existen) */
 const FOLDER = 'application/vnd.google-apps.folder';
 async function gDrive(tok, path, opts = {}) {

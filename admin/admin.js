@@ -3037,7 +3037,7 @@
       const f = $('#ct-ed'), signers = $$('.signer', f).map(el => ({ id: el.dataset.sg, label: el.querySelector('.sg-label')?.value, email: el.querySelector('.sg-email')?.value })).filter(x => x.label !== undefined);
       try {
         if (signers.length) await ctAction(() => api('POST', '/api/contracts', { id: c.id, title: f.elements.title?.value ?? c.title, artist: f.elements.artist?.value ?? c.artist, email: signers[0]?.email ?? c.email, notes: f.elements.notes.value, signers }));
-        if (!await confirmBox(isDraft(c) ? `Send this draft to ${c.signers[0]?.email || 'the artist'}? They can only read it online.` : `Send “${c.title}” to sign? ${c.signers.length > 1 ? 'Each signer gets' : 'The artist gets'} an email with a private link.`, 'Send')) return;
+        if (!await confirmBox(isDraft(c) ? `Send this draft to ${signers[0]?.email || c.signers[0]?.email || 'the artist'}? They can only read it online.` : `Send “${c.title}” to sign? ${c.signers.length > 1 ? 'Each signer gets' : 'The artist gets'} an email with a private link.`, 'Send')) return;
         const r = await ctAction(() => api('POST', `/api/contracts/${encodeURIComponent(c.id)}/send`));
         toast(r?.ok ? `Sent: ${r.sent} email${r.sent === 1 ? '' : 's'}` : r?.error || 'The email could not be sent');
         if (r?.ok) { ctOpen = null; ctTab = 'contracts'; ctData = null; render(); loadContracts(); } else ctRefresh();
@@ -3049,11 +3049,12 @@
     } else if (a === 'del') {
       if (!await confirmBox(`Delete “${c.title}”${c.status === 'signed' ? ' (SIGNED)' : ''}? Its PDF is deleted too. This can’t be undone.`, 'Delete')) return;
       try { await ctAction(() => api('DELETE', `/api/contracts/${encodeURIComponent(c.id)}`), 'Contract deleted'); ctOpen = null; ctData = null; render(); } catch { /* aviso ya mostrado */ }
-    } else if (a === 'dl-orig') { HZPDF.download(ctOpen.bytes, pdfName(c, ' (not signed)')); }
+    } else if (a === 'dl-orig') { if (!ctOpen.bytes) { toast('The PDF is still loading. Try again in a moment.'); return; } HZPDF.download(ctOpen.bytes, pdfName(c, ' (not signed)')); }
     else if (a === 'dl-file') { try { const r = await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/file`); HZPDF.download(new Uint8Array(await r.arrayBuffer()), pdfName(c, ' (signed on paper)')); } catch (err) { toast(err.message); } }
     else if (a === 'dl-signed') {
       try {
         if (c.signed_pdf) { const r = await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/signed`); HZPDF.download(new Uint8Array(await r.arrayBuffer()), pdfName(c)); return; }
+        if (!ctOpen.bytes) ctOpen.bytes = new Uint8Array(await (await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/pdf`)).arrayBuffer());
         const out = await HZPDF.signed(ctOpen.bytes, { title: ctName(c), hash: c.pdf_hash,
           signers: c.signers.map(x => ({ label: x.label, box: x.box, signed: x.signed ? { name: x.name, email: x.signer_email, at: x.signed_at, ip: x.ip, ua: x.ua, signature: x.signature, hash: c.pdf_hash } : null })) });
         HZPDF.download(out, pdfName(c, c.status === 'signed' ? '' : ' (signatures so far)'));
@@ -3083,7 +3084,7 @@
     }
     if (e.target.id === 'ct-arch') {
       e.target.value = '';
-      if (!await confirmBox('Upload this PDF as an ALREADY SIGNED contract (signed outside the site)? The contract will be marked as signed.', 'Move up')) return;
+      if (!await confirmBox('Upload this PDF as an ALREADY SIGNED contract (signed outside the site)? The contract will be marked as signed.', 'Upload')) return;
       try { await ctAction(() => authFetch(`/api/contracts/${encodeURIComponent(id)}/file`, { method: 'POST', body: f }), 'Signed PDF saved'); ctRefresh(); } catch { /* aviso ya mostrado */ }
     }
   });

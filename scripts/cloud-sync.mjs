@@ -48,6 +48,8 @@ async function pull() {
   }
   const files = {};
   for (const name of fs.readdirSync(path.join(ROOT, 'assets'))) if (fs.statSync(path.join(ROOT, 'assets', name)).isFile()) files[name] = hash(path.join(ROOT, 'assets', name));
+  // números de release del Calendar del panel (sync-soundcloud.mjs los usa para los releases nuevos)
+  fs.writeFileSync(process.env.SYNC_CAL || path.join(process.env.RUNNER_TEMP || '/tmp', 'hz-calendar.json'), JSON.stringify(d.calendar || []));
   fs.writeFileSync(STATE, JSON.stringify({ version: d.version, lists: Object.fromEntries(Object.keys(LISTS).map(k => [k, d[k] || []])), files }));
   log(`versión ${d.version} · ${got} archivos bajados de la web`);
 }

@@ -681,7 +681,9 @@ async function api(req, env, p, ctx) {
   }
   if (p === '/api/data' && req.method === 'GET') {
     if (!s.sync && !anyCan(s, 'view')) throw new HttpError(403, 'Your role has no sections yet.');
-    return json({ ...await readData(env), files: await fileList(env) });
+    // la sincronización con SoundCloud recibe también los números de release del Calendar (los de verdad)
+    const cal = s.sync ? (await env.DB.prepare("SELECT cat, artist, title FROM calendar WHERE kind = 'release' AND cat IS NOT NULL AND cat <> ''").all().catch(() => ({ results: [] }))).results : undefined;
+    return json({ ...await readData(env), files: await fileList(env), ...(cal ? { calendar: cal } : {}) });
   }
   if (p === '/api/publish' && req.method === 'POST') return publish(req, env, s);
   if (p === '/api/chat') return chat(req, env, s, url);

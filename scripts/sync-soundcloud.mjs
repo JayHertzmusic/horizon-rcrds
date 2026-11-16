@@ -204,6 +204,8 @@ const feed = await readFeed();
 const releases = readJson('releases.json', null);
 const mixtapes = readJson('mixtapes.json', []);
 const ignored = readJson('sync-ignore.json', []);
+/* Calendar del panel (lo baja cloud-sync.mjs): el número de release de verdad («HRZ#105») de cada fecha */
+const calendar = (() => { try { const v = JSON.parse(fs.readFileSync(process.env.SYNC_CAL || path.join(process.env.RUNNER_TEMP || '/tmp', 'hz-calendar.json'), 'utf8')); return Array.isArray(v) ? v : []; } catch { return []; } })();
 const isIgnored = item => Array.isArray(ignored) && ignored.some(x =>
   (x.soundcloud_link && scKey(x.soundcloud_link) === scKey(item.link)) || (x.title && norm(x.title) === norm(item.title)));
 if (!Array.isArray(releases) || !releases.length) throw new Error('releases.json is missing or empty.');
@@ -244,8 +246,19 @@ if (newRel.length) {
   let n = Math.max(0, ...releases.map(r => Number(String(r.catalog || r.catalog_number || '').replace(/\D/g, '')) || 0));
   const prefix = (String(releases[0].catalog || 'HRZ#').match(/^\D*/) || ['HRZ#'])[0] || 'HRZ#';
   for (const it of [...newRel].reverse()) {   // oldest first, so the newest gets the highest number
-    n += 1;
-    const num = String(n).padStart(3, '0'), base = `${prefix.replace(/\W/g, '').toLowerCase()}${num}`;
+    // el número del Calendar si lo tiene (mismo artista y track) y no lo usa ya otro release; si no, el siguiente
+    const catNum = v => Number(String(v || '').replace(/\D/g, '')) || 0;
+    const fromCal = calendar.find(x => norm(`${x.artist}${x.title}`) === norm(`${it.c.artist}${it.c.title}`) ||
+      (norm(x.title) && norm(x.title) === norm(it.c.title) && norm(x.artist).slice(0, 6) === norm(it.c.artist).slice(0, 6)));
+    const calN = fromCal && catNum(fromCal.cat);
+    const taken = k => releases.some(r => catNum(r.catalog || r.catalog_number) === k);
+    // (los números que el Calendar ya tiene para otros releases tampoco se usan)
+    const reserved = k => calendar.some(x => x !== fromCal && catNum(x.cat) === k);
+    let k;
+    if (calN && !taken(calN)) { k = calN; log(`  number from the Calendar: ${fromCal.cat}`); }
+    else { let m = n; do { m += 1; } while (taken(m) || reserved(m)); k = m; }
+    n = Math.max(n, k);
+    const num = String(k).padStart(3, '0'), base = `${prefix.replace(/\W/g, '').toLowerCase()}${num}`;
     // el id va en el enlace de la página del release: nunca se repite (los números se renumeraron una vez)
     let id = base;
     for (let k = 2; releases.some(r => r.id === id); k++) id = `${base}-${k}`;

@@ -108,7 +108,8 @@ export async function gformHook(req, env, url) {
         log.push(`deleted ${f.slug}`); continue;
       }
       const wNow = await structSig(f.description, web), gNow = await structSig(r.description, r.fields);
-      if (g.wsig !== wNow) ops.push({ op: 'upsert', slug: f.slug, googleId: g.id, title: f.title, description: f.description || '', fields: web });   // la web manda
+      // la web manda; cada pregunta lleva su número de Google («entry») para que el script la cambie aunque tenga otro título (si no, la borraría y se perderían sus respuestas en Google)
+      if (g.wsig !== wNow) ops.push({ op: 'upsert', slug: f.slug, googleId: g.id, title: f.title, description: f.description || '', fields: web.map(x => g.map?.[x.id] ? { ...x, entry: String(g.map[x.id]) } : x) });
       else if (g.gsig !== gNow) {   // cambió en Google → se aplica aquí
         const merged = mergeFields(web, r.fields);
         await DB.prepare('UPDATE forms SET fields = ?, description = ?, updated_at = ? WHERE id = ?').bind(JSON.stringify(merged), clean(r.description, 4000), now(), f.id).run();

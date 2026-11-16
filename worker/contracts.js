@@ -38,7 +38,9 @@ export const CONTRACT_SCHEMA = [
 // columnas del PDF (añadidas después: si ya existen, no pasa nada)
 export const CONTRACT_COLUMNS = ['pdf TEXT', 'pdf_hash TEXT', 'pdf_pages INTEGER', 'pdf_size INTEGER', 'sign_box TEXT', 'doc_url TEXT', 'kind TEXT',
   // PDF firmado final (lo genera el servidor cuando firman todos), release al que pertenece, Drive y correo final
-  'signed_pdf TEXT', 'signed_hash TEXT', 'release_cat TEXT', 'release_name TEXT', 'drive_id TEXT', 'drive_url TEXT', 'done_mail_at INTEGER', 'finish_error TEXT'];
+  'signed_pdf TEXT', 'signed_hash TEXT', 'release_cat TEXT', 'release_name TEXT', 'drive_id TEXT', 'drive_url TEXT', 'done_mail_at INTEGER', 'finish_error TEXT',
+  // PDF que se hace después de crear el contrato: 'making' mientras Google lo genera; 'error: …' si falló
+  'pdf_state TEXT'];
 // por firmante: cuándo se le envió el correo, si falló, e intentos fallidos de entrar con su email
 export const SIGNER_COLUMNS = ['emailed_at INTEGER', 'email_error TEXT', 'fails INTEGER NOT NULL DEFAULT 0'];
 
@@ -56,7 +58,7 @@ const signerOut = (r, full) => ({
 });
 const out = (c, signers, full) => ({
   id: c.id, title: c.title, artist: c.artist || '', email: c.email || '', status: c.status, notes: c.notes || '',
-  pdf: !!c.pdf, pdf_hash: c.pdf_hash || '', pdf_pages: c.pdf_pages || 0, pdf_size: c.pdf_size || 0, file: !!c.file, doc_url: c.doc_url || '',
+  pdf: !!c.pdf, pdf_state: c.pdf ? '' : c.pdf_state || '', pdf_hash: c.pdf_hash || '', pdf_pages: c.pdf_pages || 0, pdf_size: c.pdf_size || 0, file: !!c.file, doc_url: c.doc_url || '',
   kind: c.kind === 'template' ? 'template' : c.kind === 'draft' ? 'draft' : 'contract', template_id: c.template_id || '', vars: parse(c.vars) || {},
   created_at: c.created_at, updated_at: c.updated_at, sent_at: c.sent_at, signed_at: c.signed_at,
   signed_pdf: !!c.signed_pdf, signed_hash: c.signed_hash || '', release_cat: c.release_cat || '', release_name: c.release_name || '',
@@ -170,7 +172,7 @@ export async function checkDriveFiles(env) {
 }
 
 /* Panel (con sesión). can(act) = permiso «contracts» del rol; audit(texto) apunta en el historial. */
-export async function contractsApi(req, env, s, url, can, audit) {
+export async function contractsApi(req, env, s, url, can, audit, ctx) {
   const DB = env.DB, m = req.method, p = url.pathname;
   if (!can('view')) throw new ContractError(403, 'Your role has no Contracts access.');
   const edit = () => { if (!can('edit') || s.sync) throw new ContractError(403, 'Your role can only view contracts.'); };
@@ -226,32 +228,53 @@ export async function contractsApi(req, env, s, url, can, audit) {
     if (!copies.length) throw new ContractError(400, 'Who is the contract for?');
     for (const cp of copies) for (const x of (cp.signers || [])) { const em = clean(x?.email, 160); if (em && !EMAIL.test(em)) throw new ContractError(400, `The email “${em}” is not valid.`); }
     if (draft && !EMAIL.test(clean(copies[0].signers?.[0]?.email, 160))) throw new ContractError(400, 'Write the email the draft is sent to.');
-    let buf, docUrl = null;
-    if (draft) {
-      buf = tpl.pdf ? await env.FILES.get(tpl.pdf, { type: 'arrayBuffer' }) : null;
-      if (!buf) throw new ContractError(400, 'The draft template has no PDF.');
-    } else {
-      if (!tpl.doc_url) throw new ContractError(400, 'That template has no Google Doc.');
-      try { docUrl = await docFromTemplate(env, tpl.doc_url, values, clean(copies[0].title || b.title, 160) || 'Contract'); }
-      catch (e) { throw new ContractError(502, e.message); }
-      buf = await exportDocPdf(env, docUrl);
-    }
-    const hash = await sha256(buf), pages = draft ? (tpl.pdf_pages || pdfPages(buf)) : pdfPages(buf);
-    const from = await signersOf(env, tpl), keepBoxes = !!tpl.pdf_pages && tpl.pdf_pages === pages;
-    const vars = draft ? '{}' : JSON.stringify(values), t = now(), ids = [];
-    for (const cp of copies) {
-      const id = 'c_' + crypto.randomUUID().slice(0, 10), key = `contracts/${id}-${hash.slice(0, 12)}.pdf`;
+    const from = await signersOf(env, tpl), t = now(), ids = [];
+    // fila de cada contrato y sus firmantes; el PDF se pone después (put)
+    const insert = async (cp, f) => {
+      const id = 'c_' + crypto.randomUUID().slice(0, 10);
       const title = clean(cp.title, 160) || (draft ? 'Contract Draft' : tpl.title), people = Array.isArray(cp.signers) ? cp.signers : [];
-      await env.FILES.put(key, buf, { metadata: { type: 'application/pdf', at: t } });
       const rows = draft ? [{ label: clean(cp.artist, 60) || 'Artist', email: clean(people[0]?.email, 160).toLowerCase(), box: null }]
-        : (from.length ? from : [{ label: 'Artist', box: null }]).map((r, i) => ({ label: clean(people[i]?.label, 60) || r.label || `Artist ${i + 1}`, email: clean(people[i]?.email, 160).toLowerCase() || null, box: keepBoxes ? r.box : null }));
+        : (from.length ? from : [{ label: 'Artist', box: null }]).map((r, i) => ({ label: clean(people[i]?.label, 60) || r.label || `Artist ${i + 1}`, email: clean(people[i]?.email, 160).toLowerCase() || null, box: f.keepBoxes ? r.box : null }));
       await DB.batch([
-        DB.prepare('INSERT INTO contracts (id, title, artist, email, status, notes, created_by, created_at, updated_at, kind, template_id, vars, release_cat, release_name, doc_url, pdf, pdf_hash, pdf_pages, pdf_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-          .bind(id, title, clean(cp.artist ?? b.artist, 160), rows[0].email || '', 'draft', '', s.email, t, t, draft ? 'draft' : null, tpl.id, vars, draft ? null : clean(b.release_cat, 40) || null, draft ? null : clean(b.release_name, 160) || null, docUrl, key, hash, pages, buf.byteLength),
+        DB.prepare('INSERT INTO contracts (id, title, artist, email, status, notes, created_by, created_at, updated_at, kind, template_id, vars, release_cat, release_name, doc_url, pdf, pdf_hash, pdf_pages, pdf_size, pdf_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(id, title, clean(cp.artist ?? b.artist, 160), rows[0].email || '', 'draft', '', s.email, t, t, draft ? 'draft' : null, tpl.id, f.vars, draft ? null : clean(b.release_cat, 40) || null, draft ? null : clean(b.release_name, 160) || null, f.docUrl, null, null, f.pages, null, f.state),
         ...rows.map((r, i) => DB.prepare('INSERT INTO contract_signers (id, contract_id, idx, label, email, box) VALUES (?, ?, ?, ?, ?, ?)').bind('s_' + crypto.randomUUID().slice(0, 10), id, i, r.label, r.email || null, r.box || null)),
       ]);
       ids.push(id);
       await audit(`Created the ${draft ? 'draft' : 'contract'} “${title}” from the template “${tpl.title}”`);
+      return id;
+    };
+    // el mismo PDF para todos los contratos de esta llamada
+    const put = async (list, buf) => {
+      const hash = await sha256(buf), pages = draft ? (tpl.pdf_pages || pdfPages(buf)) : pdfPages(buf), at = now();
+      for (const id of list) {
+        const key = `contracts/${id}-${hash.slice(0, 12)}.pdf`;
+        await env.FILES.put(key, buf, { metadata: { type: 'application/pdf', at } });
+        await DB.prepare('UPDATE contracts SET pdf = ?, pdf_hash = ?, pdf_pages = ?, pdf_size = ?, pdf_state = NULL, updated_at = ? WHERE id = ?').bind(key, hash, pages, buf.byteLength, at, id).run();
+        // otro número de páginas que la plantilla: los recuadros de firma se vuelven a colocar
+        if (!(tpl.pdf_pages && tpl.pdf_pages === pages)) await DB.prepare('UPDATE contract_signers SET box = NULL WHERE contract_id = ?').bind(id).run();
+      }
+      return !!tpl.pdf_pages && tpl.pdf_pages === pages;
+    };
+    if (draft) {
+      const buf = tpl.pdf ? await env.FILES.get(tpl.pdf, { type: 'arrayBuffer' }) : null;
+      if (!buf) throw new ContractError(400, 'The draft template has no PDF.');
+      for (const cp of copies) await insert(cp, { vars: '{}', docUrl: null, pages: tpl.pdf_pages || null, keepBoxes: false, state: null });
+      await put(ids, buf);
+    } else {
+      if (!tpl.doc_url) throw new ContractError(400, 'That template has no Google Doc.');
+      let docUrl;
+      try { docUrl = await docFromTemplate(env, tpl.doc_url, values, clean(copies[0].title || b.title, 160) || 'Contract'); }
+      catch (e) { throw new ContractError(502, e.message); }
+      // más rápido: el contrato se abre ya y Google hace el PDF mientras tanto (unos 2 s); el panel lo carga cuando está
+      for (const cp of copies) await insert(cp, { vars: JSON.stringify(values), docUrl, pages: tpl.pdf_pages || null, keepBoxes: true, state: 'making' });
+      const list = [...ids];
+      const job = exportDocPdf(env, docUrl).then(buf => put(list, buf)).catch(async e => {
+        console.error('contract pdf', e.message);
+        for (const id of list) await DB.prepare("UPDATE contracts SET pdf_state = ?, updated_at = ? WHERE id = ? AND pdf IS NULL").bind(clean('error: ' + e.message, 300), now(), id).run().catch(() => {});
+      });
+      if (ctx?.waitUntil) ctx.waitUntil(job); else await job;
+      return { ok: true, ids, draft: false, pending: true };
     }
     // un draft se envía en el momento (solo para mirarlo)
     let error = '';
@@ -261,7 +284,7 @@ export async function contractsApi(req, env, s, url, can, audit) {
       error = error || errs[0] || '';
       await audit(`Sent the draft “${c.title}” to review (${sg.map(r => r.email).join(', ')})${errs.length ? ' — email failed' : ''}`);
     }
-    return { ok: !error, ids, draft, boxes: keepBoxes, error };
+    return { ok: !error, ids, draft, error };
   }
   if (p === '/api/contracts' && m === 'POST') {
     edit();
@@ -364,7 +387,7 @@ export async function contractsApi(req, env, s, url, can, audit) {
     const key = `contracts/${c.id}-${hash.slice(0, 12)}.pdf`;
     await env.FILES.put(key, buf, { metadata: { type: 'application/pdf', at: now() } });
     if (c.pdf && c.pdf !== key) await env.FILES.delete(c.pdf);
-    await DB.prepare('UPDATE contracts SET pdf = ?, pdf_hash = ?, pdf_pages = ?, pdf_size = ?, updated_at = ? WHERE id = ?').bind(key, hash, pages, buf.byteLength, now(), c.id).run();
+    await DB.prepare('UPDATE contracts SET pdf = ?, pdf_hash = ?, pdf_pages = ?, pdf_size = ?, pdf_state = NULL, updated_at = ? WHERE id = ?').bind(key, hash, pages, buf.byteLength, now(), c.id).run();
     if (!(c.pdf_pages && c.pdf_pages === pages)) await DB.prepare('UPDATE contract_signers SET box = NULL WHERE contract_id = ?').bind(c.id).run();
     await audit(`Generated the PDF of “${c.title}” from the Google Doc (${pages} pages)`);
     return { ok: true, pages, changedPages: !(c.pdf_pages && c.pdf_pages === pages) };

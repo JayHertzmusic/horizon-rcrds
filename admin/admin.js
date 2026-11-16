@@ -2266,7 +2266,7 @@
     const state = c => isTpl(c) ? (!c.pdf ? 'PDF missing' : !c.doc_url ? 'No Google Doc' : c.signers.some(x => !x.box) ? 'Signatures not placed' : 'Ready')
       : isDraft(c) ? (c.sent_at ? `Sent for review · ${esc(fmtDate(c.sent_at))}` : 'Not sent')
       : c.status === 'signed' ? 'Signed ' + esc(fmtDate(c.signed_at)) + (c.drive_url ? ' · In Drive' : '')
-      : c.status === 'void' ? 'Links don’t work' : !c.pdf ? 'PDF missing' : c.signers.some(x => !x.box) ? 'Signatures not placed'
+      : c.status === 'void' ? 'Links don’t work' : !c.pdf ? (c.pdf_state === 'making' ? 'Making the PDF…' : 'PDF missing') : c.signers.some(x => !x.box) ? 'Signatures not placed'
       : c.sent_at ? `Signed ${c.signers.filter(x => x.signed).length} of ${c.signers.length}` : 'Ready to send';
     const row = c => `
         <li class="row ct${fresh.has(c.id) ? ' is-new' : ''}" data-ctid="${esc(c.id)}">
@@ -2487,7 +2487,9 @@
         ${c.pdf ? signersBlock(c, ed && !signed) : ''}
         ${tpl ? '' : ctActivity(ctOpen.events)}
         ${c.pdf ? `
-          <div class="pdf-viewer" id="pdf-viewer"><p class="info">Loading PDF…</p></div>` : `<p class="ct-step">Upload the contract PDF (downloaded from Google Docs).</p>`}
+          <div class="pdf-viewer" id="pdf-viewer"><p class="info">Loading PDF…</p></div>` : c.pdf_state === 'making' ? '<div class="pdf-viewer" id="pdf-viewer"><p class="info">Making the PDF… (a few seconds)</p></div>'
+          : /^error/.test(c.pdf_state || '') ? `<p class="login-error" role="alert">The PDF could not be made (${esc(c.pdf_state.replace(/^error:\s*/, ''))}).${ed && c.doc_url ? ' <button type="button" class="btn ghost sm" data-ct="doc-pdf">Try again</button>' : ''}</p>`
+          : `<p class="ct-step">Upload the contract PDF (downloaded from Google Docs).</p>`}
         <div class="field" style="margin-top:18px"><label for="c-notes">Internal notes (the artist can’t see them)</label><textarea id="c-notes" name="notes" rows="2" maxlength="2000" ${ed ? '' : 'readonly'}>${esc(c.notes)}</textarea></div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions">
@@ -2760,8 +2762,28 @@
     if (ctOpen?.mode === 'new') return ctPick();
     if (ctOpen?.mode === 'new-tpl') return ctNewTpl();
     if (ctOpen?.mode === 'use') return ctUse();
-    if (ctOpen?.mode === 'contract') { if (ctOpen.contract?.pdf) setTimeout(ctPaint, 0); return ctDetail(); }
+    if (ctOpen?.mode === 'contract') { if (ctOpen.contract?.pdf) setTimeout(ctPaint, 0); else if (ctOpen.contract?.pdf_state === 'making') ctPdfWait(); return ctDetail(); }
     return ctList();
+  }
+  // contrato recién creado: Google hace el PDF después (unos segundos); se mira cada 1,5 s hasta que está
+  let pdfWait = null;
+  function ctPdfWait() {
+    if (pdfWait) return;
+    const id = ctOpen.id, t0 = Date.now();
+    const tick = async () => {
+      pdfWait = null;
+      const c = ctOpen?.mode === 'contract' && ctOpen.id === id ? ctOpen.contract : null;
+      if (!c || c.pdf || c.pdf_state !== 'making' || Date.now() - t0 > 90e3) return;
+      const r = await api('GET', `/api/contracts/${encodeURIComponent(id)}`).catch(() => null);
+      if (ctOpen?.mode !== 'contract' || ctOpen.id !== id) return;
+      if (r && (r.contract.pdf || r.contract.pdf_state !== 'making')) {
+        // se guarda lo que se esté escribiendo en la ficha
+        const f = $('#ct-ed'), keep = f ? [...f.elements].filter(x => x.name).map(x => [x.name, x.value]) : [];
+        ctOpen.contract = r.contract; ctOpen.events = r.events || []; render();
+        const g = $('#ct-ed'); if (g) for (const [n, v] of keep) if (g.elements[n]) g.elements[n].value = v;
+      } else pdfWait = setTimeout(tick, 1500);
+    };
+    pdfWait = setTimeout(tick, 1500);
   }
   // tras dibujar la ficha, se pinta el PDF (pdf.js) con el recuadro de la firma
   async function ctPaint() {
@@ -3090,7 +3112,7 @@
         const jobs = copiesMode
           ? people.map((p, x) => ({ values: { ...valuesFor(x + 1), 'Artists clause name': people.map(q => q.name).join(', '), 'Artists clause legal': people.map((q, y) => valuesFor(y + 1)['Legal name'] || '').filter(Boolean).join(', ') }, copies: [{ title: `${title} (${p.name})`, artist, signers: [{ label: p.name, email: p.email }] }] }))
           : [{ values: valuesFor(0), copies: [{ title, artist, signers: people.map(p => ({ label: p.name, email: p.email })) }] }];
-        btn.disabled = true; stage('Making the contract and its PDF…');
+        btn.disabled = true; stage('Making the contract…');
         try {
           const rs = await ctAction(() => Promise.all(jobs.map(jb => api('POST', '/api/contracts/make', { template: tpl.id, ...jb, release_cat: f.elements.release_cat.value, release_name: f.elements.release_name.value }))));
           const r = { ids: rs.flatMap(x => x.ids) };

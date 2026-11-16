@@ -694,7 +694,7 @@ async function api(req, env, p, ctx) {
     return json({ ok: true, soundcloud: sc, picture: pf?.avatar ? avatarUrl(pf.avatar) : '' });
   }
   if (p === '/api/contracts' || p.startsWith('/api/contracts/')) {
-    const r = await contractsApi(req, env, s, url, act => can(s, 'contracts', act), action => audit(env, s, action));
+    const r = await contractsApi(req, env, s, url, act => can(s, 'contracts', act), action => audit(env, s, action), ctx);
     return r instanceof Response ? r : json(r);
   }
   if (p === '/api/calendar' || p.startsWith('/api/calendar/')) return json(await calendarApi(req, env, s, url, act => can(s, 'calendar', act), action => audit(env, s, action)));

@@ -71,7 +71,7 @@
         } else {
           // igual que en el PDF firmado: centrada y apoyada sobre la línea
           const im = new Image(); im.src = mk.sign; im.alt = 'Signature';
-          im.style.cssText = 'position:absolute;left:5%;bottom:-1px;width:90%;height:62%;object-fit:contain;object-position:center bottom;display:block';
+          im.style.cssText = 'position:absolute;left:5%;bottom:-1px;width:90%;height:82%;object-fit:contain;object-position:center bottom;display:block';
           el.appendChild(im);
         }
         if (mk.label) el.title = mk.label;
@@ -113,7 +113,7 @@
         page.drawText(txt, { x: bx + (bw - ital.widthOfTextAtSize(txt, size)) / 2, y: by + 2, size, font: ital, color: rgb(0.05, 0.05, 0.2) });
       } else {
         const png = await doc.embedPng(s.signature);
-        const k = Math.min(bw * 0.9 / png.width, bh * 0.62 / png.height), iw = png.width * k, ih = png.height * k;
+        const k = Math.min(bw * 0.9 / png.width, bh * 0.82 / png.height), iw = png.width * k, ih = png.height * k;
         page.drawImage(png, { x: bx + (bw - iw) / 2, y: by - 1, width: iw, height: ih });
       }
     }

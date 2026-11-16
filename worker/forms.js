@@ -189,7 +189,8 @@ export async function gformHook(req, env, url) {
     const recent = (await DB.prepare("SELECT data FROM form_responses WHERE form_id = ? AND ip <> 'google' AND at > ? ORDER BY id DESC LIMIT 20").bind(f.id, now() - 30 * 60e3).all()).results;
     const same = (a, b) => JSON.stringify(Array.isArray(a) ? [...a].sort() : String(a ?? '').trim()) === JSON.stringify(Array.isArray(b) ? [...b].sort() : String(b ?? '').trim());
     const keys = Object.keys(data).filter(k => Array.isArray(data[k]) ? data[k].length : data[k]);
-    if (keys.length && recent.some(r => { const w = parse(r.data) || {}; return keys.every(k => same(data[k], w[k])); })) return { ok: true, duplicate: true };
+    // (con al menos 2 respuestas iguales: una sola coincidencia, p. ej. la misma opción elegida, no basta para tirarla)
+    if (keys.length >= 2 && recent.some(r => { const w = parse(r.data) || {}; return keys.every(k => same(data[k], w[k])); })) return { ok: true, duplicate: true };
     const at = Number(b.at) > 0 && Number(b.at) < now() + 60e3 ? Number(b.at) : now();
     await DB.prepare('INSERT INTO form_responses (form_id, at, data, ip) VALUES (?, ?, ?, ?)').bind(f.id, at, JSON.stringify(data), 'google').run();
     return { ok: true };
@@ -200,11 +201,16 @@ export async function gformHook(req, env, url) {
 async function toGoogle(env, f, data) {
   const g = parse(f.google);
   if (!g?.url || !g.map) return;
-  const body = new URLSearchParams();
+  const body = new URLSearchParams(), defs = new Map((parse(f.fields) || []).map(x => [x.id, x]));
   for (const [fid, entry] of Object.entries(g.map)) {
-    const v = data[fid];
-    if (Array.isArray(v)) v.forEach(o => body.append('entry.' + entry, o));
-    else if (v) body.append('entry.' + entry, v);
+    const v = data[fid], x = defs.get(fid), opts = x?.options || [];
+    // «Other» con texto propio: Google lo quiere como «__other_option__» + el texto aparte (si no, rechaza la respuesta entera)
+    const add = o => {
+      if (x?.other && ['radio', 'checkbox'].includes(x.type) && !opts.includes(o)) { body.append('entry.' + entry, '__other_option__'); body.append(`entry.${entry}.other_option_response`, o); }
+      else body.append('entry.' + entry, o);
+    };
+    if (Array.isArray(v)) v.forEach(add);
+    else if (v) add(v);
   }
   const hash = await respHash(f.id, data);
   await env.DB.batch([env.DB.prepare('DELETE FROM gform_sent WHERE at < ?').bind(now() - 86400e3), env.DB.prepare('INSERT OR REPLACE INTO gform_sent (hash, at) VALUES (?, ?)').bind(hash, now())]);
@@ -270,7 +276,9 @@ async function getForm(env, id) {
   return f;
 }
 function csvCell(v) {
-  const s = Array.isArray(v) ? v.join(', ') : String(v ?? '');
+  let s = Array.isArray(v) ? v.join(', ') : String(v ?? '');
+  // una respuesta que empieza por «=», «@»… Excel/Sheets la ejecutaría como fórmula: se guarda como texto
+  if (/^[=@\t\r]|^[+-][^\d\s.]/.test(s)) s = "'" + s;
   return /[",\n;]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
@@ -435,8 +443,9 @@ export async function formsApi(req, env, s, url, audit) {
   if (mm[2] === 'csv' && m === 'GET') {
     const fields = (parse(f.fields) || []).filter(x => x.type !== 'section');
     const rows = (await DB.prepare('SELECT at, data FROM form_responses WHERE form_id = ? ORDER BY id').bind(f.id).all()).results;
-    const lines = [['Fecha', ...fields.map(x => x.label)].map(csvCell).join(',')];
-    for (const r of rows) { const d = parse(r.data) || {}; lines.push([new Date(r.at).toISOString().replace('T', ' ').slice(0, 16), ...fields.map(x => d[x.id])].map(csvCell).join(',')); }
+    // «#» = el mismo número que en el panel (#1 = la primera que llegó)
+    const lines = [['#', 'Date (UTC)', ...fields.map(x => x.label)].map(csvCell).join(',')];
+    rows.forEach((r, i) => { const d = parse(r.data) || {}; lines.push([i + 1, new Date(r.at).toISOString().replace('T', ' ').slice(0, 16), ...fields.map(x => d[x.id])].map(csvCell).join(',')); });
     await audit(`Downloaded the responses of “${f.title}”`);
     return new Response('﻿' + lines.join('\r\n') + '\r\n', { headers: { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${f.slug}.csv"`, 'Cache-Control': 'no-store' } });
   }

@@ -29,6 +29,13 @@ export const FORM_SCHEMA = [
 // ¿la ha visto esta persona? (SQL; el ? es su correo)
 const SEEN_SQL = `EXISTS (SELECT 1 FROM form_seen x WHERE x.response_id = r.id AND x.email IN ('*', ?))`;
 // cómo se llama una respuesta en el historial: «#12 (Artista - Track)», como en la cabecera del panel
+// borrar un formulario entero: sus respuestas, quién las vio y sus enlaces personales (antes se quedaban sueltos en la base)
+const dropForm = (DB, id) => DB.batch([
+  DB.prepare('DELETE FROM form_seen WHERE response_id IN (SELECT id FROM form_responses WHERE form_id = ?)').bind(id),
+  DB.prepare('DELETE FROM form_responses WHERE form_id = ?').bind(id),
+  DB.prepare('DELETE FROM form_links WHERE form_id = ?').bind(id),
+  DB.prepare('DELETE FROM forms WHERE id = ?').bind(id),
+]);
 async function respName(DB, f, rid) {
   const r = await DB.prepare('SELECT data, (SELECT COUNT(*) FROM form_responses WHERE form_id = ? AND id <= ?) AS n FROM form_responses WHERE id = ?').bind(f.id, rid, rid).first();
   if (!r) return `#${rid}`;
@@ -133,7 +140,7 @@ export async function gformHook(req, env, url) {
       if (!r) continue;
       if (r.trashed) {   // en la papelera de Google → se borra también aquí
         const n = (await DB.prepare('SELECT COUNT(*) AS n FROM form_responses WHERE form_id = ?').bind(f.id).first()).n;
-        await DB.batch([DB.prepare('DELETE FROM form_responses WHERE form_id = ?').bind(f.id), DB.prepare('DELETE FROM forms WHERE id = ?').bind(f.id)]);
+        await dropForm(DB, f.id);
         await DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)').bind(now(), 'google', 'Google Forms', `Deleted the form “${f.title}” (${n} responses): it was deleted in Google Forms`, '').run();
         log.push(`deleted ${f.slug}`); continue;
       }
@@ -368,7 +375,7 @@ export async function formsApi(req, env, s, url, audit) {
   if (!mm[2] && m === 'DELETE') {
     if (!s.owner || s.sync) throw new FormError(403, 'Only owners can delete a form.');
     const n = (await DB.prepare('SELECT COUNT(*) AS n FROM form_responses WHERE form_id = ?').bind(f.id).first()).n;
-    await DB.batch([DB.prepare('DELETE FROM form_responses WHERE form_id = ?').bind(f.id), DB.prepare('DELETE FROM forms WHERE id = ?').bind(f.id)]);
+    await dropForm(DB, f.id);
     const gid = (parse(f.google) || {}).id;
     if (gid) await DB.prepare('INSERT OR REPLACE INTO gform_trash (google_id, at) VALUES (?, ?)').bind(gid, now()).run();   // también a la papelera de Google
     await audit(`Deleted the form “${f.title}” (${n} responses)`);
@@ -445,7 +452,8 @@ export async function publicFormsApi(req, env, url) {
   const mm = p.match(/^\/api\/public\/forms\/([a-z0-9-]+)$/);
   if (!mm) throw new FormError(404, 'Not found.');
   const f = await DB.prepare('SELECT * FROM forms WHERE slug = ?').bind(mm[1]).first();
-  if (!f || (!f.public && !f.invite)) throw new FormError(404, 'This form is not available right now.');
+  // «Closed» en el panel: nadie lo puede enviar, tampoco con enlace personal (antes los enlaces seguían funcionando)
+  if (!f || !f.public) throw new FormError(404, 'This form is not available right now.');
   const fields = parse(f.fields) || [];
   const b = req.method === 'POST' ? parse(await req.text()) || {} : {};
   // formulario privado: solo con un enlace personal, en el primer dispositivo que lo abre, una vez y durante 30 días
@@ -490,8 +498,13 @@ export async function publicFormsApi(req, env, url) {
     if (x.required && (!v || (Array.isArray(v) && !v.length))) throw new FormError(400, `Please answer “${x.label.trim()}”.`);
     data[x.id] = v;
   }
-  const ins = await DB.prepare('INSERT INTO form_responses (form_id, at, data, ip) VALUES (?, ?, ?, ?)').bind(f.id, now(), JSON.stringify(data), ipHash).run();
-  if (link) await DB.prepare('UPDATE form_links SET used_at = ?, response_id = ? WHERE hash = ?').bind(now(), ins.meta.last_row_id || null, link.hash).run();   // el enlace ya no sirve
+  // el enlace se gasta ANTES de guardar: dos envíos a la vez (doble clic, dos pestañas) no crean dos respuestas
+  if (link && !(await DB.prepare('UPDATE form_links SET used_at = ? WHERE hash = ? AND used_at IS NULL').bind(now(), link.hash).run()).meta.changes)
+    throw new FormError(410, 'This link has already been used to send the form. Ask HORIZON RCRDS if you need a new one.');
+  let ins;
+  try { ins = await DB.prepare('INSERT INTO form_responses (form_id, at, data, ip) VALUES (?, ?, ?, ?)').bind(f.id, now(), JSON.stringify(data), ipHash).run(); }
+  catch (e) { if (link) await DB.prepare('UPDATE form_links SET used_at = NULL WHERE hash = ?').bind(link.hash).run(); throw e; }   // no se guardó: el enlace sigue valiendo
+  if (link) await DB.prepare('UPDATE form_links SET response_id = ? WHERE hash = ?').bind(ins.meta.last_row_id || null, link.hash).run();
   try { await toGoogle(env, f, data); } catch (e) { console.error('google form copy', e); }   // copia en Google Forms (si está conectado)
   return { ok: true };
 }

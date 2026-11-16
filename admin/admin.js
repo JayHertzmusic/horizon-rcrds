@@ -330,7 +330,7 @@
           </form>
           <form id="dev-login" class="dev-login" hidden novalidate>
             <div class="field"><label for="dev-email">Local test · email</label><input id="dev-email" name="email" type="email" autocomplete="off" spellcheck="false"></div>
-            <button class="btn ghost wide" type="submit">Entrar (prueba local)</button>
+            <button class="btn ghost wide" type="submit">Sign in (local test)</button>
           </form>
           <label class="check"><input type="checkbox" id="remember" checked><span>Remember on this browser</span></label>
           <p class="login-error" role="alert" ${message ? '' : 'hidden'}>${esc(message)}</p>
@@ -1228,7 +1228,7 @@
     const nw = pending.get(name);
     if (!nw) return;
     const card = btn.closest('.card'), err = card.querySelector('.ed-error');
-    busyOn(card, btn, 'Publicando…');
+    busyOn(card, btn, 'Publishing…');
     try {
       const res = await publish(`Update ${name}`, [{ path: P('assets/' + name), blob: nw.blob }]);
       URL.revokeObjectURL(nw.url); pending.delete(name);
@@ -1514,7 +1514,7 @@
       case 'exclude-mixtape':
       case 'delete-playlist': {
         const form = $('#ed'), act = t.dataset.act, exclude = act.startsWith('exclude');
-        busyOn(form, t, exclude ? 'Excluyendo…' : 'Eliminando…');
+        busyOn(form, t, exclude ? 'Excluding…' : 'Deleting…');
         try {
           const done = await (/release$/.test(act) ? deleteRelease(exclude) : /mixtape$/.test(act) ? deleteMixtape(exclude) : deletePlaylist());
           if (!done) busyOff(form);
@@ -1593,7 +1593,7 @@
     if (form.id !== 'ed' || busy) return;
     const btn = form.querySelector('[type=submit]');
     $('#ed-error').hidden = true;
-    busyOn(form, btn, 'Publicando…');
+    busyOn(form, btn, 'Publishing…');
     try {
       if (editing.view === 'releases') await saveRelease(form);
       else if (editing.view === 'radio') await saveMixtape(form);
@@ -1728,24 +1728,31 @@
   }
   // todo se pone al día solo con UNA pregunta cada 15 s (también con la pestaña de fondo): respuestas nuevas, contratos, chat,
   // lo que publica otro miembro, el equipo y el historial. Lo demás solo se pide cuando su huella cambia (menos peticiones: plan gratis)
-  let live = null, liveBusy = false;
+  // «done»: la última huella que SÍ se ha puesto al día. Si en ese momento no se podía (estabas editando, ocupado…),
+  // se queda pendiente y se hace en la siguiente vuelta (antes se perdía hasta el siguiente cambio)
+  let live = null, done = null, liveBusy = false;
   async function checkLive() {
     if (!auth || liveBusy) return;
     liveBusy = true;
     try {
-      const t0 = Date.now(), r = await api('GET', '/api/live'), old = live; live = r;
+      const t0 = Date.now(), r = await api('GET', '/api/live'); live = r;
       // si mientras tanto marcaste o borraste algo aquí, ese dato ya es viejo (sacaría un rojo de un momento): se ignora
       if (r.unseen && t0 > unseenAt) checkUnseen(r.unseen);
-      if (!old) return;
-      if (r.ct !== old.ct) checkContracts();
-      if (r.chat !== old.chat && chatState.on) chatPoll();
-      if (!repo || busy) return;
-      if (r.v !== old.v && !editing && !isDirty()) {
+      if (!done) { done = { ...r }; return; }
+      if (r.ct !== done.ct && await checkContracts() !== false) done.ct = r.ct;
+      if (r.chat !== done.chat) { if (chatState.on) chatPoll(); done.chat = r.chat; }
+      if (r.team !== done.team) { teamData = null; if (view === 'team' && !$('#sheet')?.open) loadTeam(); done.team = r.team; }
+      if (r.audit !== done.audit) {
+        // el historial se vuelve a pedir ahora (si lo estás viendo) o al entrar en él (antes se quedaba el viejo)
+        logState.loaded = false;
+        if (view === 'log' && !$('#sheet')?.open) loadLog(false);
+        done.audit = r.audit;
+      }
+      if (r.v !== done.v && repo && !busy && !editing && !isDirty()) {
         repo = await loadRepo();
+        done.v = r.v;
         if (['releases', 'radio', 'playlists', 'player'].includes(view) && !editing && !$('#sheet')?.open) render();
       }
-      if (r.audit !== old.audit && view === 'log' && !$('#sheet')?.open) { logState.loaded = false; loadLog(false); }
-      if (r.team !== old.team) { teamData = null; if (view === 'team' && !$('#sheet')?.open) loadTeam(); }
     } catch { /* sin aviso */ }
     finally { liveBusy = false; }
   }
@@ -2260,8 +2267,10 @@
   }
   function ctMarkSeen(c) { if (!c || !ctSeen) return; const t = ctLast(c); if (t > (ctSeen[c.id] || 0)) { ctSeen[c.id] = t; ctSaveSeen(); paintBadge(); } }
   // cada 15 s: contratos al día (firmas nuevas → aviso, número y lista sin recargar)
+  // false: no se pudo (ocupado o sin conexión) y se repite en la siguiente vuelta
   async function checkContracts() {
-    if (!auth || preview || !can('contracts') || busy) return;
+    if (!auth || preview || !can('contracts')) return;
+    if (busy) return false;
     try {
       const r = await api('GET', '/api/contracts'), before = new Map((ctData?.contracts || []).map(c => [c.id, c]));
       const sig = c => `${c.status}|${c.signers.map(x => (x.signed_at || 0) + ':' + (x.emailed_at || 0)).join(',')}|${c.drive_url}|${c.title}`;
@@ -2278,7 +2287,7 @@
         const now = r.contracts.find(c => c.id === ctOpen.id), was = before.get(ctOpen.id);
         if (now && was && sig(now) !== sig(was) && !document.activeElement?.closest?.('#ct-ed')) ctRefresh();
       }
-    } catch { /* sin aviso */ }
+    } catch { return false; }
   }
   // (se pide sola cuando /api/live dice que algo de los contratos cambió)
   const isTpl = c => c?.kind === 'template';
@@ -2545,7 +2554,7 @@
   function ctActivityAll() {
     if (!ctAct) { api('GET', '/api/contracts/activity').then(r => { ctAct = r.events; if (view === 'contracts' && !ctOpen && ctTab === 'activity') render(); }).catch(e => toast(e.message)); return '<p class="info">Loading…</p>'; }
     if (!ctAct.length) return '<ol class="list"><li class="empty">Nothing yet. When an artist opens their link, reads, signs or downloads a contract, it shows here.</li></ol>';
-    return `<div class="ct-log ct-log-all"><ol>${ctAct.map(e => `<li><time>${esc(fmtDate(e.at))}</time><b>${esc(e.label || e.email || 'Artist')}</b><span>${esc(evWhat(e.event))} · <button type="button" class="link" data-ct="act-open" data-id="${esc(e.contract_id)}">${esc(e.title ? ctName(e) : 'Deleted contract')}</button></span></li>`).join('')}</ol></div>`;
+    return `<div class="ct-log ct-log-all"><ol>${ctAct.map(e => `<li><time>${esc(fmtDate(e.at))}</time><b>${esc(e.label || e.email || 'Artist')}</b><span>${esc(evWhat(e.event))} · ${e.title ? `<button type="button" class="link" data-ct="act-open" data-id="${esc(e.contract_id)}">${esc(ctName(e))}</button>` : '<span class="muted">Deleted contract</span>'}</span></li>`).join('')}</ol></div>`;
   }
   // lo que hace cada artista con su enlace (abrir, leer, firmar, descargar)
   function ctActivity(evs) {
@@ -3356,7 +3365,8 @@
   async function chatPoll() {
     clearTimeout(chatState.timer);
     if (!chatState.on) return;
-    if (!document.hidden && !chatState.loading) {
+    if (chatState.loading) { chatState.again = true; return; }   // ya hay una en marcha: se repite al terminar
+    if (!document.hidden) {
       chatState.loading = true;
       try {
         const r = await api('GET', `/api/chat?after=${chatState.last}`);
@@ -3368,10 +3378,12 @@
         chatBadge();
       } catch (e) {
         if (e.status === 401) { chatState.loading = false; logout(e.message); return; }
-        if (e.status === 403) { chatStop(); return; }
+        if (e.status === 403) { chatState.loading = false; chatStop(); return; }
       }
       chatState.loading = false;
+      if (chatState.again) { chatState.again = false; return chatPoll(); }
     }
+    clearTimeout(chatState.timer);   // (nunca dos relojes a la vez: antes se duplicaban y había el doble de peticiones)
     chatState.timer = setTimeout(chatPoll, chatState.open ? 3000 : 120000);   // cerrado: lo avisa /api/live (esto es solo por si acaso)
   }
   function chatMarkSeen() {
@@ -3385,7 +3397,7 @@
     chatPoll();
   }
   function chatStop() {
-    chatState.on = false; chatState.open = false; clearTimeout(chatState.timer);
+    chatState.on = false; chatState.open = false; chatState.again = false; clearTimeout(chatState.timer);
     chatState.msgs.clear(); chatState.last = 0;
     $('#chat')?.remove();
   }

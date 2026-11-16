@@ -671,7 +671,7 @@ async function api(req, env, p, ctx) {
     const [v, a, m, c, k, un] = await Promise.all([
       DB.prepare("SELECT v FROM site_meta WHERE k = 'version'").first(),
       DB.prepare('SELECT MAX(id) id FROM panel_audit').first(),
-      DB.prepare("SELECT COUNT(*) n, MAX(COALESCE(added_at, 0)) a, GROUP_CONCAT(COALESCE(role_id, '') || COALESCE(color, ''), ',') r FROM panel_members").first(),
+      DB.prepare("SELECT COUNT(*) n, MAX(COALESCE(added_at, 0)) a, GROUP_CONCAT(COALESCE(role_id, '') || COALESCE(color, '') || COALESCE(label, ''), ',') r FROM panel_members").first(),
       DB.prepare(`SELECT (SELECT COUNT(*) || '|' || COALESCE(MAX(updated_at), 0) || '|' || COALESCE(MAX(signed_at), 0) || '|' || COALESCE(SUM(length(drive_url)), 0) || '|' || COALESCE(SUM(length(status)), 0) FROM contracts) || '|' ||
         (SELECT COUNT(*) || '|' || COALESCE(MAX(signed_at), 0) || '|' || COALESCE(MAX(emailed_at), 0) || '|' || COALESCE(SUM(fails), 0) || '|' || COALESCE(SUM(length(COALESCE(email, '')) + length(COALESCE(label, ''))), 0) FROM contract_signers) AS f`).first().catch(() => null),
       DB.prepare("SELECT COALESCE(MAX(id), 0) || '|' || COALESCE(SUM(deleted), 0) AS f FROM chat_messages").first().catch(() => null),

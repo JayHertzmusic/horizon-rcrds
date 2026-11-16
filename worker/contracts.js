@@ -348,7 +348,9 @@ export async function contractsApi(req, env, s, url, can, audit, ctx) {
   if (!mm[2] && m === 'DELETE') {
     edit();
     if ((signed || anySigned) && !s.owner) throw new ContractError(403, 'Only owners can delete a signed contract.');
-    await DB.batch([DB.prepare('DELETE FROM contract_signers WHERE contract_id = ?').bind(c.id), DB.prepare('DELETE FROM contracts WHERE id = ?').bind(c.id)]);
+    // (lo que hicieron los artistas se queda en Activity como «Deleted contract»; la fecha del calendario deja de apuntar a él)
+    await DB.batch([DB.prepare('DELETE FROM contract_signers WHERE contract_id = ?').bind(c.id), DB.prepare('DELETE FROM contracts WHERE id = ?').bind(c.id),
+      DB.prepare('UPDATE calendar SET contract_id = NULL WHERE contract_id = ?').bind(c.id)]);
     for (const k of [c.pdf, c.file, c.signed_pdf]) if (k) await env.FILES.delete(k);
     await audit(`Deleted the contract “${c.title}”${signed ? ' (signed)' : ''}`);
     return { ok: true };

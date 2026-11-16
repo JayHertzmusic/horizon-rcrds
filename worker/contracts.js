@@ -93,7 +93,8 @@ async function pdfBody(req) {
 const pdfResponse = (buf, name) => new Response(buf, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${name}"`, 'Cache-Control': 'no-store' } });
 const sha256 = async buf => [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map(b => b.toString(16).padStart(2, '0')).join('');
 export const signedName = c => `${String(c.title || 'Contract').replace(/[\\/:*?"<>|]+/g, '').trim() || 'Contract'} (signed).pdf`;
-const signerLink = (origin, r) => `${origin}/sign/${r.token}`;
+// los enlaces de los correos siempre con la web oficial (aunque se envíe desde www. o desde workers.dev)
+const signerLink = (origin, r) => `${/(^|\.)(horizonrcrds\.com|workers\.dev)$/.test(new URL(origin).hostname) ? 'https://horizonrcrds.com' : origin}/sign/${r.token}`;
 const isDraftRow = c => c?.kind === 'draft';
 
 // el PDF de una pestaña del Google Doc, tal cual lo exporta Google
@@ -129,7 +130,8 @@ async function sendInvites(env, c, sg, list, origin) {
 function legalName(c, me, sg) {
   const v = parse(c.vars) || {}, get = re => { const k = Object.keys(v).find(n => re.test(n)); return k ? String(v[k] || '').trim() : ''; };
   const norm = x => String(x || '').trim().toLowerCase();
-  if (sg.length > 1) return get(new RegExp(`^artist ${me.idx + 1} legal name$`, 'i')) || me.label || '';
+  // por su posición en el contrato (Artista 1, 2…), no por su número interno (que salta si se quitó y añadió a alguien)
+  if (sg.length > 1) { const pos = sg.findIndex(x => x.id === me.id); return get(new RegExp(`^artist ${pos + 1} legal name$`, 'i')) || me.label || ''; }
   for (let k = 1; k <= 8; k++) if (norm(get(new RegExp(`^artist ${k} name$`, 'i'))) === norm(me.label) && me.label) return get(new RegExp(`^artist ${k} legal name$`, 'i')) || me.label;
   return get(/^legal name$/i) || me.label || '';
 }
@@ -488,7 +490,9 @@ export async function contractsApi(req, env, s, url, can, audit, ctx) {
     const hash = await sha256(buf);
     const key = `contracts/${c.id}-signed-${hash.slice(0, 12)}.pdf`;
     await env.FILES.put(key, buf, { metadata: { type: 'application/pdf', at: now() } });
-    await DB.prepare('UPDATE contracts SET signed_pdf = ?, signed_hash = ? WHERE id = ?').bind(key, hash, c.id).run();
+    // dos paneles abiertos a la vez: vale el primero (el mismo PDF en la web, en los correos y en Drive)
+    const r = await DB.prepare('UPDATE contracts SET signed_pdf = ?, signed_hash = ? WHERE id = ? AND signed_pdf IS NULL').bind(key, hash, c.id).run();
+    if (!r.meta.changes) { const cur = await DB.prepare('SELECT signed_pdf FROM contracts WHERE id = ?').bind(c.id).first(); if (cur?.signed_pdf !== key) await env.FILES.delete(key).catch(() => {}); }
     return { ok: true };
   }
   if (mm[2] === 'signed' && m === 'GET') {
@@ -517,9 +521,9 @@ export async function contractsApi(req, env, s, url, can, audit, ctx) {
     // año de salida: el del calendario (fecha de este contrato, de su número de release o de su artista y track)
     const cal = (await DB.prepare('SELECT date, cat, artist, title, contract_id FROM calendar').all().catch(() => ({ results: [] }))).results;
     const num = v => { const x = String(v || '').match(/(\d+)\s*$/); return x ? Number(x[1]) : null; };
-    const nrm = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
+    const nrm = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\p{L}\p{N}]+/gu, '');   // (cualquier idioma)
     const mine = cal.find(x => x.contract_id === c.id) || (num(c.release_cat) !== null ? cal.find(x => num(x.cat) === num(c.release_cat)) : null)
-      || (c.release_name ? cal.find(x => nrm(x.title) === nrm(c.release_name) && nrm(String(x.artist || '').split(/\s*(?:,|&|\band\b)\s*/i)[0]) === nrm(String(c.artist || '').split(/\s*(?:,|&|\band\b)\s*/i)[0])) : null);
+      || (nrm(c.release_name) ? cal.find(x => nrm(x.title) === nrm(c.release_name) && nrm(String(x.artist || '').split(/\s*(?:,|&|\band\b)\s*/i)[0]) === nrm(String(c.artist || '').split(/\s*(?:,|&|\band\b)\s*/i)[0])) : null);
     // guardado automático: solo cuando el release ya tiene su fecha en el calendario (si no, se espera)
     if (b.auto && !mine) return { ok: false, waiting: true };
     const lockKey = num(c.release_cat) !== null ? `rel:${num(c.release_cat)}` : `c:${c.id}`, t0 = now();
@@ -625,6 +629,8 @@ export async function signApi(req, env, url, mail, ctx) {
   if (req.method === 'GET') return view();
   if (req.method !== 'POST') throw new ContractError(405, 'Not allowed.');
   if (me.signed_at) throw new ContractError(409, 'You have already signed this contract.');
+  // sin su recuadro, la firma no saldría en el PDF firmado: no se deja firmar hasta que HORIZON RCRDS lo coloque
+  if (!box(me.box)) throw new ContractError(409, 'Your signature spot is not ready yet. Please try again later or contact HORIZON RCRDS.');
   const b = parse(await req.text()) || {};
   // firma a nombre del nombre legal que pusimos en el contrato (el artista no lo escribe)
   const name = clean(legalName(c, me, sg), 160) || clean(b.name, 160), email = need || clean(b.email, 160).toLowerCase();

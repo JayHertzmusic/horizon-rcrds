@@ -97,6 +97,11 @@
       return;
     }
     setStatus('Needs your signature');
+    if (!data.me.box) {   // (se cambió el documento y aún no está su recuadro)
+      bar.innerHTML = '<p>Your signature spot is being prepared by HORIZON RCRDS. Please come back to this link a bit later.</p>';
+      end.innerHTML = ''; if (view) HZPDF.drawMarks(view.pages, marks());
+      return;
+    }
     bar.innerHTML = adopted
       ? '<p>Your signature is in place. Send it with the button at the end of the page.</p>'
       : '<p>Please read the whole contract and sign in the <b>SIGN HERE</b> box.</p>';

@@ -121,51 +121,68 @@
     // Certificado: logo, datos del documento y una ficha por firmante (con su firma)
     let cp = doc.addPage([612, 792]);
     const ink = rgb(0.07, 0.07, 0.07), soft = rgb(0.42, 0.42, 0.45), rule = rgb(0.86, 0.86, 0.88);
-    const txt = (t, x, yy, f = helv, size = 10, color = ink) => cp.drawText(latin1(t), { x, y: yy, size, font: f, color });
+    // texto con letras que las fuentes del PDF no tienen (chino, cirílico, árabe…): se dibuja como imagen nítida
+    // (antes salía «???» en lugar del nombre)
+    const uniImg = async (t, f, size, color) => {
+      const k = 4, c = document.createElement('canvas'), x = c.getContext('2d');
+      const font = `${f === bold ? '700 ' : ''}${size * k}px "Helvetica Neue", Helvetica, Arial, "Noto Sans", "PingFang SC", "Microsoft YaHei", "Hiragino Sans", sans-serif`;
+      x.font = font;
+      c.width = Math.ceil(x.measureText(t).width) + 4; c.height = Math.ceil(size * 1.4 * k);
+      x.font = font; x.textBaseline = 'alphabetic';
+      x.fillStyle = `rgb(${Math.round(color.red * 255)},${Math.round(color.green * 255)},${Math.round(color.blue * 255)})`;
+      x.fillText(t, 0, size * 1.1 * k);
+      return { png: await doc.embedPng(c.toDataURL('image/png')), w: c.width / k, h: c.height / k };
+    };
+    const txt = async (t, x, yy, f = helv, size = 10, color = ink) => {
+      const s = String(t ?? '').normalize('NFC');
+      if (latin1(s) === s) return cp.drawText(s, { x, y: yy, size, font: f, color });
+      try { const im = await uniImg(s, f, size, color); cp.drawImage(im.png, { x, y: yy - size * 0.3, width: im.w, height: im.h }); }
+      catch { cp.drawText(latin1(s), { x, y: yy, size, font: f, color }); }
+    };
     let logo = null;
     try { logo = await doc.embedPng(new Uint8Array(await (await fetch('/assets/favicon_icon.png')).arrayBuffer())); } catch { /* sin logo */ }
-    const head = () => {
+    const head = async () => {
       if (logo) cp.drawImage(logo, { x: 56, y: 712, width: 40, height: 40 });
-      txt('HORIZON RCRDS', logo ? 108 : 56, 734, bold, 15);
-      txt('Electronic signature certificate', logo ? 108 : 56, 716, helv, 10, soft);
+      await txt('HORIZON RCRDS', logo ? 108 : 56, 734, bold, 15);
+      await txt('Electronic signature certificate', logo ? 108 : 56, 716, helv, 10, soft);
       cp.drawLine({ start: { x: 56, y: 694 }, end: { x: 556, y: 694 }, thickness: 0.8, color: rule });
     };
-    head();
+    await head();
     let y = 664;
-    txt('DOCUMENT', 56, y, bold, 7.5, soft); y -= 16;
-    txt(data.title, 56, y, bold, 12); y -= 22;
-    txt('DOCUMENT FINGERPRINT (SHA-256 OF THE PDF THAT WAS SIGNED)', 56, y, bold, 7.5, soft); y -= 14;
-    txt(data.hash || list.find(x => x.signed)?.signed.hash || '', 56, y, helv, 8.5); y -= 30;
+    await txt('DOCUMENT', 56, y, bold, 7.5, soft); y -= 16;
+    await txt(data.title, 56, y, bold, 12); y -= 22;
+    await txt('DOCUMENT FINGERPRINT (SHA-256 OF THE PDF THAT WAS SIGNED)', 56, y, bold, 7.5, soft); y -= 14;
+    await txt(data.hash || list.find(x => x.signed)?.signed.hash || '', 56, y, helv, 8.5); y -= 30;
     const device = ua => { ua = ua || ''; const b = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Browser';
       const o = /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : ''; return o ? `${b} on ${o}` : b; };
     for (const one of list) {
       const s = one.signed;
       if (!s) continue;
-      if (y < 190) { cp = doc.addPage([612, 792]); head(); y = 664; }
+      if (y < 190) { cp = doc.addPage([612, 792]); await head(); y = 664; }
       const top = y + 12, h = 118;
       cp.drawRectangle({ x: 56, y: top - h, width: 500, height: h, borderColor: rule, borderWidth: 0.8 });
-      txt(one.label ? `ARTIST · ${one.label}` : 'SIGNER', 72, y - 6, bold, 7.5, soft);
-      txt(s.name, 72, y - 24, bold, 13);
-      const row = (k, v, yy) => { txt(k, 72, yy, bold, 8, soft); txt(v, 150, yy, helv, 9); };
-      row('Email', s.email || '-', y - 46); row('Signed on', fmt(s.at), y - 62); row('IP address', s.ip || '-', y - 78); row('Device', device(s.ua), y - 94);
+      await txt(one.label ? `ARTIST · ${one.label}` : 'SIGNER', 72, y - 6, bold, 7.5, soft);
+      await txt(s.name, 72, y - 24, bold, 13);
+      const row = async (k, v, yy) => { await txt(k, 72, yy, bold, 8, soft); await txt(v, 150, yy, helv, 9); };
+      await row('Email', s.email || '-', y - 46); await row('Signed on', fmt(s.at), y - 62); await row('IP address', s.ip || '-', y - 78); await row('Device', device(s.ua), y - 94);
       // la firma, a la derecha
       try {
         if (!s.signature.startsWith('typed:')) {
           const png = await doc.embedPng(s.signature), k = Math.min(150 / png.width, 52 / png.height);
           cp.drawImage(png, { x: 396 + (150 - png.width * k) / 2, y: y - 66, width: png.width * k, height: png.height * k });
-        } else txt(s.signature.slice(6), 400, y - 50, ital, 18, rgb(0.05, 0.05, 0.2));
+        } else await txt(s.signature.slice(6), 400, y - 50, ital, 18, rgb(0.05, 0.05, 0.2));
         cp.drawLine({ start: { x: 396, y: y - 70 }, end: { x: 546, y: y - 70 }, thickness: 0.6, color: ink });
-        txt('Signature', 396, y - 82, helv, 7.5, soft);
+        await txt('Signature', 396, y - 82, helv, 7.5, soft);
       } catch { /* firma no legible */ }
       y = top - h - 22;
     }
-    if (y < 110) { cp = doc.addPage([612, 792]); head(); y = 664; }
+    if (y < 110) { cp = doc.addPage([612, 792]); await head(); y = 664; }
     for (const t of ['Each signer opened the document with their private link and their email address, read it, confirmed that',
       'they agree to it and signed it online. The fingerprint proves that the signed document is exactly this file:',
-      'any change to it gives a different fingerprint.']) { txt(t, 56, y, helv, 8.5, soft); y -= 13; }
-    if (data.link) { y -= 6; txt(`Signed copy: ${data.link}`, 56, y, helv, 8, soft); }
-    txt('horizonrcrds.com', 56, 40, helv, 8, soft);
-    doc.setTitle(`${latin1(data.title)} (signed)`);
+      'any change to it gives a different fingerprint.']) { await txt(t, 56, y, helv, 8.5, soft); y -= 13; }
+    if (data.link) { y -= 6; await txt(`Signed copy: ${data.link}`, 56, y, helv, 8, soft); }
+    await txt('horizonrcrds.com', 56, 40, helv, 8, soft);
+    doc.setTitle(`${data.title} (signed)`);   // (el título del archivo admite cualquier idioma)
     doc.setProducer('HORIZON RCRDS');
     return doc.save();
   }

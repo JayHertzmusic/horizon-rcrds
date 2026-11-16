@@ -16,8 +16,9 @@ export async function horizonToken(env, margin = 60e3) {
   await env.FILES.put('google/token', JSON.stringify(cached), { expirationTtl: 3000 });
   return j.token;
 }
-async function gapi(tok, url, body) {
-  const r = await fetch(url, { method: body ? 'POST' : 'GET', headers: { Authorization: `Bearer ${tok}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
+async function gapi(tok, url, body, method, patch) {
+  if (patch) body = patch;
+  const r = await fetch(url, { method: method || (body ? 'POST' : 'GET'), headers: { Authorization: `Bearer ${tok}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) {
     if (r.status === 401) cached = null;
@@ -89,11 +90,19 @@ export async function docFromTemplate(env, docUrl, values, title) {
   if (!tabObj) throw new Error('Could not find the template tab.');
   let tab = tabObj.tabProperties.tabId;
   const { text, idx, sty } = docText(tabObj.documentTab?.body?.content);
+  // ningún dato puede quedarse sin poner: la plantilla puede llevar datos de otro contrato (o rayas «____»).
+  // Solo los del sello (representante y firmante de HORIZON RCRDS) se quedan como estén si no se mandan.
+  const valueOf = name => values[name] || (name === 'Artists clause name' ? values['Artist name'] : name === 'Artists clause legal' ? values['Legal name'] : '');
+  const missing = [...new Set(findBlanks(text).filter(b => !String(valueOf(b.name) || '').trim() && !/^label /i.test(b.name)).map(b => b.name.replace(/^Artists clause name$/, 'Artist name').replace(/^Artists clause legal$/, 'Legal name')))];
+  if (missing.length) {
+    await gapi(tok, `https://www.googleapis.com/drive/v3/files/${copy.id}?supportsAllDrives=true`, null, 'PATCH', { trashed: true }).catch(() => {});   // la copia a medias, a la papelera
+    throw new Error(`Missing in the contract: ${missing.join(', ')}. Fill them in and try again.`);
+  }
   const requests = [];
   for (const b of findBlanks(text).reverse()) {
     // cláusula 1.2 («Artista, also known as Nombre legal»): con varias copias lleva a todos los artistas; si no, el del contrato
-    const v = values[b.name] || (b.name === 'Artists clause name' ? values['Artist name'] : b.name === 'Artists clause legal' ? values['Legal name'] : '');
-    if (!v) continue;
+    const v = valueOf(b.name);
+    if (!v) continue;   // (solo los del sello)
     const line = /^(_+|X{3,}|XX\.XX\.XXXX)$/.test(String(b.value).trim());
     const extra = 0;   // (los espacios de la plantilla se respetan: mueven el dato a su columna)
     const startIndex = idx[b.start - extra], endIndex = idx[b.end - 1] + 1;

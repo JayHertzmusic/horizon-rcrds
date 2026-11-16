@@ -2431,7 +2431,7 @@
         <h2 class="ct-sub">Artist</h2>
         ${who(1)}${grid(mine(1).map(([f, i]) => fieldHtml(f, i, 1)))}
         ${t.signers.length === 1 ? '<div class="copy-btns"><button type="button" class="btn ghost sm" data-ct="copy-add">+ Add artist (own copy)</button></div>' : ''}
-        ${fields ? '<p class="info">Everything goes into the contract in every place it appears. A field left empty keeps what the template says.</p>' : ''}${end}
+        ${fields ? '<p class="info">Everything goes into the contract in every place it appears. Every detail is needed.</p>' : ''}${end}
       </form>`;
     // varios artistas: un recuadro por artista con su Release Form, su nombre, su email y sus datos
     return `
@@ -2446,7 +2446,7 @@
           ${picker(x + 1)}${who(x + 1)}${grid(mine(x + 1).map(([f, i]) => fieldHtml(f, i, x + 1)))}
         </fieldset>`).join('')}
         ${t.signers.length === 1 ? '<div class="copy-btns"><button type="button" class="btn ghost sm" data-ct="copy-add">+ Add artist (own copy)</button><button type="button" class="btn ghost sm" data-ct="copy-del">Remove last</button></div>' : ''}
-        ${fields ? '<p class="info">Everything goes into the contract in every place it appears. A field left empty keeps what the template says.</p>' : ''}${end}
+        ${fields ? '<p class="info">Everything goes into the contract in every place it appears. Every detail is needed.</p>' : ''}${end}
       </form>`;
   }
   /* Un contrato, una copia por artista (p. ej. «3 Artists»): mismos datos, cada uno firma la suya */
@@ -3141,12 +3141,38 @@
         const bad = people.find(p => p.email && !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(p.email));
         if (bad) return fail(`The email of ${bad.name} is not valid.`);
         const artist = people.map(p => p.name).join(' & ');
+        // todo obligatorio: un dato vacío dejaría en el contrato lo que ponga la plantilla (rayas o datos de otro contrato)
+        // (solo los del sello, ya rellenos, se pueden dejar como están)
+        $$('#ct-use [aria-invalid]').forEach(el => el.removeAttribute('aria-invalid'));
+        const empty = [];
+        fields.forEach((x, i) => {
+          if (/^label /i.test(x.name)) return;
+          const who = fieldArtist(x.name, n, copiesMode), ks = who === 'each' ? people.map((_, y) => y + 1) : [who];
+          for (const k of ks) {
+            const a = who === 'each' ? k : who, nm = x.name.replace(/^Artist \d /i, '') + (n > 1 && a ? ` (artist ${a})` : '');
+            if (a && isDupField(x.name)) { const mail = /mail/i.test(x.name); if (!people[a - 1]?.[mail ? 'email' : 'name']) empty.push({ name: nm, el: f.elements[(mail ? 'em' : 'cn') + (a - 1)] }); continue; }
+            const el = f.elements[fieldInput(i, who, k)];
+            if (el && !el.value.trim()) empty.push({ name: nm, el });
+          }
+        });
+        if (empty.length) {
+          empty.forEach(x => x.el?.setAttribute('aria-invalid', 'true'));
+          empty[0].el?.focus();
+          return fail(`Fill in every detail: ${[...new Set(empty.map(x => x.name))].join(', ')}.`);
+        }
         const jobs = copiesMode
           ? people.map((p, x) => ({ values: { ...valuesFor(x + 1), 'Artists clause name': people.map(q => q.name).join(', '), 'Artists clause legal': people.map((q, y) => valuesFor(y + 1)['Legal name'] || '').filter(Boolean).join(', ') }, copies: [{ title: `${title} (${p.name})`, artist, signers: [{ label: p.name, email: p.email }] }] }))
           : [{ values: valuesFor(0), copies: [{ title, artist, signers: people.map(p => ({ label: p.name, email: p.email })) }] }];
         btn.disabled = true; stage('Making the contract…');
         try {
-          const rs = await ctAction(() => Promise.all(jobs.map(jb => api('POST', '/api/contracts/make', { template: tpl.id, ...jb, release_cat: f.elements.release_cat.value, release_name: f.elements.release_name.value }))));
+          // una copia por artista: o se crean todas o ninguna (si una falla, las ya creadas se quitan: al repetir no hay duplicados)
+          const rs = await ctAction(async () => {
+            const res = await Promise.allSettled(jobs.map(jb => api('POST', '/api/contracts/make', { template: tpl.id, ...jb, release_cat: f.elements.release_cat.value, release_name: f.elements.release_name.value })));
+            const bad = res.find(x => x.status === 'rejected');
+            if (!bad) return res.map(x => x.value);
+            for (const x of res) if (x.status === 'fulfilled') for (const id of x.value.ids || []) await api('DELETE', `/api/contracts/${encodeURIComponent(id)}`).catch(() => null);
+            throw bad.reason;
+          });
           const r = { ids: rs.flatMap(x => x.ids) };
           toast(r.ids.length > 1 ? `${r.ids.length} contracts created, one per artist` : 'Contract created');
           ctTab = 'contracts'; ctData = null;

@@ -101,7 +101,7 @@ export async function calendarApi(req, env, s, url, can, audit) {
    El bot de Discord manda cada 10 min los mensajes del canal. Las líneas con fecha («20.11.26 - VENTA - Back»,
    «02.12.26 | Mixtape #012 | Jay Hertz - December») se convierten en fechas del calendario: lo que cambia en Discord
    cambia aquí, lo nuevo se añade y lo que ya no está (y aún no ha salido) se quita. Lo añadido a mano en la web se respeta. */
-const norm = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
+const norm = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\p{L}\p{N}]+/gu, '');   // letras de cualquier idioma (chino, cirílico…): antes un nombre chino quedaba vacío y se confundía con otros
 export function parseDiscordCalendar(messages) {
   const out = [];
   for (const m of messages || []) {

@@ -64,13 +64,16 @@
   .ds-end:empty { display: none; }
   .ds-end .err { margin-top: 8px; }
   /* pantalla final */
-  .ds-done { width: min(560px, 100%); margin: 6vh auto 0; text-align: center; }
+  .ds-done { width: 100%; margin: 6vh auto 0; text-align: center; }
+  .ds-done > p, .ds-done .actions { max-width: 680px; margin-left: auto; margin-right: auto; }
   .ds-done-logo { width: 64px; height: 64px; border-radius: 14px; display: block; margin: 0 auto 22px; }
-  .ds-done h1 { font-size: clamp(38px, 7vw, 56px); margin-bottom: 12px; }
-  .ds-done .lead { margin: 0 0 14px; font-size: 18px; color: #fff; }
-  .ds-done .msg { margin: 0 0 10px; }
-  .ds-done .actions { justify-content: center; margin-top: 26px; }
-  .ds-done .btn { text-decoration: none; }
+  .ds-done h1 { font-size: clamp(34px, 7.4vw, 72px); line-height: .95; margin-bottom: 16px; }
+  .ds-done h1 .nw { white-space: nowrap; }   /* «HORIZON RCRDS» nunca se parte */
+  .ds-done .lead { margin: 0 auto 14px; font-size: 18px; color: #fff; }
+  .ds-done .msg { margin: 0 auto 10px; }
+  .ds-done .actions { justify-content: center; margin-top: 26px; margin-left: auto; margin-right: auto; }
+  .ds-done .btn { text-decoration: none; min-width: 250px; }
+  @media (max-width: 560px) { .ds-done .btn { width: 100%; max-width: 340px; } }
   @media print {
     body { background: #fff; color: #111; }
     main { padding: 0; width: 100%; }
@@ -142,6 +145,6 @@
 <script src="/assets/vendor/pdf/pdf.min.js"></script>
 <script src="/assets/vendor/pdf/pdf-lib.min.js"></script>
 <script src="/contract-pdf.js?v=10"></script>
-<script src="/sign.js?v=11"></script>
+<script src="/sign.js?v=12"></script>
 </body>
 </html>

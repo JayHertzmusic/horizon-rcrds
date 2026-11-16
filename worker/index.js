@@ -67,10 +67,9 @@ const fail = (status, message) => json({ message, panel: true }, status);
 const isDevOrigin = o => /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(o || '');
 
 /* ---------------- Base de datos ---------------- */
-let schemaReady = false;
-async function ensureSchema(env) {
-  if (schemaReady) return;
-  await env.DB.batch([
+// tablas y columnas de la base de datos. Solo se repasan cuando cambian (firma guardada en panel_settings):
+// así cada arranque del Worker hace 1 consulta en vez de ~60.
+const BASE_SCHEMA = [
     `CREATE TABLE IF NOT EXISTS site_data (name TEXT PRIMARY KEY, json TEXT NOT NULL, version INTEGER NOT NULL DEFAULT 0, updated_at INTEGER, updated_by TEXT)`,
     `CREATE TABLE IF NOT EXISTS site_meta (k TEXT PRIMARY KEY, v INTEGER NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS site_history (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, json TEXT NOT NULL, at INTEGER NOT NULL, by_email TEXT, message TEXT)`,
@@ -88,20 +87,31 @@ async function ensureSchema(env) {
     ...FORM_SCHEMA,
     ...CONTRACT_SCHEMA,
     ...CALENDAR_SCHEMA,
-  ].map(q => env.DB.prepare(q)));
-  // nombre que le pone el owner a cada persona (columna añadida después)
-  try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN label TEXT').run(); } catch { /* ya existe */ }
-  try { await env.DB.prepare('ALTER TABLE panel_members ADD COLUMN color TEXT').run(); } catch { /* ya existe */ }
-  try { await env.DB.prepare('ALTER TABLE panel_profiles ADD COLUMN color TEXT').run(); } catch { /* ya existe */ }
-  // perfil de SoundCloud (la foto se toma de ahí y se actualiza sola) y la última foto copiada
-  for (const col of ['soundcloud TEXT', 'sc_pic TEXT']) { try { await env.DB.prepare(`ALTER TABLE panel_profiles ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
-  try { await env.DB.prepare('ALTER TABLE panel_roles ADD COLUMN forms TEXT').run(); } catch { /* ya existe */ }
-  try { await env.DB.prepare('ALTER TABLE forms ADD COLUMN google TEXT').run(); } catch { /* ya existe */ }   // Google Form conectado
-  for (const col of FORM_LINK_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE form_links ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
+];
+// columnas añadidas después: [ALTER, lo que hay que hacer solo la vez que se añade]
+const ALTERS = [
+  ['ALTER TABLE panel_members ADD COLUMN label TEXT'],   // nombre que le pone el owner a cada persona
+  ['ALTER TABLE panel_members ADD COLUMN color TEXT'],
+  ['ALTER TABLE panel_profiles ADD COLUMN color TEXT'],
+  ['ALTER TABLE panel_profiles ADD COLUMN soundcloud TEXT'],   // perfil de SoundCloud (la foto se toma de ahí) y la última foto copiada
+  ['ALTER TABLE panel_profiles ADD COLUMN sc_pic TEXT'],
+  ['ALTER TABLE panel_roles ADD COLUMN forms TEXT'],
+  ['ALTER TABLE forms ADD COLUMN google TEXT'],   // Google Form conectado
+  ...FORM_LINK_COLUMNS.map(c => [`ALTER TABLE form_links ADD COLUMN ${c}`]),
   // formulario privado (solo con enlace personal). El Release Form lo es desde el principio.
-  try { await env.DB.prepare('ALTER TABLE forms ADD COLUMN invite INTEGER NOT NULL DEFAULT 0').run(); await env.DB.prepare("UPDATE forms SET invite = 1 WHERE slug = 'release-form'").run(); } catch { /* ya existe */ }
-  for (const col of CONTRACT_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE contracts ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
-  for (const col of SIGNER_COLUMNS) { try { await env.DB.prepare(`ALTER TABLE contract_signers ADD COLUMN ${col}`).run(); } catch { /* ya existe */ } }
+  ['ALTER TABLE forms ADD COLUMN invite INTEGER NOT NULL DEFAULT 0', "UPDATE forms SET invite = 1 WHERE slug = 'release-form'"],
+  ...CONTRACT_COLUMNS.map(c => [`ALTER TABLE contracts ADD COLUMN ${c}`]),
+  ...SIGNER_COLUMNS.map(c => [`ALTER TABLE contract_signers ADD COLUMN ${c}`]),
+];
+const ALL_SCHEMA = BASE_SCHEMA;   // (ya lleva las tablas de formularios, contratos y calendario)
+const SCHEMA_SIG = (() => { let h = 5381; for (const ch of JSON.stringify([ALL_SCHEMA, ALTERS])) h = (h * 33 + ch.charCodeAt(0)) >>> 0; return 'v' + h.toString(36); })();
+let schemaReady = false;
+async function ensureSchema(env) {
+  if (schemaReady) return;
+  try { if ((await env.DB.prepare("SELECT value FROM panel_settings WHERE key = 'schema_sig'").first())?.value === SCHEMA_SIG) { schemaReady = true; return; } } catch { /* base nueva: se crea todo */ }
+  await env.DB.batch(ALL_SCHEMA.map(q => env.DB.prepare(q)));
+  for (const [q, then] of ALTERS) { try { await env.DB.prepare(q).run(); if (then) await env.DB.prepare(then).run(); } catch { /* ya existe */ } }
+  await env.DB.prepare("INSERT OR REPLACE INTO panel_settings (key, value) VALUES ('schema_sig', ?)").bind(SCHEMA_SIG).run();
   schemaReady = true;
 }
 const audit = (env, who, action, detail = '') => env.DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)')

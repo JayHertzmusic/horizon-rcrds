@@ -379,7 +379,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     if (pos.children.length !== steps.length) pos.innerHTML = steps.map((st, k) => `<button type="button" data-go="${k}" aria-label="Step ${k + 1}: ${esc(plain(st.title) || 'Step ' + (k + 1))}"><i></i></button>`).join('');
     [...pos.children].forEach((b, k) => { b.className = k < cur ? 'past' : k === cur ? 'on' : ''; b.toggleAttribute('aria-current', k === cur); });
     document.getElementById('err').hidden = true;
-    progress();
+    progress(); saveDraft();
     if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
     document.querySelector('.step.on input, .step.on textarea, .step.on select')?.focus({ preventScroll: true });
   }
@@ -438,12 +438,48 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
   })();
   const linkHeaders = KEY ? { 'X-Form-Device': device } : {};
   const apiUrl = () => '/api/public/forms/' + encodeURIComponent(slug) + (KEY ? '?k=' + encodeURIComponent(KEY) : '');
+  // borrador en este dispositivo: si se recarga la página (o se cierra) a medias, las respuestas siguen ahí. Se borra al enviar.
+  const DRAFT = !PREVIEW && !EMBED && (KEY || slug) ? 'hz_draft_' + (KEY ? 'k_' + KEY.slice(0, 24) : 's_' + slug) : '';
+  let draftTimer = 0;
+  function draftState() {
+    const f = document.getElementById('f'), out = {};
+    for (const x of form.fields) {
+      if (x.type === 'section') continue;
+      const other = f.querySelector(`[data-other="${CSS.escape(x.id)}"]`)?.value || '';
+      if (x.type === 'radio' || x.type === 'checkbox') out[x.id] = { v: [...f.querySelectorAll(`input[name="${CSS.escape(x.id)}"]:checked`)].map(i => i.value), o: other };
+      else out[x.id] = { v: f.elements[x.id]?.value || '' };
+    }
+    return out;
+  }
+  function saveDraft() {
+    if (!DRAFT || !form || !document.getElementById('f')) return;
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => { try { localStorage.setItem(DRAFT, JSON.stringify({ at: Date.now(), step: EXCL() ? cur : 0, a: draftState() })); } catch { /* sin espacio o bloqueado */ } }, 300);
+  }
+  const dropDraft = () => { clearTimeout(draftTimer); try { if (DRAFT) localStorage.removeItem(DRAFT); } catch { /* nada */ } };
+  function restoreDraft() {
+    const f = document.getElementById('f');
+    if (!DRAFT || !f) return;
+    let d = null; try { d = JSON.parse(localStorage.getItem(DRAFT) || 'null'); } catch { /* nada */ }
+    if (!d?.a || Date.now() - (d.at || 0) > 30 * 864e5) return;
+    for (const x of form.fields) {
+      const v = d.a[x.id];
+      if (!v || x.type === 'section') continue;
+      if (x.type === 'radio' || x.type === 'checkbox') {
+        f.querySelectorAll(`input[name="${CSS.escape(x.id)}"]`).forEach(i => { if (!i.hidden) i.checked = (v.v || []).includes(i.value); });
+        const o = f.querySelector(`[data-other="${CSS.escape(x.id)}"]`); if (o && v.o) o.value = v.o;
+      } else if (f.elements[x.id] && typeof v.v === 'string') f.elements[x.id].value = v.v;
+    }
+    progress();
+    // vuelve al paso donde se quedó (o al primero que tenga algo obligatorio sin contestar)
+    if (EXCL() && d.step > 0) { let k = 0; while (k < Math.min(d.step, steps.length - 1) && !stepMissing(k)) k++; goStep(k, false); }
+  }
   async function load() {
     try {
       const r = await fetch(apiUrl(), { cache: 'no-store', headers: linkHeaders });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.message || 'This form is not available.');
-      form = j; draw(false);
+      form = j; draw(false); restoreDraft();
     } catch (e) { root.innerHTML = `<h1>Not available</h1><p class="msg">${esc(e.message)}</p>`; }
   }
   // vista previa del panel: el formulario llega del editor (mismo sitio) y se redibuja al momento
@@ -524,6 +560,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.message || 'Something went wrong. Please try again.');
       document.getElementById('bar').style.width = '100%';
+      dropDraft();
       if (EMBED) parent.postMessage({ type: 'hz-form-sent' }, location.origin);
       root.innerHTML = EXCL()
         ? `<div class="x-end"><a class="xa-brand x-end-brand" href="/"><img src="/assets/logo.png" alt=""><span>HORIZON RCRDS</span></a><div class="done"><span class="x-badge"><i></i>Received</span><h2 style="margin-top:22px">Thank you${form.note ? ', ' + esc(form.note) : ''}!</h2><p>Your details are with HORIZON RCRDS.<br>We’ll prepare everything for your release and be in touch soon.</p><a href="/">Back to the website</a></div></div>`
@@ -531,6 +568,8 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (x) { err.textContent = x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Send'; }
   });
+  document.addEventListener('input', saveDraft);
+  document.addEventListener('change', saveDraft);
   document.addEventListener('input', e => {
     const o = e.target.closest('[data-other]');
     if (o && o.value) { const r = o.closest('.opt').querySelector('input[type=radio], input[type=checkbox]'); if (r) r.checked = true; }

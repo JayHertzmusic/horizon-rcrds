@@ -28,6 +28,17 @@ export const FORM_SCHEMA = [
 ];
 // ¿la ha visto esta persona? (SQL; el ? es su correo)
 const SEEN_SQL = `EXISTS (SELECT 1 FROM form_seen x WHERE x.response_id = r.id AND x.email IN ('*', ?))`;
+// cómo se llama una respuesta en el historial: «#12 (Artista - Track)», como en la cabecera del panel
+async function respName(DB, f, rid) {
+  const r = await DB.prepare('SELECT data, (SELECT COUNT(*) FROM form_responses WHERE form_id = ? AND id <= ?) AS n FROM form_responses WHERE id = ?').bind(f.id, rid, rid).first();
+  if (!r) return `#${rid}`;
+  const d = parse(r.data) || {}, qs = (parse(f.fields) || []).filter(x => x.type !== 'section');
+  const val = x => (Array.isArray(d[x.id]) ? d[x.id].join(', ') : String(d[x.id] || '')).trim();
+  const who = qs.find(x => /artist|team/i.test(x.label) && val(x)) || qs.find(x => /name/i.test(x.label) && val(x));
+  const what = qs.find(x => /track|song|title/i.test(x.label) && x !== who && val(x));
+  const label = [who && val(who), what && val(what)].filter(Boolean).join(' - ').slice(0, 120);
+  return `#${r.n}${label ? ` (${label})` : ''}`;
+}
 // quién del team ha visto cada respuesta: nombre del team, foto y color (como en el panel)
 async function seenBy(DB, ids) {
   if (!ids.length) return {};
@@ -375,22 +386,27 @@ export async function formsApi(req, env, s, url, audit) {
   }
   if (mm[2] === 'responses' && mm[3] && m === 'POST') {
     // visto / nuevo solo para quien lo pulsa (el resto del team lo sigue viendo como estaba)
-    const seen = !!(parse(await req.text()) || {}).seen, rid = Number(mm[3]), me = s.email || '';
+    const body = parse(await req.text()) || {}, seen = !!body.seen, rid = Number(mm[3]), me = s.email || '';
     if (!me || s.sync) throw new FormError(403, 'Not allowed.');
     if (!seen && !s.owner) throw new FormError(403, 'Only owners can mark a response as new.');   // el resto del team: visto al abrirla
     if (!await DB.prepare('SELECT 1 FROM form_responses WHERE id = ? AND form_id = ?').bind(rid, f.id).first()) throw new FormError(404, 'That response no longer exists.');
-    if (seen) await DB.prepare('INSERT OR IGNORE INTO form_seen (response_id, email, at) VALUES (?, ?, ?)').bind(rid, me, now()).run();
+    if (seen) {
+      const ins = await DB.prepare('INSERT OR IGNORE INTO form_seen (response_id, email, at) VALUES (?, ?, ?)').bind(rid, me, now()).run();
+      if (ins.meta.changes) await audit(body.opened ? `Opened the response ${await respName(DB, f, rid)} in “${f.title}”` : `Marked the response ${await respName(DB, f, rid)} in “${f.title}” as seen`);   // queda constancia en el historial (solo la primera vez)
+    }
     else if (await DB.prepare("SELECT 1 FROM form_seen WHERE response_id = ? AND email = '*'").bind(rid).first()) {
       // era «vista por todos» (de antes): sigue vista para los demás del team, nueva solo para ti
       const team = new Set([...String(env.OWNER_EMAILS || '').toLowerCase().split(/[\s,;]+/).filter(Boolean), ...(await DB.prepare('SELECT email FROM panel_members').all()).results.map(x => x.email)]);
       team.delete(me);
       await DB.batch([DB.prepare("DELETE FROM form_seen WHERE response_id = ? AND email IN ('*', ?)").bind(rid, me), ...[...team].map(e => DB.prepare('INSERT OR IGNORE INTO form_seen (response_id, email, at) VALUES (?, ?, ?)').bind(rid, e, 0))]);
     } else await DB.prepare('DELETE FROM form_seen WHERE response_id = ? AND email = ?').bind(rid, me).run();
+    if (!seen) await audit(`Marked the response ${await respName(DB, f, rid)} in “${f.title}” as new`);
     return { ok: true, seen, seen_by: (await seenBy(DB, [rid]))[rid] || [] };
   }
   if (mm[2] === 'seen' && m === 'POST') {
     if (!s.email || s.sync || !s.owner) throw new FormError(403, 'Only owners can mark everything as seen.');
-    await DB.prepare('INSERT OR IGNORE INTO form_seen (response_id, email, at) SELECT id, ?, ? FROM form_responses WHERE form_id = ?').bind(s.email, now(), f.id).run();
+    const all = await DB.prepare('INSERT OR IGNORE INTO form_seen (response_id, email, at) SELECT id, ?, ? FROM form_responses WHERE form_id = ?').bind(s.email, now(), f.id).run();
+    if (all.meta.changes) await audit(`Marked ${all.meta.changes} response${all.meta.changes > 1 ? 's' : ''} in “${f.title}” as seen`);
     return { ok: true };
   }
   if (mm[2] === 'responses' && mm[3] && m === 'DELETE') {

@@ -1833,7 +1833,7 @@
         </article>`;
   }
   // visto / nuevo (solo para ti); tu foto se añade o se quita de «Seen by»
-  async function markSeen(ids, seen, all = false) {
+  async function markSeen(ids, seen, all = false, opened = false) {
     const fid = formOpen.id, f = formsData?.forms.find(x => x.id === fid), me = auth.user;
     const mine = { email: me.email, name: me.name || me.email.split('@')[0], picture: me.picture || '', color: me.color || '', at: Date.now() };
     const before = new Map(formOpen.responses.filter(r => ids.includes(r.id)).map(r => [r.id, { seen: r.seen, seen_by: r.seen_by }]));
@@ -1842,7 +1842,7 @@
     patchResps(ids);
     try {
       if (all) await api('POST', `/api/forms/${encodeURIComponent(fid)}/seen`);
-      else for (const rid of ids) { const r = await api('POST', `/api/forms/${encodeURIComponent(fid)}/responses/${rid}`, { seen }); const x = formOpen?.id === fid && formOpen.responses.find(y => y.id === rid); if (x && r.seen_by) x.seen_by = r.seen_by; }
+      else for (const rid of ids) { const r = await api('POST', `/api/forms/${encodeURIComponent(fid)}/responses/${rid}`, { seen, opened }); const x = formOpen?.id === fid && formOpen.responses.find(y => y.id === rid); if (x && r.seen_by) x.seen_by = r.seen_by; }
       if (formOpen?.id === fid) patchResps(ids);
       // lo cambias tú: se cuenta ya, para que no salte el aviso de «respuesta nueva»
       const d = seen ? -ids.length : ids.length;
@@ -2150,7 +2150,7 @@
       if (opening) formOpen.openIds.add(rid); else formOpen.openIds.delete(rid);
       patchResps([rid]);
       // abrirla = verla: se marca como vista solo para ti (al resto del team le sigue saliendo como nueva)
-      if (opening && !preview && formOpen.responses.find(r => r.id === rid && !r.seen)) markSeen([rid], true);
+      if (opening && !preview && formOpen.responses.find(r => r.id === rid && !r.seen)) markSeen([rid], true, false, true);
     } else if (act === 'resp-seen' || act === 'resp-unseen' || act === 'resp-all-seen') {
       const all = act === 'resp-all-seen', seen = act !== 'resp-unseen';
       const ids = all ? formOpen.responses.filter(r => !r.seen).map(r => r.id) : [Number(t.closest('[data-resp]').dataset.resp)];

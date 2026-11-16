@@ -1034,15 +1034,17 @@ html, body, * { scrollbar-width: none; }
 .lk-chips button span { margin-left: 4px; opacity: .6; }
 .lk-chips button.on { border-color: #fff; color: #fff; background: rgba(255, 255, 255, .06); }
 .lk-search { width: min(280px, 100%); }
-.lk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 14px; }
+.lk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 370px), 1fr)); gap: 14px; }
 .lk-card { display: flex; flex-direction: column; gap: 12px; padding: 16px 16px 14px; border: 1px solid var(--line-2); border-radius: 10px; background: #0b0b0b; }
 .lk-card header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .lk-card header b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 22px/1 'Bebas Neue', sans-serif; letter-spacing: .05em; color: #fff; }
-.lk-card dl { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 6px 10px; margin: 0; font-size: 13.5px; }
+.lk-card dl { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 6px 10px; margin: 0; font-size: 13.5px; }
 .lk-card dt { color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; align-self: center; }
 .lk-card dd { margin: 0; display: flex; gap: 8px; align-items: baseline; min-width: 0; }
 .lk-card dd small { color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lk-card footer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); }
+.lk-card footer { display: flex; flex-wrap: nowrap; gap: 6px; align-items: center; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); }
+/* todos los botones en una sola fila, así la línea de abajo queda a la misma altura en todas las tarjetas */
+.lk-card footer .btn.sm { flex: none; padding-left: 11px; padding-right: 11px; white-space: nowrap; }
 .lk-card footer .ic { margin-left: auto; }
 .lk-card.is-sent { border-color: rgba(126, 226, 168, .3); }
 /* abierto (en espera) en amarillo; caducado o cancelado en rojo */
@@ -1054,3 +1056,4 @@ html, body, * { scrollbar-width: none; }
 .lk-more { display: flex; justify-content: center; margin-top: 18px; }
 .lk-empty { padding: 30px 0; text-align: center; }
 @media (max-width: 760px) { .lk-made { grid-template-columns: 1fr; } .lk-search { width: 100%; } }
+@media (max-width: 420px) { .lk-card footer { flex-wrap: wrap; } }

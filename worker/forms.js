@@ -315,15 +315,18 @@ export async function formsApi(req, env, s, url, audit) {
         else throw new FormError(400, 'Invalid action.');
         return { ok: true };
       }
+      if (!clean(b.note, 120)) throw new FormError(400, 'Write the artist name first.');   // cada enlace lleva siempre el nombre de para quién es
       const tok = linkToken(), t = now();
       await DB.prepare('INSERT INTO form_links (hash, form_id, note, created_by, created_at, expires_at, token) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(await sha(tok), f.id, clean(b.note, 120) || null, s.email, t, t + LINK_DAYS * 864e5, tok).run();
       await audit(`Created a personal link for “${f.title}”${b.note ? ` (${clean(b.note, 120)})` : ''}`);
       const origin = /(^|\.)horizonrcrds\.com$/.test(url.hostname) ? 'https://horizonrcrds.com' : url.origin;
       return { ok: true, url: `${origin}/forms/${f.slug}?k=${tok}`, expires_at: t + LINK_DAYS * 864e5 };
     }
-    const rows = (await DB.prepare('SELECT * FROM form_links WHERE form_id = ? ORDER BY created_at DESC LIMIT 500').bind(f.id).all()).results;
+    // quién lo creó, con su nombre del team (el mismo que sale en el panel), no el correo
+    const rows = (await DB.prepare(`SELECT l.*, COALESCE(m.label, (SELECT ps.name FROM panel_sessions ps WHERE ps.email = l.created_by AND length(ps.name) > 0 ORDER BY ps.created_at DESC LIMIT 1), m.name) AS by_name
+      FROM form_links l LEFT JOIN panel_members m ON m.email = l.created_by WHERE l.form_id = ? ORDER BY l.created_at DESC LIMIT 500`).bind(f.id).all()).results;
     const origin = /(^|\.)horizonrcrds\.com$/.test(url.hostname) ? 'https://horizonrcrds.com' : url.origin;
-    return { links: rows.map(l => ({ id: l.hash.slice(0, 16), note: l.note || '', by: l.created_by, created_at: l.created_at, expires_at: l.expires_at, opened_at: l.opened_at, used_at: l.used_at, response_id: l.response_id || null,
+    return { links: rows.map(l => ({ id: l.hash.slice(0, 16), note: l.note || '', by: l.created_by, by_name: l.by_name || String(l.created_by || '').split('@')[0], created_at: l.created_at, expires_at: l.expires_at, opened_at: l.opened_at, used_at: l.used_at, response_id: l.response_id || null,
       state: linkState(l), url: l.token ? `${origin}/forms/${f.slug}?k=${l.token}` : '' })) };
   }
   if (!mm[2] && m === 'DELETE') {

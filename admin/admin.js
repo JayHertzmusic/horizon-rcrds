@@ -1983,14 +1983,15 @@
     const all = formOpen.links, o = formOpen;
     const count = k => (all || []).filter(l => k === 'all' || l.state === k).length;
     const q = o.q.trim().toLowerCase();
-    const list = (all || []).filter(l => (o.filter === 'all' || l.state === o.filter) && (!q || `${l.note} ${l.by}`.toLowerCase().includes(q)));
+    const list = (all || []).filter(l => (o.filter === 'all' || l.state === o.filter) && (!q || `${l.note} ${l.by} ${l.by_name || ''}`.toLowerCase().includes(q)));
     const card = l => {
       const st = LINK_STATE[l.state] || [l.state, ''], d = daysTo(l.expires_at), live = l.state === 'unused' || l.state === 'opened';
       return `
         <article class="lk-card is-${l.state}" data-link="${esc(l.id)}">
           <header><b title="${esc(l.note)}">${esc(l.note || 'Untitled link')}</b><span class="tag ${st[1]}">${st[0]}</span></header>
           <dl>
-            <dt>Created</dt><dd>${esc(fmtDate(l.created_at))}<small>${esc((l.by || '').split('@')[0])}</small></dd>
+            <dt>Created</dt><dd>${esc(fmtDate(l.created_at))}</dd>
+            <dt>Created by</dt><dd>${esc(l.by_name || (l.by || '').split('@')[0] || '—')}</dd>
             <dt>${l.state === 'expired' ? 'Expired' : 'Expires'}</dt><dd>${live ? (d <= 1 ? 'Today' : `In ${d} days`) : esc(new Date(l.expires_at).toLocaleDateString('en-GB'))}</dd>
             <dt>Opened</dt><dd>${l.opened_at ? esc(fmtDate(l.opened_at)) : '—'}</dd>
             <dt>Sent</dt><dd>${l.used_at ? esc(fmtDate(l.used_at)) : '—'}</dd>
@@ -2011,7 +2012,7 @@
       <div class="head"><div><p class="eyebrow">Private form</p><h1>PERSONAL LINKS <span class="count">${(all || []).length}</span></h1></div></div>
       <p class="info lead">Each link is for one artist: it only works on the first device that opens it, only to send <b>${esc(f.title)}</b> once, and for 30 days.</p>
       <form id="lk-new" class="lk-new" novalidate>
-        <input name="note" maxlength="120" placeholder="Who is it for? (artist name)" aria-label="Who is the link for" autocomplete="off">
+        <input name="note" maxlength="120" required placeholder="Who is it for? (artist name, required)" aria-label="Who is the link for (required)" autocomplete="off">
         <button type="submit" class="btn primary">Generate link</button>
       </form>
       ${o.made ? `<div class="lk-made"><span>New link${o.made.note ? ` for <b>${esc(o.made.note)}</b>` : ''} — copied, ready to send:</span><input readonly value="${esc(o.made.url)}" aria-label="New link"><button type="button" class="btn ghost sm" data-lk="copy-new">Copy</button></div>` : ''}
@@ -2022,10 +2023,12 @@
       ${!all ? '<p class="info">Loading…</p>' : list.length ? `<div class="lk-grid">${list.slice(0, o.show).map(card).join('')}</div>
         ${list.length > o.show ? `<div class="lk-more"><button type="button" class="btn ghost" data-lk="more">Show more (${list.length - o.show})</button></div>` : ''}` : '<p class="info lk-empty">No links here.</p>'}`;
   }
+  document.addEventListener('input', e => { if (e.target.closest?.('#lk-new')) e.target.removeAttribute('aria-invalid'); });
   document.addEventListener('submit', async e => {
     if (e.target.id !== 'lk-new') return;
     e.preventDefault(); e.stopImmediatePropagation();
-    const btn = e.target.querySelector('button'), note = e.target.elements.note.value.trim();
+    const btn = e.target.querySelector('button'), input = e.target.elements.note, note = input.value.trim();
+    if (!note) { input.setAttribute('aria-invalid', 'true'); input.focus(); toast('Write the artist name first'); return; }   // sin nombre no hay enlace
     btn.disabled = true;
     try {
       const r = await api('POST', `/api/forms/${encodeURIComponent(formOpen.id)}/links`, { note });

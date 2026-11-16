@@ -1797,7 +1797,7 @@
     return `
       <button type="button" class="back" data-act="form-back">← Forms</button>
       <div class="head"><div><p class="eyebrow">Responses</p><h1>${esc(f.title)} <span class="count">${f.total}</span></h1></div>
-        <div class="head-btns" data-form="${esc(f.id)}">${rs && rs.some(r => !r.seen) && !preview ? '<button type="button" class="btn ghost" data-act="resp-all-seen">Mark all as seen</button>' : ''}${f.invite && !preview ? '<button type="button" class="btn ghost" data-act="form-links">Generate link</button>' : ''}${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Download (Excel / CSV)</button>' : ''}${canEditForm(f) && !preview ? '<button type="button" class="btn primary" data-act="form-edit">Edit form</button>' : ''}</div></div>
+        <div class="head-btns" data-form="${esc(f.id)}">${rs && rs.some(r => !r.seen) && !preview && auth.user.owner ? '<button type="button" class="btn ghost" data-act="resp-all-seen">Mark all as seen</button>' : ''}${f.invite && !preview ? '<button type="button" class="btn ghost" data-act="form-links">Generate link</button>' : ''}${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Download (Excel / CSV)</button>' : ''}${canEditForm(f) && !preview ? '<button type="button" class="btn primary" data-act="form-edit">Edit form</button>' : ''}</div></div>
       ${formOpen.err ? `<p class="login-error" role="alert">${esc(formOpen.err)}</p>` : ''}
       ${f.total ? `<div class="resp-search"><input class="search" type="search" id="resp-filter" placeholder="Search by #number, name, track, email…" aria-label="Search responses" value="${esc(formOpen.q || '')}" autocomplete="off"></div>` : ''}
       <div id="resp-list">${respList(f)}</div>`;
@@ -1828,7 +1828,7 @@
     return `
         <article class="resp${r.seen ? '' : ' is-new'}${respOpen(r, rs) ? ' is-open' : ''}" data-resp="${r.id}">
           <header data-act="resp-toggle" title="Show / hide the answers"><span class="resp-num">#${r.n || ''}</span>${(() => { const w = respWho(f, r); return w.who ? `<span class="resp-who"><b>${mark(esc(w.who), q)}</b>${w.what ? `<span>${mark(esc(w.what), q)}</span>` : ''}</span>` : ''; })()}${r.seen ? '' : '<span class="new-pill">New</span>'}<span class="resp-date">${esc(fmtDate(r.at))}</span>${seenByHtml(r)}
-            <span class="resp-btns">${preview ? '' : r.seen ? '<button type="button" class="btn ghost sm" data-act="resp-unseen">Mark as new</button>' : '<button type="button" class="btn primary sm" data-act="resp-seen">Mark as seen</button>'}${own ? '<button type="button" class="btn ghost sm" data-act="resp-del">Delete</button>' : ''}</span></header>
+            <span class="resp-btns">${preview || !auth.user.owner ? '' : r.seen ? '<button type="button" class="btn ghost sm" data-act="resp-unseen">Mark as new</button>' : '<button type="button" class="btn primary sm" data-act="resp-seen">Mark as seen</button>'}${own ? '<button type="button" class="btn ghost sm" data-act="resp-del">Delete</button>' : ''}</span></header>
           ${respOpen(r, rs) ? `<dl>${qs.map(x => `<dt>${esc(x.label)}</dt><dd>${mark(answerHtml(r.data[x.id]), q)}</dd>`).join('')}</dl>` : ''}
         </article>`;
   }
@@ -1859,7 +1859,7 @@
     if (!f || !rs) return;
     const qs = f.fields.filter(x => x.type !== 'section'), own = canEditForm(f), q = (formOpen.q || '').trim();
     for (const r of rs) if (ids.includes(r.id)) { const el = document.querySelector(`.resp[data-resp="${r.id}"]`); if (el) el.outerHTML = respItem(f, r, rs, q, qs, own).trim(); }
-    const hb = document.querySelector('.head-btns[data-form]'), allBtn = hb?.querySelector('[data-act="resp-all-seen"]'), need = rs.some(r => !r.seen) && !preview;
+    const hb = document.querySelector('.head-btns[data-form]'), allBtn = hb?.querySelector('[data-act="resp-all-seen"]'), need = rs.some(r => !r.seen) && !preview && auth.user.owner;   // marcar a mano: solo owners (el resto, al abrirla)
     if (hb && need && !allBtn) hb.insertAdjacentHTML('afterbegin', '<button type="button" class="btn ghost" data-act="resp-all-seen">Mark all as seen</button>');
     if (allBtn && !need) allBtn.remove();
   }

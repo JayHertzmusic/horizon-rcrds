@@ -377,6 +377,7 @@ export async function formsApi(req, env, s, url, audit) {
     // visto / nuevo solo para quien lo pulsa (el resto del team lo sigue viendo como estaba)
     const seen = !!(parse(await req.text()) || {}).seen, rid = Number(mm[3]), me = s.email || '';
     if (!me || s.sync) throw new FormError(403, 'Not allowed.');
+    if (!seen && !s.owner) throw new FormError(403, 'Only owners can mark a response as new.');   // el resto del team: visto al abrirla
     if (!await DB.prepare('SELECT 1 FROM form_responses WHERE id = ? AND form_id = ?').bind(rid, f.id).first()) throw new FormError(404, 'That response no longer exists.');
     if (seen) await DB.prepare('INSERT OR IGNORE INTO form_seen (response_id, email, at) VALUES (?, ?, ?)').bind(rid, me, now()).run();
     else if (await DB.prepare("SELECT 1 FROM form_seen WHERE response_id = ? AND email = '*'").bind(rid).first()) {
@@ -388,7 +389,7 @@ export async function formsApi(req, env, s, url, audit) {
     return { ok: true, seen, seen_by: (await seenBy(DB, [rid]))[rid] || [] };
   }
   if (mm[2] === 'seen' && m === 'POST') {
-    if (!s.email || s.sync) throw new FormError(403, 'Not allowed.');
+    if (!s.email || s.sync || !s.owner) throw new FormError(403, 'Only owners can mark everything as seen.');
     await DB.prepare('INSERT OR IGNORE INTO form_seen (response_id, email, at) SELECT id, ?, ? FROM form_responses WHERE form_id = ?').bind(s.email, now(), f.id).run();
     return { ok: true };
   }

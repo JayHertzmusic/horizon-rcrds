@@ -27,7 +27,7 @@
     // Correos de contratos a los artistas: Resend (gratis), clave en el secreto RESEND_API_KEY
     // Script de Google de Horizon (aplicación web): da al servidor el permiso de Google Docs/Drive de la cuenta de Horizon
     // (solo responde con la clave GFORM_SECRET)
-    "GSCRIPT_URL": "https://script.google.com/macros/s/AKfycbx3BK4X2abrzTG5bFkfZPOn1MiZjm9vF3j1zexh8KgEuXUgMQ_NKXR-eAe4fJdzpr0c/exec"
+    "GSCRIPT_URL": "https://script.google.com/macros/s/AKfycbx0olV05UBMEDQa6OSkmIdDP8X05DhJdsEqYsfgTG2brDf0VFiLAa9PShqlJUYTYT2R/exec"
   },
   "send_email": [{ "name": "MAIL", "destination_address": "contacthorizonids@gmail.com" }],
   // fotos de SoundCloud del equipo: se miran cada 30 minutos

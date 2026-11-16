@@ -137,7 +137,11 @@ export async function discordCalendarHook(req, env) {
   // solo desde el bot (enlace interno entre Workers: no viene de internet)
   if ((req.headers.get('cf-connecting-ip') && env.DEV_LOGIN !== '1') || req.headers.get('x-horizon-bot') !== '1') throw new CalendarError(404, 'Not found.');   // (en local, para probar)
   const DB = env.DB, b = parse(await req.text()) || {};
-  const msgs = Array.isArray(b.messages) ? b.messages.slice(0, 50) : [];
+  // del más viejo al más nuevo (Discord los da del más nuevo al más viejo): así, si un release sale en dos mensajes,
+  // vale la fecha del mensaje más reciente y no la del antiguo
+  const sid = m => /^\d{5,25}$/.test(String(m?.id || '')) ? String(m.id).padStart(25, '0') : '';
+  const msgs = (Array.isArray(b.messages) ? b.messages.slice(0, 50) : []).map((m, i) => [m, i])
+    .sort(([x, i], [y, j]) => sid(x) && sid(y) ? (sid(x) < sid(y) ? -1 : 1) : i - j).map(([m]) => m);
   // si una fecha sale varias veces (mensajes viejos y nuevos), vale la del mensaje más reciente
   const lines = [...new Map(parseDiscordCalendar(msgs).map(x => [x.kind + norm(x.artist) + norm(x.title), x])).values()];
   const status = { at: Date.now(), messages: msgs.length, lines: lines.length, noText: msgs.length > 0 && msgs.every(m => !m.content), noAccess: b.error === 'no-access' };

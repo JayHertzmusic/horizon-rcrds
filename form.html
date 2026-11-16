@@ -313,6 +313,8 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
   }
   // privado con enlace personal: portada de invitación y una sección por paso
   const EXCL = () => !!form?.invite && !PREVIEW && !EMBED;
+  // pregunta de un solo botón obligatorio («Finish»): no es una pregunta, es el aviso de revisar → ya va marcada y se enseña como resumen
+  const isConfirm = x => EXCL() && x.type === 'radio' && x.required && !x.other && (x.options || []).length === 1;
   let steps = [], cur = 0;
   function stepsOf(fields) {
     const out = [];
@@ -334,7 +336,6 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     // todas las preguntas con su línea de ayuda (aunque esté vacía): así los recuadros quedan alineados en cada fila
     const withHelp = h => /class="help"/.test(h) ? h : h.replace(/<(input|textarea|select|div class="opts")/, '<p class="help" aria-hidden="true"></p>$&');
     // pregunta de un solo botón obligatorio («Finish»): no es una pregunta, es el aviso de revisar → ya va marcada y se enseña como resumen
-    const isConfirm = x => x.type === 'radio' && x.required && !x.other && (x.options || []).length === 1;
     const sentence = t => String(t || '').toLowerCase().replace(/(^\s*|[.!?]\s+)(\p{L})/gu, (m, a, c) => a + c.toUpperCase());
     const confirmQ = x => `<div class="q x-confirm" data-q="${esc(x.id)}"><input type="radio" name="${esc(x.id)}" value="${esc(x.options[0])}" checked hidden>
       <div class="x-ok"><span class="x-tick" aria-hidden="true">✓</span><div><b>${esc(sentence(x.label))}</b>${x.help ? `<p>${esc(x.help)}</p>` : ''}</div></div>
@@ -533,7 +534,8 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
   function progress() {
     const f = document.getElementById('f'), bar = document.getElementById('bar');
     if (!f || !form) return;
-    const qs = form.fields.filter(x => x.type !== 'section'), a = answers(f);
+    // (el aviso final de revisar ya va marcado: no cuenta, si no el «% done» empezaba en 9 % sin contestar nada)
+    const qs = form.fields.filter(x => x.type !== 'section' && !isConfirm(x)), a = answers(f);
     const n = qs.filter(x => Array.isArray(a[x.id]) ? a[x.id].length : a[x.id]).length;
     bar.style.width = qs.length ? `${(n / qs.length) * 100}%` : '0';
     const pct = qs.length ? Math.round((n / qs.length) * 100) : 0, xb = document.getElementById('x-bar'), xp = document.getElementById('x-pct');

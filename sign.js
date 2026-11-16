@@ -212,6 +212,8 @@
     try {
       const r = await post('', { signature: adopted.signature, agree: true, hash });
       const j = await r.json().catch(() => ({}));
+      // la sesión caducó (12 h con la página abierta): se vuelve a pedir el email; la firma adoptada se queda puesta
+      if (r.status === 401) { sess = ''; try { sessionStorage.removeItem(KEY); } catch { /* nada */ } return gate('Your session expired. Enter your email again: your signature stays in place.'); }
       if (!r.ok) throw new Error(j.message || 'Something went wrong. Please try again.');
       data = j; adopted = null;
       done();

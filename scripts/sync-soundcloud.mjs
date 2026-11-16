@@ -248,8 +248,11 @@ if (newRel.length) {
   for (const it of [...newRel].reverse()) {   // oldest first, so the newest gets the highest number
     // el número del Calendar si lo tiene (mismo artista y track) y no lo usa ya otro release; si no, el siguiente
     const catNum = v => Number(String(v || '').replace(/\D/g, '')) || 0;
-    const fromCal = calendar.find(x => norm(`${x.artist}${x.title}`) === norm(`${it.c.artist}${it.c.title}`) ||
-      (norm(x.title) && norm(x.title) === norm(it.c.title) && norm(x.artist).slice(0, 6) === norm(it.c.artist).slice(0, 6)));
+    // mismo track y algún artista en común, en cualquier orden («Jay Hertz & Neutro» = «Neutro, Jay Hertz»)
+    const people = v => String(v || '').split(/\s*(?:,|&|\+|\/|\bx\b|\band\b|\bfeat\.?|\bft\.?|\bvs\.?)\s*/i).map(norm).filter(Boolean);
+    const sameTrack = (a, b) => { const x = norm(a).replace(/originalmix$/, ''), y = norm(b).replace(/originalmix$/, ''); return !!x && x === y; };
+    const fromCal = calendar.find(x => norm(`${x.artist}${x.title}`) === norm(`${it.c.artist}${it.c.title}`)) ||
+      calendar.find(x => sameTrack(x.title, it.c.title) && people(x.artist).some(p => people(it.c.artist).includes(p)));
     const calN = fromCal && catNum(fromCal.cat);
     const taken = k => releases.some(r => catNum(r.catalog || r.catalog_number) === k);
     // (los números que el Calendar ya tiene para otros releases tampoco se usan)

@@ -21,7 +21,26 @@ export const FORM_SCHEMA = [
   // enlaces personales (formularios privados como el Release Form): un enlace = una persona, un envío, 30 días
   `CREATE TABLE IF NOT EXISTS form_links (hash TEXT PRIMARY KEY, form_id TEXT NOT NULL, note TEXT, created_by TEXT, created_at INTEGER, expires_at INTEGER, device TEXT, opened_at INTEGER, used_at INTEGER, response_id INTEGER)`,
   `CREATE INDEX IF NOT EXISTS form_links_form ON form_links (form_id, created_at)`,
+  // «visto» de cada persona del team (cada uno tiene sus respuestas nuevas). email '*' = vista por todos (las de antes de esto)
+  `CREATE TABLE IF NOT EXISTS form_seen (response_id INTEGER NOT NULL, email TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (response_id, email))`,
+  `INSERT OR IGNORE INTO form_seen (response_id, email, at) SELECT id, '*', at FROM form_responses WHERE seen = 1`,
+  `UPDATE form_responses SET seen = 0 WHERE seen = 1`,
 ];
+// ¿la ha visto esta persona? (SQL; el ? es su correo)
+const SEEN_SQL = `EXISTS (SELECT 1 FROM form_seen x WHERE x.response_id = r.id AND x.email IN ('*', ?))`;
+// quién del team ha visto cada respuesta: nombre del team, foto y color (como en el panel)
+async function seenBy(DB, ids) {
+  if (!ids.length) return {};
+  const rows = (await DB.prepare(`SELECT x.response_id AS rid, x.email, x.at,
+      COALESCE(m.label, (SELECT ps.name FROM panel_sessions ps WHERE ps.email = x.email AND length(ps.name) > 0 ORDER BY ps.created_at DESC LIMIT 1), m.name) AS name,
+      COALESCE(CASE WHEN p.avatar IS NOT NULL THEN '/api/public/avatar/' || p.avatar END, m.picture, (SELECT ps.picture FROM panel_sessions ps WHERE ps.email = x.email AND length(ps.picture) > 0 ORDER BY ps.created_at DESC LIMIT 1)) AS picture,
+      COALESCE(p.color, m.color) AS color
+    FROM form_seen x LEFT JOIN panel_members m ON m.email = x.email LEFT JOIN panel_profiles p ON p.email = x.email
+    WHERE x.email <> '*' AND x.at > 0 AND x.response_id IN (SELECT value FROM json_each(?)) ORDER BY x.at`).bind(JSON.stringify(ids)).all()).results;
+  const out = {};
+  for (const r of rows) (out[r.rid] = out[r.rid] || []).push({ email: r.email, name: r.name || r.email.split('@')[0], picture: r.picture || '', color: r.color || '', at: r.at });
+  return out;
+}
 const LINK_DAYS = 30;
 const sha = async v => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v)))].map(b => b.toString(16).padStart(2, '0')).join('');
 const linkToken = () => { const u = crypto.getRandomValues(new Uint8Array(18)); return btoa(String.fromCharCode(...u)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
@@ -234,13 +253,13 @@ export async function formsApi(req, env, s, url, audit) {
   // respuestas sin ver (para el aviso del panel), solo de los formularios que esta persona puede ver
   if (p === '/api/forms/unseen' && m === 'GET') {
     const forms = (await DB.prepare('SELECT id, access FROM forms').all()).results.filter(f => canSeeForm(s, f)).map(f => f.id);
-    const rows = (await DB.prepare('SELECT form_id, COUNT(*) AS n FROM form_responses WHERE seen = 0 GROUP BY form_id').all()).results.filter(r => forms.includes(r.form_id));
+    const rows = (await DB.prepare(`SELECT r.form_id, COUNT(*) AS n FROM form_responses r WHERE NOT ${SEEN_SQL} GROUP BY r.form_id`).bind(s.email || '').all()).results.filter(r => forms.includes(r.form_id));
     return { total: rows.reduce((a, r) => a + r.n, 0), forms: Object.fromEntries(rows.map(r => [r.form_id, r.n])) };
   }
   if (p === '/api/forms' && m === 'GET') {
     const forms = (await DB.prepare('SELECT * FROM forms ORDER BY position, created_at').all()).results.filter(f => canSeeForm(s, f));
     // un rol limitado a algunos formularios no crea nuevos (no los vería)
-    const counts = (await DB.prepare('SELECT form_id, COUNT(*) AS total, SUM(CASE WHEN seen = 0 THEN 1 ELSE 0 END) AS unseen FROM form_responses GROUP BY form_id').all()).results;
+    const counts = (await DB.prepare(`SELECT r.form_id, COUNT(*) AS total, SUM(CASE WHEN ${SEEN_SQL} THEN 0 ELSE 1 END) AS unseen FROM form_responses r GROUP BY r.form_id`).bind(s.email || '').all()).results;
     return {
       owner: !!s.owner,
       forms: forms.map(f => {
@@ -346,27 +365,38 @@ export async function formsApi(req, env, s, url, audit) {
     const like = '%' + q.replace(/[\\%_]/g, c => '\\' + c) + '%';
     // cada respuesta lleva su número (#1 = la primera que llegó), como las filas de Google; se puede buscar por él
     const num = /^#?\d{1,6}$/.test(q) ? Number(q.replace('#', '')) : -1;
-    const base = `WITH t AS (SELECT id, at, data, seen, ROW_NUMBER() OVER (ORDER BY id) AS n FROM form_responses WHERE form_id = ?) SELECT * FROM t WHERE id ${asc ? '>' : '<'} ?`;
+    const base = `WITH t AS (SELECT id, at, data, ROW_NUMBER() OVER (ORDER BY id) AS n FROM form_responses WHERE form_id = ?) SELECT r.*, ${SEEN_SQL} AS seen FROM t r WHERE id ${asc ? '>' : '<'} ?`;
     const tail = ` ORDER BY id ${asc ? 'ASC' : 'DESC'} LIMIT 101`;
     const rows = (q
-      ? await DB.prepare(base + " AND (data LIKE ? ESCAPE '\\' OR n = ?)" + tail).bind(f.id, from, like, num).all()
-      : await DB.prepare(base + tail).bind(f.id, from).all()).results;
-    return { responses: rows.slice(0, 100).map(r => ({ id: r.id, n: r.n, at: r.at, seen: !!r.seen, data: parse(r.data) || {} })), more: rows.length > 100, asc };
+      ? await DB.prepare(base + " AND (data LIKE ? ESCAPE '\\' OR n = ?)" + tail).bind(f.id, s.email || '', from, like, num).all()
+      : await DB.prepare(base + tail).bind(f.id, s.email || '', from).all()).results;
+    const list = rows.slice(0, 100), by = await seenBy(DB, list.map(r => r.id));
+    return { responses: list.map(r => ({ id: r.id, n: r.n, at: r.at, seen: !!r.seen, seen_by: by[r.id] || [], data: parse(r.data) || {} })), more: rows.length > 100, asc };
   }
   if (mm[2] === 'responses' && mm[3] && m === 'POST') {
-    const seen = (parse(await req.text()) || {}).seen ? 1 : 0;
-    const r = await DB.prepare('UPDATE form_responses SET seen = ? WHERE id = ? AND form_id = ?').bind(seen, Number(mm[3]), f.id).run();
-    if (!r.meta.changes) throw new FormError(404, 'That response no longer exists.');
-    return { ok: true, seen: !!seen };
+    // visto / nuevo solo para quien lo pulsa (el resto del team lo sigue viendo como estaba)
+    const seen = !!(parse(await req.text()) || {}).seen, rid = Number(mm[3]), me = s.email || '';
+    if (!me || s.sync) throw new FormError(403, 'Not allowed.');
+    if (!await DB.prepare('SELECT 1 FROM form_responses WHERE id = ? AND form_id = ?').bind(rid, f.id).first()) throw new FormError(404, 'That response no longer exists.');
+    if (seen) await DB.prepare('INSERT OR IGNORE INTO form_seen (response_id, email, at) VALUES (?, ?, ?)').bind(rid, me, now()).run();
+    else if (await DB.prepare("SELECT 1 FROM form_seen WHERE response_id = ? AND email = '*'").bind(rid).first()) {
+      // era «vista por todos» (de antes): sigue vista para los demás del team, nueva solo para ti
+      const team = new Set([...String(env.OWNER_EMAILS || '').toLowerCase().split(/[\s,;]+/).filter(Boolean), ...(await DB.prepare('SELECT email FROM panel_members').all()).results.map(x => x.email)]);
+      team.delete(me);
+      await DB.batch([DB.prepare("DELETE FROM form_seen WHERE response_id = ? AND email IN ('*', ?)").bind(rid, me), ...[...team].map(e => DB.prepare('INSERT OR IGNORE INTO form_seen (response_id, email, at) VALUES (?, ?, ?)').bind(rid, e, 0))]);
+    } else await DB.prepare('DELETE FROM form_seen WHERE response_id = ? AND email = ?').bind(rid, me).run();
+    return { ok: true, seen, seen_by: (await seenBy(DB, [rid]))[rid] || [] };
   }
   if (mm[2] === 'seen' && m === 'POST') {
-    await DB.prepare('UPDATE form_responses SET seen = 1 WHERE form_id = ? AND seen = 0').bind(f.id).run();
+    if (!s.email || s.sync) throw new FormError(403, 'Not allowed.');
+    await DB.prepare('INSERT OR IGNORE INTO form_seen (response_id, email, at) SELECT id, ?, ? FROM form_responses WHERE form_id = ?').bind(s.email, now(), f.id).run();
     return { ok: true };
   }
   if (mm[2] === 'responses' && mm[3] && m === 'DELETE') {
     if (s.sync || formLevel(s, f) !== 'edit') throw new FormError(403, 'Your role can’t delete responses here.');
     const r = await DB.prepare('DELETE FROM form_responses WHERE id = ? AND form_id = ?').bind(Number(mm[3]), f.id).run();
     if (!r.meta.changes) throw new FormError(404, 'That response no longer exists.');
+    await DB.prepare('DELETE FROM form_seen WHERE response_id = ?').bind(Number(mm[3])).run();
     await audit(`Deleted a response from the form “${f.title}”`);
     return { ok: true };
   }

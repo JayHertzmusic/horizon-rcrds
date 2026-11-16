@@ -1816,13 +1816,42 @@
     return `${!rs ? '<p class="info">Loading…</p>' : rs.length ? `${q ? `<p class="info">${rs.length}${formOpen.more ? '+' : ''} ${rs.length === 1 ? 'response matches' : 'responses match'} “${esc(q)}”</p>` : ''}<div class="resps">${rs.map(r => respItem(f, r, rs, q, qs, own)).join('')}</div>
         ${formOpen.more ? '<button type="button" class="btn ghost log-more" data-act="resp-more">Show more</button>' : ''}` : `<p class="info">${q ? `Nothing matches “${esc(q)}”.` : 'No responses yet.'}</p>`}`;
   }
+  // fotitos de quién del team ya ha visto la respuesta (la tuya también)
+  function seenByHtml(r) {
+    const list = r.seen_by || [];
+    if (!list.length) return '';
+    const shown = list.slice(0, 5), more = list.length - shown.length;
+    const tip = 'Seen by ' + list.map(x => x.name).join(', ');
+    return `<span class="seen-by" title="${esc(tip)}" aria-label="${esc(tip)}">${shown.map(x => `<span class="sb-one" title="${esc(x.name)}${x.at ? ' · ' + esc(fmtDate(x.at)) : ''}">${avatar(x.picture, x.name, x.color)}</span>`).join('')}${more > 0 ? `<span class="sb-more">+${more}</span>` : ''}</span>`;
+  }
   function respItem(f, r, rs, q, qs, own) {
     return `
         <article class="resp${r.seen ? '' : ' is-new'}${respOpen(r, rs) ? ' is-open' : ''}" data-resp="${r.id}">
-          <header data-act="resp-toggle" title="Show / hide the answers"><span class="resp-num">#${r.n || ''}</span>${(() => { const w = respWho(f, r); return w.who ? `<span class="resp-who"><b>${mark(esc(w.who), q)}</b>${w.what ? `<span>${mark(esc(w.what), q)}</span>` : ''}</span>` : ''; })()}${r.seen ? '' : '<span class="new-pill">New</span>'}<span class="resp-date">${esc(fmtDate(r.at))}</span>
+          <header data-act="resp-toggle" title="Show / hide the answers"><span class="resp-num">#${r.n || ''}</span>${(() => { const w = respWho(f, r); return w.who ? `<span class="resp-who"><b>${mark(esc(w.who), q)}</b>${w.what ? `<span>${mark(esc(w.what), q)}</span>` : ''}</span>` : ''; })()}${r.seen ? '' : '<span class="new-pill">New</span>'}<span class="resp-date">${esc(fmtDate(r.at))}</span>${seenByHtml(r)}
             <span class="resp-btns">${preview ? '' : r.seen ? '<button type="button" class="btn ghost sm" data-act="resp-unseen">Mark as new</button>' : '<button type="button" class="btn primary sm" data-act="resp-seen">Mark as seen</button>'}${own ? '<button type="button" class="btn ghost sm" data-act="resp-del">Delete</button>' : ''}</span></header>
           ${respOpen(r, rs) ? `<dl>${qs.map(x => `<dt>${esc(x.label)}</dt><dd>${mark(answerHtml(r.data[x.id]), q)}</dd>`).join('')}</dl>` : ''}
         </article>`;
+  }
+  // visto / nuevo (solo para ti); tu foto se añade o se quita de «Seen by»
+  async function markSeen(ids, seen, all = false) {
+    const fid = formOpen.id, f = formsData?.forms.find(x => x.id === fid), me = auth.user;
+    const mine = { email: me.email, name: me.name || me.email.split('@')[0], picture: me.picture || '', color: me.color || '', at: Date.now() };
+    const before = new Map(formOpen.responses.filter(r => ids.includes(r.id)).map(r => [r.id, { seen: r.seen, seen_by: r.seen_by }]));
+    for (const r of formOpen.responses) if (ids.includes(r.id)) { r.seen = seen; r.seen_by = (r.seen_by || []).filter(x => x.email !== me.email).concat(seen ? [mine] : []); }
+    if (f) f.unseen = Math.max(0, (f.unseen || 0) + (seen ? -ids.length : ids.length));
+    patchResps(ids);
+    try {
+      if (all) await api('POST', `/api/forms/${encodeURIComponent(fid)}/seen`);
+      else for (const rid of ids) { const r = await api('POST', `/api/forms/${encodeURIComponent(fid)}/responses/${rid}`, { seen }); const x = formOpen?.id === fid && formOpen.responses.find(y => y.id === rid); if (x && r.seen_by) x.seen_by = r.seen_by; }
+      if (formOpen?.id === fid) patchResps(ids);
+      // lo cambias tú: se cuenta ya, para que no salte el aviso de «respuesta nueva»
+      const d = seen ? -ids.length : ids.length;
+      unseen = { total: Math.max(0, unseen.total + d), forms: { ...(unseen.forms || {}), [fid]: Math.max(0, ((unseen.forms || {})[fid] || 0) + d) } };
+      paintBadge(); checkUnseen();
+    } catch (err) {
+      if (formOpen?.id === fid) { for (const r of formOpen.responses) if (before.has(r.id)) Object.assign(r, before.get(r.id)); if (f) f.unseen = Math.max(0, (f.unseen || 0) + (seen ? ids.length : -ids.length)); patchResps(ids); }
+      toast(err.message);
+    }
   }
   // cambia solo esas respuestas y el botón «Mark all as seen» (sin redibujar la página: no parpadea)
   function patchResps(ids) {
@@ -2117,23 +2146,15 @@
       if (e.target.closest('button, a')) return;
       const rid = Number(t.closest('[data-resp]').dataset.resp);
       formOpen.openIds = formOpen.openIds || new Set();
-      if (formOpen.openIds.has(rid)) formOpen.openIds.delete(rid); else formOpen.openIds.add(rid);
+      const opening = !formOpen.openIds.has(rid);
+      if (opening) formOpen.openIds.add(rid); else formOpen.openIds.delete(rid);
       patchResps([rid]);
+      // abrirla = verla: se marca como vista solo para ti (al resto del team le sigue saliendo como nueva)
+      if (opening && !preview && formOpen.responses.find(r => r.id === rid && !r.seen)) markSeen([rid], true);
     } else if (act === 'resp-seen' || act === 'resp-unseen' || act === 'resp-all-seen') {
       const all = act === 'resp-all-seen', seen = act !== 'resp-unseen';
       const ids = all ? formOpen.responses.filter(r => !r.seen).map(r => r.id) : [Number(t.closest('[data-resp]').dataset.resp)];
-      if (!ids.length) return;
-      const fid = formOpen.id, f = formsData?.forms.find(x => x.id === fid);
-      const set = v => { for (const r of formOpen.responses) if (ids.includes(r.id)) r.seen = v; if (f) f.unseen = Math.max(0, (f.unseen || 0) + (v === seen ? 1 : -1) * (seen ? -ids.length : ids.length)); patchResps(ids); };
-      set(seen);
-      try {
-        await Promise.all(ids.map(rid => api('POST', `/api/forms/${encodeURIComponent(fid)}/responses/${rid}`, { seen })));
-        // lo cambias tú: se cuenta ya, para que no salte el aviso de «respuesta nueva»
-        const d = seen ? -ids.length : ids.length;
-        unseen = { total: Math.max(0, unseen.total + d), forms: { ...(unseen.forms || {}), [fid]: Math.max(0, ((unseen.forms || {})[fid] || 0) + d) } };
-        checkUnseen();
-      }
-      catch (err) { if (formOpen?.id === fid) set(!seen); toast(err.message); }
+      if (ids.length) markSeen(ids, seen, all);
     } else if (act === 'resp-del') {
       const rid = Number(t.closest('[data-resp]').dataset.resp);
       if (!await confirmBox('Delete this response? This can’t be undone.', 'Delete')) return;

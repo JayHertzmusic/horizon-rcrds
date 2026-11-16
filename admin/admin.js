@@ -2549,10 +2549,10 @@
   // en cuanto firman todos, el contrato se guarda solo en Drive (con el panel abierto por alguien que puede editar contratos)
   const AUTO_DRIVE_FROM = Date.parse('2026-11-15T20:00:00Z');   // los firmados antes se guardan a mano
   let autoDriving = false;
-  const autoDriveFailed = new Set();
+  const autoDriveFailed = new Set(), autoDriveWait = new Map();   // sin fecha en el calendario: se vuelve a mirar cada 2 min
   async function autoDrive() {
     if (autoDriving || !ctData || !ctCanEdit() || preview) return;
-    const todo = ctData.contracts.filter(c => !isTpl(c) && !isDraft(c) && c.status === 'signed' && !c.drive_url && !c.file && (c.signed_at || 0) >= AUTO_DRIVE_FROM && !autoDriveFailed.has(c.id));
+    const todo = ctData.contracts.filter(c => !isTpl(c) && !isDraft(c) && c.status === 'signed' && !c.drive_url && !c.file && (c.signed_at || 0) >= AUTO_DRIVE_FROM && !autoDriveFailed.has(c.id) && !((autoDriveWait.get(c.id) || 0) > Date.now()));
     if (!todo.length) return;
     autoDriving = true;
     try {
@@ -2561,11 +2561,12 @@
       for (const c of todo) {
         try {
           await ensureSigned(c);
-          const r = await api('POST', `/api/contracts/${encodeURIComponent(c.id)}/drive-save`);
+          const r = await api('POST', `/api/contracts/${encodeURIComponent(c.id)}/drive-save`, { auto: true });
+          if (r.waiting) { autoDriveWait.set(c.id, Date.now() + 120e3); continue; }   // aún sin fecha en el calendario
           c.drive_url = r.drive_url;
-          toast(`Saved in Drive: ${c.title}`);
+          if (!r.already) toast(`Saved in Drive: ${c.title}`);
           if (view === 'contracts' && (!ctOpen || ctOpen.id === c.id)) { if (ctOpen) ctRefresh(); else render(); }
-        } catch (e) { autoDriveFailed.add(c.id); console.warn('Drive', c.id, e.message); }
+        } catch (e) { if (e.status === 409) autoDriveWait.set(c.id, Date.now() + 30e3); else autoDriveFailed.add(c.id); console.warn('Drive', c.id, e.message); }
       }
     } finally { autoDriving = false; }
   }

@@ -32,6 +32,8 @@ export const CONTRACT_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS sign_sessions (hash TEXT PRIMARY KEY, signer_id TEXT NOT NULL, expires_at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS contract_events (id INTEGER PRIMARY KEY AUTOINCREMENT, contract_id TEXT NOT NULL, signer_id TEXT, at INTEGER NOT NULL, event TEXT NOT NULL, ip TEXT, ua TEXT)`,
   `CREATE INDEX IF NOT EXISTS contract_events_c ON contract_events (contract_id, id)`,
+  // un solo guardado en Drive a la vez por release (si no, dos paneles abiertos crean dos carpetas iguales)
+  `CREATE TABLE IF NOT EXISTS drive_locks (key TEXT PRIMARY KEY, at INTEGER NOT NULL)`,
 ];
 // columnas del PDF (añadidas después: si ya existen, no pasa nada)
 export const CONTRACT_COLUMNS = ['pdf TEXT', 'pdf_hash TEXT', 'pdf_pages INTEGER', 'pdf_size INTEGER', 'sign_box TEXT', 'doc_url TEXT', 'kind TEXT',
@@ -469,20 +471,34 @@ export async function contractsApi(req, env, s, url, can, audit) {
     if (!signed) throw new ContractError(400, 'Only signed contracts go to Drive.');
     const root = (await DB.prepare("SELECT value FROM panel_settings WHERE key = 'contracts_drive'").first())?.value;
     if (!root) throw new ContractError(400, 'Paste the Drive folder link first (Contracts → Signed).');
+    const b = parse(await req.text()) || {};
+    if (c.drive_url && !b.again) return { ok: true, drive_url: c.drive_url, already: true };   // ya está en Drive: no se guarda otra vez
     const key = c.signed_pdf || c.file;
     if (!key) throw new ContractError(409, 'The signed PDF is not ready yet. Open the contract once and try again.');
-    const buf = await env.FILES.get(key, { type: 'arrayBuffer' });
-    if (!buf) throw new ContractError(404, 'PDF not found.');
-    let r;
-    // año de salida: el del calendario (fecha de este contrato o de su número de release); si no, lo deduce por el número
-    const cal = (await DB.prepare('SELECT date, cat, contract_id FROM calendar').all().catch(() => ({ results: [] }))).results;
+    // año de salida: el del calendario (fecha de este contrato, de su número de release o de su artista y track)
+    const cal = (await DB.prepare('SELECT date, cat, artist, title, contract_id FROM calendar').all().catch(() => ({ results: [] }))).results;
     const num = v => { const x = String(v || '').match(/(\d+)\s*$/); return x ? Number(x[1]) : null; };
-    const mine = cal.find(x => x.contract_id === c.id) || (num(c.release_cat) !== null ? cal.find(x => num(x.cat) === num(c.release_cat)) : null);
-    const known = cal.filter(x => num(x.cat) !== null).map(x => ({ n: num(x.cat), year: Number(x.date.slice(0, 4)) }));
-    try { r = await saveToDrive(env, root, c, new Uint8Array(buf), { year: mine ? Number(mine.date.slice(0, 4)) : null, known }); } catch (e) { throw new ContractError(502, e.message); }
-    await DB.prepare('UPDATE contracts SET drive_id = ?, drive_url = ? WHERE id = ?').bind(r.id, `https://drive.google.com/file/d/${r.id}/view`, c.id).run();
-    await audit(`Saved the signed “${c.title}” in Google Drive (${r.path})`);
-    return { ok: true, drive_url: `https://drive.google.com/file/d/${r.id}/view` };
+    const nrm = v => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '');
+    const mine = cal.find(x => x.contract_id === c.id) || (num(c.release_cat) !== null ? cal.find(x => num(x.cat) === num(c.release_cat)) : null)
+      || (c.release_name ? cal.find(x => nrm(x.title) === nrm(c.release_name) && nrm(String(x.artist || '').split(/\s*(?:,|&|\band\b)\s*/i)[0]) === nrm(String(c.artist || '').split(/\s*(?:,|&|\band\b)\s*/i)[0])) : null);
+    // guardado automático: solo cuando el release ya tiene su fecha en el calendario (si no, se espera)
+    if (b.auto && !mine) return { ok: false, waiting: true };
+    const lockKey = num(c.release_cat) !== null ? `rel:${num(c.release_cat)}` : `c:${c.id}`, t0 = now();
+    const lock = await DB.prepare('INSERT INTO drive_locks (key, at) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET at = excluded.at WHERE drive_locks.at < ?').bind(lockKey, t0, t0 - 120e3).run();
+    if (!lock.meta.changes) throw new ContractError(409, 'Already saving it in Drive. Try again in a moment.');
+    try {
+      // otro panel pudo guardarlo justo antes
+      const fresh = await DB.prepare('SELECT drive_url FROM contracts WHERE id = ?').bind(c.id).first();
+      if (fresh?.drive_url && !b.again) return { ok: true, drive_url: fresh.drive_url, already: true };
+      const buf = await env.FILES.get(key, { type: 'arrayBuffer' });
+      if (!buf) throw new ContractError(404, 'PDF not found.');
+      const known = cal.filter(x => num(x.cat) !== null).map(x => ({ n: num(x.cat), year: Number(x.date.slice(0, 4)) }));
+      let r;
+      try { r = await saveToDrive(env, root, c, new Uint8Array(buf), { year: mine ? Number(mine.date.slice(0, 4)) : null, known }); } catch (e) { throw new ContractError(502, e.message); }
+      await DB.prepare('UPDATE contracts SET drive_id = ?, drive_url = ? WHERE id = ?').bind(r.id, `https://drive.google.com/file/d/${r.id}/view`, c.id).run();
+      await audit(`Saved the signed “${c.title}” in Google Drive (${r.path})`);
+      return { ok: true, drive_url: `https://drive.google.com/file/d/${r.id}/view` };
+    } finally { await DB.prepare('DELETE FROM drive_locks WHERE key = ? AND at = ?').bind(lockKey, t0).run(); }
   }
   if (mm[2] === 'drive' && m === 'POST') {
     edit();

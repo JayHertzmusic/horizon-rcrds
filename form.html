@@ -108,49 +108,91 @@
   @media (max-width: 470px) { html.embed #f > .q.half { grid-column: 1 / -1; } }
   .send { text-indent: .24em; }
   html.embed .send { text-indent: .22em; }
-  /* ===== Formulario privado (enlace personal): invitación, pasos por secciones ===== */
-  html.excl body::before { background: radial-gradient(1100px 620px at 50% -18%, rgba(255, 255, 255, .10), transparent 70%), radial-gradient(700px 500px at 100% 100%, rgba(255, 255, 255, .04), transparent 70%); }
-  html.excl main { width: min(880px, 100%); padding-top: 44px; }
-  .x-hero { text-align: center; margin-bottom: 34px; }
-  .x-badge { display: inline-flex; align-items: center; gap: 10px; padding: 7px 16px; border: 1px solid rgba(255, 255, 255, .25); border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .28em; text-transform: uppercase; color: #fff; background: rgba(255, 255, 255, .04); }
+  /* ===== Formulario privado (enlace personal): pantalla completa — pasos a la izquierda, preguntas en columnas ===== */
+  html.excl body::before { background: radial-gradient(900px 600px at 0% 0%, rgba(255, 255, 255, .07), transparent 70%), radial-gradient(800px 600px at 100% 100%, rgba(255, 255, 255, .035), transparent 70%); }
+  html.excl header.top, html.excl footer.sig { display: none; }
+  html.excl main { width: 100%; padding: 0; }
+  .xa { display: grid; grid-template-columns: 300px minmax(0, 1fr); min-height: 100vh; }
+  .xa-side { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 22px; padding: 32px 24px 26px; border-right: 1px solid #1c1c1c; background: rgba(8, 8, 8, .75); }
+  .xa-brand { display: inline-flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; }
+  .xa-brand img { height: 24px; }
+  .xa-brand span { font: 400 18px/1 'Bebas Neue', sans-serif; letter-spacing: .16em; }
+  .x-badge { align-self: flex-start; display: inline-flex; align-items: center; gap: 9px; padding: 6px 13px; border: 1px solid rgba(255, 255, 255, .22); border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .26em; text-transform: uppercase; color: #fff; background: rgba(255, 255, 255, .04); }
   .x-badge i { width: 6px; height: 6px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px #fff; }
-  .x-hero h1 { margin: 22px 0 12px; font-size: clamp(54px, 11vw, 104px); }
-  .x-for { margin: 0 0 16px; font-size: 15px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
+  .xa-side h1 { margin: -8px 0 0; font-size: 46px; line-height: .92; text-align: left; }
+  .x-for { margin: -12px 0 0; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
   .x-for b { color: #fff; font-weight: 600; }
-  html.excl .desc { margin-bottom: 0; }
-  .x-steps { position: sticky; top: 0; z-index: 4; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 14px; margin: 0 0 26px; padding: 14px 0 12px; background: linear-gradient(180deg, var(--bg) 70%, transparent); list-style: none; }
-  .x-steps li { display: grid; gap: 8px; min-width: 0; cursor: pointer; }
-  .x-steps li::before { content: ''; height: 3px; border-radius: 3px; background: #262626; transition: background .3s; }
-  .x-steps li.past::before { background: #8a8a8a; }
-  .x-steps li.on::before { background: #fff; }
-  .x-steps span { display: block; padding-right: 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .x-steps span em { font-style: normal; color: inherit; opacity: .8; margin-right: 8px; }
-  .x-steps li.on span { color: #fff; }
-  .x-steps li.past span { color: var(--muted); }
-  .x-card { padding: 34px 34px 30px; border: 1px solid #222; border-radius: 22px; background: linear-gradient(180deg, rgba(22, 22, 22, .92), rgba(10, 10, 10, .92)); box-shadow: 0 30px 80px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .05); }
-  html.excl #f { display: block; }
-  html.excl .step { display: none; grid-template-columns: 1fr 1fr; column-gap: 14px; animation: x-in .35s ease; }
-  html.excl .step.on { display: grid; }
-  html.excl .step > * { grid-column: 1 / -1; }
-  html.excl .step > .q.half { grid-column: auto; }
-  @media (max-width: 760px) { html.excl .step > .q.half { grid-column: 1 / -1; } }
-  @keyframes x-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-  html.excl .sec { margin: 0 0 22px; }
-  html.excl .sec::before { display: none; }
-  .x-num { display: block; margin-bottom: 8px; font: 700 11px/1 'Barlow', sans-serif; letter-spacing: .3em; color: var(--muted); }
-  html.excl .sec h2 { font-size: clamp(36px, 6vw, 52px); }
-  html.excl .q { padding: 22px 24px; border-radius: 14px; border-color: #1f1f1f; background: rgba(255, 255, 255, .02); }
-  html.excl .q:focus-within { border-color: #4a4a4a; background: rgba(255, 255, 255, .035); }
-  .x-qn { display: inline-block; min-width: 26px; margin-right: 10px; font-size: 12px; font-weight: 700; letter-spacing: .1em; color: var(--faint); }
-  .x-nav { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 26px; padding-top: 22px; border-top: 1px solid #1d1d1d; }
-  .x-nav .ghost { min-height: 54px; padding: 0 30px; border: 1px solid #333; border-radius: 2px; background: none; color: #fff; font: 700 13px/1 'Barlow', sans-serif; letter-spacing: .24em; text-indent: .24em; text-transform: uppercase; cursor: pointer; }
+  .x-steps { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+  .x-steps li { display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 2px 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background .2s; }
+  .x-steps li:hover { background: rgba(255, 255, 255, .04); }
+  .x-steps li .n { grid-row: span 2; display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid #333; border-radius: 50%; font-size: 12px; font-weight: 700; color: var(--muted); }
+  .x-steps li .t { font-size: 12.5px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .x-steps li small { font-size: 11.5px; color: var(--faint); }
+  .x-steps li.on { background: rgba(255, 255, 255, .07); }
+  .x-steps li.on .n { border-color: #fff; background: #fff; color: #000; }
+  .x-steps li.on .t { color: #fff; }
+  .x-steps li.past .n { border-color: #777; color: #fff; }
+  .x-steps li.past .n::before { content: '✓'; }
+  .x-steps li.past .n b { display: none; }
+  .x-steps li.past .t { color: #cfcfcf; }
+  .xa-prog { margin-top: auto; }
+  .xa-prog div { height: 3px; border-radius: 3px; background: #222; overflow: hidden; }
+  .xa-prog div i { display: block; height: 100%; width: 0; background: #fff; transition: width .3s; }
+  .xa-prog small { display: block; margin-top: 8px; font-size: 11.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+  .xa-about summary { cursor: pointer; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); list-style: none; }
+  .xa-about summary::-webkit-details-marker { display: none; }
+  .xa-about summary::after { content: ' +'; }
+  .xa-about[open] summary::after { content: ' –'; }
+  .xa-about p { margin: 10px 0 0; font-size: 13.5px; line-height: 1.55; color: #a9a9a9; white-space: pre-line; }
+  .xa-about a { color: #fff; }
+  .x-note { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--faint); }
+  .xa-main { display: flex; flex-direction: column; min-height: 100vh; padding: 38px clamp(24px, 4.5vw, 64px) 0; }
+  html.excl #f { display: flex; flex-direction: column; flex: 1; }
+  html.excl .step { display: none; animation: x-in .3s ease; }
+  html.excl .step.on { display: block; }
+  @keyframes x-in { from { opacity: .2; transform: translateX(10px); } to { opacity: 1; transform: none; } }
+  .xa-head { margin: 0 0 24px; }
+  .x-num { display: block; margin-bottom: 10px; font: 700 11px/1 'Barlow', sans-serif; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); }
+  .xa-head h2 { margin: 0; font: 400 clamp(40px, 5vw, 64px)/.95 'Bebas Neue', sans-serif; letter-spacing: .03em; color: #fff; }
+  .xa-head p { margin: 10px 0 0; max-width: 760px; color: var(--muted); font-size: 15px; white-space: pre-line; }
+  .xa-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 230px), 1fr)); gap: 0 24px; align-items: start; }
+  /* cada pregunta = 3 filas (título, ayuda, respuesta) compartidas con las de su fila: las respuestas quedan siempre a la misma altura */
+  .xa-grid > .q { display: grid; grid-template-rows: subgrid; grid-row: span 3; margin-bottom: 20px !important; }
+  .xa-grid > .q > * { align-self: start; }
+  .xa-grid > .q > .lbl, .xa-grid > .q > label { align-self: end; }
+  .xa-grid .q.wide { grid-column: 1 / -1; }
+  html.excl .q { margin: 0; padding: 0; border: 0; border-radius: 0; background: none; }
+  html.excl .q > label, html.excl .q > .lbl { display: flex; align-items: baseline; gap: 8px; margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #fff; }
+  html.excl .req { color: var(--muted); margin: 0; }
+  html.excl .help { margin: 0 0 8px; font-size: 13px; line-height: 1.45; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  html.excl .q:focus-within .help { -webkit-line-clamp: unset; }
+  html.excl .q > label + input, html.excl .q > label + textarea, html.excl .q > label + select { margin-top: 0; }
+  html.excl input[type=text], html.excl input[type=email], html.excl input[type=url], html.excl select { min-height: 48px; padding: 12px 14px; border: 1px solid #2a2a2a; border-radius: 8px; background: rgba(255, 255, 255, .03); }
+  html.excl textarea { min-height: 84px; height: 84px; padding: 12px 14px; border-color: #2a2a2a; background: rgba(255, 255, 255, .03); resize: vertical; }
+  html.excl input:focus, html.excl textarea:focus, html.excl select:focus { border-color: #fff; background: rgba(255, 255, 255, .05); }
+  html.excl .opts { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; margin-top: 0; }
+  html.excl .opt { padding: 10px 12px; border-radius: 8px; font-size: 14px; }
+  html.excl .q.bad input, html.excl .q.bad textarea, html.excl .q.bad .opt { border-color: rgba(255, 107, 107, .8); }
+  html.excl .q.bad > label, html.excl .q.bad > .lbl { color: #ff9a9a; }
+  .x-qn { color: var(--faint); font-size: 11px; letter-spacing: .1em; }
+  .x-nav { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: auto; padding: 22px 0 26px; background: linear-gradient(180deg, transparent, var(--bg) 35%); }
+  html.excl #err { margin: 22px 0 0; }
+  .x-nav .ghost { display: inline-flex; align-items: center; min-height: 54px; padding: 0 30px; border: 1px solid #333; border-radius: 2px; background: none; color: #fff; font: 700 13px/1 'Barlow', sans-serif; letter-spacing: .24em; text-indent: .24em; text-transform: uppercase; cursor: pointer; }
   .x-nav .ghost:hover { border-color: #fff; }
-  .x-nav .ghost[hidden] { display: inline-flex; visibility: hidden; }
-  .x-nav small { color: var(--faint); font-size: 12.5px; letter-spacing: .08em; }
-  .x-note { margin: 22px 0 0; text-align: center; font-size: 12.5px; letter-spacing: .06em; color: var(--faint); }
-  html.excl .done { padding: 80px 28px; border-radius: 22px; }
-  html.excl .done h2 { font-size: clamp(48px, 9vw, 76px); }
-  @media (max-width: 560px) { .x-card { padding: 22px 16px 20px; border-radius: 16px; } .x-steps span em { display: none; } .x-nav .ghost, .x-nav .send { padding: 0 18px; } }
+  .x-nav .ghost[hidden] { visibility: hidden; }
+  .x-nav small { color: var(--faint); font-size: 12.5px; letter-spacing: .12em; }
+  html.excl .done { margin: 12vh auto 0; max-width: 720px; padding: 70px 28px; border-radius: 22px; }
+  html.excl .done h2 { font-size: clamp(48px, 8vw, 80px); }
+  /* pantallas pequeñas: los pasos arriba, en una fila */
+  @media (max-width: 900px) {
+    .xa { grid-template-columns: 1fr; }
+    .xa-side { position: static; height: auto; gap: 14px; padding: 22px 16px 10px; border-right: 0; background: none; }
+    .xa-side h1 { font-size: 46px; }
+    .x-steps { grid-auto-flow: column; grid-auto-columns: minmax(150px, 1fr); overflow-x: auto; }
+    .x-steps li small, .xa-prog, .xa-about, .x-note { display: none; }
+    .xa-main { min-height: 0; padding: 18px 16px 0; }
+    .x-nav .ghost, .x-nav .send { padding: 0 18px; }
+  }
     /* sin barras de scroll visibles (se sigue pudiendo desplazar) */
     html, body, * { scrollbar-width: none; }
     ::-webkit-scrollbar { display: none; width: 0; height: 0; }
@@ -228,30 +270,38 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
   function drawExcl() {
     document.documentElement.classList.add('excl');
     document.title = `${form.title || 'Form'} — HORIZON RCRDS`;
-    steps = stepsOf(form.fields); HALF = halves(form.fields);
+    steps = stepsOf(form.fields);
     let n = 0;
-    const num = x => x.type === 'section' ? '' : `<span class="x-qn">${String(++n).padStart(2, '0')}</span>`;
-    const q = x => field(x).replace(/(<label for="[^"]+">|<span class="lbl" id="[^"]+">)/, m => m + num(x));
+    const num = x => `<span class="x-qn">${String(++n).padStart(2, '0')}</span>`;
+    // todo en columnas (solo las preguntas con muchas opciones ocupan el ancho entero)
+    // todas las preguntas con su línea de ayuda (aunque esté vacía): así los recuadros quedan alineados en cada fila
+    const withHelp = h => /class="help"/.test(h) ? h : h.replace(/<(input|textarea|select|div class="opts")/, '<p class="help" aria-hidden="true"></p>$&');
+    const q = x => withHelp(field(x)).replace(/^<div class="q( half)?"/, `<div class="q${(x.type === 'radio' || x.type === 'checkbox') && (x.options || []).length > 4 ? ' wide' : ''}"`).replace(/(<label for="[^"]+">|<span class="lbl" id="[^"]+">)/, m => m + num(x));
+    const qCount = st => `${st.fields.length} question${st.fields.length > 1 ? 's' : ''}`;
     root.innerHTML = `
-      <div class="x-hero">
-        <span class="x-badge"><i></i>Private invitation</span>
-        <h1>${esc(form.title || 'Form')}</h1>
-        ${form.note ? `<p class="x-for">Prepared for <b>${esc(form.note)}</b></p>` : ''}
-        ${form.description ? `<p class="desc">${linky(form.description)}</p>` : ''}
-      </div>
-      <ol class="x-steps">${steps.map((st, i) => `<li data-go="${i}"><span><em>${String(i + 1).padStart(2, '0')}</em>${esc(plain(st.title) || 'Step ' + (i + 1))}</span></li>`).join('')}</ol>
-      <div class="x-card">
-        <form id="f" novalidate>
-          ${steps.map((st, i) => `<section class="step" data-step="${i}">
-            <div class="sec"><span class="x-num">STEP ${i + 1} OF ${steps.length}</span><h2>${esc(plain(st.sec ? st.sec.label : st.title))}</h2>${st.sec?.help ? `<p>${linky(st.sec.help)}</p>` : ''}</div>
-            ${st.fields.map(q).join('')}
-          </section>`).join('')}
-          <div class="hp" aria-hidden="true"><label>Leave empty <input name="_hp" tabindex="-1" autocomplete="off"></label></div>
-          <p class="err" id="err" role="alert" hidden></p>
-          <div class="x-nav"><button type="button" class="ghost" data-back>Back</button><small id="x-pos"></small><button type="button" class="send" data-next>Next</button></div>
-        </form>
-      </div>
-      <p class="x-note">This link is personal: it only works for you, once, on this device.</p>`;
+      <div class="xa">
+        <aside class="xa-side">
+          <a class="xa-brand" href="/"><img src="/assets/logo.png" alt=""><span>HORIZON RCRDS</span></a>
+          <span class="x-badge"><i></i>Private invitation</span>
+          <h1>${esc(form.title || 'Form')}</h1>
+          ${form.note ? `<p class="x-for">Prepared for <b>${esc(form.note)}</b></p>` : ''}
+          <ol class="x-steps">${steps.map((st, i) => `<li data-go="${i}"><span class="n"><b>${i + 1}</b></span><span class="t">${esc(plain(st.title) || 'Step ' + (i + 1))}</span><small>${qCount(st)}</small></li>`).join('')}</ol>
+          <div class="xa-prog"><div><i id="x-bar"></i></div><small id="x-pct">0% done</small></div>
+          ${form.description ? `<details class="xa-about"><summary>About this form</summary><p>${linky(form.description)}</p></details>` : ''}
+          <p class="x-note">This link is personal: it only works for you, once, on this device.</p>
+        </aside>
+        <section class="xa-main">
+          <form id="f" novalidate>
+            ${steps.map((st, i) => `<section class="step" data-step="${i}">
+              <header class="xa-head"><span class="x-num">Step ${i + 1} of ${steps.length}</span><h2>${esc(plain(st.sec ? st.sec.label : st.title))}</h2>${st.sec?.help ? `<p>${linky(st.sec.help)}</p>` : ''}</header>
+              <div class="xa-grid">${st.fields.map(q).join('')}</div>
+            </section>`).join('')}
+            <div class="hp" aria-hidden="true"><label>Leave empty <input name="_hp" tabindex="-1" autocomplete="off"></label></div>
+            <p class="err" id="err" role="alert" hidden></p>
+            <div class="x-nav"><button type="button" class="ghost" data-back>Back</button><small id="x-pos"></small><button type="button" class="send" data-next>Next</button></div>
+          </form>
+        </section>
+      </div>`;
     goStep(0, false);
   }
   function goStep(i, scroll = true) {
@@ -264,7 +314,8 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     document.getElementById('x-pos').textContent = `${cur + 1} / ${steps.length}`;
     document.getElementById('err').hidden = true;
     progress();
-    if (scroll) document.querySelector('.x-steps').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.querySelector('.step.on input, .step.on textarea, .step.on select')?.focus({ preventScroll: true });
   }
   // lo obligatorio de un paso, antes de pasar al siguiente
   function stepMissing(i) {
@@ -382,6 +433,8 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     const qs = form.fields.filter(x => x.type !== 'section'), a = answers(f);
     const n = qs.filter(x => Array.isArray(a[x.id]) ? a[x.id].length : a[x.id]).length;
     bar.style.width = qs.length ? `${(n / qs.length) * 100}%` : '0';
+    const pct = qs.length ? Math.round((n / qs.length) * 100) : 0, xb = document.getElementById('x-bar'), xp = document.getElementById('x-pct');
+    if (xb) xb.style.width = pct + '%'; if (xp) xp.textContent = `${pct}% done`;
   }
 
   document.addEventListener('submit', async e => {

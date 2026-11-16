@@ -1045,6 +1045,11 @@ html, body, * { scrollbar-width: none; }
 .lk-card footer { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: auto; padding-top: 12px; border-top: 1px solid var(--line); }
 .lk-card footer .ic { margin-left: auto; }
 .lk-card.is-sent { border-color: rgba(126, 226, 168, .3); }
+/* abierto (en espera) en amarillo; caducado o cancelado en rojo */
+.lk-card .tag.wait { color: #f5c542; border-color: rgba(245, 197, 66, .45); background: rgba(245, 197, 66, .08); }
+.lk-card .tag.bad { color: var(--danger); border-color: rgba(255, 90, 95, .45); background: rgba(255, 90, 95, .08); }
+.lk-card.is-opened { border-color: rgba(245, 197, 66, .3); }
+.lk-card.is-expired, .lk-card.is-revoked { border-color: rgba(255, 90, 95, .3); }
 .lk-card.is-expired, .lk-card.is-revoked { opacity: .65; }
 .lk-more { display: flex; justify-content: center; margin-top: 18px; }
 .lk-empty { padding: 30px 0; text-align: center; }

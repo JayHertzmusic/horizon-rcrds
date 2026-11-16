@@ -1969,7 +1969,7 @@
      envío, solo en el primer dispositivo que lo abre y durante 30 días */
   /* Enlaces personales de un formulario privado (Release Form): página propia con filtros, búsqueda y acciones.
      Cada enlace: una persona, el primer dispositivo que lo abre, un envío y 30 días. */
-  const LINK_STATE = { unused: ['Not opened', 'off'], opened: ['Opened', ''], sent: ['Sent', 'ok'], expired: ['Expired', 'off'], revoked: ['Cancelled', 'off'] };
+  const LINK_STATE = { unused: ['Not opened', 'off'], opened: ['Opened', 'wait'], sent: ['Sent', 'ok'], expired: ['Expired', 'bad'], revoked: ['Cancelled', 'bad'] };
   async function openLinks(id, keep = {}) {
     formOpen = { mode: 'links', id, links: null, filter: 'all', q: '', show: 12, made: null, ...keep };
     render();

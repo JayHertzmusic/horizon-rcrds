@@ -156,8 +156,11 @@ export async function finalize(env, id, origin) {
 /* Cada 30 min: si el PDF de un contrato firmado se borró del Drive (o está en la papelera), se olvida su enlace,
    así el panel lo vuelve a guardar en su carpeta. Solo los firmados en los últimos 6 meses. */
 export async function checkDriveFiles(env) {
-  const rows = (await env.DB.prepare("SELECT id, drive_id FROM contracts WHERE status = 'signed' AND drive_id IS NOT NULL AND signed_at > ?").bind(now() - 180 * 864e5).all()).results;
-  if (!rows.length) return;
+  const all = (await env.DB.prepare("SELECT id, drive_id FROM contracts WHERE status = 'signed' AND drive_id IS NOT NULL AND signed_at > ? ORDER BY id").bind(now() - 180 * 864e5).all()).results;
+  if (!all.length) return;
+  // plan gratis: máximo 50 llamadas por ejecución → 15 contratos por turno, rotando (cada uno se revisa varias veces al día)
+  const per = 15, start = (Math.floor(now() / 1800e3) * per) % all.length;
+  const rows = all.length <= per ? all : [...all.slice(start), ...all.slice(0, start)].slice(0, per);
   const tok = await horizonToken(env);
   for (const r of rows) {
     const res = await fetch(`https://www.googleapis.com/drive/v3/files/${r.drive_id}?fields=trashed&supportsAllDrives=true`, { headers: { Authorization: `Bearer ${tok}` } });

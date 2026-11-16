@@ -6,7 +6,7 @@
    - La sincronización con SoundCloud (GitHub Actions) se identifica con el token OIDC que GitHub da a ese
      workflow: no hay claves guardadas en ningún sitio. */
 import STATIC_FILES from './static-files.json';
-import { FORM_SCHEMA, FORM_LINK_COLUMNS, FormError, formsApi, publicFormsApi, formsCount, gformHook } from './forms.js';
+import { FORM_SCHEMA, FORM_LINK_COLUMNS, FormError, formsApi, publicFormsApi, formsCount, formsUnseen, gformHook } from './forms.js';
 import { CONTRACT_SCHEMA, CONTRACT_COLUMNS, SIGNER_COLUMNS, ContractError, contractsApi, signApi, checkDriveFiles } from './contracts.js';
 import { EmailMessage } from 'cloudflare:email';
 import { loginCodeMail } from './contract-mail.js';
@@ -656,12 +656,17 @@ async function api(req, env, p, ctx) {
   // ¿ha cambiado algo? (el panel lo pregunta cada pocos segundos: versión de la web, historial y equipo)
   if (p === '/api/live' && req.method === 'GET') {
     const DB = env.DB;
-    const [v, a, m] = await Promise.all([
+    // una sola pregunta para todo: el panel solo pide lo demás (contratos, chat…) cuando cambia su huella
+    const [v, a, m, c, k, un] = await Promise.all([
       DB.prepare("SELECT v FROM site_meta WHERE k = 'version'").first(),
       DB.prepare('SELECT MAX(id) id FROM panel_audit').first(),
       DB.prepare("SELECT COUNT(*) n, MAX(COALESCE(added_at, 0)) a, GROUP_CONCAT(COALESCE(role_id, '') || COALESCE(color, ''), ',') r FROM panel_members").first(),
+      DB.prepare(`SELECT (SELECT COUNT(*) || '|' || COALESCE(MAX(updated_at), 0) || '|' || COALESCE(MAX(signed_at), 0) || '|' || COALESCE(SUM(length(drive_url)), 0) || '|' || COALESCE(SUM(length(status)), 0) FROM contracts) || '|' ||
+        (SELECT COUNT(*) || '|' || COALESCE(MAX(signed_at), 0) || '|' || COALESCE(MAX(emailed_at), 0) || '|' || COALESCE(SUM(fails), 0) || '|' || COALESCE(SUM(length(COALESCE(email, '')) + length(COALESCE(label, ''))), 0) FROM contract_signers) AS f`).first().catch(() => null),
+      DB.prepare("SELECT COALESCE(MAX(id), 0) || '|' || COALESCE(SUM(deleted), 0) AS f FROM chat_messages").first().catch(() => null),
+      s.sync ? null : formsUnseen(env, s).catch(() => null),
     ]);
-    return json({ v: v?.v || 0, audit: a?.id || 0, team: `${m?.n}|${m?.a}|${m?.r || ''}` });
+    return json({ v: v?.v || 0, audit: a?.id || 0, team: `${m?.n}|${m?.a}|${m?.r || ''}`, ct: c?.f || '', chat: k?.f || '', unseen: un });
   }
   if (p === '/api/data' && req.method === 'GET') {
     if (!s.sync && !anyCan(s, 'view')) throw new HttpError(403, 'Your role has no sections yet.');

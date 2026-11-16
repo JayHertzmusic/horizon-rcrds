@@ -1691,10 +1691,10 @@
     for (const f of formsData.forms) if (f.unseen) { forms[f.id] = f.unseen; total += f.unseen; }
     unseen = { total, forms }; paintBadge();
   }
-  async function checkUnseen() {
+  async function checkUnseen(given) {
     if (!auth || preview || !showForms()) return;
     try {
-      const r = await api('GET', '/api/forms/unseen'), old = unseen;
+      const r = given || await api('GET', '/api/forms/unseen'), old = unseen;
       const grown = Object.keys(r.forms || {}).filter(id => (r.forms[id] || 0) > ((old.forms || {})[id] || 0));
       const grew = r.total > old.total || grown.length > 0;
       unseen = r;
@@ -1719,14 +1719,19 @@
       }
     } catch { /* sin aviso */ }
   }
-  setInterval(checkUnseen, 15e3);
-  // todo lo demás se pone al día solo (lo que publica otro miembro, la sincronización con SoundCloud, el equipo, el historial)
-  let live = null;
+  // todo se pone al día solo con UNA pregunta cada 15 s (también con la pestaña de fondo): respuestas nuevas, contratos, chat,
+  // lo que publica otro miembro, el equipo y el historial. Lo demás solo se pide cuando su huella cambia (menos peticiones: plan gratis)
+  let live = null, liveBusy = false;
   async function checkLive() {
-    if (!auth || !repo || busy) return;
+    if (!auth || liveBusy) return;
+    liveBusy = true;
     try {
       const r = await api('GET', '/api/live'), old = live; live = r;
+      if (r.unseen) checkUnseen(r.unseen);
       if (!old) return;
+      if (r.ct !== old.ct) checkContracts();
+      if (r.chat !== old.chat && chatState.on) chatPoll();
+      if (!repo || busy) return;
       if (r.v !== old.v && !editing && !isDirty()) {
         repo = await loadRepo();
         if (['releases', 'radio', 'playlists', 'player'].includes(view) && !editing && !$('#sheet')?.open) render();
@@ -1734,10 +1739,10 @@
       if (r.audit !== old.audit && view === 'log' && !$('#sheet')?.open) { logState.loaded = false; loadLog(false); }
       if (r.team !== old.team) { teamData = null; if (view === 'team' && !$('#sheet')?.open) loadTeam(); }
     } catch { /* sin aviso */ }
+    finally { liveBusy = false; }
   }
-  setInterval(checkLive, 20e3);
+  setInterval(checkLive, 15e3);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkLive(); });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkUnseen(); });
   const showForms = () => can('forms') || (preview ? visibleForms().length > 0 : auth?.user?.formsCount > 0);
   async function loadForms() {
     if (formsLoading) return;
@@ -2252,8 +2257,7 @@
       }
     } catch { /* sin aviso */ }
   }
-  setInterval(checkContracts, 15e3);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkContracts(); });
+  // (se pide sola cuando /api/live dice que algo de los contratos cambió)
   const isTpl = c => c?.kind === 'template';
   function ctList() {
     const all = ctData.contracts, ed = ctCanEdit(), tab = ctTab, fresh = new Set(ctNew().map(c => c.id));
@@ -2574,13 +2578,14 @@
   const AUTO_DRIVE_FROM = Date.parse('2026-11-15T20:00:00Z');   // los firmados antes se guardan a mano
   let autoDriving = false;
   const autoDriveFailed = new Set(), autoDriveWait = new Map();   // sin fecha en el calendario: se vuelve a mirar cada 2 min
+  let ctDriveTried = 0;
   async function autoDrive() {
     if (autoDriving || !ctData || !ctCanEdit() || preview) return;
     const todo = ctData.contracts.filter(c => !isTpl(c) && !isDraft(c) && c.status === 'signed' && !c.drive_url && !c.file && (c.signed_at || 0) >= AUTO_DRIVE_FROM && !autoDriveFailed.has(c.id) && !((autoDriveWait.get(c.id) || 0) > Date.now()));
     if (!todo.length) return;
     autoDriving = true;
     try {
-      if (ctDrive === null || !ctDriveReady) await ctDriveLoad();
+      if (ctDrive === null || (!ctDriveReady && Date.now() - ctDriveTried > 300e3)) { ctDriveTried = Date.now(); await ctDriveLoad(); }
       if (!ctDriveReady) return;
       for (const c of todo) {
         try {
@@ -3322,7 +3327,7 @@
       }
       chatState.loading = false;
     }
-    chatState.timer = setTimeout(chatPoll, chatState.open ? 3000 : 20000);
+    chatState.timer = setTimeout(chatPoll, chatState.open ? 3000 : 120000);   // cerrado: lo avisa /api/live (esto es solo por si acaso)
   }
   function chatMarkSeen() {
     chatState.seen = chatState.last;

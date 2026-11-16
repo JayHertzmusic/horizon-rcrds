@@ -240,6 +240,16 @@ export function formLevel(s, f) {
   return base;
 }
 export const canSeeForm = (s, f) => !!s.owner || !!formLevel(s, f) || access(f).roles.includes(s.role?.id) || access(f).emails.includes(s.email);
+// respuestas sin ver de esta persona, solo de los formularios que puede ver (aviso rojo del panel; también va en /api/live)
+export async function formsUnseen(env, s) {
+  const DB = env.DB;
+  const [fs, rs] = await Promise.all([
+    DB.prepare('SELECT id, access FROM forms').all(),
+    DB.prepare(`SELECT r.form_id, COUNT(*) AS n FROM form_responses r WHERE NOT ${SEEN_SQL} GROUP BY r.form_id`).bind(s.email || '').all(),
+  ]);
+  const forms = fs.results.filter(f => canSeeForm(s, f)).map(f => f.id), rows = rs.results.filter(r => forms.includes(r.form_id));
+  return { total: rows.reduce((a, r) => a + r.n, 0), forms: Object.fromEntries(rows.map(r => [r.form_id, r.n])) };
+}
 export async function formsCount(env, s) {
   if (s.owner) return (await env.DB.prepare('SELECT COUNT(*) AS n FROM forms').first())?.n || 0;
   const rows = (await env.DB.prepare('SELECT id, access FROM forms').all()).results;
@@ -262,11 +272,7 @@ export async function formsApi(req, env, s, url, audit) {
   const ownerOnly = (act = 'edit') => { if (s.sync || !(s.owner || s.perms?.forms?.[act])) throw new FormError(403, 'You do not have permission to change forms.'); };
 
   // respuestas sin ver (para el aviso del panel), solo de los formularios que esta persona puede ver
-  if (p === '/api/forms/unseen' && m === 'GET') {
-    const forms = (await DB.prepare('SELECT id, access FROM forms').all()).results.filter(f => canSeeForm(s, f)).map(f => f.id);
-    const rows = (await DB.prepare(`SELECT r.form_id, COUNT(*) AS n FROM form_responses r WHERE NOT ${SEEN_SQL} GROUP BY r.form_id`).bind(s.email || '').all()).results.filter(r => forms.includes(r.form_id));
-    return { total: rows.reduce((a, r) => a + r.n, 0), forms: Object.fromEntries(rows.map(r => [r.form_id, r.n])) };
-  }
+  if (p === '/api/forms/unseen' && m === 'GET') return formsUnseen(env, s);
   if (p === '/api/forms' && m === 'GET') {
     const forms = (await DB.prepare('SELECT * FROM forms ORDER BY position, created_at').all()).results.filter(f => canSeeForm(s, f));
     // un rol limitado a algunos formularios no crea nuevos (no los vería)

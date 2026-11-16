@@ -217,7 +217,12 @@
   .x-dots .past i { background: #8a8a8a; }
   .x-dots .on i { width: 22px; background: #fff; transform: none; }
   .x-dots .on { cursor: default; }
-  html.excl .done { margin: 12vh auto 0; max-width: 720px; padding: 70px 28px; border-radius: 22px; }
+  /* pantalla final: logo arriba y el mensaje en el centro de la pantalla */
+  .x-end { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 30px; padding: 32px 16px; box-sizing: border-box; }
+  .x-end-brand { gap: 14px; }
+  .x-end-brand img { height: 34px; }
+  .x-end-brand span { font-size: 26px; }
+  html.excl .done { margin: 0; width: 100%; max-width: 720px; padding: 70px 28px; border-radius: 22px; box-sizing: border-box; }
   html.excl .done h2 { font-size: clamp(48px, 8vw, 80px); }
   @media (max-width: 640px) { .xa-grid { grid-template-columns: 1fr; } html.excl .opts { grid-auto-flow: row; } html.excl .opts:has(> .opt:only-child) { width: auto; } }
   /* pantallas bajas (portátiles): todo un poco más compacto para que cada paso quepa sin bajar */
@@ -521,7 +526,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
       document.getElementById('bar').style.width = '100%';
       if (EMBED) parent.postMessage({ type: 'hz-form-sent' }, location.origin);
       root.innerHTML = EXCL()
-        ? `<div class="done"><span class="x-badge"><i></i>Received</span><h2 style="margin-top:22px">Thank you${form.note ? ', ' + esc(form.note) : ''}!</h2><p>Your details are with HORIZON RCRDS.<br>We’ll prepare everything for your release and be in touch soon.</p><a href="/">Back to the website</a></div>`
+        ? `<div class="x-end"><a class="xa-brand x-end-brand" href="/"><img src="/assets/logo.png" alt=""><span>HORIZON RCRDS</span></a><div class="done"><span class="x-badge"><i></i>Received</span><h2 style="margin-top:22px">Thank you${form.note ? ', ' + esc(form.note) : ''}!</h2><p>Your details are with HORIZON RCRDS.<br>We’ll prepare everything for your release and be in touch soon.</p><a href="/">Back to the website</a></div></div>`
         : `<div class="done"><h2>Thank you!</h2><p>Your answer has been sent to HORIZON RCRDS.<br>We’ll get back to you soon.</p><a href="/">Back to the website</a></div>`;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (x) { err.textContent = x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Send'; }

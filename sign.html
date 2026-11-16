@@ -17,10 +17,10 @@
   html, body { margin: 0; }
   body { background: var(--bg); color: var(--text); font: 400 16px/1.6 'Barlow', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
   main { width: min(960px, 100%); margin: 0 auto; padding: 40px 16px 96px; }
-  .top { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
+  .top { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 28px; }
   .home { display: inline-flex; align-items: center; gap: 12px; color: #fff; text-decoration: none; }
   .home img { height: 32px; }
-  .home span { font: 400 22px/1 'Bebas Neue', sans-serif; letter-spacing: .12em; }
+  .home span { font: 400 22px/1 'Bebas Neue', sans-serif; letter-spacing: .12em; margin-right: -.12em; }   /* (el espacio de la última letra no descentra) */
   .status { padding: 6px 12px; border-radius: 3px; font-size: 11px; font-weight: 700; letter-spacing: .2em; text-transform: uppercase; border: 1px solid rgba(var(--accent-rgb), .5); color: var(--accent); }
   .status.ok { color: #fff; border-color: rgba(255, 255, 255, .5); }
   h1 { margin: 0 0 6px; font: 400 clamp(36px, 7vw, 56px)/.95 'Bebas Neue', sans-serif; color: #fff; }
@@ -139,7 +139,7 @@
 </head>
 <body>
 <main>
-  <div class="top"><a class="home" href="/"><img src="/assets/logo.png" alt=""><span>HORIZON RCRDS</span></a><span id="status"></span></div>
+  <div class="top"><a class="home" href="/"><img src="/assets/logo.png" alt=""><span>HORIZON RCRDS</span></a><span id="status" hidden></span></div>
   <div id="root"><p class="msg">Loading…</p></div>
 </main>
 <script src="/assets/vendor/pdf/pdf.min.js"></script>

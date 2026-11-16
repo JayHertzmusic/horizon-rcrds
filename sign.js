@@ -224,12 +224,12 @@
       done();
     } catch (x) { err.textContent = x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Send signed contract'; }
   }
-  // «HORIZON RCRDS RELEASE CONTRACT ｜ Artista - Track.pdf» (la barra normal no se permite en nombres de archivo)
+  // «HORIZON RCRDS RELEASE CONTRACT ǀ Artista - Track.pdf» (Windows no deja «|» en un nombre de archivo: «ǀ» se ve igual y sí vale)
   async function download(btn) {
     const label = btn.textContent;
     btn.disabled = true; btn.textContent = 'Preparing…';
     try {
-      const name = `${data.title.replace(/\|/g, '｜').replace(/[\\/:*?"<>]+/g, '').trim() || 'Contract'}.pdf`;
+      const name = `${data.title.replace(/\|/g, 'ǀ').replace(/[\\/:*?"<>]+/g, '').trim() || 'Contract'}.pdf`;
       const r = await get('/signed');
       if (r.ok) HZPDF.download(new Uint8Array(await r.arrayBuffer()), name);
       else {

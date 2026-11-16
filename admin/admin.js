@@ -2257,7 +2257,7 @@
     const who = [String(c.artist || '').split(/\s*(?:,|&|\band\b)\s*/i).map(x => x.trim()).filter(Boolean).join(' & '), String(c.release_name || c.vars?.Track || '').trim()].filter(Boolean).join(' - ');
     return `HORIZON RCRDS ${kind}${who ? ' | ' + who : ''}`;
   };
-  const pdfName = (c, extra = '') => `${ctName(c).replace(/\|/g, '｜').replace(/[\\/:*?"<>]+/g, '')}${extra}.pdf`;
+  const pdfName = (c, extra = '') => `${ctName(c).replace(/\|/g, 'ǀ').replace(/[\\/:*?"<>]+/g, '')}${extra}.pdf`;
   // contratos con firmas nuevas (número rojo en «Contracts» hasta que abres ese contrato)
   const ctLast = c => Math.max(0, ...c.signers.map(x => x.signed_at || 0));
   const ctSaveSeen = () => { try { localStorage.setItem('hz_ct_seen', JSON.stringify(ctSeen)); } catch { /* nada */ } };

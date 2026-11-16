@@ -218,8 +218,8 @@ export async function saveToDrive(env, root, c, bytes, cal = {}) {
       path += ' / ' + dest.name;
     }
   }
-  // como el asunto de los correos: «HORIZON RCRDS RELEASE CONTRACT ｜ Artista - Track.pdf»
-  const name = `${mailName(c).replace(/\|/g, '｜').replace(/[\/:*?"<>]+/g, '').trim()}.pdf`, B = 'hz' + crypto.randomUUID().replace(/-/g, '');
+  // como el asunto de los correos: «HORIZON RCRDS RELEASE CONTRACT ǀ Artista - Track.pdf»
+  const name = `${mailName(c).replace(/\|/g, 'ǀ').replace(/[\/:*?"<>]+/g, '').trim()}.pdf`, B = 'hz' + crypto.randomUUID().replace(/-/g, '');
   const head = `--${B}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [dest.id], mimeType: 'application/pdf' })}\r\n--${B}\r\nContent-Type: application/pdf\r\n\r\n`;
   const body = new Blob([head, bytes, `\r\n--${B}--`]);
   const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id', { method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': `multipart/related; boundary=${B}` }, body });

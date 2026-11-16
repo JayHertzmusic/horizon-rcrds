@@ -192,6 +192,19 @@
   .x-nav .ghost { display: inline-flex; align-items: center; min-height: 54px; padding: 0 30px; border: 1px solid #333; border-radius: 2px; background: none; color: #fff; font: 700 13px/1 'Barlow', sans-serif; letter-spacing: .24em; text-indent: .24em; text-transform: uppercase; cursor: pointer; }
   .x-nav .ghost:hover { border-color: #fff; }
   .x-nav .ghost[hidden] { visibility: hidden; }
+  /* último paso: aviso de revisar + resumen de los pasos (sin pregunta) */
+  .xa-grid > .q.x-confirm { display: block; grid-row: auto; grid-column: 1 / -1; margin-bottom: 0 !important; }
+  .x-ok { display: flex; align-items: center; gap: 18px; padding: 22px 24px; border: 1px solid #2a2a2a; border-radius: 12px; background: rgba(255, 255, 255, .03); }
+  .x-tick { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; background: #fff; color: #000; font-size: 18px; font-weight: 700; }
+  .x-ok b { display: block; color: #fff; font-size: 16px; font-weight: 600; line-height: 1.4; }
+  .x-ok p { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+  .x-rv { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; margin-top: 14px; }
+  .x-rv button { display: flex; align-items: center; gap: 10px; height: var(--box, 52px); padding: 0 16px; border: 1px solid #2a2a2a; border-radius: 8px; background: none; color: #fff; font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, background .15s; }
+  .x-rv button:hover { border-color: #fff; background: rgba(255, 255, 255, .04); }
+  .x-rv span { color: var(--faint); font-size: 11px; letter-spacing: .1em; }
+  .x-rv b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+  .x-rv i { font-style: normal; color: var(--muted); font-size: 12px; }
+  .x-rv button:hover i { color: #fff; }
   /* un puntito por paso: el actual alargado y blanco, los hechos en gris claro */
   .x-nav [data-back] { justify-self: start; }
   .x-nav [data-next], .x-nav .send { justify-self: end; width: auto; }
@@ -310,8 +323,14 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     // todo en columnas (solo las preguntas con muchas opciones ocupan el ancho entero)
     // todas las preguntas con su línea de ayuda (aunque esté vacía): así los recuadros quedan alineados en cada fila
     const withHelp = h => /class="help"/.test(h) ? h : h.replace(/<(input|textarea|select|div class="opts")/, '<p class="help" aria-hidden="true"></p>$&');
-    const q = x => withHelp(field(x)).replace(/^<div class="q( half)?"/, `<div class="q${(x.type === 'radio' || x.type === 'checkbox') && (x.options || []).length > 4 ? ' wide' : ''}"`).replace(/(<label for="[^"]+">|<span class="lbl" id="[^"]+">)/, m => m + num(x));
-    const qCount = st => `${st.fields.length} question${st.fields.length > 1 ? 's' : ''}`;
+    // pregunta de un solo botón obligatorio («Finish»): no es una pregunta, es el aviso de revisar → ya va marcada y se enseña como resumen
+    const isConfirm = x => x.type === 'radio' && x.required && !x.other && (x.options || []).length === 1;
+    const sentence = t => String(t || '').toLowerCase().replace(/(^\s*|[.!?]\s+)(\p{L})/gu, (m, a, c) => a + c.toUpperCase());
+    const confirmQ = x => `<div class="q x-confirm" data-q="${esc(x.id)}"><input type="radio" name="${esc(x.id)}" value="${esc(x.options[0])}" checked hidden>
+      <div class="x-ok"><span class="x-tick" aria-hidden="true">✓</span><div><b>${esc(sentence(x.label))}</b>${x.help ? `<p>${esc(x.help)}</p>` : ''}</div></div>
+      <div class="x-rv">${steps.slice(0, -1).map((st, i) => `<button type="button" data-go="${i}"><span>${String(i + 1).padStart(2, '0')}</span><b>${esc(plain(st.title) || 'Step ' + (i + 1))}</b><i>Edit</i></button>`).join('')}</div></div>`;
+    const q = x => isConfirm(x) ? confirmQ(x) : withHelp(field(x)).replace(/^<div class="q( half)?"/, `<div class="q${(x.type === 'radio' || x.type === 'checkbox') && (x.options || []).length > 4 ? ' wide' : ''}"`).replace(/(<label for="[^"]+">|<span class="lbl" id="[^"]+">)/, m => m + num(x));
+    const qCount = st => st.fields.every(isConfirm) ? 'Review & send' : `${st.fields.length} question${st.fields.length > 1 ? 's' : ''}`;
     root.innerHTML = `
       <div class="xa">
         <aside class="xa-side">
@@ -368,12 +387,13 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     if (e.target.closest('[data-back]')) { goStep(cur - 1); return; }
     const nx = e.target.closest('[data-next]');
     if (nx && nx.type === 'button') {
+      e.preventDefault();   // el botón pasa a «Send» al llegar al último paso: este mismo clic no debe enviar
       document.querySelectorAll('.q.bad').forEach(q => q.classList.remove('bad'));
       const m = stepMissing(cur);
       if (m) { markMissing(m); return; }
       goStep(cur + 1); return;
     }
-    const li = e.target.closest('.x-steps li');
+    const li = e.target.closest('.x-steps li, .x-rv [data-go]');
     if (li) {
       const to = Number(li.dataset.go);
       if (to > cur) { for (let k = cur; k < to; k++) { const m = stepMissing(k); if (m) { goStep(k); markMissing(m); return; } } }

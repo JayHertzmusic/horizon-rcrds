@@ -18,6 +18,8 @@ export const FORM_SCHEMA = [
   // respuestas que la web copió a Google Forms (para no volver a meterlas cuando Google las devuelve)
   `CREATE TABLE IF NOT EXISTS gform_sent (hash TEXT PRIMARY KEY, at INTEGER NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS gform_trash (google_id TEXT PRIMARY KEY, at INTEGER NOT NULL)`,
+  // respuestas borradas en la web que el script tiene que borrar también en su Google Form (cada 5 min)
+  `CREATE TABLE IF NOT EXISTS gform_del (id INTEGER PRIMARY KEY AUTOINCREMENT, google_id TEXT NOT NULL, at INTEGER NOT NULL, answers TEXT NOT NULL, name TEXT, title TEXT, created_at INTEGER NOT NULL)`,
   // enlaces personales (formularios privados como el Release Form): un enlace = una persona, un envío, 30 días
   `CREATE TABLE IF NOT EXISTS form_links (hash TEXT PRIMARY KEY, form_id TEXT NOT NULL, note TEXT, created_by TEXT, created_at INTEGER, expires_at INTEGER, device TEXT, opened_at INTEGER, used_at INTEGER, response_id INTEGER)`,
   `CREATE INDEX IF NOT EXISTS form_links_form ON form_links (form_id, created_at)`,
@@ -158,7 +160,10 @@ export async function gformHook(req, env, url) {
     }
     // formularios borrados en la web → a la papelera de Google
     for (const t of (await DB.prepare('SELECT google_id FROM gform_trash').all()).results) ops.push({ op: 'trash', googleId: t.google_id });
-    return { ok: true, ops, log };
+    // respuestas borradas en la web → el script busca la misma en el Google Form (por lo que contesta) y la borra
+    const deletes = (await DB.prepare('SELECT id, google_id, at, answers FROM gform_del ORDER BY id LIMIT 20').all()).results
+      .map(x => ({ id: x.id, googleId: x.google_id, at: x.at, answers: parse(x.answers) || {} }));
+    return { ok: true, ops, log, deletes };
   }
   if (url.pathname === '/api/hooks/gform/ack') {
     // el script ya aplicó los cambios: se guarda cómo quedaron los Google Forms
@@ -167,6 +172,13 @@ export async function gformHook(req, env, url) {
       if (f) await linkGoogle(DB, f, g);
     }
     for (const id of (Array.isArray(b.trashed) ? b.trashed : []).slice(0, 30)) await DB.prepare('DELETE FROM gform_trash WHERE google_id = ?').bind(String(id)).run();
+    for (const x of (Array.isArray(b.deletedResp) ? b.deletedResp : []).slice(0, 30)) {
+      const q = await DB.prepare('SELECT name, title FROM gform_del WHERE id = ?').bind(Number(x?.id) || 0).first();
+      if (!q) continue;
+      await DB.prepare('DELETE FROM gform_del WHERE id = ?').bind(Number(x.id)).run();
+      await DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)').bind(now(), 'google', 'Google Forms',
+        x.found ? `Deleted the response ${q.name || ''} in the Google Form “${q.title || ''}” too` : `Could not find the response ${q.name || ''} in the Google Form “${q.title || ''}” (already deleted there?)`, '').run();
+    }
     return { ok: true };
   }
   if (url.pathname === '/api/hooks/gform/response') {
@@ -434,8 +446,16 @@ export async function formsApi(req, env, s, url, audit) {
   if (mm[2] === 'responses' && mm[3] && m === 'DELETE') {
     if (s.sync || formLevel(s, f) !== 'edit') throw new FormError(403, 'Your role can’t delete responses here.');
     const name = await respName(DB, f, Number(mm[3]));   // «#n (Artista - Track)», antes de borrarla
+    const row = await DB.prepare('SELECT at, data FROM form_responses WHERE id = ? AND form_id = ?').bind(Number(mm[3]), f.id).first();
     const r = await DB.prepare('DELETE FROM form_responses WHERE id = ? AND form_id = ?').bind(Number(mm[3]), f.id).run();
     if (!r.meta.changes) throw new FormError(404, 'That response no longer exists.');
+    // también en su Google Form (lo borra el script en la siguiente sincronización, como mucho 5 min)
+    const gid = (parse(f.google) || {}).id;
+    if (gid && row) {
+      const d = parse(row.data) || {}, answers = {};
+      for (const x of parse(f.fields) || []) if (x.type !== 'section' && d[x.id] != null && d[x.id] !== '' && !(Array.isArray(d[x.id]) && !d[x.id].length)) answers[x.label] = d[x.id];
+      await DB.prepare('INSERT INTO gform_del (google_id, at, answers, name, title, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(gid, row.at, JSON.stringify(answers), name, f.title, now()).run();
+    }
     await DB.prepare('DELETE FROM form_seen WHERE response_id = ?').bind(Number(mm[3])).run();
     await audit(`Deleted the response ${name} from the form “${f.title}”`);
     return { ok: true };

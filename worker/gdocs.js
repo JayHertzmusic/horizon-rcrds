@@ -3,10 +3,11 @@ import { mailName } from './contract-mail.js';
    Contracts crea contratos sin iniciar sesión en Google). El permiso lo da el script de Apps Script de Horizon
    (aplicación web, GSCRIPT_URL): devuelve un token de Google de la cuenta de Horizon; aquí se guarda ~50 min. */
 let cached = null;
-export async function horizonToken(env) {
-  if (cached && cached.exp > Date.now() + 60e3) return cached.token;
+// margin: cuánto tiempo de vida tiene que quedarle (la tarea de cada 30 min lo renueva antes: nadie espera al crear un contrato)
+export async function horizonToken(env, margin = 60e3) {
+  if (cached && cached.exp > Date.now() + margin) return cached.token;
   const kv = await env.FILES.get('google/token', { type: 'json' }).catch(() => null);
-  if (kv?.token && kv.exp > Date.now() + 60e3) { cached = kv; return kv.token; }
+  if (kv?.token && kv.exp > Date.now() + margin) { cached = kv; return kv.token; }
   if (!env.GSCRIPT_URL || !env.GFORM_SECRET) throw new Error('Google is not connected yet (the Horizon script is missing).');
   const r = await fetch(env.GSCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ secret: env.GFORM_SECRET, action: 'token' }), redirect: 'follow' });
   const j = await r.json().catch(() => ({}));
@@ -69,24 +70,24 @@ function docText(content) {
 }
 const findTab = (tabs, id) => { for (const t of tabs || []) { if (t.tabProperties?.tabId === id) return t; const c = findTab(t.childTabs, id); if (c) return c; } return null; };
 const docParts = u => { const m = String(u).match(/docs\.google\.com\/document\/(?:u\/\d+\/)?d\/([\w-]{20,})/), t = String(u).match(/[?&#]tab=(t\.[\w]+)/); return m ? { id: m[1], tab: t ? t[1] : '' } : null; };
+// lo único que se lee de un Doc: pestañas, texto con su posición y el estilo que se copia a los datos
+const DOC_EL = 'paragraph(elements(startIndex,textRun(content,textStyle(italic,smallCaps,weightedFontFamily,fontSize,foregroundColor)))),table(tableRows(tableCells(content(paragraph(elements(startIndex,textRun(content,textStyle(italic,smallCaps,weightedFontFamily,fontSize,foregroundColor))))))))';
+const DOC_TAB = `tabProperties(tabId,index),documentTab(body(content(${DOC_EL})))`;
+const DOC_FIELDS = encodeURIComponent(`tabs(${DOC_TAB},childTabs(${DOC_TAB},childTabs(${DOC_TAB})))`);
 const flatTabs = (tabs, out = []) => { for (const t of tabs || []) { out.push(t.tabProperties || {}); flatTabs(t.childTabs, out); } return out; };
 export async function docFromTemplate(env, docUrl, values, title) {
   const tok = await horizonToken(env);
   const d = docParts(docUrl);
   if (!d) throw new Error('The template’s Google Doc link is not valid.');
-  const copy = await gapi(tok, `https://www.googleapis.com/drive/v3/files/${d.id}/copy?fields=id&supportsAllDrives=true`, { name: `HORIZON RCRDS — ${title}` });
-  // la copia conserva casi siempre los ids de las pestañas: se lee una vez y solo si no está la pestaña se busca por su posición
-  let tab = d.tab;
-  const full = await gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}?includeTabsContent=true`);
-  let tabObj = tab ? findTab(full.tabs, tab) : full.tabs?.[0];
-  if (!tabObj && tab) {
-    const q = '?includeTabsContent=true&fields=tabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index))))';
-    const ta = flatTabs((await gapi(tok, `https://docs.googleapis.com/v1/documents/${d.id}${q}`)).tabs), tb = flatTabs(full.tabs);
-    const id = tb[ta.findIndex(t => t.tabId === tab)]?.tabId;
-    tabObj = id ? findTab(full.tabs, id) : null;
-  }
-  if (!tabObj) throw new Error('Could not find the template tab in the copy.');
-  tab = tabObj.tabProperties.tabId;
+  // más rápido: la plantilla se lee A LA VEZ que se copia (la copia tiene el mismo texto en las mismas posiciones y casi
+  // siempre los mismos ids de pestaña) y solo con lo necesario (texto, posiciones y estilo), no el documento entero
+  const [copy, src] = await Promise.all([
+    gapi(tok, `https://www.googleapis.com/drive/v3/files/${d.id}/copy?fields=id&supportsAllDrives=true`, { name: `HORIZON RCRDS — ${title}` }),
+    gapi(tok, `https://docs.googleapis.com/v1/documents/${d.id}?includeTabsContent=true&fields=${DOC_FIELDS}`),
+  ]);
+  let tabObj = d.tab ? findTab(src.tabs, d.tab) : src.tabs?.[0];
+  if (!tabObj) throw new Error('Could not find the template tab.');
+  let tab = tabObj.tabProperties.tabId;
   const { text, idx, sty } = docText(tabObj.documentTab?.body?.content);
   const requests = [];
   for (const b of findBlanks(text).reverse()) {
@@ -108,7 +109,19 @@ export async function docFromTemplate(env, docUrl, values, title) {
       requests.push({ updateTextStyle: { range: { startIndex: startIndex + pre.length, endIndex: startIndex + pre.length + v.length, tabId: tab }, textStyle: style, fields: fields.join(',') } });
     }
   }
-  if (requests.length) await gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}:batchUpdate`, { requests });
+  if (requests.length) {
+    try { await gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}:batchUpdate`, { requests }); }
+    catch (e) {
+      // la copia cambió el id de la pestaña (raro): se busca la misma pestaña por su posición en la copia y se repite
+      const q = `?includeTabsContent=true&fields=${encodeURIComponent('tabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index),childTabs(tabProperties(tabId,index))))')}`;
+      const ta = flatTabs(src.tabs), tb = flatTabs((await gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}${q}`)).tabs);
+      const id = tb[ta.findIndex(t => t.tabId === tab)]?.tabId;
+      if (!id || id === tab) throw e;
+      const swap = o => JSON.parse(JSON.stringify(o).split(`"tabId":"${tab}"`).join(`"tabId":"${id}"`));
+      tab = id;
+      await gapi(tok, `https://docs.googleapis.com/v1/documents/${copy.id}:batchUpdate`, { requests: swap(requests) });
+    }
+  }
   return `https://docs.google.com/document/d/${copy.id}/edit${tab ? '?tab=' + tab : ''}`;
 }
 

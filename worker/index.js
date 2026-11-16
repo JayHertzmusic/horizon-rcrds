@@ -11,6 +11,7 @@ import { CONTRACT_SCHEMA, CONTRACT_COLUMNS, SIGNER_COLUMNS, ContractError, contr
 import { EmailMessage } from 'cloudflare:email';
 import { loginCodeMail } from './contract-mail.js';
 import { CALENDAR_SCHEMA, CalendarError, calendarApi, discordCalendarHook } from './calendar.js';
+import { horizonToken } from './gdocs.js';
 
 // Secciones del panel y lo que se puede hacer en cada una. Una sección nueva (p. ej. eventos) se añade aquí.
 const SECTIONS = [
@@ -707,7 +708,11 @@ async function api(req, env, p, ctx) {
 
 export default {
   // cada 30 min: fotos de SoundCloud del equipo al día
-  async scheduled(event, env, ctx) { ctx.waitUntil(refreshScPhotos(env)); ctx.waitUntil(checkDriveFiles(env).catch(e => console.error('drive check', e))); },
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(refreshScPhotos(env));
+    // permiso de Google siempre listo (dura 50 min; se renueva si le quedan menos de 35): crear un contrato no espera por él
+    ctx.waitUntil(horizonToken(env, 35 * 60e3).catch(e => console.error('google token', e.message)).then(() => checkDriveFiles(env)).catch(e => console.error('drive check', e)));
+  },
   async fetch(req, env, ctx) {
     const url = new URL(req.url), p = url.pathname;
     try {

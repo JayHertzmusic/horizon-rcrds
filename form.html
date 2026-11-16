@@ -208,10 +208,15 @@
   /* un puntito por paso: el actual alargado y blanco, los hechos en gris claro */
   .x-nav [data-back] { justify-self: start; }
   .x-nav [data-next], .x-nav .send { justify-self: end; width: auto; }
-  .x-dots { display: flex; align-items: center; gap: 8px; }
-  .x-dots i { width: 7px; height: 7px; border-radius: 4px; background: #333; transition: width .25s, background .25s; }
-  .x-dots i.past { background: #8a8a8a; }
-  .x-dots i.on { width: 22px; background: #fff; }
+  .x-dots { display: flex; align-items: center; gap: 0; }
+  .x-dots button { display: grid; place-items: center; padding: 10px 4px; border: 0; background: none; cursor: pointer; }
+  .x-dots i { display: block; width: 7px; height: 7px; border-radius: 4px; background: #333; transition: width .45s cubic-bezier(.65, 0, .35, 1), background-color .45s ease, transform .2s ease; }
+  .x-dots button:hover i { background: #bbb; transform: scale(1.25); }
+  .x-dots button:focus-visible { outline: none; }
+  .x-dots button:focus-visible i { box-shadow: 0 0 0 2px #000, 0 0 0 3px #fff; }
+  .x-dots .past i { background: #8a8a8a; }
+  .x-dots .on i { width: 22px; background: #fff; transform: none; }
+  .x-dots .on { cursor: default; }
   html.excl .done { margin: 12vh auto 0; max-width: 720px; padding: 70px 28px; border-radius: 22px; }
   html.excl .done h2 { font-size: clamp(48px, 8vw, 80px); }
   @media (max-width: 640px) { .xa-grid { grid-template-columns: 1fr; } html.excl .opts { grid-auto-flow: row; } html.excl .opts:has(> .opt:only-child) { width: auto; } }
@@ -351,7 +356,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
             </section>`).join('')}
             <div class="hp" aria-hidden="true"><label>Leave empty <input name="_hp" tabindex="-1" autocomplete="off"></label></div>
             <p class="err" id="err" role="alert" hidden></p>
-            <div class="x-nav"><button type="button" class="ghost" data-back>Back</button><span class="x-dots" id="x-pos" role="img"></span><button type="button" class="send" data-next>Next</button></div>
+            <div class="x-nav"><button type="button" class="ghost" data-back>Back</button><span class="x-dots" id="x-pos"></span><button type="button" class="send" data-next>Next</button></div>
           </form>
         </section>
       </div>`;
@@ -364,9 +369,10 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     const last = cur === steps.length - 1, next = document.querySelector('[data-next]');
     next.textContent = last ? 'Send' : 'Next'; next.type = last ? 'submit' : 'button';
     document.querySelector('[data-back]').hidden = cur === 0;
+    // puntitos: se crean una vez y solo cambian de clase (así el paso de uno a otro se anima); se puede pulsar cualquiera
     const pos = document.getElementById('x-pos');
-    pos.innerHTML = steps.map((_, k) => `<i class="${k < cur ? 'past' : k === cur ? 'on' : ''}"></i>`).join('');
-    pos.setAttribute('aria-label', `Step ${cur + 1} of ${steps.length}`);
+    if (pos.children.length !== steps.length) pos.innerHTML = steps.map((st, k) => `<button type="button" data-go="${k}" aria-label="Step ${k + 1}: ${esc(plain(st.title) || 'Step ' + (k + 1))}"><i></i></button>`).join('');
+    [...pos.children].forEach((b, k) => { b.className = k < cur ? 'past' : k === cur ? 'on' : ''; b.toggleAttribute('aria-current', k === cur); });
     document.getElementById('err').hidden = true;
     progress();
     if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -393,7 +399,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
       if (m) { markMissing(m); return; }
       goStep(cur + 1); return;
     }
-    const li = e.target.closest('.x-steps li, .x-rv [data-go]');
+    const li = e.target.closest('.x-steps li, .x-rv [data-go], .x-dots [data-go]');
     if (li) {
       const to = Number(li.dataset.go);
       if (to > cur) { for (let k = cur; k < to; k++) { const m = stepMissing(k); if (m) { goStep(k); markMissing(m); return; } } }

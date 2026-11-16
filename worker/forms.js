@@ -417,10 +417,11 @@ export async function formsApi(req, env, s, url, audit) {
   }
   if (mm[2] === 'responses' && mm[3] && m === 'DELETE') {
     if (s.sync || formLevel(s, f) !== 'edit') throw new FormError(403, 'Your role can’t delete responses here.');
+    const name = await respName(DB, f, Number(mm[3]));   // «#n (Artista - Track)», antes de borrarla
     const r = await DB.prepare('DELETE FROM form_responses WHERE id = ? AND form_id = ?').bind(Number(mm[3]), f.id).run();
     if (!r.meta.changes) throw new FormError(404, 'That response no longer exists.');
     await DB.prepare('DELETE FROM form_seen WHERE response_id = ?').bind(Number(mm[3])).run();
-    await audit(`Deleted a response from the form “${f.title}”`);
+    await audit(`Deleted the response ${name} from the form “${f.title}”`);
     return { ok: true };
   }
   if (mm[2] === 'csv' && m === 'GET') {

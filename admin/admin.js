@@ -1674,7 +1674,7 @@
   // al probar un rol, el aviso cuenta solo lo nuevo de los formularios que ese rol puede ver
   const badgeCount = () => preview ? visibleForms().reduce((a, f) => a + (f.unseen || 0), 0) : unseen.total;
   const ctBadgeCount = () => (preview || !can('contracts') ? 0 : ctNew().length);
-  let unseenReady = false;
+  let unseenReady = false, unseenAt = 0;   // unseenAt: último cambio hecho aquí (visto / nuevo / borrar)
   let ctSeen = (() => { try { return JSON.parse(localStorage.getItem('hz_ct_seen') || 'null'); } catch { return null; } })(), ctPolled = false;   // la primera vez solo se apunta lo que hay (sin avisos)
   function paintBadge() {
     const n = badgeCount(), b = $('#forms-badge'), k = ctBadgeCount(), cb = $('#ct-badge');
@@ -1695,6 +1695,13 @@
     if (!auth || preview || !showForms()) return;
     try {
       const r = given || await api('GET', '/api/forms/unseen'), old = unseen;
+      // la tarjeta de cada formulario («N new») siempre igual que el número rojo, también cuando baja
+      // (borrada o vista en otro sitio); si no, se quedaba en rojo sin nada nuevo dentro
+      if (formsData) {
+        let diff = false;
+        for (const f of formsData.forms) { const n = (r.forms || {})[f.id] || 0; if ((f.unseen || 0) !== n) { f.unseen = n; diff = true; } }
+        if (diff && view === 'forms' && !formOpen && !busy) render();
+      }
       const grown = Object.keys(r.forms || {}).filter(id => (r.forms[id] || 0) > ((old.forms || {})[id] || 0));
       const grew = r.total > old.total || grown.length > 0;
       unseen = r;
@@ -1726,8 +1733,9 @@
     if (!auth || liveBusy) return;
     liveBusy = true;
     try {
-      const r = await api('GET', '/api/live'), old = live; live = r;
-      if (r.unseen) checkUnseen(r.unseen);
+      const t0 = Date.now(), r = await api('GET', '/api/live'), old = live; live = r;
+      // si mientras tanto marcaste o borraste algo aquí, ese dato ya es viejo (sacaría un rojo de un momento): se ignora
+      if (r.unseen && t0 > unseenAt) checkUnseen(r.unseen);
       if (!old) return;
       if (r.ct !== old.ct) checkContracts();
       if (r.chat !== old.chat && chatState.on) chatPoll();
@@ -1851,6 +1859,7 @@
       if (formOpen?.id === fid) patchResps(ids);
       // lo cambias tú: se cuenta ya, para que no salte el aviso de «respuesta nueva»
       const d = seen ? -ids.length : ids.length;
+      unseenAt = Date.now();
       unseen = { total: Math.max(0, unseen.total + d), forms: { ...(unseen.forms || {}), [fid]: Math.max(0, ((unseen.forms || {})[fid] || 0) + d) } };
       paintBadge(); checkUnseen();
     } catch (err) {
@@ -2163,7 +2172,21 @@
     } else if (act === 'resp-del') {
       const rid = Number(t.closest('[data-resp]').dataset.resp);
       if (!await confirmBox('Delete this response? This can’t be undone.', 'Delete')) return;
-      try { await formAction(() => api('DELETE', `/api/forms/${encodeURIComponent(formOpen.id)}/responses/${rid}`), 'Response deleted'); formOpen.responses = formOpen.responses.filter(r => r.id !== rid); const f = formsData.forms.find(x => x.id === formOpen.id); if (f) f.total--; render(); } catch { /* aviso ya mostrado */ }
+      try {
+        const fid = formOpen.id, gone = formOpen.responses.find(r => r.id === rid);
+        await formAction(() => api('DELETE', `/api/forms/${encodeURIComponent(fid)}/responses/${rid}`), 'Response deleted');
+        formOpen.responses = formOpen.responses.filter(r => r.id !== rid);
+        const f = formsData.forms.find(x => x.id === fid);
+        if (f) f.total--;
+        // era nueva: el aviso rojo (menú y tarjeta del formulario) baja ya, no se queda en rojo sin nada dentro
+        if (gone && !gone.seen) {
+          if (f) f.unseen = Math.max(0, (f.unseen || 0) - 1);
+          unseenAt = Date.now();
+          unseen = { total: Math.max(0, unseen.total - 1), forms: { ...(unseen.forms || {}), [fid]: Math.max(0, ((unseen.forms || {})[fid] || 0) - 1) } };
+          paintBadge();
+        }
+        render();
+      } catch { /* aviso ya mostrado */ }
     } else if (act === 'copy-link') {
       try { await navigator.clipboard.writeText(publicUrl(formOpen.draft)); toast('Link copied'); } catch { toast(publicUrl(formOpen.draft)); }
     } else if (['q-add', 'q-sec', 'q-up', 'q-down', 'q-del'].includes(act)) {

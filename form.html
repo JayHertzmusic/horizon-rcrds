@@ -187,12 +187,18 @@
   html.excl .q.bad input, html.excl .q.bad textarea, html.excl .q.bad .opt { border-color: rgba(255, 107, 107, .8); }
   html.excl .q.bad > label, html.excl .q.bad > .lbl { color: #ff9a9a; }
   .x-qn { color: var(--faint); font-size: 11px; letter-spacing: .1em; }
-  .x-nav { position: sticky; bottom: 0; display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 0; padding: 22px 0 26px; background: linear-gradient(180deg, transparent, var(--bg) 35%); }
+  .x-nav { position: sticky; bottom: 0; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 14px; margin-top: 0; padding: 22px 0 26px; background: linear-gradient(180deg, transparent, var(--bg) 35%); }
   html.excl #err { margin: 22px 0 0; }
   .x-nav .ghost { display: inline-flex; align-items: center; min-height: 54px; padding: 0 30px; border: 1px solid #333; border-radius: 2px; background: none; color: #fff; font: 700 13px/1 'Barlow', sans-serif; letter-spacing: .24em; text-indent: .24em; text-transform: uppercase; cursor: pointer; }
   .x-nav .ghost:hover { border-color: #fff; }
   .x-nav .ghost[hidden] { visibility: hidden; }
-  .x-nav small { color: var(--faint); font-size: 12.5px; letter-spacing: .12em; white-space: nowrap; }
+  /* un puntito por paso: el actual alargado y blanco, los hechos en gris claro */
+  .x-nav [data-back] { justify-self: start; }
+  .x-nav [data-next], .x-nav .send { justify-self: end; width: auto; }
+  .x-dots { display: flex; align-items: center; gap: 8px; }
+  .x-dots i { width: 7px; height: 7px; border-radius: 4px; background: #333; transition: width .25s, background .25s; }
+  .x-dots i.past { background: #8a8a8a; }
+  .x-dots i.on { width: 22px; background: #fff; }
   html.excl .done { margin: 12vh auto 0; max-width: 720px; padding: 70px 28px; border-radius: 22px; }
   html.excl .done h2 { font-size: clamp(48px, 8vw, 80px); }
   @media (max-width: 640px) { .xa-grid { grid-template-columns: 1fr; } html.excl .opts { grid-auto-flow: row; } html.excl .opts:has(> .opt:only-child) { width: auto; } }
@@ -326,7 +332,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
             </section>`).join('')}
             <div class="hp" aria-hidden="true"><label>Leave empty <input name="_hp" tabindex="-1" autocomplete="off"></label></div>
             <p class="err" id="err" role="alert" hidden></p>
-            <div class="x-nav"><button type="button" class="ghost" data-back>Back</button><small id="x-pos"></small><button type="button" class="send" data-next>Next</button></div>
+            <div class="x-nav"><button type="button" class="ghost" data-back>Back</button><span class="x-dots" id="x-pos" role="img"></span><button type="button" class="send" data-next>Next</button></div>
           </form>
         </section>
       </div>`;
@@ -339,7 +345,9 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     const last = cur === steps.length - 1, next = document.querySelector('[data-next]');
     next.textContent = last ? 'Send' : 'Next'; next.type = last ? 'submit' : 'button';
     document.querySelector('[data-back]').hidden = cur === 0;
-    document.getElementById('x-pos').textContent = `${cur + 1} / ${steps.length}`;
+    const pos = document.getElementById('x-pos');
+    pos.innerHTML = steps.map((_, k) => `<i class="${k < cur ? 'past' : k === cur ? 'on' : ''}"></i>`).join('');
+    pos.setAttribute('aria-label', `Step ${cur + 1} of ${steps.length}`);
     document.getElementById('err').hidden = true;
     progress();
     if (scroll) window.scrollTo({ top: 0, behavior: 'smooth' });

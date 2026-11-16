@@ -1264,6 +1264,72 @@
   // la sección en la que estás se recuerda en esta pestaña (al refrescar no vuelve a Releases)
   const VIEW_KEY = 'hz_view_' + MODE;
   const lastView = () => { let v = ''; try { v = sessionStorage.getItem(VIEW_KEY) || ''; } catch { /* nada */ } return v && v !== 'none' ? v : firstView(); };
+  /* Dentro de cada sección también se recuerda dónde estabas (al refrescar sigues ahí): el formulario abierto
+     (respuestas, enlaces o editor), el contrato o la pestaña de Contracts, el release/mixtape/playlist que editabas,
+     la fecha del calendario… y hasta dónde habías bajado en la página. Solo en esta pestaña. */
+  const PLACE_KEY = 'hz_place_' + MODE;
+  const readPlace = () => { try { return JSON.parse(sessionStorage.getItem(PLACE_KEY) || 'null'); } catch { return null; } };
+  let placeReady = false, placeY = 0, placeTimer = 0;
+  function savePlace() {
+    if (preview || !placeReady) return;
+    const p = { view, y: Math.round(window.scrollY) };
+    if (view === 'forms' && formOpen?.id && ['responses', 'edit', 'links'].includes(formOpen.mode)) p.form = { mode: formOpen.mode, id: formOpen.id };
+    if (view === 'contracts') {
+      p.ctTab = ctTab;
+      if (ctOpen?.mode === 'contract' && ctOpen.id) p.ct = ctOpen.id;
+      else if (ctOpen?.mode === 'use' && ctOpen.tpl?.id) p.ctUse = ctOpen.tpl.id;
+      else if (ctOpen?.mode === 'new' || ctOpen?.mode === 'new-tpl') p.ctNew = ctOpen.mode;
+    }
+    if (view === 'calendar' && calOpen) p.cal = calOpen.item?.id || 'new';
+    if (editing) p.edit = { view: editing.view, key: editing.key ?? null, index: editing.index ?? -1 };
+    try { sessionStorage.setItem(PLACE_KEY, JSON.stringify(p)); } catch { /* nada */ }
+  }
+  addEventListener('scroll', () => { clearTimeout(placeTimer); placeTimer = setTimeout(savePlace, 250); }, { passive: true });
+  addEventListener('pagehide', savePlace);   // (justo al refrescar o cerrar: la posición exacta)
+  async function restorePlace(p) {
+    try {
+      if (!p || p.view !== view) return;
+      const e = p.edit;
+      if (e && e.view === view) {
+        if (e.view === 'releases' || e.view === 'radio') {
+          const list = e.view === 'releases' ? repo.releases : repo.mixtapes, index = e.key ? list.findIndex(r => keyOf(r) === e.key) : -1;
+          if (!e.key || index >= 0) go(e.view, { view: e.view, key: e.key, orig: index >= 0 ? list[index] : null, index, cover: null, px: COVER_PX });
+        } else if (e.view === 'playlists' && (e.index < 0 || repo.playlists[e.index])) go('playlists', { view: 'playlists', index: e.index, orig: e.index >= 0 ? repo.playlists[e.index] : null, cover: null, px: COVER_PX });
+      }
+      if (view === 'forms' && p.form) {
+        if (!formsData) await loadForms();
+        const f = formsData?.forms.find(x => x.id === p.form.id);
+        if (f && view === 'forms' && !formOpen) {
+          if (p.form.mode === 'responses') await openResponses(f.id);
+          else if (p.form.mode === 'links' && f.invite) await openLinks(f.id);
+          else if (p.form.mode === 'edit' && canEditForm(f)) openEditor(f);
+        }
+      }
+      if (view === 'contracts') {
+        if (p.ctTab) ctTab = p.ctTab;
+        if (p.ct) await openContract(p.ct);
+        else if (p.ctNew) { ctOpen = { mode: p.ctNew }; render(); }
+        else if (p.ctUse) {
+          if (!ctData) await loadContracts();
+          const tpl = ctData?.contracts.find(x => x.id === p.ctUse);
+          // (igual que pulsar «Use» en esa plantilla)
+          if (tpl && view === 'contracts' && !ctOpen) { const b = document.createElement('button'); b.type = 'button'; b.dataset.ct = 'use'; b.hidden = true; const w = document.createElement('div'); w.dataset.ctid = tpl.id; w.appendChild(b); app.appendChild(w); b.click(); w.remove(); }
+        } else render();
+      }
+      if (view === 'calendar' && p.cal) {
+        if (!calData) await loadCalendar();
+        const item = p.cal === 'new' ? null : calData?.items.find(x => x.id === p.cal);
+        if (view === 'calendar' && calData && (p.cal === 'new' || item)) { calOpen = { item }; render(); }
+      }
+      placeY = p.y || 0;
+    } catch { /* se queda en la sección */ }
+    finally {
+      placeReady = true;
+      // bajar a donde estabas cuando ya haya contenido (lo de las secciones llega un poco después)
+      if (placeY > 0) { const t0 = Date.now(); const tryScroll = () => { if (document.documentElement.scrollHeight >= placeY + innerHeight - 4 || Date.now() - t0 > 4000) window.scrollTo(0, placeY); else setTimeout(tryScroll, 150); }; setTimeout(tryScroll, 150); }
+      savePlace();
+    }
+  }
   function go(v, ed = null) {
     formOpen = null; ctOpen = null; calOpen = null;
     view = v; editing = ed; setDirtyBase(null);
@@ -1282,6 +1348,7 @@
     if (view === 'calendar' && !can('calendar')) view = firstView();
     if ((view === 'team' || view === 'log') && (preview || !(MODE === 'admin' && auth.user.owner))) view = firstView();
     if (!preview) try { sessionStorage.setItem(VIEW_KEY, view); } catch { /* nada */ }
+    queueMicrotask(savePlace);   // (después de pintar: el estado ya está puesto)
     let inner;
     if (view === 'none') inner = noAccessView();
     else if (view === 'team') inner = teamView();
@@ -3482,7 +3549,9 @@
       const remembered = (() => { try { return !!localStorage.getItem(AUTH_KEY); } catch { return false; } })();
       saveAuth(auth, remembered);
       repo = firstView() === 'none' ? emptyRepo() : await loadRepo();
-      go(lastView());   // al refrescar, sigues en la misma sección
+      const place = readPlace();
+      go(lastView());   // al refrescar, sigues en la misma sección…
+      restorePlace(place);   // …y en el mismo sitio dentro de ella
     } catch (e) {
       if (e.status === 401 || e.status === 403 || e.status === 404) { logout(e.message); return; }
       app.innerHTML = `<main class="login"><div class="login-card"><p class="login-error" role="alert">${esc(e.message)}</p>

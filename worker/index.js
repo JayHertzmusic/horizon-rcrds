@@ -719,7 +719,7 @@ export default {
     ctx.waitUntil(refreshScPhotos(env));
     // permiso de Google siempre listo (dura 50 min; se renueva si le quedan menos de 35): crear un contrato no espera por él
     ctx.waitUntil(horizonToken(env, 35 * 60e3).catch(e => console.error('google token', e.message)).then(() => checkDriveFiles(env)).catch(e => console.error('drive check', e)));
-    ctx.waitUntil(runChainActions(env).catch(e => console.error('chain actions', e)));   // reposts/likes programados de la cadena
+    ctx.waitUntil(runChainActions(env, 12).catch(e => console.error('chain actions', e)));   // reposts/likes de la cadena que ya toquen (pocos por vuelta: orgánico y dentro del límite)
   },
   async fetch(req, env, ctx) {
     const url = new URL(req.url), p = url.pathname;

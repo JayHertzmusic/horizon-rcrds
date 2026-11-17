@@ -182,15 +182,19 @@ export async function chainApi(req, env, s, url, audit) {
       ? await DB.prepare(`SELECT id FROM sc_members WHERE revoked = 0 AND id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all()
       : await DB.prepare('SELECT id FROM sc_members WHERE revoked = 0').all()).results;
     if (!members.length) throw new ChainError(400, 'No connected accounts to support this track yet.');
+    // orgánico: cada acción a una hora distinta y al azar dentro del periodo elegido (no todas de golpe)
+    const spreadH = Math.max(0, Math.min(168, Number(body.spread_hours) || 0)), spreadMs = spreadH * 3600e3;
     const t = now(), ins = [];
-    for (const mem of members) for (const type of acts)
-      // no repetir una acción ya hecha o en cola para el mismo track y cuenta
+    const order = members.flatMap(mem => acts.map(type => ({ mem, type }))).sort(() => Math.random() - 0.5);
+    for (const { mem, type } of order) {
+      const at = spreadMs ? t + Math.floor(Math.random() * spreadMs) : t + Math.floor(Math.random() * 90e3);   // aun «right away» lleva unos segundos de margen
       ins.push(DB.prepare(`INSERT INTO sc_actions (member_id, type, target, release_id, scheduled_at, status, created_at)
         SELECT ?, ?, ?, NULL, ?, 'queued', ? WHERE NOT EXISTS (SELECT 1 FROM sc_actions a WHERE a.member_id = ? AND a.type = ? AND a.target = ? AND a.status IN ('queued', 'done'))`)
-        .bind(mem.id, type, trackId, t, t, mem.id, type, trackId));
+        .bind(mem.id, type, trackId, at, t, mem.id, type, trackId));
+    }
     for (let i = 0; i < ins.length; i += 50) await DB.batch(ins.slice(i, i + 50));
-    await audit(`Queued ${acts.join(' + ')} on ${trackUrl} for ${members.length} chain account(s)`);
-    return { ok: true, members: members.length, actions: acts.length * members.length };
+    await audit(`Queued ${acts.join(' + ')} on ${trackUrl} for ${members.length} chain account(s)${spreadH ? ` over ~${spreadH}h` : ''}`);
+    return { ok: true, members: members.length, actions: acts.length * members.length, spread_hours: spreadH };
   }
   // estado de la cola de acciones y procesar un lote ahora
   if (p === '/api/chain/queue' && m === 'GET') {

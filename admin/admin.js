@@ -3465,11 +3465,13 @@
           <label class="check"><input type="checkbox" name="like" checked> <span>Like</span></label>
           <span class="muted sm-txt">From all ${chainData.members.filter(m => !m.revoked).length} connected account(s)</span>
         </div>
+        <div class="field"><label for="ch-spread">Spread over time <span class="muted">(so it looks organic, not all at once)</span></label>
+          <select id="ch-spread" name="spread"><option value="6">A few hours</option><option value="24" selected>About a day</option><option value="72">A few days</option><option value="168">A week</option><option value="0">Right away</option></select></div>
         <div class="ed-actions"><button type="submit" class="btn primary" ${chainData.members.some(m => !m.revoked) ? '' : 'disabled'}>Queue support</button></div>
       </form>
       ${(() => { const q = chainData.queue?.counts || {}; const pend = q.queued || 0, done = q.done || 0, fail = q.failed || 0;
         return (pend + done + fail) ? `<div class="ch-queue"><span>${pend} queued · ${done} done${fail ? ' · ' + fail + ' failed' : ''}</span>
-          <span class="row-btns">${pend ? '<button type="button" class="btn ghost sm" data-ch="run">Run now</button><button type="button" class="btn ghost sm danger-txt" data-ch="clear">Clear queued</button>' : ''}</span></div>` : ''; })()}
+          <span class="row-btns">${pend ? '<button type="button" class="btn ghost sm" data-ch="run">Run due now</button><button type="button" class="btn ghost sm danger-txt" data-ch="clear">Clear queued</button>' : ''}</span></div>` : ''; })()}
 
       <h2 class="ct-group-h">Chain members <span>${chainData.members.length}</span></h2>
       <ol class="list">
@@ -3508,8 +3510,8 @@
       const f = e.target, btn = f.querySelector('[type=submit]');
       busy = true; btn.disabled = true; btn.textContent = 'Queueing…';
       try {
-        const r = await api('POST', '/api/chain/promote', { track_url: f.elements.track_url.value.trim(), repost: f.elements.repost.checked, like: f.elements.like.checked });
-        toast(r.actions ? `Queued ${r.actions} action(s) across ${r.members} account(s)` : 'Nothing new to queue');
+        const r = await api('POST', '/api/chain/promote', { track_url: f.elements.track_url.value.trim(), repost: f.elements.repost.checked, like: f.elements.like.checked, spread_hours: Number(f.elements.spread.value) });
+        toast(r.actions ? `Queued ${r.actions} action(s) across ${r.members} account(s)${r.spread_hours ? `, spread over ~${r.spread_hours}h` : ''}` : 'Nothing new to queue');
         chainData = null; await loadChain();
       } catch (err) { toast(err.message); btn.disabled = false; btn.textContent = 'Queue support'; } finally { busy = false; }
       return;

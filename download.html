@@ -87,8 +87,7 @@
 
     if (params.get('done') === '1') {
       root.innerHTML = head +
-        '<span class="ok-badge">✓ Connected</span>' +
-        '<p class="done-msg">Thanks for joining the chain — your download is ready.</p>' +
+        '<span class="ok-badge"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Download ready</span>' +
         '<a class="btn dl" href="/api/public/download/' + encodeURIComponent(id) + '/file">↓ Download the Extended Mix</a>' + socials;
       return;
     }

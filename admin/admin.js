@@ -386,7 +386,7 @@
 
   function shell(inner) {
     const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}${id === 'forms' ? (() => { const n = badgeCount(); return `<span class="nbadge" id="forms-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}${id === 'contracts' ? (() => { if (!ctPolled) { ctPolled = true; setTimeout(checkContracts, 0); } const n = ctBadgeCount(); return `<span class="nbadge" id="ct-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}</button>`;
-    const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', chain: 'Chain' };
+    const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', chain: 'Gates' };
     const initials = (u.name || u.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
     return `
       <header class="top">
@@ -1366,7 +1366,7 @@
     else inner = releasesView();
     app.innerHTML = shell(inner);
     chatStart();
-    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', team: 'Team', log: 'History', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', chain: 'Chain', none: 'Team' };
+    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', team: 'Team', log: 'History', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', chain: 'Gates', none: 'Team' };
     document.title = `${unseen.total && !preview ? `(${unseen.total > 99 ? '99+' : unseen.total}) ` : ''}${editing ? (editing.orig?.title || 'New') + ' · ' : ''}${names[view] || ''} — Panel HORIZON RCRDS`;
   }
   function busyOn(scope, btn, label) {
@@ -3414,16 +3414,16 @@
   }
   const scProfile = m => m.permalink || (m.name ? 'https://soundcloud.com/' + m.name : '#');
   function chainPage() {
-    if (!chainData) { if (!chainErr) setTimeout(loadChain, 0); return `<div class="head"><div><p class="eyebrow">SoundCloud</p><h1>CHAIN</h1></div></div>${chainErr ? `<p class="login-error" role="alert">${esc(chainErr)}</p>` : '<p class="info">Loading…</p>'}`; }
+    if (!chainData) { if (!chainErr) setTimeout(loadChain, 0); return `<div class="head"><div><p class="eyebrow">SoundCloud</p><h1>GATES</h1></div></div>${chainErr ? `<p class="login-error" role="alert">${esc(chainErr)}</p>` : '<p class="info">Loading…</p>'}`; }
     const st = chainData.settings;
     const warn = !st.connected ? '<p class="login-error" role="alert">The SoundCloud app is not connected (missing keys). Downloads can’t run yet.</p>' : '';
     const onN = chainData.gates.filter(g => g.active).length, memN = chainData.members.filter(m => !m.revoked).length, qN = chainData.queue?.counts?.queued || 0;
     const tab = (id, label, count) => `<button type="button" role="tab" class="${chainTab === id ? 'on' : ''}" data-chtab="${id}">${label}${count != null ? `<span>${count}</span>` : ''}</button>`;
     return `
-      <div class="head"><div><p class="eyebrow">SoundCloud</p><h1>CHAIN</h1></div></div>
+      <div class="head"><div><p class="eyebrow">SoundCloud</p><h1>GATES</h1></div></div>
       ${warn}
       <div class="ct-tabs" role="tablist">
-        ${tab('gates', 'Gates', onN)}${tab('support', 'Support', null)}${tab('members', 'Members', chainData.members.length)}${tab('settings', 'Settings', null)}
+        ${tab('gates', 'Downloads', onN)}${tab('support', 'Support', null)}${tab('members', 'Members', chainData.members.length)}${tab('settings', 'Settings', null)}
       </div>
       ${chainTab === 'settings' ? chainSettingsHtml() : chainTab === 'gates' ? chainGatesHtml() : chainTab === 'members' ? chainMembersHtml() : chainSupportHtml()}
       <input type="file" id="ch-file" class="sr-only" accept="audio/mpeg,.mp3">`;
@@ -3494,14 +3494,16 @@
       ${(pend + done + fail) ? `<div class="ch-queue"><span>${pend} queued · ${done} done${fail ? ' · ' + fail + ' failed' : ''}</span>
         <span class="row-btns">${pend ? '<button type="button" class="btn ghost sm" data-ch="run">Run due now</button><button type="button" class="btn ghost sm danger-txt" data-ch="clear">Clear queued</button>' : ''}</span></div>` : ''}`;
   }
+  const nfmt = n => n == null ? '' : n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + 'k' : String(n);
   function chainMembersHtml() {
     return `
       <p class="info sm-txt">Accounts that connected their SoundCloud and joined the chain.</p>
-      <ol class="list">
+      <ol class="list ch-members">
         ${chainData.members.length ? chainData.members.map(m => `
-          <li class="row">
-            <span class="meta"><b>${esc(m.name || m.id)}</b><span>${m.followers != null ? m.followers + ' followers · ' : ''}joined ${esc(fmtDate(m.connected_at))}${m.revoked ? ' · <span class="danger-txt">disconnected</span>' : ''}</span></span>
-            <a class="link" href="${esc(scProfile(m))}" target="_blank" rel="noopener">SoundCloud ↗</a>
+          <li class="row ch-member${m.revoked ? ' is-off' : ''}">
+            ${m.avatar ? `<img class="ch-av" src="${esc(m.avatar)}" alt="" referrerpolicy="no-referrer" loading="lazy">` : `<span class="ch-av ph">${esc((m.name || '?').trim()[0] || '?').toUpperCase()}</span>`}
+            <span class="meta"><b>${esc(m.name || ('#' + m.id))}</b><span>${m.followers != null ? nfmt(m.followers) + ' followers · ' : ''}joined ${esc(fmtDate(m.connected_at))}${m.revoked ? ' · <span class="danger-txt">disconnected</span>' : ''}</span></span>
+            <a class="btn ghost sm" href="${esc(scProfile(m))}" target="_blank" rel="noopener">SoundCloud ↗</a>
           </li>`).join('') : '<li class="empty">Nobody has connected yet.</li>'}
       </ol>`;
   }

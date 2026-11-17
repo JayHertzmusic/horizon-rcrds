@@ -93,20 +93,25 @@ async function resolveUser(env, url) {
   if (!r.ok || !j || j.kind !== 'user' || !j.id) throw new ChainError(400, 'That is not a valid SoundCloud profile link.');
   return { id: String(j.id), name: j.username || j.full_name || '', permalink: j.permalink_url || '' };
 }
-// una acción en la cuenta de un miembro
+// una acción en la cuenta de un miembro. SoundCloud ha cambiado los endpoints varias veces: se prueban las variantes
+// conocidas de cada acción hasta que una funcione.
+const SC_ENDPOINTS = {
+  follow: t => [['PUT', `/me/followings/${t}`], ['POST', `/me/followings/${t}`], ['PUT', `/users/${t}/followings`]],
+  like: t => [['POST', `/likes/tracks/${t}`], ['PUT', `/likes/tracks/${t}`], ['PUT', `/me/favorites/${t}`], ['POST', `/me/likes/tracks/${t}`]],
+  repost: t => [['POST', `/reposts/tracks/${t}`], ['PUT', `/reposts/tracks/${t}`], ['PUT', `/e1/me/track_reposts/${t}`]],
+};
+const scOk = s => s === 200 || s === 201 || s === 202 || s === 204;
 async function doAction(env, m, type, target) {
-  const tok = await memberToken(env, m);
-  let r;
-  if (type === 'follow') r = await scWrite(tok, 'PUT', `/me/followings/${encodeURIComponent(target)}`);
-  else if (type === 'like') r = await scWrite(tok, 'PUT', `/likes/tracks/${encodeURIComponent(target)}`);
-  else if (type === 'repost') r = await scWrite(tok, 'POST', `/reposts/tracks/${encodeURIComponent(target)}`);
-  else throw new ChainError(400, 'Unknown action.');
-  if (r.status === 404 && type === 'repost') r = await scWrite(tok, 'PUT', `/reposts/tracks/${encodeURIComponent(target)}`);   // (según la versión del endpoint)
-  if (!r.ok && r.status !== 200 && r.status !== 201) {
-    const t = await r.text().catch(() => '');
-    throw new ChainError(502, `SoundCloud ${type} failed (${r.status}) ${t.slice(0, 120)}`);
+  const tok = await memberToken(env, m), list = SC_ENDPOINTS[type];
+  if (!list) throw new ChainError(400, 'Unknown action.');
+  const t = encodeURIComponent(target), tries = [];
+  for (const [method, path] of list(t)) {
+    const r = await scWrite(tok, method, path);
+    if (scOk(r.status)) { await env.DB.prepare('UPDATE sc_members SET last_action_at = ? WHERE id = ?').bind(now(), m.id).run(); return; }
+    tries.push(`${method} ${path.split('/').slice(0, 3).join('/')}:${r.status}`);
+    if (r.status === 401 || r.status === 403) break;   // token/permiso: no tiene sentido probar más
   }
-  await env.DB.prepare('UPDATE sc_members SET last_action_at = ? WHERE id = ?').bind(now(), m.id).run();
+  throw new ChainError(502, `SoundCloud ${type} failed (${tries.join(' / ')})`);
 }
 
 /* ---------------- Ajustes de la cadena ---------------- */

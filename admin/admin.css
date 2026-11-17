@@ -1084,3 +1084,10 @@ html, body, * { scrollbar-width: none; }
 .ch-queue .row-btns { display: flex; gap: 8px; }
 .ch-search { max-width: 820px; margin-bottom: 10px; }
 .ch-search input { width: 100%; }
+.row.ch-member { display: flex; align-items: center; gap: 14px; }
+.ch-member .ch-av { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; flex: none; background: #222; }
+.ch-member .ch-av.ph { display: flex; align-items: center; justify-content: center; font-weight: 700; color: #bbb; font-size: 16px; }
+.ch-member .meta { flex: 1 1 auto; min-width: 0; }
+.ch-member .meta b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ch-member .btn { flex: none; }
+.ch-member.is-off { opacity: .55; }

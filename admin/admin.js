@@ -395,7 +395,7 @@
           <span class="word">HORIZON<small>RCRDS</small></span>
         </a>
         <nav class="tabs" aria-label="Sections">
-          ${ORDER().filter(canTab).map(v => tab(v, names[v])).join('')}${MODE === 'admin' && u.owner && !preview ? tab('chain', 'Chain') + tab('team', 'Team') + tab('log', 'History') : ''}
+          ${ORDER().filter(canTab).map(v => tab(v, names[v])).join('')}${MODE === 'admin' && u.owner && !preview ? tab('chain', 'Gates') + tab('team', 'Team') + tab('log', 'History') : ''}
         </nav>
         <div class="top-end">
           <span class="who" title="${esc(u.email)}">

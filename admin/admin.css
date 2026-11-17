@@ -1080,3 +1080,5 @@ html, body, * { scrollbar-width: none; }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .sheet-head h2 { margin: 0; }
 @media (max-width: 620px) { .row.ch-gate .ch-track { margin-left: 0; } }
+.ch-queue { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 10px 14px; margin: 4px 0 8px; background: rgba(255,255,255,.03); border: 1px solid var(--line); border-radius: 8px; font-size: 13.5px; color: var(--faint); }
+.ch-queue .row-btns { display: flex; gap: 8px; }

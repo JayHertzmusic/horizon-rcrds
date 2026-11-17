@@ -168,6 +168,39 @@ export async function chainApi(req, env, s, url, audit) {
     await audit(`Uploaded the download file for ${rid}`);
     return { ok: true };
   }
+  // dar support a un track (de la cadena o de fuera): repost + like desde las cuentas conectadas
+  if (p === '/api/chain/promote' && m === 'POST') {
+    const trackUrl = clean(body.track_url, 300);
+    if (!trackUrl) throw new ChainError(400, 'Paste the SoundCloud track link to support.');
+    const trackId = await resolveTrack(env, trackUrl);
+    const acts = [];
+    if (body.repost) acts.push('repost');
+    if (body.like) acts.push('like');
+    if (!acts.length) throw new ChainError(400, 'Choose repost and/or like.');
+    const ids = Array.isArray(body.members) ? body.members.map(x => Number(x)).filter(Boolean) : null;
+    const members = (ids?.length
+      ? await DB.prepare(`SELECT id FROM sc_members WHERE revoked = 0 AND id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all()
+      : await DB.prepare('SELECT id FROM sc_members WHERE revoked = 0').all()).results;
+    if (!members.length) throw new ChainError(400, 'No connected accounts to support this track yet.');
+    const t = now(), ins = [];
+    for (const mem of members) for (const type of acts)
+      // no repetir una acción ya hecha o en cola para el mismo track y cuenta
+      ins.push(DB.prepare(`INSERT INTO sc_actions (member_id, type, target, release_id, scheduled_at, status, created_at)
+        SELECT ?, ?, ?, NULL, ?, 'queued', ? WHERE NOT EXISTS (SELECT 1 FROM sc_actions a WHERE a.member_id = ? AND a.type = ? AND a.target = ? AND a.status IN ('queued', 'done'))`)
+        .bind(mem.id, type, trackId, t, t, mem.id, type, trackId));
+    for (let i = 0; i < ins.length; i += 50) await DB.batch(ins.slice(i, i + 50));
+    await audit(`Queued ${acts.join(' + ')} on ${trackUrl} for ${members.length} chain account(s)`);
+    return { ok: true, members: members.length, actions: acts.length * members.length };
+  }
+  // estado de la cola de acciones y procesar un lote ahora
+  if (p === '/api/chain/queue' && m === 'GET') {
+    const rows = (await DB.prepare(`SELECT a.id, a.type, a.target, a.status, a.scheduled_at, a.done_at, a.error, m.name, m.permalink FROM sc_actions a LEFT JOIN sc_members m ON m.id = a.member_id ORDER BY a.id DESC LIMIT 200`).all()).results;
+    const counts = Object.fromEntries((await DB.prepare('SELECT status, COUNT(*) AS n FROM sc_actions GROUP BY status').all()).results.map(c => [c.status, c.n]));
+    return { actions: rows, counts };
+  }
+  if (p === '/api/chain/run' && m === 'POST') { const processed = await runChainActions(env, 30); return { ok: true, processed }; }
+  if (p === '/api/chain/clear' && m === 'POST') { await DB.prepare("DELETE FROM sc_actions WHERE status = 'queued'").run(); await audit('Cleared the queued chain actions'); return { ok: true }; }
+
   // quién desbloqueó un release
   if (p === '/api/chain/unlocks' && m === 'GET') {
     const rid = clean(url.searchParams.get('release') || '', 80);

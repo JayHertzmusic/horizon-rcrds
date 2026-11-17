@@ -3406,7 +3406,7 @@
   async function loadChain() {
     if (chainLoading) return;
     chainLoading = true;
-    try { chainData = await api('GET', '/api/chain'); chainErr = ''; }
+    try { chainData = await api('GET', '/api/chain'); chainData.queue = await api('GET', '/api/chain/queue').catch(() => ({ actions: [], counts: {} })); chainErr = ''; }
     catch (e) { chainErr = e.message; if (e.status === 401) { chainLoading = false; logout(e.message); return; } }
     chainLoading = false;
     if (view === 'chain') render();
@@ -3456,6 +3456,21 @@
       </ol>
       <input type="file" id="ch-file" class="sr-only" accept="audio/mpeg,.mp3">
 
+      <h2 class="ct-group-h">Support a track</h2>
+      <p class="info sm-txt">Repost and/or like any SoundCloud track — a Horizon release or anyone in the chain — from every connected account. They agreed to this when they joined.</p>
+      <form id="ch-promote" class="editor ch-set">
+        <div class="field"><label for="ch-ptrack">SoundCloud track link</label><input id="ch-ptrack" name="track_url" placeholder="https://soundcloud.com/artist/track" autocomplete="off" spellcheck="false"></div>
+        <div class="ch-acts">
+          <label class="check"><input type="checkbox" name="repost" checked> <span>Repost</span></label>
+          <label class="check"><input type="checkbox" name="like" checked> <span>Like</span></label>
+          <span class="muted sm-txt">From all ${chainData.members.filter(m => !m.revoked).length} connected account(s)</span>
+        </div>
+        <div class="ed-actions"><button type="submit" class="btn primary" ${chainData.members.some(m => !m.revoked) ? '' : 'disabled'}>Queue support</button></div>
+      </form>
+      ${(() => { const q = chainData.queue?.counts || {}; const pend = q.queued || 0, done = q.done || 0, fail = q.failed || 0;
+        return (pend + done + fail) ? `<div class="ch-queue"><span>${pend} queued · ${done} done${fail ? ' · ' + fail + ' failed' : ''}</span>
+          <span class="row-btns">${pend ? '<button type="button" class="btn ghost sm" data-ch="run">Run now</button><button type="button" class="btn ghost sm danger-txt" data-ch="clear">Clear queued</button>' : ''}</span></div>` : ''; })()}
+
       <h2 class="ct-group-h">Chain members <span>${chainData.members.length}</span></h2>
       <ol class="list">
         ${chainData.members.length ? chainData.members.map(m => `
@@ -3475,16 +3490,30 @@
     } catch (e) { toast(e.message); }
   }
   document.addEventListener('submit', async e => {
-    if (e.target.id !== 'ch-settings') return;
-    e.preventDefault(); e.stopImmediatePropagation();
-    if (busy) return;
-    const f = e.target, btn = f.querySelector('[type=submit]');
-    busy = true; btn.disabled = true;
-    try {
-      await api('POST', '/api/chain/settings', { notice: f.elements.notice.value, horizon_url: f.elements.horizon_url.value.trim(),
-        actions: { follow: f.elements.follow.checked, like: f.elements.like.checked, repost: f.elements.repost.checked } });
-      toast('Saved'); chainData = null; await loadChain();
-    } catch (err) { toast(err.message); } finally { busy = false; btn.disabled = false; }
+    if (e.target.id === 'ch-settings') {
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (busy) return;
+      const f = e.target, btn = f.querySelector('[type=submit]');
+      busy = true; btn.disabled = true;
+      try {
+        await api('POST', '/api/chain/settings', { notice: f.elements.notice.value, horizon_url: f.elements.horizon_url.value.trim(),
+          actions: { follow: f.elements.follow.checked, like: f.elements.like.checked, repost: f.elements.repost.checked } });
+        toast('Saved'); chainData = null; await loadChain();
+      } catch (err) { toast(err.message); } finally { busy = false; btn.disabled = false; }
+      return;
+    }
+    if (e.target.id === 'ch-promote') {
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (busy) return;
+      const f = e.target, btn = f.querySelector('[type=submit]');
+      busy = true; btn.disabled = true; btn.textContent = 'Queueing…';
+      try {
+        const r = await api('POST', '/api/chain/promote', { track_url: f.elements.track_url.value.trim(), repost: f.elements.repost.checked, like: f.elements.like.checked });
+        toast(r.actions ? `Queued ${r.actions} action(s) across ${r.members} account(s)` : 'Nothing new to queue');
+        chainData = null; await loadChain();
+      } catch (err) { toast(err.message); btn.disabled = false; btn.textContent = 'Queue support'; } finally { busy = false; }
+      return;
+    }
   }, true);
   document.addEventListener('click', async e => {
     if (view !== 'chain') return;
@@ -3502,6 +3531,15 @@
       chainFileFor = rid; $('#ch-file').click();
     } else if (a === 'unlocks') {
       chainUnlocks(rid);
+    } else if (a === 'run') {
+      busy = true; t.disabled = true; t.textContent = 'Running…';
+      try { const r = await api('POST', '/api/chain/run'); toast(`Ran ${r.processed} action(s)`); chainData = null; await loadChain(); }
+      catch (err) { toast(err.message); } finally { busy = false; }
+    } else if (a === 'clear') {
+      if (!await confirmBox('Clear all queued chain actions that haven’t run yet?', 'Clear')) return;
+      busy = true;
+      try { await api('POST', '/api/chain/clear'); toast('Queue cleared'); chainData = null; await loadChain(); }
+      catch (err) { toast(err.message); } finally { busy = false; }
     }
   });
   let chainFileFor = null;

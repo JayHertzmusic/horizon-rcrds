@@ -2355,6 +2355,7 @@
           paintBadge();
         }
         render();
+        searchResponses();   // los números (#) y los contadores de las pestañas se recalculan: la siguiente pasa a ocupar su sitio
       } catch { /* aviso ya mostrado */ }
     } else if (act === 'copy-link') {
       try { await navigator.clipboard.writeText(publicUrl(formOpen.draft)); toast('Link copied'); } catch { toast(publicUrl(formOpen.draft)); }

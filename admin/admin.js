@@ -3464,7 +3464,7 @@
               <button type="button" class="btn ghost sm" data-ch="file">${g.file ? 'Replace MP3' : 'Upload MP3'}</button>
               ${g.active ? `<a class="btn ghost sm" href="${SITE}download/${encodeURIComponent(r.id)}" target="_blank" rel="noopener">Open ↗</a>` : ''}
             </span>
-            ${g.active ? `<div class="ch-track"><input data-ch="track" value="${esc(g.track_url || '')}" placeholder="SoundCloud track link of this release (for like + repost)" autocomplete="off" spellcheck="false"><button type="button" class="btn ghost sm" data-ch="track-save">Save link</button></div>` : ''}
+            ${g.active ? `<div class="ch-track"><input data-ch="track" value="${esc(g.track_url || r.soundcloud_link || '')}" placeholder="SoundCloud track link of this release (for like + repost)" autocomplete="off" spellcheck="false"><button type="button" class="btn ghost sm" data-ch="track-save">Save link</button></div>${!g.track_id && !g.track_url && !r.soundcloud_link ? '<span class="muted sm-txt ch-track-hint">This release has no SoundCloud link on the site — paste the track link above.</span>' : ''}` : ''}
           </li>`; }).join('') || `<li class="empty">${q ? 'No releases match.' : 'No releases.'}</li>`}
       </ol>`;
   }
@@ -3547,8 +3547,12 @@
     const li = t.closest('[data-rid]'), rid = li?.dataset.rid, a = t.dataset.ch;
     if (a === 'toggle') {
       busy = true;
-      try { const g = chainData.gates.find(x => x.release_id === rid) || {}; await api('POST', '/api/chain/gate', { release_id: rid, active: t.checked, track_url: g.track_url || '' }); chainData = null; await loadChain(); }
-      catch (err) { toast(err.message); t.checked = !t.checked; } finally { busy = false; }
+      try {
+        const g = chainData.gates.find(x => x.release_id === rid) || {}, rel = (repo?.releases || []).find(x => x.id === rid) || {};
+        // al activar, usa solo el link de SoundCloud del propio release (no hay que pegarlo)
+        await api('POST', '/api/chain/gate', { release_id: rid, active: t.checked, track_url: g.track_url || rel.soundcloud_link || '' });
+        chainData = null; await loadChain();
+      } catch (err) { toast(err.message); t.checked = !t.checked; } finally { busy = false; }
     } else if (a === 'track-save') {
       const input = li.querySelector('[data-ch=track]'); busy = true; t.disabled = true;
       try { await api('POST', '/api/chain/gate', { release_id: rid, active: true, track_url: input.value.trim() }); toast('Track link saved'); chainData = null; await loadChain(); }

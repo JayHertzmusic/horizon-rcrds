@@ -13,34 +13,29 @@
   * { box-sizing: border-box; }
   html, body { margin: 0; min-height: 100%; }
   body { background: var(--bg); color: var(--text); font: 400 16px/1.6 'Barlow', system-ui, sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
-  /* portada difuminada de fondo */
-  #bg { position: fixed; inset: -60px; background-size: cover; background-position: center; filter: blur(55px) saturate(1.3) brightness(.45); transform: scale(1.15); z-index: -2; opacity: 0; transition: opacity .6s; }
+  #bg { position: fixed; inset: -60px; background-size: cover; background-position: center; filter: blur(60px) saturate(1.4) brightness(.5); transform: scale(1.15); z-index: -2; opacity: 0; transition: opacity .6s; }
   #bg.on { opacity: 1; }
-  #tint { position: fixed; inset: 0; background: radial-gradient(120% 90% at 50% 0%, transparent, rgba(0,0,0,.55) 70%, rgba(0,0,0,.9)); z-index: -1; }
-  main { width: min(480px, 100%); margin: 0 auto; padding: 40px 18px 70px; display: flex; flex-direction: column; align-items: center; text-align: center; }
-  .brand { display: inline-flex; align-items: center; gap: 11px; color: #fff; text-decoration: none; margin-bottom: 32px; opacity: .92; }
-  .brand img { height: 26px; }
-  .brand span { font: 400 18px/1 'Bebas Neue', sans-serif; letter-spacing: .16em; margin-right: -.16em; }
-  .cover { width: 240px; height: 240px; border-radius: 16px; object-fit: cover; background: #000;
-    box-shadow: 0 24px 60px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.06), 0 10px 60px -10px var(--acc); }
-  .eyebrow { margin: 22px 0 0; font: 700 11px/1 'Barlow', sans-serif; letter-spacing: .28em; text-transform: uppercase; color: var(--acc); }
-  h1 { font: 400 clamp(34px, 9vw, 52px)/.95 'Bebas Neue', sans-serif; margin: 10px 0 2px; }
-  .artist { color: var(--soft); font-size: 15px; margin: 0; }
-  .card { width: 100%; margin-top: 30px; background: rgba(20,20,24,.72); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255,255,255,.1); border-radius: 16px; padding: 22px 20px; box-shadow: 0 20px 50px rgba(0,0,0,.4); }
-  .notice { color: var(--soft); font-size: 13.5px; line-height: 1.6; text-align: left; margin: 0; }
-  .agree { display: flex; gap: 11px; align-items: flex-start; text-align: left; font-size: 13px; color: var(--soft); margin-top: 16px; cursor: pointer; user-select: none; }
-  .agree input { margin: 2px 0 0; width: 18px; height: 18px; accent-color: var(--acc); flex: none; }
-  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; margin-top: 18px; padding: 16px 20px; border: 0; border-radius: 10px;
-    font: 700 13px/1 'Barlow', sans-serif; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; text-decoration: none; transition: transform .1s, box-shadow .2s, opacity .2s; }
+  #tint { position: fixed; inset: 0; background: radial-gradient(120% 80% at 50% 0%, transparent, rgba(0,0,0,.5) 65%, rgba(0,0,0,.92)); z-index: -1; }
+  main { width: min(440px, 100%); margin: 0 auto; padding: 30px 18px 56px; display: flex; flex-direction: column; align-items: center; text-align: center; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; margin-bottom: 26px; opacity: .9; }
+  .brand img { height: 24px; }
+  .brand span { font: 400 17px/1 'Bebas Neue', sans-serif; letter-spacing: .16em; margin-right: -.16em; }
+  .cover { width: min(86vw, 400px); aspect-ratio: 1; border-radius: 18px; object-fit: cover; background: #000;
+    box-shadow: 0 30px 70px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.07), 0 12px 90px -10px var(--acc); }
+  .eyebrow { margin: 26px 0 0; font: 700 11px/1 'Barlow', sans-serif; letter-spacing: .3em; text-transform: uppercase; color: var(--acc); }
+  h1 { font: 400 clamp(40px, 11vw, 60px)/.92 'Bebas Neue', sans-serif; margin: 12px 0 2px; }
+  .artist { color: var(--soft); font-size: 16px; margin: 0; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 11px; width: 100%; margin-top: 26px; padding: 18px 20px; border: 0; border-radius: 12px;
+    font: 700 14px/1 'Barlow', sans-serif; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; text-decoration: none; transition: transform .1s, box-shadow .2s, opacity .2s; }
   .btn:active { transform: translateY(1px); }
-  .btn.sc { background: linear-gradient(180deg, #ff6a2b, #ff4d00); color: #fff; box-shadow: 0 10px 26px -8px rgba(255,80,0,.7); }
-  .btn.sc:disabled { opacity: .45; box-shadow: none; cursor: default; }
-  .btn.dl { background: #fff; color: #0a0a0b; box-shadow: 0 10px 30px -8px rgba(255,255,255,.4); }
-  .err { color: #ff6b6b; font-size: 13.5px; margin: 14px 0 0; }
-  .ok-badge { display: inline-flex; align-items: center; gap: 7px; color: #22c55e; font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
-  .done-msg { color: var(--soft); font-size: 14px; margin: 12px 0 0; }
-  .foot { margin-top: 26px; font-size: 11px; letter-spacing: .1em; color: #6b6b74; }
+  .btn.sc { background: linear-gradient(180deg, #ff6a2b, #ff4d00); color: #fff; box-shadow: 0 14px 34px -8px rgba(255,80,0,.75); }
+  .btn.sc:disabled { opacity: .5; box-shadow: none; cursor: default; }
+  .btn.dl { background: #fff; color: #0a0a0b; box-shadow: 0 14px 36px -8px rgba(255,255,255,.45); }
+  .note { margin: 16px 2px 0; font-size: 12px; line-height: 1.55; color: #8a8a93; max-width: 380px; }
+  .err { color: #ff6b6b; font-size: 13.5px; margin: 16px 0 0; }
+  .ok-badge { display: inline-flex; align-items: center; gap: 7px; margin-top: 26px; color: #22c55e; font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+  .done-msg { color: var(--soft); font-size: 14px; margin: 10px 0 0; }
+  .foot { margin-top: 24px; font-size: 11px; letter-spacing: .1em; color: #6b6b74; }
   .foot a { color: var(--soft); text-decoration: none; }
   .msg { color: var(--soft); }
 </style>
@@ -56,7 +51,7 @@
   const params = new URLSearchParams(location.search);
   const brand = '<a class="brand" href="/"><img src="/assets/logo.png" alt=""><span>HORIZON RCRDS</span></a>';
   const img = f => !f ? '' : /^(https?:|\/)/.test(f) ? f : '/assets/' + f;
-  const scLogo = '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M1 15a1 1 0 0 0 2 0v-4a1 1 0 0 0-2 0zm3 1a1 1 0 0 0 2 0V9a1 1 0 0 0-2 0zm3 0a1 1 0 0 0 2 0V8a1 1 0 0 0-2 0zm3 .5a1 1 0 0 0 2 0V7a1 1 0 0 0-2 0zm3 0a1 1 0 0 0 2 0V8.5a1 1 0 0 0-2 0zM18 17h4a3 3 0 0 0 0-6 4.5 4.5 0 0 0-8.4-1.6V17z"/></svg>';
+  const scLogo = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M1 15a1 1 0 0 0 2 0v-4a1 1 0 0 0-2 0zm3 1a1 1 0 0 0 2 0V9a1 1 0 0 0-2 0zm3 0a1 1 0 0 0 2 0V8a1 1 0 0 0-2 0zm3 .5a1 1 0 0 0 2 0V7a1 1 0 0 0-2 0zm3 0a1 1 0 0 0 2 0V8.5a1 1 0 0 0-2 0zM18 17h4a3 3 0 0 0 0-6 4.5 4.5 0 0 0-8.4-1.6V17z"/></svg>';
 
   async function load() {
     if (!id) { root.innerHTML = brand + '<p class="msg">This download link is not valid.</p>'; return; }
@@ -79,25 +74,20 @@
 
     if (params.get('done') === '1') {
       root.innerHTML = head +
-        '<div class="card"><span class="ok-badge">✓ Connected</span>' +
+        '<span class="ok-badge">✓ Connected</span>' +
         '<p class="done-msg">Thanks for joining the chain — your download is ready.</p>' +
-        '<a class="btn dl" href="/api/public/download/' + encodeURIComponent(id) + '/file">↓ Download</a></div>' +
+        '<a class="btn dl" href="/api/public/download/' + encodeURIComponent(id) + '/file">↓ Download</a>' +
         '<p class="foot"><a href="/">horizonrcrds.com</a></p>';
       return;
     }
     const error = params.get('error');
     root.innerHTML = head +
-      '<div class="card">' +
-      '<p class="notice">' + esc(d.notice || '') + '</p>' +
+      '<button class="btn sc" id="go">' + scLogo + 'Connect with SoundCloud</button>' +
       (error ? '<p class="err">' + esc(error) + '</p>' : '') +
-      '<label class="agree"><input type="checkbox" id="agree"><span>I have read the above and I agree. Connect my SoundCloud and run these actions on my account.</span></label>' +
-      '<button class="btn sc" id="go" disabled>' + scLogo + 'Connect with SoundCloud</button>' +
-      '</div>' +
+      '<p class="note">' + esc(d.notice || '') + '</p>' +
       '<p class="foot"><a href="/">horizonrcrds.com</a></p>';
 
-    const chk = document.getElementById('agree'), go = document.getElementById('go');
-    chk.addEventListener('change', () => { go.disabled = !chk.checked; });
-    go.addEventListener('click', () => { if (chk.checked) { go.disabled = true; go.textContent = 'Connecting…'; location.href = '/api/sc/login?r=' + encodeURIComponent(id); } });
+    document.getElementById('go').addEventListener('click', e => { const b = e.currentTarget; b.disabled = true; b.textContent = 'Connecting…'; location.href = '/api/sc/login?r=' + encodeURIComponent(id); });
   }
   load();
 })();

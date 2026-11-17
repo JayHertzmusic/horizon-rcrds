@@ -36,12 +36,15 @@ const SC_API = 'https://api.soundcloud.com';
 const SC_AUTH = 'https://secure.soundcloud.com';
 const REDIRECT = env => (env.SITE_URL || 'https://horizonrcrds.com').replace(/\/+$/, '') + '/api/sc/callback';
 
+// SoundCloud pide las claves de la app en la cabecera (Basic auth), no en el cuerpo
+const scTokenReq = (env, params) => fetch(`${SC_AUTH}/oauth/token`, { method: 'POST',
+  headers: { Authorization: 'Basic ' + btoa(`${env.SC_CLIENT_ID}:${env.SC_CLIENT_SECRET}`), 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+  body: new URLSearchParams(params) });
 // token de la app (client_credentials): para resolver URLs públicas sin un miembro
 let appTok = null;
 async function appToken(env) {
   if (appTok && appTok.exp > now() + 60e3) return appTok.token;
-  const r = await fetch(`${SC_AUTH}/oauth/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-    body: new URLSearchParams({ grant_type: 'client_credentials', client_id: env.SC_CLIENT_ID, client_secret: env.SC_CLIENT_SECRET }) });
+  const r = await scTokenReq(env, { grant_type: 'client_credentials' });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.access_token) throw new ChainError(502, `SoundCloud did not give app access (${r.status}).`);
   appTok = { token: j.access_token, exp: now() + (j.expires_in || 3600) * 1000 };
@@ -51,8 +54,7 @@ async function appToken(env) {
 async function memberToken(env, m) {
   if (m.token_exp && m.token_exp > now() + 60e3) return m.access_token;
   if (!m.refresh_token) return m.access_token;
-  const r = await fetch(`${SC_AUTH}/oauth/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-    body: new URLSearchParams({ grant_type: 'refresh_token', client_id: env.SC_CLIENT_ID, client_secret: env.SC_CLIENT_SECRET, refresh_token: m.refresh_token }) });
+  const r = await scTokenReq(env, { grant_type: 'refresh_token', refresh_token: m.refresh_token });
   const j = await r.json().catch(() => ({}));
   if (!r.ok || !j.access_token) throw new ChainError(401, 'SoundCloud access expired. The artist needs to connect again.');
   const exp = now() + (j.expires_in || 3600) * 1000;
@@ -242,8 +244,7 @@ export async function scOauth(req, env, url) {
     if (!code || !st) return back('The link expired. Please try again.', false, '');
     await env.FILES.delete(`scstate/${state}`).catch(() => {});
     try {
-      const tr = await fetch(`${SC_AUTH}/oauth/token`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-        body: new URLSearchParams({ grant_type: 'authorization_code', client_id: env.SC_CLIENT_ID, client_secret: env.SC_CLIENT_SECRET, redirect_uri: REDIRECT(env), code_verifier: st.verifier, code }) });
+      const tr = await scTokenReq(env, { grant_type: 'authorization_code', redirect_uri: REDIRECT(env), code_verifier: st.verifier, code });
       const tj = await tr.json().catch(() => ({}));
       if (!tr.ok || !tj.access_token) throw new ChainError(502, 'SoundCloud sign-in failed.');
       const meR = await scGet(tj.access_token, '/me');

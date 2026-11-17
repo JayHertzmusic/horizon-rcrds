@@ -258,7 +258,8 @@ export async function scOauth(req, env, url) {
 
   if (p === '/api/sc/callback') {
     const code = url.searchParams.get('code'), state = url.searchParams.get('state');
-    const back = (msg, ok, rid) => Response.redirect(`${origin}/download${rid ? '/' + encodeURIComponent(rid) : ''}?${ok ? 'done=1' : 'error=' + encodeURIComponent(msg)}`, 302);
+    // ok = token de descarga (solo se da al conectar de verdad); si no, mensaje de error. Nunca se puede descargar con ?done=1 a mano.
+    const back = (msg, ok, rid) => Response.redirect(`${origin}/download${rid ? '/' + encodeURIComponent(rid) : ''}?${ok ? 'dl=' + ok : 'error=' + encodeURIComponent(msg)}`, 302);
     if (url.searchParams.get('error')) return back('You cancelled the SoundCloud connection.', false, '');
     const st = state ? parse(await env.FILES.get(`scstate/${state}`)) : null;
     if (!code || !st) return back('The link expired. Please try again.', false, '');
@@ -289,7 +290,10 @@ export async function scOauth(req, env, url) {
       }
       await DB.prepare('INSERT INTO sc_unlocks (member_id, release_id, at) VALUES (?, ?, ?)').bind(member.id, st.rid, now()).run();
       if (errs.length) console.error('chain actions', member.id, errs.join(' | '));
-      return back('', true, st.rid);
+      // token de descarga (vale 1 hora, solo para este release): sin él, el archivo no se sirve
+      const dl = token();
+      await env.FILES.put(`dl/${dl}`, JSON.stringify({ rid: st.rid, member: member.id, at: now() }), { expirationTtl: 3600 });
+      return back('', dl, st.rid);
     } catch (e) {
       console.error('sc callback', e.message);
       return back(e.message || 'Something went wrong. Please try again.', false, st.rid);
@@ -309,8 +313,11 @@ export async function chainPublic(req, env, url) {
     const st = await chainSettings(env);
     return { title: rel.title || '', artist: rel.artist || '', image: rel.image || '', color: rel.color || '', notice: gate.notice || st.notice, connected: st.connected };
   }
-  // descargar el archivo (solo tras volver de SoundCloud, con ?ok): aquí comprobamos que hay al menos un desbloqueo reciente
+  // descargar el archivo: solo con el token que da el servidor al conectar de verdad (bloquea el ?done=1 a mano)
   if (url.pathname === `/api/public/download/${encodeURIComponent(rid)}/file` && req.method === 'GET') {
+    const dl = String(url.searchParams.get('t') || '');
+    const pass = dl ? parse(await env.FILES.get(`dl/${dl}`)) : null;
+    if (!pass || pass.rid !== rid) throw new ChainError(403, 'Connect your SoundCloud to unlock this download.');
     const gate = await DB.prepare('SELECT file, file_name FROM sc_gates WHERE release_id = ? AND active = 1').bind(rid).first();
     if (!gate?.file) throw new ChainError(404, 'Not available.');
     const f = await env.FILES.get(gate.file, { type: 'arrayBuffer' });

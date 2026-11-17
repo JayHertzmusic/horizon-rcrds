@@ -1937,7 +1937,7 @@
   function respItem(f, r, rs, q, qs, own) {
     return `
         <article class="resp${r.seen ? '' : ' is-new'}${respOpen(r, rs) ? ' is-open' : ''}${isReplyForm(f) ? ' is-demo' : ''}" data-resp="${r.id}">
-          <header data-act="resp-toggle" title="Show / hide the answers"><span class="resp-num">#${r.n || ''}</span>${(() => { const w = respWho(f, r); return w.who ? `<span class="resp-who"><b>${mark(esc(w.who), q)}</b>${w.what ? `<span>${mark(esc(w.what), q)}</span>` : ''}</span>` : ''; })()}${r.seen ? '' : '<span class="new-pill">New</span>'}${r.reply ? `<span class="reply-pill ${r.reply.kind === 'accept' ? 'is-acc' : 'is-rej'}" title="${esc(replyLabel(r.reply))} by ${esc(r.reply.by_name || '')} · ${esc(fmtDate(r.reply.at))}">${replyLabel(r.reply)}</span>` : ''}<span class="resp-date">${esc(fmtDate(r.at))}</span>${seenByHtml(r)}
+          <header data-act="resp-toggle" title="Show / hide the answers"><span class="resp-num">#${r.n || ''}</span>${(() => { const w = respWho(f, r); return w.who ? `<span class="resp-who"><b>${mark(esc(w.who), q)}</b>${w.what ? `<span>${mark(esc(w.what), q)}</span>` : ''}</span>` : ''; })()}${r.collab ? `<span class="collab-pill" title="${r.collab.pos === 1 ? 'Main artist of a collab' : 'Collab artist (own details only)'}">Collab ${r.collab.pos}/${r.collab.n}${r.collab.pos > 1 && r.collab.main ? ' · with ' + esc(r.collab.main) : ''}</span>` : ''}${r.seen ? '' : '<span class="new-pill">New</span>'}${r.reply ? `<span class="reply-pill ${r.reply.kind === 'accept' ? 'is-acc' : 'is-rej'}" title="${esc(replyLabel(r.reply))} by ${esc(r.reply.by_name || '')} · ${esc(fmtDate(r.reply.at))}">${replyLabel(r.reply)}</span>` : ''}<span class="resp-date">${esc(fmtDate(r.at))}</span>${seenByHtml(r)}
             <span class="resp-btns">${preview || !auth.user.owner ? '' : r.seen ? '<button type="button" class="btn ghost sm" data-act="resp-unseen">Mark as new</button>' : '<button type="button" class="btn primary sm" data-act="resp-seen">Mark as seen</button>'}${own ? '<button type="button" class="btn ghost sm" data-act="resp-del">Delete</button>' : ''}</span></header>
           ${respOpen(r, rs) ? `<dl>${qs.map(x => `<dt>${esc(x.label)}</dt><dd>${mark(answerHtml(r.data[x.id]), q)}</dd>`).join('')}</dl>` : ''}
           ${respOpen(r, rs) && canReply(f) ? `<div class="resp-reply">
@@ -2120,7 +2120,7 @@
   async function openLinks(id, keep = {}) {
     formOpen = { mode: 'links', id, links: null, filter: 'all', q: '', show: 12, made: null, ...keep };
     render();
-    try { const r = await api('GET', `/api/forms/${encodeURIComponent(id)}/links`); if (formOpen?.mode === 'links' && formOpen.id === id) { formOpen.links = r.links; render(); } }
+    try { const r = await api('GET', `/api/forms/${encodeURIComponent(id)}/links`); if (formOpen?.mode === 'links' && formOpen.id === id) { formOpen.links = r.links; formOpen.collabFields = r.collab_fields || []; render(); } }
     catch (e) { toast(e.message); }
   }
   const daysTo = t => Math.ceil((t - Date.now()) / 864e5);
@@ -2142,6 +2142,7 @@
             <dt>${l.state === 'expired' ? 'Expired' : 'Expires'}</dt><dd>${live ? (d <= 1 ? 'Today' : `In ${d} days`) : esc(new Date(l.expires_at).toLocaleDateString('en-GB'))}</dd>
             <dt>Opened</dt><dd>${l.opened_at ? esc(fmtDate(l.opened_at)) : '—'}</dd>
             <dt>Sent</dt><dd>${l.used_at ? esc(fmtDate(l.used_at)) : '—'}</dd>
+            ${l.grp ? `<dt>Collab</dt><dd>${l.grp_pos === 1 ? 'Main artist' : `Artist ${l.grp_pos} of ${l.grp_n}`} · with ${esc((all || []).filter(x => x.grp === l.grp && x.id !== l.id).sort((a, b) => a.grp_pos - b.grp_pos).map(x => x.note).join(' & ') || '—')}</dd>` : ''}
           </dl>
           <footer>
             ${l.url && live ? '<button type="button" class="btn ghost sm" data-lk="copy">Copy link</button>' : ''}
@@ -2156,13 +2157,17 @@
     const chips = [['all', 'All'], ['unused', 'Not opened'], ['opened', 'Opened'], ['sent', 'Sent'], ['expired', 'Expired'], ['revoked', 'Cancelled']];
     return `
       <button type="button" class="back" data-act="form-resp-back">← ${esc(f.title)}</button>
-      <div class="head"><div><p class="eyebrow">Private form</p><h1>PERSONAL LINKS <span class="count">${(all || []).length}</span></h1></div></div>
-      <p class="info lead">Each link is for one artist: it only works on the first device that opens it, only to send <b>${esc(f.title)}</b> once, and for 30 days.</p>
+      <div class="head"><div><p class="eyebrow">Private form</p><h1>PERSONAL LINKS <span class="count">${(all || []).length}</span></h1></div>${canEditForm(f) ? '<div class="head-btns"><button type="button" class="btn ghost" data-lk="collab-q">Collab questions</button></div>' : ''}</div>
+      <p class="info lead">Each link is for one artist: it only works on the first device that opens it, only to send <b>${esc(f.title)}</b> once, and for 30 days. For a collab, add the other artists: each one gets their own link — the first artist fills in the whole form, the others only their own details.</p>
       <form id="lk-new" class="lk-new" novalidate>
         <input name="note" maxlength="120" required placeholder="Who is it for? (artist name, required)" aria-label="Who is the link for (required)" autocomplete="off">
         <button type="submit" class="btn primary">Generate link</button>
       </form>
-      ${o.made ? `<div class="lk-made"><span>New link${o.made.note ? ` for <b>${esc(o.made.note)}</b>` : ''} — copied, ready to send:</span><input readonly value="${esc(o.made.url)}" aria-label="New link"><button type="button" class="btn ghost sm" data-lk="copy-new">Copy</button></div>` : ''}
+      <div class="lk-co-add"><button type="button" class="btn ghost sm" data-lk="co-add">+ Collab artist</button></div>
+      ${o.made ? (o.made.links?.length > 1 ? `<div class="lk-made lk-made-group"><span>Collab links — one per artist, ready to send:</span>
+          ${o.made.links.map((x, i) => `<div class="lk-made-row"><b>${esc(x.note)}</b><small>${i ? 'Own details only' : 'Main artist · full form'}</small><input readonly value="${esc(x.url)}" aria-label="Link for ${esc(x.note)}"><button type="button" class="btn ghost sm" data-lk="copy-made" data-i="${i}">Copy</button></div>`).join('')}
+          <div class="lk-made-row"><span></span><span></span><span></span><button type="button" class="btn ghost sm" data-lk="copy-all">Copy all</button></div></div>`
+        : `<div class="lk-made"><span>New link${o.made.note ? ` for <b>${esc(o.made.note)}</b>` : ''} — copied, ready to send:</span><input readonly value="${esc(o.made.url)}" aria-label="New link"><button type="button" class="btn ghost sm" data-lk="copy-new">Copy</button></div>`) : ''}
       <div class="lk-tools">
         <div class="lk-chips" role="tablist">${chips.map(([k, t]) => `<button type="button" role="tab" class="${o.filter === k ? 'on' : ''}" data-lk-filter="${k}">${t} <span>${count(k)}</span></button>`).join('')}</div>
         <input class="lk-search" type="search" placeholder="Search by artist…" value="${esc(o.q)}" aria-label="Search links">
@@ -2172,16 +2177,28 @@
   }
   document.addEventListener('input', e => { if (e.target.closest?.('#lk-new')) e.target.removeAttribute('aria-invalid'); });
   document.addEventListener('submit', async e => {
+    if (e.target.id !== 'lk-collab') return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    const btn = e.target.querySelector('[type=submit]'), ids = [...e.target.querySelectorAll('input[name=cq]:checked')].map(x => x.value);
+    btn.disabled = true;
+    try { const r = await api('POST', `/api/forms/${encodeURIComponent(formOpen.id)}/collab`, { fields: ids }); formOpen.collabFields = r.collab_fields; closeSheet(); toast('Saved'); }
+    catch (x) { toast(x.message); btn.disabled = false; }
+  }, true);
+  document.addEventListener('submit', async e => {
     if (e.target.id !== 'lk-new') return;
     e.preventDefault(); e.stopImmediatePropagation();
-    const btn = e.target.querySelector('button'), input = e.target.elements.note, note = input.value.trim();
+    const btn = e.target.querySelector('button[type=submit]'), input = e.target.elements.note, note = input.value.trim();
     if (!note) { input.setAttribute('aria-invalid', 'true'); input.focus(); toast('Write the artist name first'); return; }   // sin nombre no hay enlace
+    const cos = [...e.target.querySelectorAll('input[name=co]')], empty = cos.find(x => !x.value.trim());
+    if (empty) { empty.setAttribute('aria-invalid', 'true'); empty.focus(); toast('Write the name of every collab artist'); return; }
     btn.disabled = true;
     try {
-      const r = await api('POST', `/api/forms/${encodeURIComponent(formOpen.id)}/links`, { note });
-      try { await navigator.clipboard.writeText(r.url); } catch { /* se copia a mano */ }
-      toast('Link created and copied');
-      openLinks(formOpen.id, { made: { url: r.url, note }, filter: 'all', q: '' });
+      const collab = cos.map(x => x.value.trim());
+      const r = await api('POST', `/api/forms/${encodeURIComponent(formOpen.id)}/links`, { note, ...(collab.length ? { collab } : {}) });
+      const txt = r.links?.length > 1 ? r.links.map(x => `${x.note}: ${x.url}`).join('\n') : r.url;
+      try { await navigator.clipboard.writeText(txt); } catch { /* se copia a mano */ }
+      toast(r.links?.length > 1 ? 'Collab links created and copied' : 'Link created and copied');
+      openLinks(formOpen.id, { made: { url: r.url, note, links: r.links }, filter: 'all', q: '' });
     } catch (x) { toast(x.message); btn.disabled = false; }
   }, true);
   document.addEventListener('input', e => {
@@ -2198,6 +2215,38 @@
     if (!b) return;
     const a = b.dataset.lk, id = b.closest('[data-link]')?.dataset.link, l = formOpen.links?.find(x => x.id === id);
     if (a === 'more') { formOpen.show += 12; render(); return; }
+    if (a === 'co-add' || a === 'co-del') {
+      // artistas del collab (hasta 3 en total): sin redibujar, para no perder lo escrito
+      const fm = $('#lk-new');
+      if (a === 'co-del') b.closest('.lk-co').remove();
+      else if (fm && fm.querySelectorAll('.lk-co').length < 2) {
+        fm.insertAdjacentHTML('beforeend', `<div class="lk-co"><input name="co" maxlength="120" placeholder="Collab artist name" aria-label="Collab artist name" autocomplete="off"><button type="button" class="ic" data-lk="co-del" aria-label="Remove this artist" title="Remove">✕</button></div>`);
+        fm.querySelector('.lk-co:last-child input')?.focus();
+      }
+      const n = fm ? fm.querySelectorAll('.lk-co').length : 0, add = $('.lk-co-add');
+      if (add) add.hidden = n >= 2;
+      const sb = fm?.querySelector('button[type=submit]'); if (sb) sb.textContent = n ? `Generate ${n + 1} links` : 'Generate link';
+      return;
+    }
+    if (a === 'copy-made' || a === 'copy-all') {
+      const ls = formOpen.made?.links || [], txt = a === 'copy-all' ? ls.map(x => `${x.note}: ${x.url}`).join('\n') : ls[Number(b.dataset.i)]?.url;
+      try { await navigator.clipboard.writeText(txt || ''); toast(a === 'copy-all' ? 'All links copied' : 'Link copied'); } catch { toast('Could not copy'); }
+      return;
+    }
+    if (a === 'collab-q') {
+      const f = formsData.forms.find(x => x.id === formOpen.id); if (!f) return;
+      const on = new Set(formOpen.collabFields || []);
+      let sec = '';
+      const rows = f.fields.map(x => x.type === 'section' ? `<p class="cq-sec">${esc(x.label)}</p>` : `<label class="check cq-row"><input type="checkbox" name="cq" value="${esc(x.id)}" ${on.has(x.id) ? 'checked' : ''}> <span>${esc(x.label)}</span></label>`).join('');
+      sheet(`<form id="lk-collab">
+        <div class="sheet-head"><h2>Collab questions</h2><button type="button" class="btn ghost sm" data-lk="sheet-x">Close</button></div>
+        <p class="info sm-txt">In a collab, the main artist answers everything. The other artists only answer the questions ticked here (their own details).</p>
+        <div class="cq-list">${rows}</div>
+        <div class="confirm-actions"><button type="submit" class="btn primary">Save</button></div>
+      </form>`);
+      return;
+    }
+    if (a === 'sheet-x') { closeSheet(); return; }
     if (a === 'copy-new' || a === 'copy') {
       const u = a === 'copy' ? l.url : formOpen.made.url;
       try { await navigator.clipboard.writeText(u); toast('Link copied'); } catch { $('.lk-made input')?.select(); }
@@ -2623,7 +2672,7 @@
     for (const f of ctOpen.rf.fields) for (const [k, re] of Object.entries(RF_KEYS)) if (re.test(f.label || '') && !o[k]) o[k] = String(r.data?.[f.id] ?? '').trim();
     return o;
   }
-  const rfLabel = r => { const o = rfRead(r); return `#${r.n} · ${o.artist || '—'} — ${o.track || '—'} · ${new Date(r.at).toLocaleDateString('en-GB')}`; };
+  const rfLabel = r => { const o = rfRead(r); return `#${r.n} · ${o.artist || '—'} — ${o.track || (r.collab?.main ? 'collab with ' + r.collab.main : '—')}${r.collab ? ` (collab ${r.collab.pos}/${r.collab.n})` : ''} · ${new Date(r.at).toLocaleDateString('en-GB')}`; };
   const splitNames = v => String(v || '').split(/\s*(?:,|&|\/|\band\b)\s*/i).map(x => x.trim()).filter(Boolean);
   async function rfLoad() {
     try {
@@ -2640,7 +2689,7 @@
   const ctFormValues = () => { const f = $('#ct-use'); return f ? [...f.elements].filter(x => x.name).map(x => [x.name, x.value]) : []; };
   const ctFormRestore = vals => { const f = $('#ct-use'); if (f) for (const [n, v] of vals) if (f.elements[n] && n !== 'from') f.elements[n].value = v; };
   // la respuesta del Release Form de un artista → sus datos (bloque «Artist k») y los del release si faltan
-  function rfFill(k, id) {
+  function rfFill(k, id, quiet = false) {
     const r = ctOpen.rf?.list.find(x => String(x.id) === String(id)), f = $('#ct-use');
     if (!r || !f) return;
     const o = rfRead(r), n = artistsOf(ctOpen.tpl), copies = isCopies(ctOpen.tpl);
@@ -2658,7 +2707,13 @@
     const names = Array.from({ length: n }, (_, i) => (f.elements['cn' + i]?.value || '').trim()).filter(Boolean);
     const track = f.elements.release_name.value.trim();
     if (names.length && track) f.elements.title.value = `${ctOpen.tpl.title} — ${names.join(' & ')} — ${track}`;
-    toast(`Artist ${k}: details filled from the Release Form — check them`);
+    // collab: con el artista principal se rellenan también los demás (cada uno en su bloque), si el contrato tiene sitio
+    if (!quiet && r.collab?.pos === 1) {
+      const mates = ctOpen.rf.list.filter(x => x.collab?.grp === r.collab.grp && x.collab.pos > 1 && x.collab.pos <= n);
+      for (const m of mates) { rfFill(m.collab.pos, m.id, true); const sel = f.querySelector(`.u-from[data-k="${m.collab.pos}"]`); if (sel) sel.value = String(m.id); }
+      if (mates.length) { toast(`Collab: artists 1–${1 + mates.length} filled from their Release Forms — check them`); return; }
+    }
+    if (!quiet) toast(`Artist ${k}: details filled from the Release Form — check them`);
   }
   function ctDetail() {
     const c = ctOpen.contract;

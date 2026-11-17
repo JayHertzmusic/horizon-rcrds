@@ -100,6 +100,7 @@ const ALTERS = [
   ['ALTER TABLE panel_profiles ADD COLUMN sc_pic TEXT'],
   ['ALTER TABLE panel_roles ADD COLUMN forms TEXT'],
   ['ALTER TABLE forms ADD COLUMN google TEXT'],   // Google Form conectado
+  ['ALTER TABLE forms ADD COLUMN collab TEXT'],   // preguntas que contestan los artistas invitados de un collab (JSON de ids)
   ...FORM_LINK_COLUMNS.map(c => [`ALTER TABLE form_links ADD COLUMN ${c}`]),
   // formulario privado (solo con enlace personal). El Release Form lo es desde el principio.
   ['ALTER TABLE forms ADD COLUMN invite INTEGER NOT NULL DEFAULT 0', "UPDATE forms SET invite = 1 WHERE slug = 'release-form'"],

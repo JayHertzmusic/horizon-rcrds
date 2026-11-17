@@ -91,7 +91,54 @@ const sha = async v => [...new Uint8Array(await crypto.subtle.digest('SHA-256', 
 const linkToken = () => { const u = crypto.getRandomValues(new Uint8Array(18)); return btoa(String.fromCharCode(...u)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 // estado de un enlace personal para mostrarlo en el panel
 const linkState = l => l.revoked ? 'revoked' : l.used_at ? 'sent' : l.expires_at < now() ? 'expired' : l.opened_at ? 'opened' : 'unused';
-export const FORM_LINK_COLUMNS = ['token TEXT', 'revoked INTEGER NOT NULL DEFAULT 0'];
+// grp = collab (los enlaces de un mismo release con 2-3 artistas), grp_pos 1 = artista principal, gsent = ya copiada a Google
+export const FORM_LINK_COLUMNS = ['token TEXT', 'revoked INTEGER NOT NULL DEFAULT 0', 'grp TEXT', 'grp_pos INTEGER', 'grp_n INTEGER', 'gsent INTEGER'];
+
+/* ---------- Collabs (Release Form con 2-3 artistas) ----------
+   El artista principal contesta todo; los demás solo sus datos (las preguntas marcadas como «collab»). */
+// por defecto: los datos personales (antes de la primera sección), la sección de redes, la foto de prensa y el paso final
+function collabIds(f) {
+  const saved = parse(f.collab);
+  if (Array.isArray(saved)) return new Set(saved.map(String));
+  const out = new Set();
+  let sec = null;
+  for (const x of parse(f.fields) || []) {
+    if (x.type === 'section') { sec = x; continue; }
+    if (!sec || /social|final/i.test(sec.label || '') || /press photo|spotify|apple music|beatport|socials/i.test(x.label || '')) out.add(x.id);
+  }
+  return out;
+}
+// las preguntas que ve un artista invitado (con el título de su sección solo si queda alguna pregunta en ella)
+// (una sección de la que el invitado solo contesta alguna pregunta suelta, p. ej. la foto de prensa, no sale como paso:
+// esa pregunta va con el paso anterior, que es el de sus datos)
+function collabFields(f) {
+  const ids = collabIds(f), all = parse(f.fields) || [], out = [];
+  const secs = [];
+  for (const x of all) { if (x.type === 'section') secs.push({ sec: x, total: 0, mine: 0 }); else if (secs.length) { secs.at(-1).total++; if (ids.has(x.id)) secs.at(-1).mine++; } }
+  let i = -1, sec = null;
+  for (const x of all) {
+    if (x.type === 'section') { i++; sec = secs[i].mine === secs[i].total || /social|final/i.test(x.label || '') ? x : null; continue; }
+    if (!ids.has(x.id)) continue;
+    if (sec) { out.push(sec); sec = null; }
+    out.push(x);
+  }
+  return out;
+}
+// copia del collab en Google Forms: cuando el principal ya envió, cada invitado va con los datos del track del principal
+// (Google pide las preguntas obligatorias del track; así cada fila de Google queda completa)
+async function collabToGoogle(env, f, grp) {
+  const rows = (await env.DB.prepare('SELECT l.hash, l.grp_pos, l.gsent, r.data FROM form_links l JOIN form_responses r ON r.id = l.response_id WHERE l.grp = ? ORDER BY l.grp_pos').bind(grp).all()).results;
+  const main = rows.find(x => x.grp_pos === 1);
+  if (!main) return;
+  const md = parse(main.data) || {}, ids = collabIds(f);
+  for (const x of rows) {
+    if (x.gsent) continue;
+    const d = parse(x.data) || {};
+    const full = x.grp_pos === 1 ? d : { ...Object.fromEntries(Object.entries(md).filter(([k]) => !ids.has(k))), ...d };
+    await toGoogle(env, f, full);
+    await env.DB.prepare('UPDATE form_links SET gsent = 1 WHERE hash = ?').bind(x.hash).run();
+  }
+}
 
 /* ---------- Conexión con Google Forms (script de Apps Script en la cuenta de Horizon) ----------
    - Google → web: cada respuesta de un Google Form llega aquí y se guarda en su formulario de la web.
@@ -380,7 +427,7 @@ export async function formsApi(req, env, s, url, audit) {
     await DB.batch(ids.slice(0, 200).map((id, i) => DB.prepare('UPDATE forms SET position = ? WHERE id = ?').bind(i + 1, String(id))));
     return { ok: true };
   }
-  const mm = p.match(/^\/api\/forms\/([\w-]+)(?:\/(responses|csv|seen|links|replies|reply))?(?:\/(\d+))?$/);
+  const mm = p.match(/^\/api\/forms\/([\w-]+)(?:\/(responses|csv|seen|links|replies|reply|collab))?(?:\/(\d+))?$/);
   if (!mm) throw new FormError(404, 'Not found.');
   const f = await getForm(env, mm[1]);
   if (!canSeeForm(s, f)) throw new FormError(403, 'You don’t have access to this form.');
@@ -405,18 +452,36 @@ export async function formsApi(req, env, s, url, audit) {
         return { ok: true };
       }
       if (!clean(b.note, 120)) throw new FormError(400, 'Write the artist name first.');   // cada enlace lleva siempre el nombre de para quién es
-      const tok = linkToken(), t = now();
-      await DB.prepare('INSERT INTO form_links (hash, form_id, note, created_by, created_at, expires_at, token) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(await sha(tok), f.id, clean(b.note, 120) || null, s.email, t, t + LINK_DAYS * 864e5, tok).run();
-      await audit(`Created a personal link for “${f.title}”${b.note ? ` (${clean(b.note, 120)})` : ''}`);
-      const origin = /(^|\.)horizonrcrds\.com$/.test(url.hostname) ? 'https://horizonrcrds.com' : url.origin;
-      return { ok: true, url: `${origin}/forms/${f.slug}?k=${tok}`, expires_at: t + LINK_DAYS * 864e5 };
+      // collab: un enlace por artista (el primero es el principal), todos del mismo release
+      const others = (Array.isArray(b.collab) ? b.collab : []).map(x => clean(x, 120)).filter(Boolean).slice(0, 2);
+      if (Array.isArray(b.collab) && b.collab.length && others.length !== b.collab.length) throw new FormError(400, 'Write the name of every artist.');
+      const names = [clean(b.note, 120), ...others], t = now(), origin = /(^|\.)horizonrcrds\.com$/.test(url.hostname) ? 'https://horizonrcrds.com' : url.origin;
+      const grp = names.length > 1 ? linkToken().slice(0, 16) : null, made = [];
+      for (let i = 0; i < names.length; i++) {
+        const tok = linkToken();
+        await DB.prepare('INSERT INTO form_links (hash, form_id, note, created_by, created_at, expires_at, token, grp, grp_pos, grp_n) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+          .bind(await sha(tok), f.id, names[i], s.email, t, t + LINK_DAYS * 864e5, tok, grp, grp ? i + 1 : null, grp ? names.length : null).run();
+        made.push({ note: names[i], url: `${origin}/forms/${f.slug}?k=${tok}` });
+      }
+      await audit(grp ? `Created collab links for “${f.title}” (${names.join(' & ')})` : `Created a personal link for “${f.title}” (${names[0]})`);
+      return { ok: true, url: made[0].url, links: made, expires_at: t + LINK_DAYS * 864e5 };
     }
     // quién lo creó, con su nombre del team (el mismo que sale en el panel), no el correo
     const rows = (await DB.prepare(`SELECT l.*, COALESCE(m.label, (SELECT ps.name FROM panel_sessions ps WHERE ps.email = l.created_by AND length(ps.name) > 0 ORDER BY ps.created_at DESC LIMIT 1), m.name) AS by_name
       FROM form_links l LEFT JOIN panel_members m ON m.email = l.created_by WHERE l.form_id = ? ORDER BY l.created_at DESC LIMIT 500`).bind(f.id).all()).results;
     const origin = /(^|\.)horizonrcrds\.com$/.test(url.hostname) ? 'https://horizonrcrds.com' : url.origin;
-    return { links: rows.map(l => ({ id: l.hash.slice(0, 16), note: l.note || '', by: l.created_by, by_name: l.by_name || String(l.created_by || '').split('@')[0], created_at: l.created_at, expires_at: l.expires_at, opened_at: l.opened_at, used_at: l.used_at, response_id: l.response_id || null,
+    return { collab_fields: [...collabIds(f)], links: rows.map(l => ({ id: l.hash.slice(0, 16), note: l.note || '', by: l.created_by, by_name: l.by_name || String(l.created_by || '').split('@')[0], created_at: l.created_at, expires_at: l.expires_at, opened_at: l.opened_at, used_at: l.used_at, response_id: l.response_id || null,
+      grp: l.grp || null, grp_pos: l.grp_pos || null, grp_n: l.grp_n || null,
       state: linkState(l), url: l.token ? `${origin}/forms/${f.slug}?k=${l.token}` : '' })) };
+  }
+  // preguntas que contestan los artistas invitados de un collab
+  if (mm[2] === 'collab' && m === 'POST') {
+    if (s.sync || formLevel(s, f) !== 'edit') throw new FormError(403, 'Your role can’t change this form.');
+    const b = parse(await req.text()) || {}, valid = new Set((parse(f.fields) || []).filter(x => x.type !== 'section').map(x => x.id));
+    const ids = (Array.isArray(b.fields) ? b.fields : []).map(String).filter(x => valid.has(x));
+    await DB.prepare('UPDATE forms SET collab = ? WHERE id = ?').bind(JSON.stringify(ids), f.id).run();
+    await audit(`Changed which questions collab artists answer in “${f.title}”`);
+    return { ok: true, collab_fields: ids };
   }
   // plantillas para contestar (aceptar / rechazar). Verlas: quien ve el formulario; cambiarlas y enviar: quien lo puede editar.
   if (mm[2] === 'replies' && m === 'GET') return { templates: await replyTemplates(env, f.id) };
@@ -477,7 +542,15 @@ export async function formsApi(req, env, s, url, audit) {
     if (list.length) for (const x of (await DB.prepare(`SELECT response_id, kind, at, by_name FROM form_replies WHERE response_id IN (${list.map(() => '?').join(',')}) ORDER BY id`).bind(...list.map(r => r.id)).all()).results) rep[x.response_id] = { kind: x.kind, at: x.at, by_name: x.by_name };
     const cnt = { pending: 0, accept: 0, reject: 0 };
     for (const c of (await DB.prepare('SELECT rk, COUNT(*) AS n FROM (SELECT (SELECT x.kind FROM form_replies x WHERE x.response_id = r.id ORDER BY x.id DESC LIMIT 1) AS rk FROM form_responses r WHERE r.form_id = ?) GROUP BY rk').bind(f.id).all()).results) cnt[c.rk || 'pending'] = c.n;
-    return { responses: list.map(r => ({ id: r.id, n: r.n, at: r.at, seen: !!r.seen, seen_by: by[r.id] || [], data: parse(r.data) || {}, reply: rep[r.id] || null })), more: rows.length > 100, asc, counts: cnt };
+    // collab: de qué grupo es cada respuesta, su puesto (1 = principal) y quién es el principal
+    const col = {};
+    if (list.length) {
+      const ls = (await DB.prepare(`SELECT response_id, grp, grp_pos, grp_n, note FROM form_links WHERE grp IS NOT NULL AND response_id IN (${list.map(() => '?').join(',')})`).bind(...list.map(r => r.id)).all()).results;
+      const grps = [...new Set(ls.map(x => x.grp))];
+      const mains = grps.length ? Object.fromEntries((await DB.prepare(`SELECT grp, note FROM form_links WHERE grp_pos = 1 AND grp IN (${grps.map(() => '?').join(',')})`).bind(...grps).all()).results.map(x => [x.grp, x.note])) : {};
+      for (const x of ls) col[x.response_id] = { grp: x.grp, pos: x.grp_pos, n: x.grp_n, main: mains[x.grp] || '' };
+    }
+    return { responses: list.map(r => ({ id: r.id, n: r.n, at: r.at, seen: !!r.seen, seen_by: by[r.id] || [], data: parse(r.data) || {}, reply: rep[r.id] || null, collab: col[r.id] || null })), more: rows.length > 100, asc, counts: cnt };
   }
   if (mm[2] === 'responses' && mm[3] && m === 'POST') {
     // visto / nuevo solo para quien lo pulsa (el resto del team lo sigue viendo como estaba)
@@ -565,7 +638,16 @@ export async function publicFormsApi(req, env, url) {
       if (!r.meta.changes) throw new FormError(403, 'This link is personal and has already been opened on another device.');
     }
   }
-  if (req.method === 'GET') return { title: f.title, description: f.description || '', fields, invite: !!f.invite, note: link?.note || '' };
+  // collab: el artista principal contesta todo; los invitados, solo sus datos
+  const guest = !!(link?.grp && link.grp_pos > 1), shown = guest ? collabFields(f) : fields;
+  if (req.method === 'GET') {
+    let collab = null;
+    if (link?.grp) {
+      const mates = (await DB.prepare('SELECT note, grp_pos FROM form_links WHERE grp = ? ORDER BY grp_pos').bind(link.grp).all()).results;
+      collab = { pos: link.grp_pos, n: link.grp_n, main: mates.find(x => x.grp_pos === 1)?.note || '', with: mates.filter(x => x.grp_pos !== link.grp_pos).map(x => x.note) };
+    }
+    return { title: f.title, description: f.description || '', fields: shown, invite: !!f.invite, note: link?.note || '', collab };
+  }
   if (req.method !== 'POST') throw new FormError(405, 'Not allowed.');
   if (b._hp) return { ok: true };   // campo trampa para bots: se ignora en silencio
   const ip = req.headers.get('CF-Connecting-IP') || '';
@@ -575,7 +657,7 @@ export async function publicFormsApi(req, env, url) {
     if (recent >= 8) throw new FormError(429, 'Too many answers in a row. Please try again later.');
   }
   const data = {};
-  for (const x of fields) {
+  for (const x of shown) {
     if (x.type === 'section') continue;
     let v = b.answers?.[x.id];
     if (x.type === 'checkbox') {
@@ -596,6 +678,6 @@ export async function publicFormsApi(req, env, url) {
   try { ins = await DB.prepare('INSERT INTO form_responses (form_id, at, data, ip) VALUES (?, ?, ?, ?)').bind(f.id, now(), JSON.stringify(data), ipHash).run(); }
   catch (e) { if (link) await DB.prepare('UPDATE form_links SET used_at = NULL WHERE hash = ?').bind(link.hash).run(); throw e; }   // no se guardó: el enlace sigue valiendo
   if (link) await DB.prepare('UPDATE form_links SET response_id = ? WHERE hash = ?').bind(ins.meta.last_row_id || null, link.hash).run();
-  try { await toGoogle(env, f, data); } catch (e) { console.error('google form copy', e); }   // copia en Google Forms (si está conectado)
+  try { if (link?.grp) await collabToGoogle(env, f, link.grp); else await toGoogle(env, f, data); } catch (e) { console.error('google form copy', e); }   // copia en Google Forms (si está conectado)
   return { ok: true };
 }

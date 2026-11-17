@@ -37,6 +37,11 @@
   .err { color: #ff6b6b; font-size: 13.5px; margin: 16px 0 0; }
   .ok-badge { display: inline-flex; align-items: center; gap: 7px; margin-top: 26px; color: #22c55e; font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
   .done-msg { color: var(--soft); font-size: 14px; margin: 10px 0 0; }
+  .socials { display: flex; gap: 20px; justify-content: center; margin-top: 30px; }
+  .socials a { color: #8a8a93; width: 23px; height: 23px; display: inline-flex; transition: color .2s, transform .1s; }
+  .socials a:hover { color: var(--acc); transform: translateY(-2px); }
+  .socials svg { width: 100%; height: 100%; }
+  .follow-lbl { margin: 28px 0 0; font: 700 10px/1 'Barlow', sans-serif; letter-spacing: .26em; text-transform: uppercase; color: #6b6b74; }
   .foot { margin-top: 24px; font-size: 11px; letter-spacing: .1em; color: #6b6b74; }
   .foot a { color: var(--soft); text-decoration: none; }
   .msg { color: var(--soft); }
@@ -54,6 +59,11 @@
   const brand = '<a class="brand" href="/"><img src="/assets/logo.png" alt=""><span>HORIZON RCRDS</span></a>';
   const img = f => !f ? '' : /^(https?:|\/)/.test(f) ? f : '/assets/' + f;
   const scLogo = '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M1 15a1 1 0 0 0 2 0v-4a1 1 0 0 0-2 0zm3 1a1 1 0 0 0 2 0V9a1 1 0 0 0-2 0zm3 0a1 1 0 0 0 2 0V8a1 1 0 0 0-2 0zm3 .5a1 1 0 0 0 2 0V7a1 1 0 0 0-2 0zm3 0a1 1 0 0 0 2 0V8.5a1 1 0 0 0-2 0zM18 17h4a3 3 0 0 0 0-6 4.5 4.5 0 0 0-8.4-1.6V17z"/></svg>';
+  const IG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.2c3.2 0 3.6 0 4.9.07 1.2.06 1.8.25 2.2.42.56.22.96.48 1.38.9.42.42.68.82.9 1.38.17.4.36 1 .42 2.2.07 1.3.07 1.7.07 4.9s0 3.6-.07 4.9c-.06 1.2-.25 1.8-.42 2.2a3.7 3.7 0 0 1-.9 1.38 3.7 3.7 0 0 1-1.38.9c-.4.17-1 .36-2.2.42-1.3.07-1.7.07-4.9.07s-3.6 0-4.9-.07c-1.2-.06-1.8-.25-2.2-.42a3.7 3.7 0 0 1-1.38-.9 3.7 3.7 0 0 1-.9-1.38c-.17-.4-.36-1-.42-2.2C2.2 15.6 2.2 15.2 2.2 12s0-3.6.07-4.9c.06-1.2.25-1.8.42-2.2.22-.56.48-.96.9-1.38.42-.42.82-.68 1.38-.9.4-.17 1-.36 2.2-.42C8.4 2.2 8.8 2.2 12 2.2zm0 1.8c-3.1 0-3.5 0-4.7.07-1.1.05-1.7.23-2.1.4-.5.2-.9.44-1.3.84-.4.4-.64.8-.84 1.3-.17.4-.35 1-.4 2.1-.06 1.2-.06 1.6-.06 4.3s0 3.1.06 4.3c.05 1.1.23 1.7.4 2.1.2.5.44.9.84 1.3.4.4.8.64 1.3.84.4.17 1 .35 2.1.4 1.2.06 1.6.07 4.7.07s3.5 0 4.7-.07c1.1-.05 1.7-.23 2.1-.4.5-.2.9-.44 1.3-.84.4-.4.64-.8.84-1.3.17-.4.35-1 .4-2.1.06-1.2.07-1.6.07-4.3s0-3.1-.07-4.3c-.05-1.1-.23-1.7-.4-2.1a3.5 3.5 0 0 0-.84-1.3 3.5 3.5 0 0 0-1.3-.84c-.4-.17-1-.35-2.1-.4C15.5 4 15.1 4 12 4zm0 3.1a4.9 4.9 0 1 1 0 9.8 4.9 4.9 0 0 1 0-9.8zm0 1.8a3.1 3.1 0 1 0 0 6.2 3.1 3.1 0 0 0 0-6.2zm5.1-.3a1.15 1.15 0 1 1-2.3 0 1.15 1.15 0 0 1 2.3 0z"/></svg>';
+  const YT = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23 7.5a3 3 0 0 0-2.1-2.1C19 4.9 12 4.9 12 4.9s-7 0-8.9.5A3 3 0 0 0 1 7.5 31 31 0 0 0 .5 12 31 31 0 0 0 1 16.5a3 3 0 0 0 2.1 2.1c1.9.5 8.9.5 8.9.5s7 0 8.9-.5a3 3 0 0 0 2.1-2.1A31 31 0 0 0 23.5 12 31 31 0 0 0 23 7.5zM9.8 15.3V8.7l5.7 3.3-5.7 3.3z"/></svg>';
+  const SP = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm4.6 14.4a.62.62 0 0 1-.86.2c-2.35-1.43-5.3-1.76-8.8-.96a.62.62 0 1 1-.28-1.22c3.8-.87 7.1-.5 9.74 1.12.3.18.4.57.2.86zm1.23-2.73a.78.78 0 0 1-1.07.26c-2.7-1.66-6.8-2.14-10-1.17a.78.78 0 1 1-.45-1.5c3.65-1.1 8.17-.56 11.27 1.34.37.23.49.71.25 1.07zm.1-2.85C14.72 8.98 9.5 8.8 6.46 9.72a.94.94 0 1 1-.54-1.8c3.5-1.05 9.26-.85 12.9 1.31a.94.94 0 0 1-.96 1.62z"/></svg>';
+  const SOCIALS = [['SoundCloud', 'https://soundcloud.com/horizonirecords', scLogo], ['Instagram', 'https://www.instagram.com/horizon_rcrds/', IG], ['YouTube', 'https://www.youtube.com/@HORIZONRCRDS', YT], ['Spotify', 'https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse', SP]];
+  const socials = '<p class="follow-lbl">Follow HORIZON RCRDS</p><div class="socials">' + SOCIALS.map(([n, u, s]) => `<a href="${u}" target="_blank" rel="noopener" aria-label="${n}">${s}</a>`).join('') + '</div>';
 
   async function load() {
     if (!id) { root.innerHTML = brand + '<p class="msg">This download link is not valid.</p>'; return; }
@@ -78,7 +88,7 @@
       root.innerHTML = head +
         '<span class="ok-badge">✓ Connected</span>' +
         '<p class="done-msg">Thanks for joining the chain — your download is ready.</p>' +
-        '<a class="btn dl" href="/api/public/download/' + encodeURIComponent(id) + '/file">↓ Download the Extended Mix</a>';
+        '<a class="btn dl" href="/api/public/download/' + encodeURIComponent(id) + '/file">↓ Download the Extended Mix</a>' + socials;
       return;
     }
     const error = params.get('error');
@@ -86,7 +96,7 @@
       '<p class="unlock">Connect your SoundCloud to get the free <b>Extended Mix</b></p>' +
       '<button class="btn sc" id="go">' + scLogo + 'Connect with SoundCloud</button>' +
       (error ? '<p class="err">' + esc(error) + '</p>' : '') +
-      '<p class="note">' + esc(d.notice || '') + '</p>';
+      '<p class="note">' + esc(d.notice || '') + '</p>' + socials;
 
     document.getElementById('go').addEventListener('click', e => { const b = e.currentTarget; b.disabled = true; b.textContent = 'Connecting…'; location.href = '/api/sc/login?r=' + encodeURIComponent(id); });
   }

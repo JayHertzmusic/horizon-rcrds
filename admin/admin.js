@@ -386,7 +386,7 @@
 
   function shell(inner) {
     const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}${id === 'forms' ? (() => { const n = badgeCount(); return `<span class="nbadge" id="forms-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}${id === 'contracts' ? (() => { if (!ctPolled) { ctPolled = true; setTimeout(checkContracts, 0); } const n = ctBadgeCount(); return `<span class="nbadge" id="ct-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}</button>`;
-    const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar' };
+    const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', chain: 'Chain' };
     const initials = (u.name || u.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
     return `
       <header class="top">
@@ -395,7 +395,7 @@
           <span class="word">HORIZON<small>RCRDS</small></span>
         </a>
         <nav class="tabs" aria-label="Sections">
-          ${ORDER().filter(canTab).map(v => tab(v, names[v])).join('')}${MODE === 'admin' && u.owner && !preview ? tab('team', 'Team') + tab('log', 'History') : ''}
+          ${ORDER().filter(canTab).map(v => tab(v, names[v])).join('')}${MODE === 'admin' && u.owner && !preview ? tab('chain', 'Chain') + tab('team', 'Team') + tab('log', 'History') : ''}
         </nav>
         <div class="top-end">
           <span class="who" title="${esc(u.email)}">
@@ -1343,16 +1343,17 @@
     if (!auth || !repo) return;
     accent();
     if (view === 'forms' && !showForms()) view = firstView();
-    if (view !== 'team' && view !== 'log' && view !== 'none' && view !== 'forms' && view !== 'contracts' && !can(view)) { view = firstView(); editing = null; }
+    if (view !== 'team' && view !== 'log' && view !== 'chain' && view !== 'none' && view !== 'forms' && view !== 'contracts' && !can(view)) { view = firstView(); editing = null; }
     if (view === 'contracts' && !can('contracts')) view = firstView();
     if (view === 'calendar' && !can('calendar')) view = firstView();
-    if ((view === 'team' || view === 'log') && (preview || !(MODE === 'admin' && auth.user.owner))) view = firstView();
+    if ((view === 'team' || view === 'log' || view === 'chain') && (preview || !(MODE === 'admin' && auth.user.owner))) view = firstView();
     if (!preview) try { sessionStorage.setItem(VIEW_KEY, view); } catch { /* nada */ }
     queueMicrotask(savePlace);   // (después de pintar: el estado ya está puesto)
     let inner;
     if (view === 'none') inner = noAccessView();
     else if (view === 'team') inner = teamView();
     else if (view === 'log') inner = logView();
+    else if (view === 'chain') inner = chainPage();
     else if (view === 'forms') inner = formsPage();
     else if (view === 'contracts') inner = contractsPage();
     else if (view === 'calendar') inner = calendarPage();
@@ -1365,7 +1366,7 @@
     else inner = releasesView();
     app.innerHTML = shell(inner);
     chatStart();
-    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', team: 'Team', log: 'History', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', none: 'Team' };
+    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', team: 'Team', log: 'History', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', chain: 'Chain', none: 'Team' };
     document.title = `${unseen.total && !preview ? `(${unseen.total > 99 ? '99+' : unseen.total}) ` : ''}${editing ? (editing.orig?.title || 'New') + ' · ' : ''}${names[view] || ''} — Panel HORIZON RCRDS`;
   }
   function busyOn(scope, btn, label) {
@@ -3399,6 +3400,120 @@
     const f = e.target;
     await calSave({ id: calOpen.item?.id, date: f.elements.date.value, kind: f.elements.kind.value, artist: f.elements.artist.value, title: f.elements.title.value, cat: f.elements.cat.value, note: f.elements.note.value, programmed: f.elements.programmed.checked }, 'Saved');
   }, true);
+
+  /* ---------------- Chain: download gates + cadena de SoundCloud (solo owners) ---------------- */
+  let chainData = null, chainErr = '', chainLoading = false, chainOpen = null;   // chainOpen = release cuyos desbloqueos se ven
+  async function loadChain() {
+    if (chainLoading) return;
+    chainLoading = true;
+    try { chainData = await api('GET', '/api/chain'); chainErr = ''; }
+    catch (e) { chainErr = e.message; if (e.status === 401) { chainLoading = false; logout(e.message); return; } }
+    chainLoading = false;
+    if (view === 'chain') render();
+  }
+  const scProfile = m => m.permalink || (m.name ? 'https://soundcloud.com/' + m.name : '#');
+  function chainPage() {
+    if (!chainData) { if (!chainErr) setTimeout(loadChain, 0); return `<div class="head"><div><p class="eyebrow">SoundCloud</p><h1>CHAIN</h1></div></div>${chainErr ? `<p class="login-error" role="alert">${esc(chainErr)}</p>` : '<p class="info">Loading…</p>'}`; }
+    const st = chainData.settings, A = st.actions || {}, gateOf = id => chainData.gates.find(g => g.release_id === id) || {};
+    const releases = (repo?.releases || []);
+    const warn = !st.connected ? '<p class="login-error" role="alert">The SoundCloud app is not connected (missing keys). Downloads can’t run yet.</p>' : '';
+    return `
+      <div class="head"><div><p class="eyebrow">SoundCloud</p><h1>CHAIN</h1></div></div>
+      ${warn}
+      <p class="info">Fans unlock a download by connecting their SoundCloud and accepting the notice. Their account then follows Horizon and reposts + likes the track, and joins the chain. Only owners see this.</p>
+
+      <form id="ch-settings" class="editor ch-set">
+        <h2 class="ct-sub">Settings</h2>
+        <div class="field"><label for="ch-hz">Horizon SoundCloud profile <span class="muted">(the account fans will follow)</span></label>
+          <input id="ch-hz" name="horizon_url" value="${esc(st.horizon_url || '')}" placeholder="https://soundcloud.com/horizonrcrds" autocomplete="off" spellcheck="false">
+          ${st.horizon_id ? '<span class="muted sm-txt">Connected ✓</span>' : ''}</div>
+        <div class="field"><span>What happens on the fan’s account when they accept</span>
+          <div class="ch-acts">
+            <label class="check"><input type="checkbox" name="follow" ${A.follow ? 'checked' : ''}> <span>Follow Horizon</span></label>
+            <label class="check"><input type="checkbox" name="like" ${A.like ? 'checked' : ''}> <span>Like the track</span></label>
+            <label class="check"><input type="checkbox" name="repost" ${A.repost ? 'checked' : ''}> <span>Repost the track</span></label>
+          </div></div>
+        <div class="field"><label for="ch-notice">Consent notice <span class="muted">(shown to the fan before connecting — it must say what you do on their account)</span></label>
+          <textarea id="ch-notice" name="notice" rows="4" maxlength="2000">${esc(st.notice || '')}</textarea></div>
+        <div class="ed-actions"><button type="submit" class="btn primary">Save settings</button></div>
+      </form>
+
+      <h2 class="ct-group-h">Download gates <span>${chainData.gates.filter(g => g.active).length}</span></h2>
+      <p class="info sm-txt">Turn a gate on for a release, paste its SoundCloud track link, and upload the MP3 fans get (320 kbps, under 25 MB).</p>
+      <ol class="list ch-gates">
+        ${releases.map(r => { const g = gateOf(r.id); return `
+          <li class="row ch-gate${g.active ? ' is-on' : ''}" data-rid="${esc(r.id)}">
+            ${imgTag(r.image, 'thumb')}
+            <span class="meta"><b>${esc(r.artist || '')}${r.title ? ' - ' + esc(r.title) : ''}</b>
+              <span>${esc(catOf(r))}${g.file ? ` · <span class="ok-txt">MP3 ✓${g.file_size ? ' ' + (g.file_size / 1048576).toFixed(1) + ' MB' : ''}</span>` : ' · <span class="muted">no file</span>'}${g.track_id ? ' · track ✓' : ''}${g.active && g.unlocks ? ` · <button type="button" class="link" data-ch="unlocks">${g.unlocks} unlock${g.unlocks === 1 ? '' : 's'}</button>` : ''}</span></span>
+            <label class="pub-sw${g.active ? ' on' : ''}" title="${g.active ? 'Gate on' : 'Gate off'}"><input type="checkbox" data-ch="toggle" ${g.active ? 'checked' : ''} hidden><span class="pub-knob"></span>${g.active ? 'On' : 'Off'}</label>
+            <span class="row-btns">
+              <button type="button" class="btn ghost sm" data-ch="file">${g.file ? 'Replace MP3' : 'Upload MP3'}</button>
+              ${g.active ? `<a class="btn ghost sm" href="${SITE}download/${encodeURIComponent(r.id)}" target="_blank" rel="noopener">Open ↗</a>` : ''}
+            </span>
+            ${g.active ? `<div class="ch-track"><input data-ch="track" value="${esc(g.track_url || '')}" placeholder="SoundCloud track link of this release (for like + repost)" autocomplete="off" spellcheck="false"><button type="button" class="btn ghost sm" data-ch="track-save">Save link</button></div>` : ''}
+          </li>`; }).join('') || '<li class="empty">No releases.</li>'}
+      </ol>
+      <input type="file" id="ch-file" class="sr-only" accept="audio/mpeg,.mp3">
+
+      <h2 class="ct-group-h">Chain members <span>${chainData.members.length}</span></h2>
+      <ol class="list">
+        ${chainData.members.length ? chainData.members.map(m => `
+          <li class="row">
+            <span class="meta"><b>${esc(m.name || m.id)}</b><span>${m.followers != null ? m.followers + ' followers · ' : ''}joined ${esc(fmtDate(m.connected_at))}${m.revoked ? ' · <span class="danger-txt">disconnected</span>' : ''}</span></span>
+            <a class="link" href="${esc(scProfile(m))}" target="_blank" rel="noopener">SoundCloud ↗</a>
+          </li>`).join('') : '<li class="empty">Nobody has connected yet.</li>'}
+      </ol>`;
+  }
+  // panel de desbloqueos de un release (quién descargó)
+  async function chainUnlocks(rid) {
+    try {
+      const r = await api('GET', `/api/chain/unlocks?release=${encodeURIComponent(rid)}`);
+      const rows = r.unlocks || [];
+      const items = rows.map(u => `<li class="row"><span class="meta"><b>${esc(u.name || '')}</b><span>${u.followers != null ? u.followers + ' followers · ' : ''}${esc(fmtDate(u.at))}</span></span><a class="link" href="${esc(u.permalink || '#')}" target="_blank" rel="noopener">SoundCloud ↗</a></li>`).join('');
+      sheet(`<div class="sheet-head"><h2>${esc(rid)} · unlocks</h2><button type="button" class="btn ghost sm" onclick="this.closest('dialog').close()">Close</button></div>${rows.length ? `<ol class="list">${items}</ol>` : '<p class="info">No unlocks yet.</p>'}`);
+    } catch (e) { toast(e.message); }
+  }
+  document.addEventListener('submit', async e => {
+    if (e.target.id !== 'ch-settings') return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (busy) return;
+    const f = e.target, btn = f.querySelector('[type=submit]');
+    busy = true; btn.disabled = true;
+    try {
+      await api('POST', '/api/chain/settings', { notice: f.elements.notice.value, horizon_url: f.elements.horizon_url.value.trim(),
+        actions: { follow: f.elements.follow.checked, like: f.elements.like.checked, repost: f.elements.repost.checked } });
+      toast('Saved'); chainData = null; await loadChain();
+    } catch (err) { toast(err.message); } finally { busy = false; btn.disabled = false; }
+  }, true);
+  document.addEventListener('click', async e => {
+    if (view !== 'chain') return;
+    const t = e.target.closest('[data-ch]'); if (!t || busy) return;
+    const li = t.closest('[data-rid]'), rid = li?.dataset.rid, a = t.dataset.ch;
+    if (a === 'toggle') {
+      busy = true;
+      try { const g = chainData.gates.find(x => x.release_id === rid) || {}; await api('POST', '/api/chain/gate', { release_id: rid, active: t.checked, track_url: g.track_url || '' }); chainData = null; await loadChain(); }
+      catch (err) { toast(err.message); t.checked = !t.checked; } finally { busy = false; }
+    } else if (a === 'track-save') {
+      const input = li.querySelector('[data-ch=track]'); busy = true; t.disabled = true;
+      try { await api('POST', '/api/chain/gate', { release_id: rid, active: true, track_url: input.value.trim() }); toast('Track link saved'); chainData = null; await loadChain(); }
+      catch (err) { toast(err.message); } finally { busy = false; t.disabled = false; }
+    } else if (a === 'file') {
+      chainFileFor = rid; $('#ch-file').click();
+    } else if (a === 'unlocks') {
+      chainUnlocks(rid);
+    }
+  });
+  let chainFileFor = null;
+  document.addEventListener('change', async e => {
+    if (e.target.id !== 'ch-file') return;
+    const file = e.target.files?.[0]; e.target.value = '';
+    if (!file || !chainFileFor) return;
+    if (file.size > 25 * 1048576) { toast('The MP3 must be under 25 MB (use 320 kbps, not WAV).'); return; }
+    busy = true;
+    try { await authFetch(`/api/chain/file/${encodeURIComponent(chainFileFor)}?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'audio/mpeg' }, body: file }); toast('MP3 uploaded'); chainData = null; await loadChain(); }
+    catch (err) { toast(err.message); } finally { busy = false; chainFileFor = null; }
+  });
 
   /* ---------------- Team chat (burbuja abajo a la derecha) ---------------- */
   const CHAT_SEEN = 'hz_chat_seen';

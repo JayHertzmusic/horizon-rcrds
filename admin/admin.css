@@ -1151,7 +1151,7 @@ html, body, * { scrollbar-width: none; }
 .sheet textarea { width: 100%; resize: vertical; }
 .sheet .field input { width: 100%; }
 .resp-tabs { margin: 4px 0 14px; }
-/* respuestas: «New» en azul para no confundirlo con «Rejected» (rojo) */
-.resp .new-pill { background: rgba(59,130,246,.14); border-color: rgba(59,130,246,.5); color: #93c5fd; }
-.resp .new-pill::before { background: #3b82f6; }
-.resp.is-new { border-color: rgba(59,130,246,.5); box-shadow: inset 3px 0 0 #3b82f6; }
+/* Demo Submission: «New» en amarillo para no confundirlo con «Rejected» (rojo). El resto de forms sigue en rojo. */
+.resp.is-demo .new-pill { background: rgba(250,204,21,.12); border-color: rgba(250,204,21,.5); color: #fde047; }
+.resp.is-demo .new-pill::before { background: #facc15; }
+.resp.is-demo.is-new { border-color: rgba(250,204,21,.5); box-shadow: inset 3px 0 0 #facc15; }

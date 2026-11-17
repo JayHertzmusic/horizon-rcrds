@@ -1936,7 +1936,7 @@
   }
   function respItem(f, r, rs, q, qs, own) {
     return `
-        <article class="resp${r.seen ? '' : ' is-new'}${respOpen(r, rs) ? ' is-open' : ''}" data-resp="${r.id}">
+        <article class="resp${r.seen ? '' : ' is-new'}${respOpen(r, rs) ? ' is-open' : ''}${isReplyForm(f) ? ' is-demo' : ''}" data-resp="${r.id}">
           <header data-act="resp-toggle" title="Show / hide the answers"><span class="resp-num">#${r.n || ''}</span>${(() => { const w = respWho(f, r); return w.who ? `<span class="resp-who"><b>${mark(esc(w.who), q)}</b>${w.what ? `<span>${mark(esc(w.what), q)}</span>` : ''}</span>` : ''; })()}${r.seen ? '' : '<span class="new-pill">New</span>'}${r.reply ? `<span class="reply-pill ${r.reply.kind === 'accept' ? 'is-acc' : 'is-rej'}" title="${esc(replyLabel(r.reply))} by ${esc(r.reply.by_name || '')} · ${esc(fmtDate(r.reply.at))}">${replyLabel(r.reply)}</span>` : ''}<span class="resp-date">${esc(fmtDate(r.at))}</span>${seenByHtml(r)}
             <span class="resp-btns">${preview || !auth.user.owner ? '' : r.seen ? '<button type="button" class="btn ghost sm" data-act="resp-unseen">Mark as new</button>' : '<button type="button" class="btn primary sm" data-act="resp-seen">Mark as seen</button>'}${own ? '<button type="button" class="btn ghost sm" data-act="resp-del">Delete</button>' : ''}</span></header>
           ${respOpen(r, rs) ? `<dl>${qs.map(x => `<dt>${esc(x.label)}</dt><dd>${mark(answerHtml(r.data[x.id]), q)}</dd>`).join('')}</dl>` : ''}

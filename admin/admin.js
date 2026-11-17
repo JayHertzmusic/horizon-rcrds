@@ -3403,6 +3403,7 @@
 
   /* ---------------- Chain: download gates + cadena de SoundCloud (solo owners) ---------------- */
   let chainData = null, chainErr = '', chainLoading = false, chainOpen = null;   // chainOpen = release cuyos desbloqueos se ven
+  let chainTab = 'support', chainGateQ = '';   // pestaña dentro de Chain y búsqueda de releases en Gates
   async function loadChain() {
     if (chainLoading) return;
     chainLoading = true;
@@ -3414,20 +3415,27 @@
   const scProfile = m => m.permalink || (m.name ? 'https://soundcloud.com/' + m.name : '#');
   function chainPage() {
     if (!chainData) { if (!chainErr) setTimeout(loadChain, 0); return `<div class="head"><div><p class="eyebrow">SoundCloud</p><h1>CHAIN</h1></div></div>${chainErr ? `<p class="login-error" role="alert">${esc(chainErr)}</p>` : '<p class="info">Loading…</p>'}`; }
-    const st = chainData.settings, A = st.actions || {}, gateOf = id => chainData.gates.find(g => g.release_id === id) || {};
-    const releases = (repo?.releases || []);
+    const st = chainData.settings;
     const warn = !st.connected ? '<p class="login-error" role="alert">The SoundCloud app is not connected (missing keys). Downloads can’t run yet.</p>' : '';
+    const onN = chainData.gates.filter(g => g.active).length, memN = chainData.members.filter(m => !m.revoked).length, qN = chainData.queue?.counts?.queued || 0;
+    const tab = (id, label, count) => `<button type="button" role="tab" class="${chainTab === id ? 'on' : ''}" data-chtab="${id}">${label}${count != null ? `<span>${count}</span>` : ''}</button>`;
     return `
       <div class="head"><div><p class="eyebrow">SoundCloud</p><h1>CHAIN</h1></div></div>
       ${warn}
-      <p class="info">Fans unlock a download by connecting their SoundCloud and accepting the notice. Their account then follows Horizon and reposts + likes the track, and joins the chain. Only owners see this.</p>
-
+      <div class="ct-tabs" role="tablist">
+        ${tab('support', 'Support', null)}${tab('gates', 'Gates', onN)}${tab('members', 'Members', chainData.members.length)}${tab('settings', 'Settings', null)}
+      </div>
+      ${chainTab === 'settings' ? chainSettingsHtml() : chainTab === 'gates' ? chainGatesHtml() : chainTab === 'members' ? chainMembersHtml() : chainSupportHtml()}
+      <input type="file" id="ch-file" class="sr-only" accept="audio/mpeg,.mp3">`;
+  }
+  function chainSettingsHtml() {
+    const st = chainData.settings, A = st.actions || {};
+    return `
       <form id="ch-settings" class="editor ch-set">
-        <h2 class="ct-sub">Settings</h2>
         <div class="field"><label for="ch-hz">Horizon SoundCloud profile <span class="muted">(the account fans will follow)</span></label>
           <input id="ch-hz" name="horizon_url" value="${esc(st.horizon_url || '')}" placeholder="https://soundcloud.com/horizonrcrds" autocomplete="off" spellcheck="false">
           ${st.horizon_id ? '<span class="muted sm-txt">Connected ✓</span>' : ''}</div>
-        <div class="field"><span>What happens on the fan’s account when they accept</span>
+        <div class="field"><span>What happens on the fan’s account when they accept the download</span>
           <div class="ch-acts">
             <label class="check"><input type="checkbox" name="follow" ${A.follow ? 'checked' : ''}> <span>Follow Horizon</span></label>
             <label class="check"><input type="checkbox" name="like" ${A.like ? 'checked' : ''}> <span>Like the track</span></label>
@@ -3436,10 +3444,15 @@
         <div class="field"><label for="ch-notice">Consent notice <span class="muted">(shown to the fan before connecting — it must say what you do on their account)</span></label>
           <textarea id="ch-notice" name="notice" rows="4" maxlength="2000">${esc(st.notice || '')}</textarea></div>
         <div class="ed-actions"><button type="submit" class="btn primary">Save settings</button></div>
-      </form>
-
-      <h2 class="ct-group-h">Download gates <span>${chainData.gates.filter(g => g.active).length}</span></h2>
+      </form>`;
+  }
+  function chainGatesHtml() {
+    const gateOf = id => chainData.gates.find(g => g.release_id === id) || {};
+    const q = chainGateQ.trim().toLowerCase();
+    const releases = (repo?.releases || []).filter(r => !q || `${r.artist || ''} ${r.title || ''} ${catOf(r)}`.toLowerCase().includes(q));
+    return `
       <p class="info sm-txt">Turn a gate on for a release, paste its SoundCloud track link, and upload the MP3 fans get (320 kbps, under 25 MB).</p>
+      <div class="field ch-search"><input id="ch-gq" placeholder="Search releases by artist, track or number…" value="${esc(chainGateQ)}" autocomplete="off"></div>
       <ol class="list ch-gates">
         ${releases.map(r => { const g = gateOf(r.id); return `
           <li class="row ch-gate${g.active ? ' is-on' : ''}" data-rid="${esc(r.id)}">
@@ -3452,28 +3465,31 @@
               ${g.active ? `<a class="btn ghost sm" href="${SITE}download/${encodeURIComponent(r.id)}" target="_blank" rel="noopener">Open ↗</a>` : ''}
             </span>
             ${g.active ? `<div class="ch-track"><input data-ch="track" value="${esc(g.track_url || '')}" placeholder="SoundCloud track link of this release (for like + repost)" autocomplete="off" spellcheck="false"><button type="button" class="btn ghost sm" data-ch="track-save">Save link</button></div>` : ''}
-          </li>`; }).join('') || '<li class="empty">No releases.</li>'}
-      </ol>
-      <input type="file" id="ch-file" class="sr-only" accept="audio/mpeg,.mp3">
-
-      <h2 class="ct-group-h">Support a track</h2>
+          </li>`; }).join('') || `<li class="empty">${q ? 'No releases match.' : 'No releases.'}</li>`}
+      </ol>`;
+  }
+  function chainSupportHtml() {
+    const memN = chainData.members.filter(m => !m.revoked).length;
+    const qc = chainData.queue?.counts || {}, pend = qc.queued || 0, done = qc.done || 0, fail = qc.failed || 0;
+    return `
       <p class="info sm-txt">Repost and/or like any SoundCloud track — a Horizon release or anyone in the chain — from every connected account. They agreed to this when they joined.</p>
       <form id="ch-promote" class="editor ch-set">
         <div class="field"><label for="ch-ptrack">SoundCloud track link</label><input id="ch-ptrack" name="track_url" placeholder="https://soundcloud.com/artist/track" autocomplete="off" spellcheck="false"></div>
         <div class="ch-acts">
           <label class="check"><input type="checkbox" name="repost" checked> <span>Repost</span></label>
           <label class="check"><input type="checkbox" name="like" checked> <span>Like</span></label>
-          <span class="muted sm-txt">From all ${chainData.members.filter(m => !m.revoked).length} connected account(s)</span>
+          <span class="muted sm-txt">From all ${memN} connected account(s)</span>
         </div>
         <div class="field"><label for="ch-spread">Spread over time <span class="muted">(so it looks organic, not all at once)</span></label>
           <select id="ch-spread" name="spread"><option value="6">A few hours</option><option value="24" selected>About a day</option><option value="72">A few days</option><option value="168">A week</option><option value="0">Right away</option></select></div>
-        <div class="ed-actions"><button type="submit" class="btn primary" ${chainData.members.some(m => !m.revoked) ? '' : 'disabled'}>Queue support</button></div>
+        <div class="ed-actions"><button type="submit" class="btn primary" ${memN ? '' : 'disabled'}>Queue support</button></div>
       </form>
-      ${(() => { const q = chainData.queue?.counts || {}; const pend = q.queued || 0, done = q.done || 0, fail = q.failed || 0;
-        return (pend + done + fail) ? `<div class="ch-queue"><span>${pend} queued · ${done} done${fail ? ' · ' + fail + ' failed' : ''}</span>
-          <span class="row-btns">${pend ? '<button type="button" class="btn ghost sm" data-ch="run">Run due now</button><button type="button" class="btn ghost sm danger-txt" data-ch="clear">Clear queued</button>' : ''}</span></div>` : ''; })()}
-
-      <h2 class="ct-group-h">Chain members <span>${chainData.members.length}</span></h2>
+      ${(pend + done + fail) ? `<div class="ch-queue"><span>${pend} queued · ${done} done${fail ? ' · ' + fail + ' failed' : ''}</span>
+        <span class="row-btns">${pend ? '<button type="button" class="btn ghost sm" data-ch="run">Run due now</button><button type="button" class="btn ghost sm danger-txt" data-ch="clear">Clear queued</button>' : ''}</span></div>` : ''}`;
+  }
+  function chainMembersHtml() {
+    return `
+      <p class="info sm-txt">Accounts that connected their SoundCloud and joined the chain.</p>
       <ol class="list">
         ${chainData.members.length ? chainData.members.map(m => `
           <li class="row">
@@ -3517,8 +3533,16 @@
       return;
     }
   }, true);
+  document.addEventListener('input', e => {
+    if (e.target.id !== 'ch-gq') return;
+    chainGateQ = e.target.value;
+    const el = document.querySelector('.ch-gates');
+    if (el) { const tmp = document.createElement('div'); tmp.innerHTML = chainGatesHtml(); const fresh = tmp.querySelector('.ch-gates'); if (fresh) el.replaceWith(fresh); }
+  });
   document.addEventListener('click', async e => {
     if (view !== 'chain') return;
+    const tabBtn = e.target.closest('[data-chtab]');
+    if (tabBtn) { chainTab = tabBtn.dataset.chtab; render(); return; }
     const t = e.target.closest('[data-ch]'); if (!t || busy) return;
     const li = t.closest('[data-rid]'), rid = li?.dataset.rid, a = t.dataset.ch;
     if (a === 'toggle') {

@@ -1068,7 +1068,6 @@ html, body, * { scrollbar-width: none; }
 .ch-set .ch-acts { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 8px; }
 .ch-set .ch-acts .check { margin: 0; }
 .ch-gates { margin-top: 6px; }
-.ch-gates { max-width: 960px; }
 .row.ch-gate { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .row.ch-gate .thumb { width: 48px; height: 48px; border-radius: 6px; flex: none; }
 .row.ch-gate .meta { flex: 1 1 220px; min-width: 0; }

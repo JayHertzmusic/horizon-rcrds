@@ -141,18 +141,21 @@ export async function chainApi(req, env, s, url, audit) {
   if (p === '/api/chain/gate' && m === 'POST') {
     const rid = clean(body.release_id, 80);
     if (!rid) throw new ChainError(400, 'Which release?');
-    const trackUrl = clean(body.track_url, 300);
-    let trackId = null;
-    if (trackUrl) trackId = await resolveTrack(env, trackUrl);
+    const existing = await DB.prepare('SELECT track_url, track_id FROM sc_gates WHERE release_id = ?').bind(rid).first();
+    const trackUrl = 'track_url' in body ? clean(body.track_url, 300) : (existing?.track_url || '');
+    // el track solo se resuelve si el link cambió (así encender/apagar el gate es instantáneo)
+    let trackId = existing?.track_id || null;
+    if (trackUrl && trackUrl !== (existing?.track_url || '')) trackId = await resolveTrack(env, trackUrl);
+    else if (!trackUrl) trackId = null;
     const actions = body.actions && typeof body.actions === 'object' ? JSON.stringify({ follow: !!body.actions.follow, like: !!body.actions.like, repost: !!body.actions.repost }) : null;
     const notice = 'notice' in body ? clean(body.notice, 2000) : null;
     await DB.prepare(`INSERT INTO sc_gates (release_id, active, track_url, track_id, actions, notice, updated_at, created_by)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(release_id) DO UPDATE SET active = excluded.active, track_url = excluded.track_url, track_id = excluded.track_id,
-         actions = COALESCE(excluded.actions, sc_gates.actions), notice = excluded.notice, updated_at = excluded.updated_at`)
+         actions = COALESCE(excluded.actions, sc_gates.actions), notice = COALESCE(excluded.notice, sc_gates.notice), updated_at = excluded.updated_at`)
       .bind(rid, body.active ? 1 : 0, trackUrl || null, trackId, actions, notice, now(), s.email).run();
     await audit(`${body.active ? 'Turned on' : 'Turned off'} the download gate for ${rid}`);
-    return { ok: true };
+    return { ok: true, track_id: trackId };
   }
   // subir el archivo del extended (MP3) al KV
   if (p.startsWith('/api/chain/file/') && m === 'POST') {

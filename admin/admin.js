@@ -3451,22 +3451,29 @@
     const q = chainGateQ.trim().toLowerCase();
     const releases = (repo?.releases || []).filter(r => !q || `${r.artist || ''} ${r.title || ''} ${catOf(r)}`.toLowerCase().includes(q));
     return `
-      <p class="info sm-txt">Turn a gate on for a release, paste its SoundCloud track link, and upload the MP3 fans get (320 kbps, under 25 MB).</p>
+      <p class="info sm-txt">Turn a gate on for a release and upload the MP3 fans get (320 kbps, under 25 MB). The track is taken from the release’s own SoundCloud link automatically.</p>
       <div class="field ch-search"><input id="ch-gq" placeholder="Search releases by artist, track or number…" value="${esc(chainGateQ)}" autocomplete="off"></div>
       <ol class="list ch-gates">
-        ${releases.map(r => { const g = gateOf(r.id); return `
+        ${releases.map(r => { const g = gateOf(r.id), noLink = !r.soundcloud_link; return `
           <li class="row ch-gate${g.active ? ' is-on' : ''}" data-rid="${esc(r.id)}">
             ${imgTag(r.image, 'thumb')}
             <span class="meta"><b>${esc(r.artist || '')}${r.title ? ' - ' + esc(r.title) : ''}</b>
-              <span>${esc(catOf(r))}${g.file ? ` · <span class="ok-txt">MP3 ✓${g.file_size ? ' ' + (g.file_size / 1048576).toFixed(1) + ' MB' : ''}</span>` : ' · <span class="muted">no file</span>'}${g.track_id ? ' · track ✓' : ''}${g.active && g.unlocks ? ` · <button type="button" class="link" data-ch="unlocks">${g.unlocks} unlock${g.unlocks === 1 ? '' : 's'}</button>` : ''}</span></span>
+              <span>${esc(catOf(r))}${g.file ? ` · <span class="ok-txt">MP3 ✓${g.file_size ? ' ' + (g.file_size / 1048576).toFixed(1) + ' MB' : ''}</span>` : ' · <span class="muted">no file</span>'}${g.active && g.unlocks ? ` · <button type="button" class="link" data-ch="unlocks">${g.unlocks} unlock${g.unlocks === 1 ? '' : 's'}</button>` : ''}</span></span>
             <label class="pub-sw${g.active ? ' on' : ''}" title="${g.active ? 'Gate on' : 'Gate off'}"><input type="checkbox" data-ch="toggle" ${g.active ? 'checked' : ''} hidden><span class="pub-knob"></span>${g.active ? 'On' : 'Off'}</label>
             <span class="row-btns">
               <button type="button" class="btn ghost sm" data-ch="file">${g.file ? 'Replace MP3' : 'Upload MP3'}</button>
               ${g.active ? `<a class="btn ghost sm" href="${SITE}download/${encodeURIComponent(r.id)}" target="_blank" rel="noopener">Open ↗</a>` : ''}
             </span>
-            ${g.active ? `<div class="ch-track"><input data-ch="track" value="${esc(g.track_url || r.soundcloud_link || '')}" placeholder="SoundCloud track link of this release (for like + repost)" autocomplete="off" spellcheck="false"><button type="button" class="btn ghost sm" data-ch="track-save">Save link</button></div>${!g.track_id && !g.track_url && !r.soundcloud_link ? '<span class="muted sm-txt ch-track-hint">This release has no SoundCloud link on the site — paste the track link above.</span>' : ''}` : ''}
+            ${g.active && noLink ? `<div class="ch-track"><input data-ch="track" value="${esc(g.track_url || '')}" placeholder="This release has no SoundCloud link — paste the track link for like + repost" autocomplete="off" spellcheck="false"><button type="button" class="btn ghost sm" data-ch="track-save">Save link</button></div>` : ''}
           </li>`; }).join('') || `<li class="empty">${q ? 'No releases match.' : 'No releases.'}</li>`}
       </ol>`;
+  }
+  function renderGatesList() {
+    const el = document.querySelector('.ch-gates');
+    if (!el) return;
+    const tmp = document.createElement('div'); tmp.innerHTML = chainGatesHtml();
+    const fresh = tmp.querySelector('.ch-gates'); if (fresh) el.replaceWith(fresh);
+    const cnt = document.querySelector('[data-chtab=gates] span'); if (cnt) cnt.textContent = chainData.gates.filter(x => x.active).length;
   }
   function chainSupportHtml() {
     const memN = chainData.members.filter(m => !m.revoked).length;
@@ -3546,13 +3553,20 @@
     const t = e.target.closest('[data-ch]'); if (!t || busy) return;
     const li = t.closest('[data-rid]'), rid = li?.dataset.rid, a = t.dataset.ch;
     if (a === 'toggle') {
-      busy = true;
+      // instantáneo: se marca ya y la llamada va por detrás (resolver el track puede tardar ~1s)
+      const on = t.checked, rel = (repo?.releases || []).find(x => x.id === rid) || {};
+      let g = chainData.gates.find(x => x.release_id === rid);
+      if (!g) { g = { release_id: rid, active: 0, file: false, unlocks: 0, track_url: '', track_id: null }; chainData.gates.push(g); }
+      g.active = on ? 1 : 0;
+      renderGatesList();   // el interruptor cambia al momento
       try {
-        const g = chainData.gates.find(x => x.release_id === rid) || {}, rel = (repo?.releases || []).find(x => x.id === rid) || {};
-        // al activar, usa solo el link de SoundCloud del propio release (no hay que pegarlo)
-        await api('POST', '/api/chain/gate', { release_id: rid, active: t.checked, track_url: g.track_url || rel.soundcloud_link || '' });
-        chainData = null; await loadChain();
-      } catch (err) { toast(err.message); t.checked = !t.checked; } finally { busy = false; }
+        // al activar, usa el link de SoundCloud del propio release (no hay que pegarlo)
+        const r = await api('POST', '/api/chain/gate', { release_id: rid, active: on, track_url: g.track_url || rel.soundcloud_link || '' });
+        g.track_url = g.track_url || rel.soundcloud_link || '';
+        if (r.track_id) g.track_id = r.track_id;
+        renderGatesList();   // «track ✓» cuando SoundCloud lo confirma
+      } catch (err) { g.active = on ? 0 : 1; toast(err.message); renderGatesList(); }
+      return;
     } else if (a === 'track-save') {
       const input = li.querySelector('[data-ch=track]'); busy = true; t.disabled = true;
       try { await api('POST', '/api/chain/gate', { release_id: rid, active: true, track_url: input.value.trim() }); toast('Track link saved'); chainData = null; await loadChain(); }

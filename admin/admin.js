@@ -3403,7 +3403,7 @@
 
   /* ---------------- Chain: download gates + cadena de SoundCloud (solo owners) ---------------- */
   let chainData = null, chainErr = '', chainLoading = false, chainOpen = null;   // chainOpen = release cuyos desbloqueos se ven
-  let chainTab = 'support', chainGateQ = '';   // pestaña dentro de Chain y búsqueda de releases en Gates
+  let chainTab = 'gates', chainGateQ = '';   // pestaña dentro de Chain y búsqueda de releases en Gates
   async function loadChain() {
     if (chainLoading) return;
     chainLoading = true;
@@ -3423,7 +3423,7 @@
       <div class="head"><div><p class="eyebrow">SoundCloud</p><h1>CHAIN</h1></div></div>
       ${warn}
       <div class="ct-tabs" role="tablist">
-        ${tab('support', 'Support', null)}${tab('gates', 'Gates', onN)}${tab('members', 'Members', chainData.members.length)}${tab('settings', 'Settings', null)}
+        ${tab('gates', 'Gates', onN)}${tab('support', 'Support', null)}${tab('members', 'Members', chainData.members.length)}${tab('settings', 'Settings', null)}
       </div>
       ${chainTab === 'settings' ? chainSettingsHtml() : chainTab === 'gates' ? chainGatesHtml() : chainTab === 'members' ? chainMembersHtml() : chainSupportHtml()}
       <input type="file" id="ch-file" class="sr-only" accept="audio/mpeg,.mp3">`;

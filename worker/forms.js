@@ -10,8 +10,13 @@ export class FormError extends Error { constructor(status, message) { super(mess
 const parse = s => { try { return JSON.parse(s); } catch { return null; } };
 const clean = (v, max) => String(v ?? '').replace(/[\u0000-\u0008\u000b-\u001f]/g, '').trim().slice(0, max);
 const now = () => Date.now();
+import { demoReplyMail } from './contract-mail.js';
 
 export const FORM_SCHEMA = [
+  // respuestas por correo a una respuesta del formulario (demos: aceptada / rechazada)
+  `CREATE TABLE IF NOT EXISTS form_replies (id INTEGER PRIMARY KEY AUTOINCREMENT, response_id INTEGER NOT NULL, form_id TEXT NOT NULL, kind TEXT NOT NULL,
+     to_email TEXT, subject TEXT, body TEXT, at INTEGER NOT NULL, by TEXT, by_name TEXT)`,
+  `CREATE INDEX IF NOT EXISTS form_replies_resp ON form_replies (response_id, id)`,
   `CREATE TABLE IF NOT EXISTS forms (id TEXT PRIMARY KEY, slug TEXT UNIQUE NOT NULL, title TEXT NOT NULL, description TEXT, fields TEXT NOT NULL DEFAULT '[]', position INTEGER NOT NULL DEFAULT 0, public INTEGER NOT NULL DEFAULT 0, on_site INTEGER NOT NULL DEFAULT 0, button TEXT, access TEXT NOT NULL DEFAULT '{}', created_at INTEGER, updated_at INTEGER)`,
   `CREATE TABLE IF NOT EXISTS form_responses (id INTEGER PRIMARY KEY AUTOINCREMENT, form_id TEXT NOT NULL, at INTEGER NOT NULL, data TEXT NOT NULL, seen INTEGER NOT NULL DEFAULT 0, ip TEXT)`,
   `CREATE INDEX IF NOT EXISTS form_responses_form ON form_responses (form_id, id)`,
@@ -38,6 +43,26 @@ const dropForm = (DB, id) => DB.batch([
   DB.prepare('DELETE FROM form_links WHERE form_id = ?').bind(id),
   DB.prepare('DELETE FROM forms WHERE id = ?').bind(id),
 ]);
+// plantillas de respuesta (demos). {artist} y {track} se cambian por los de cada respuesta.
+const REPLY_DEFAULTS = {
+  accept: { subject: 'Your demo “{track}” — HORIZON RCRDS',
+    body: 'Hi {artist},\n\nThank you for sending us “{track}”. We listened to it and we love it — we would like to release it on HORIZON RCRDS.\n\nWe will get back to you very soon with the next steps.\n\nBest,\nHORIZON RCRDS' },
+  reject: { subject: 'Your demo “{track}” — HORIZON RCRDS',
+    body: 'Hi {artist},\n\nThank you for sending us “{track}” and for thinking of HORIZON RCRDS. We listened to it carefully, but it is not the right fit for the label at the moment.\n\nPlease keep sending us your music — we would love to hear what you make next.\n\nBest,\nHORIZON RCRDS' },
+};
+async function replyTemplates(env, fid) {
+  const saved = parse((await env.DB.prepare('SELECT value FROM panel_settings WHERE key = ?').bind('reply_tpl_' + fid).first())?.value) || {};
+  const out = {};
+  for (const k of ['accept', 'reject']) out[k] = { subject: saved[k]?.subject || REPLY_DEFAULTS[k].subject, body: saved[k]?.body || REPLY_DEFAULTS[k].body };
+  return out;
+}
+const emailOf = (f, d) => {
+  const qs = (parse(f.fields) || []).filter(x => x.type !== 'section');
+  const x = qs.find(q => q.type === 'email' && /@/.test(String(d[q.id] || ''))) || qs.find(q => /e-?mail/i.test(q.label) && /@/.test(String(d[q.id] || '')));
+  const e = x ? String(d[x.id]).trim() : '';
+  return /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(e) ? e : '';
+};
+
 async function respName(DB, f, rid) {
   const r = await DB.prepare('SELECT data, (SELECT COUNT(*) FROM form_responses WHERE form_id = ? AND id <= ?) AS n FROM form_responses WHERE id = ?').bind(f.id, rid, rid).first();
   if (!r) return `#${rid}`;
@@ -355,7 +380,7 @@ export async function formsApi(req, env, s, url, audit) {
     await DB.batch(ids.slice(0, 200).map((id, i) => DB.prepare('UPDATE forms SET position = ? WHERE id = ?').bind(i + 1, String(id))));
     return { ok: true };
   }
-  const mm = p.match(/^\/api\/forms\/([\w-]+)(?:\/(responses|csv|seen|links))?(?:\/(\d+))?$/);
+  const mm = p.match(/^\/api\/forms\/([\w-]+)(?:\/(responses|csv|seen|links|replies|reply))?(?:\/(\d+))?$/);
   if (!mm) throw new FormError(404, 'Not found.');
   const f = await getForm(env, mm[1]);
   if (!canSeeForm(s, f)) throw new FormError(403, 'You don’t have access to this form.');
@@ -393,6 +418,35 @@ export async function formsApi(req, env, s, url, audit) {
     return { links: rows.map(l => ({ id: l.hash.slice(0, 16), note: l.note || '', by: l.created_by, by_name: l.by_name || String(l.created_by || '').split('@')[0], created_at: l.created_at, expires_at: l.expires_at, opened_at: l.opened_at, used_at: l.used_at, response_id: l.response_id || null,
       state: linkState(l), url: l.token ? `${origin}/forms/${f.slug}?k=${l.token}` : '' })) };
   }
+  // plantillas para contestar (aceptar / rechazar). Verlas: quien ve el formulario; cambiarlas y enviar: quien lo puede editar.
+  if (mm[2] === 'replies' && m === 'GET') return { templates: await replyTemplates(env, f.id) };
+  if (mm[2] === 'replies' && m === 'POST') {
+    if (s.sync || formLevel(s, f) !== 'edit') throw new FormError(403, 'Your role can’t change the reply templates.');
+    const b = parse(await req.text()) || {}, cur = await replyTemplates(env, f.id), out = {};
+    for (const k of ['accept', 'reject']) out[k] = { subject: clean(b[k]?.subject, 200) || cur[k].subject, body: clean(b[k]?.body, 5000) || cur[k].body };
+    await DB.prepare('INSERT OR REPLACE INTO panel_settings (key, value) VALUES (?, ?)').bind('reply_tpl_' + f.id, JSON.stringify(out)).run();
+    await audit(`Changed the reply templates of “${f.title}”`);
+    return { ok: true, templates: out };
+  }
+  if (mm[2] === 'reply' && mm[3] && m === 'POST') {
+    if (s.sync || formLevel(s, f) !== 'edit') throw new FormError(403, 'Your role can’t reply to responses here.');
+    const rid = Number(mm[3]), b = parse(await req.text()) || {};
+    const kind = b.kind === 'accept' ? 'accept' : b.kind === 'reject' ? 'reject' : '';
+    if (!kind) throw new FormError(400, 'Accept or reject?');
+    const row = await DB.prepare('SELECT data FROM form_responses WHERE id = ? AND form_id = ?').bind(rid, f.id).first();
+    if (!row) throw new FormError(404, 'That response no longer exists.');
+    const to = emailOf(f, parse(row.data) || {});
+    if (!to) throw new FormError(400, 'This response has no valid email address.');
+    const subject = clean(b.subject, 200), body = clean(b.body, 5000);
+    if (!subject || !body) throw new FormError(400, 'Write the subject and the message.');
+    try { await demoReplyMail(env, to, subject, body); }
+    catch (e) { throw new FormError(502, e.message); }
+    const who = clean(s.name, 120) || String(s.email || '').split('@')[0];
+    await DB.prepare('INSERT INTO form_replies (response_id, form_id, kind, to_email, subject, body, at, by, by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(rid, f.id, kind, to, subject, body, now(), s.email || '', who).run();
+    await audit(`${kind === 'accept' ? 'Accepted' : 'Rejected'} the response ${await respName(DB, f, rid)} in “${f.title}” (email sent to ${to})`);
+    return { ok: true, reply: { kind, at: now(), by_name: who } };
+  }
   if (!mm[2] && m === 'DELETE') {
     if (!s.owner || s.sync) throw new FormError(403, 'Only owners can delete a form.');
     const n = (await DB.prepare('SELECT COUNT(*) AS n FROM form_responses WHERE form_id = ?').bind(f.id).first()).n;
@@ -416,7 +470,9 @@ export async function formsApi(req, env, s, url, audit) {
       ? await DB.prepare(base + " AND (data LIKE ? ESCAPE '\\' OR n = ?)" + tail).bind(f.id, s.email || '', from, like, num).all()
       : await DB.prepare(base + tail).bind(f.id, s.email || '', from).all()).results;
     const list = rows.slice(0, 100), by = await seenBy(DB, list.map(r => r.id));
-    return { responses: list.map(r => ({ id: r.id, n: r.n, at: r.at, seen: !!r.seen, seen_by: by[r.id] || [], data: parse(r.data) || {} })), more: rows.length > 100, asc };
+    const rep = {};
+    if (list.length) for (const x of (await DB.prepare(`SELECT response_id, kind, at, by_name FROM form_replies WHERE response_id IN (${list.map(() => '?').join(',')}) ORDER BY id`).bind(...list.map(r => r.id)).all()).results) rep[x.response_id] = { kind: x.kind, at: x.at, by_name: x.by_name };
+    return { responses: list.map(r => ({ id: r.id, n: r.n, at: r.at, seen: !!r.seen, seen_by: by[r.id] || [], data: parse(r.data) || {}, reply: rep[r.id] || null })), more: rows.length > 100, asc };
   }
   if (mm[2] === 'responses' && mm[3] && m === 'POST') {
     // visto / nuevo solo para quien lo pulsa (el resto del team lo sigue viendo como estaba)
@@ -456,7 +512,7 @@ export async function formsApi(req, env, s, url, audit) {
       for (const x of parse(f.fields) || []) if (x.type !== 'section' && d[x.id] != null && d[x.id] !== '' && !(Array.isArray(d[x.id]) && !d[x.id].length)) answers[x.label] = d[x.id];
       await DB.prepare('INSERT INTO gform_del (google_id, at, answers, name, title, created_at) VALUES (?, ?, ?, ?, ?, ?)').bind(gid, row.at, JSON.stringify(answers), name, f.title, now()).run();
     }
-    await DB.prepare('DELETE FROM form_seen WHERE response_id = ?').bind(Number(mm[3])).run();
+    await DB.batch([DB.prepare('DELETE FROM form_seen WHERE response_id = ?').bind(Number(mm[3])), DB.prepare('DELETE FROM form_replies WHERE response_id = ?').bind(Number(mm[3]))]);
     await audit(`Deleted the response ${name} from the form “${f.title}”`);
     return { ok: true };
   }

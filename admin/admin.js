@@ -1887,10 +1887,22 @@
     return `
       <button type="button" class="back" data-act="form-back">← Forms</button>
       <div class="head"><div><p class="eyebrow">Responses</p><h1>${esc(f.title)} <span class="count">${f.total}</span></h1></div>
-        <div class="head-btns" data-form="${esc(f.id)}">${rs && rs.some(r => !r.seen) && !preview && auth.user.owner ? '<button type="button" class="btn ghost" data-act="resp-all-seen">Mark all as seen</button>' : ''}${f.invite && !preview ? '<button type="button" class="btn ghost" data-act="form-links">Generate link</button>' : ''}${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Download (Excel / CSV)</button>' : ''}${canEditForm(f) && !preview ? '<button type="button" class="btn primary" data-act="form-edit">Edit form</button>' : ''}</div></div>
+        <div class="head-btns" data-form="${esc(f.id)}">${rs && rs.some(r => !r.seen) && !preview && auth.user.owner ? '<button type="button" class="btn ghost" data-act="resp-all-seen">Mark all as seen</button>' : ''}${f.invite && !preview ? '<button type="button" class="btn ghost" data-act="form-links">Generate link</button>' : ''}${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Download (Excel / CSV)</button>' : ''}${canReply(f) ? '<button type="button" class="btn ghost" data-act="reply-tpl">Reply templates</button>' : ''}${canEditForm(f) && !preview ? '<button type="button" class="btn primary" data-act="form-edit">Edit form</button>' : ''}</div></div>
       ${formOpen.err ? `<p class="login-error" role="alert">${esc(formOpen.err)}</p>` : ''}
       ${f.total ? `<div class="resp-search"><input class="search" type="search" id="resp-filter" placeholder="Search by #number, name, track, email…" aria-label="Search responses" value="${esc(formOpen.q || '')}" autocomplete="off"></div>` : ''}
       <div id="resp-list">${respList(f)}</div>`;
+  }
+  // Demos: contestar con plantilla (aceptar / rechazar) por correo. Solo en el form de demos y para quien lo puede editar.
+  const isReplyForm = f => !!f && /demo/i.test(f.slug || '') && f.fields.some(x => x.type === 'email');
+  const canReply = f => isReplyForm(f) && canEditForm(f) && !preview;
+  const respEmail = (f, r) => { const x = f.fields.find(q => q.type === 'email' && /@/.test(String(r.data[q.id] || ''))); return x ? String(r.data[x.id]).trim() : ''; };
+  const fillTpl = (txt, f, r) => { const w = respWho(f, r); return String(txt || '').replace(/\{artist\}/gi, w.who || 'there').replace(/\{track\}/gi, w.what || 'your track'); };
+  const replyLabel = rp => rp ? `${rp.kind === 'accept' ? 'Accepted' : 'Rejected'}` : '';
+  async function replyTemplatesFor(f) {
+    if (formOpen.tpl?.fid === f.id) return formOpen.tpl.t;
+    const r = await api('GET', `/api/forms/${encodeURIComponent(f.id)}/replies`);
+    formOpen.tpl = { fid: f.id, t: r.templates };
+    return r.templates;
   }
   // nombre del artista (y título del track) para la cabecera de cada respuesta
   function respWho(f, r) {
@@ -1917,9 +1929,13 @@
   function respItem(f, r, rs, q, qs, own) {
     return `
         <article class="resp${r.seen ? '' : ' is-new'}${respOpen(r, rs) ? ' is-open' : ''}" data-resp="${r.id}">
-          <header data-act="resp-toggle" title="Show / hide the answers"><span class="resp-num">#${r.n || ''}</span>${(() => { const w = respWho(f, r); return w.who ? `<span class="resp-who"><b>${mark(esc(w.who), q)}</b>${w.what ? `<span>${mark(esc(w.what), q)}</span>` : ''}</span>` : ''; })()}${r.seen ? '' : '<span class="new-pill">New</span>'}<span class="resp-date">${esc(fmtDate(r.at))}</span>${seenByHtml(r)}
+          <header data-act="resp-toggle" title="Show / hide the answers"><span class="resp-num">#${r.n || ''}</span>${(() => { const w = respWho(f, r); return w.who ? `<span class="resp-who"><b>${mark(esc(w.who), q)}</b>${w.what ? `<span>${mark(esc(w.what), q)}</span>` : ''}</span>` : ''; })()}${r.seen ? '' : '<span class="new-pill">New</span>'}${r.reply ? `<span class="reply-pill ${r.reply.kind === 'accept' ? 'is-acc' : 'is-rej'}" title="${esc(replyLabel(r.reply))} by ${esc(r.reply.by_name || '')} · ${esc(fmtDate(r.reply.at))}">${replyLabel(r.reply)}</span>` : ''}<span class="resp-date">${esc(fmtDate(r.at))}</span>${seenByHtml(r)}
             <span class="resp-btns">${preview || !auth.user.owner ? '' : r.seen ? '<button type="button" class="btn ghost sm" data-act="resp-unseen">Mark as new</button>' : '<button type="button" class="btn primary sm" data-act="resp-seen">Mark as seen</button>'}${own ? '<button type="button" class="btn ghost sm" data-act="resp-del">Delete</button>' : ''}</span></header>
           ${respOpen(r, rs) ? `<dl>${qs.map(x => `<dt>${esc(x.label)}</dt><dd>${mark(answerHtml(r.data[x.id]), q)}</dd>`).join('')}</dl>` : ''}
+          ${respOpen(r, rs) && canReply(f) ? `<div class="resp-reply">
+            <span class="muted sm-txt">${r.reply ? `${replyLabel(r.reply)} by ${esc(r.reply.by_name || '')} · ${esc(fmtDate(r.reply.at))} — email sent` : respEmail(f, r) ? `Reply to ${esc(respEmail(f, r))}` : 'No email address in this response'}</span>
+            <span class="resp-btns"><button type="button" class="btn ghost sm acc-txt" data-act="resp-reply" data-kind="accept" ${respEmail(f, r) ? '' : 'disabled'}>Accept</button><button type="button" class="btn ghost sm danger-txt" data-act="resp-reply" data-kind="reject" ${respEmail(f, r) ? '' : 'disabled'}>Reject</button></span>
+          </div>` : ''}
         </article>`;
   }
   // visto / nuevo (solo para ti); tu foto se añade o se quita de «Seen by»
@@ -2185,6 +2201,29 @@
       openLinks(formOpen.id, { filter: formOpen.filter, q: formOpen.q, show: formOpen.show, made: formOpen.made, links: formOpen.links });
     } catch (x) { toast(x.message); }
   });
+  document.addEventListener('submit', async e => {
+    const fm = e.target;
+    if (fm.id !== 'reply-send' && fm.id !== 'reply-tpl') return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (busy || !formOpen?.id) return;
+    const fid = formOpen.id, btn = fm.querySelector('[type=submit]'), d = Object.fromEntries(new FormData(fm));
+    busy = true; btn.disabled = true;
+    try {
+      if (fm.id === 'reply-tpl') {
+        const r = await api('POST', `/api/forms/${encodeURIComponent(fid)}/replies`, { accept: { subject: d.accept_subject, body: d.accept_body }, reject: { subject: d.reject_subject, body: d.reject_body } });
+        formOpen.tpl = { fid, t: r.templates };
+        closeSheet(); toast('Templates saved');
+      } else {
+        const rid = Number(fm.dataset.rid), kind = fm.dataset.kind;
+        const r = await api('POST', `/api/forms/${encodeURIComponent(fid)}/reply/${rid}`, { kind, subject: d.subject, body: d.body });
+        const x = formOpen?.id === fid && formOpen.responses.find(y => y.id === rid);
+        if (x) x.reply = r.reply;
+        closeSheet(); toast(kind === 'accept' ? 'Acceptance email sent' : 'Rejection email sent');
+        if (x) patchResps([rid]);
+      }
+    } catch (err) { if (err.status === 401) { busy = false; logout(err.message); return; } toast(err.message); }
+    finally { busy = false; btn.disabled = false; }
+  });
   async function formAction(fn, ok) {
     busy = true;
     try { await fn(); if (ok) toast(ok); }
@@ -2246,6 +2285,36 @@
       const all = act === 'resp-all-seen', seen = act !== 'resp-unseen';
       const ids = all ? formOpen.responses.filter(r => !r.seen).map(r => r.id) : [Number(t.closest('[data-resp]').dataset.resp)];
       if (ids.length) markSeen(ids, seen, all);
+    } else if (act === 'resp-reply') {
+      // abre el correo ya escrito con la plantilla (se puede retocar) y se envía con un botón
+      const f = formsData.forms.find(x => x.id === formOpen.id), rid = Number(t.closest('[data-resp]').dataset.resp), r = formOpen.responses.find(x => x.id === rid);
+      if (!f || !r) return;
+      const kind = t.dataset.kind === 'accept' ? 'accept' : 'reject';
+      let tpl; try { tpl = (await replyTemplatesFor(f))[kind]; } catch (err) { toast(err.message); return; }
+      const again = r.reply ? `<p class="info sm-txt">Already ${replyLabel(r.reply).toLowerCase()} on ${esc(fmtDate(r.reply.at))} by ${esc(r.reply.by_name || '')}. Sending again will email the artist one more time.</p>` : '';
+      sheet(`<form id="reply-send" data-rid="${rid}" data-kind="${kind}">
+        <div class="sheet-head"><h2>${kind === 'accept' ? 'Accept demo' : 'Reject demo'}</h2><button type="button" class="btn ghost sm" data-act="sheet-x">Close</button></div>
+        ${again}
+        <div class="field"><label>To</label><input value="${esc(respEmail(f, r))}" readonly></div>
+        <div class="field"><label for="rp-subj">Subject</label><input id="rp-subj" name="subject" maxlength="200" value="${esc(fillTpl(tpl.subject, f, r))}"></div>
+        <div class="field"><label for="rp-body">Message</label><textarea id="rp-body" name="body" rows="11" maxlength="5000">${esc(fillTpl(tpl.body, f, r))}</textarea></div>
+        <div class="confirm-actions"><button type="submit" class="btn ${kind === 'accept' ? 'primary' : 'danger'}">Send email</button></div>
+      </form>`);
+    } else if (act === 'reply-tpl') {
+      const f = formsData.forms.find(x => x.id === formOpen.id);
+      if (!f) return;
+      let T; try { T = await replyTemplatesFor(f); } catch (err) { toast(err.message); return; }
+      const part = (k, label) => `<h3 class="rp-h">${label}</h3>
+        <div class="field"><label for="rt-${k}-s">Subject</label><input id="rt-${k}-s" name="${k}_subject" maxlength="200" value="${esc(T[k].subject)}"></div>
+        <div class="field"><label for="rt-${k}-b">Message</label><textarea id="rt-${k}-b" name="${k}_body" rows="8" maxlength="5000">${esc(T[k].body)}</textarea></div>`;
+      sheet(`<form id="reply-tpl">
+        <div class="sheet-head"><h2>Reply templates</h2><button type="button" class="btn ghost sm" data-act="sheet-x">Close</button></div>
+        <p class="info sm-txt">{artist} and {track} are replaced with each response’s artist and track. You can still edit the email before sending it.</p>
+        ${part('accept', 'Accept')}${part('reject', 'Reject')}
+        <div class="confirm-actions"><button type="submit" class="btn primary">Save templates</button></div>
+      </form>`);
+    } else if (act === 'sheet-x') {
+      closeSheet();
     } else if (act === 'resp-del') {
       const rid = Number(t.closest('[data-resp]').dataset.resp);
       if (!await confirmBox('Delete this response? This can’t be undone.', 'Delete')) return;

@@ -46,7 +46,7 @@ const hello = sg => sg.label && !/^Artista?\s*\d*$/i.test(sg.label) ? `Hi ${esc(
 
 // Resend (plan gratis: 3.000 correos/mes, 100/día). La clave va como secreto RESEND_API_KEY.
 async function send(env, msg) {
-  const from = env.MAIL_FROM || 'contracts@horizonrcrds.com';
+  const from = msg.from || env.MAIL_FROM || 'contracts@horizonrcrds.com';
   const body = {
     from: `HORIZON RCRDS <${from}>`, to: [msg.to], reply_to: env.MAIL_TO || from,   // solo al artista (sin copia a Horizon); si responde, llega a Horizon
     subject: msg.subject, html: msg.html, text: textOf(msg.html),
@@ -64,6 +64,12 @@ async function send(env, msg) {
   if (/domain.*not verified|verify a domain|testing emails/i.test(m)) throw new Error('Resend did not send it: the horizonrcrds.com domain is not verified in Resend yet.');
   if (r.status === 429) throw new Error('Resend sending limit reached (100 a day on the free plan). Try again later.');
   throw new Error(`The email could not be sent (Resend: ${m || r.status}).`);
+}
+
+// respuesta a una demo (aceptada / rechazada): sale de demos@, y si el artista contesta llega al correo de Horizon
+export function demoReplyMail(env, to, subject, text) {
+  const body = esc(text).replace(/\r?\n/g, '<br>');
+  return send(env, { to, from: env.DEMO_FROM || 'demos@horizonrcrds.com', subject, html: layout(esc(subject), body, null) });
 }
 
 // código para entrar al panel con el email (para quien no usa Google)

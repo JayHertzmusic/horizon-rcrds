@@ -1140,3 +1140,13 @@ html, body, * { scrollbar-width: none; }
 .ch-blocked-h .muted { font-size: 12px; text-transform: none; letter-spacing: 0; }
 .ch-bars.dense { gap: 1px; }
 .ch-bars.dense .ch-bar i { border-radius: 2px 2px 0 0; }
+/* Forms · contestar demos (aceptar / rechazar) */
+.reply-pill { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.reply-pill.is-acc { background: rgba(34,197,94,.13); border: 1px solid rgba(34,197,94,.45); color: #86efac; }
+.reply-pill.is-rej { background: rgba(255,255,255,.05); border: 1px solid var(--line-2); color: var(--faint); }
+.resp-reply { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.resp-reply .resp-btns { display: flex; gap: 8px; }
+.btn.acc-txt { color: #86efac; }
+.sheet .rp-h { margin: 18px 0 8px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #fff; }
+.sheet textarea { width: 100%; resize: vertical; }
+.sheet .field input { width: 100%; }

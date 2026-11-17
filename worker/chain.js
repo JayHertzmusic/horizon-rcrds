@@ -230,6 +230,19 @@ export async function chainApi(req, env, s, url, audit) {
   if (p === '/api/chain/run' && m === 'POST') { const processed = await runChainActions(env, 30); return { ok: true, processed }; }
   if (p === '/api/chain/clear' && m === 'POST') { await DB.prepare("DELETE FROM sc_actions WHERE status = 'queued'").run(); await audit('Cleared the queued chain actions'); return { ok: true }; }
 
+  // sacar a alguien de la cadena: se borran su cuenta conectada (y sus tokens) y sus acciones pendientes.
+  // Sus descargas/connects pasados siguen contando en las estadísticas.
+  if (p === '/api/chain/member/remove' && m === 'POST') {
+    const id = Number(body.id);
+    const mem = id ? await DB.prepare('SELECT name FROM sc_members WHERE id = ?').bind(id).first() : null;
+    if (!mem) throw new ChainError(404, 'That account is not in the chain.');
+    await DB.batch([
+      DB.prepare("DELETE FROM sc_actions WHERE member_id = ? AND status = 'queued'").bind(id),
+      DB.prepare('DELETE FROM sc_members WHERE id = ?').bind(id),
+    ]);
+    await audit(`Removed ${mem.name || '#' + id} from the SoundCloud chain`);
+    return { ok: true };
+  }
   // estadísticas: descargas y connects con fecha de los últimos N días (el panel los agrupa por día en su hora local)
   if (p === '/api/chain/stats' && m === 'GET') {
     const days = Math.max(7, Math.min(365, Number(url.searchParams.get('days')) || 90)), since = now() - (days + 1) * 86400e3;
@@ -243,7 +256,7 @@ export async function chainApi(req, env, s, url, audit) {
   // quién desbloqueó un release
   if (p === '/api/chain/unlocks' && m === 'GET') {
     const rid = clean(url.searchParams.get('release') || '', 80);
-    const rows = (await DB.prepare(`SELECT u.at, m.name, m.permalink, m.avatar, m.followers FROM sc_unlocks u JOIN sc_members m ON m.id = u.member_id
+    const rows = (await DB.prepare(`SELECT u.at, m.name, m.permalink, m.avatar, m.followers FROM sc_unlocks u LEFT JOIN sc_members m ON m.id = u.member_id
        ${rid ? 'WHERE u.release_id = ?' : ''} ORDER BY u.id DESC LIMIT 500`).bind(...(rid ? [rid] : [])).all()).results;
     return { unlocks: rows };
   }

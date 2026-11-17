@@ -3582,6 +3582,7 @@
             ${m.avatar ? `<img class="ch-av" src="${esc(m.avatar)}" alt="" referrerpolicy="no-referrer" loading="lazy">` : `<span class="ch-av ph">${esc((m.name || '?').trim()[0] || '?').toUpperCase()}</span>`}
             <span class="meta"><b>${esc(m.name || ('#' + m.id))}</b><span>${m.followers != null ? nfmt(m.followers) + ' followers · ' : ''}joined ${esc(fmtDate(m.connected_at))}${m.revoked ? ' · <span class="danger-txt">disconnected</span>' : ''}</span></span>
             <a class="btn ghost sm" href="${esc(scProfile(m))}" target="_blank" rel="noopener">SoundCloud ↗</a>
+            <button type="button" class="btn ghost sm danger-txt" data-ch="member-remove" data-mid="${esc(m.id)}">Remove</button>
           </li>`).join('') : '<li class="empty">Nobody has connected yet.</li>'}
       </ol>`;
   }
@@ -3592,7 +3593,7 @@
       const rows = r.unlocks || [];
       const items = rows.map(u => `<li class="row ch-member">
         ${u.avatar ? `<img class="ch-av" src="${esc(u.avatar)}" alt="" referrerpolicy="no-referrer" loading="lazy">` : `<span class="ch-av ph">${esc((u.name || '?').trim()[0] || '?').toUpperCase()}</span>`}
-        <span class="meta"><b>${esc(u.name || 'SoundCloud user')}</b><span>${u.followers != null ? nfmt(u.followers) + ' followers · ' : ''}${esc(fmtDate(u.at))}</span></span>
+        <span class="meta"><b>${esc(u.name || (u.permalink ? 'SoundCloud user' : 'Removed account'))}</b><span>${u.followers != null ? nfmt(u.followers) + ' followers · ' : ''}${esc(fmtDate(u.at))}</span></span>
         <a class="btn ghost sm" href="${esc(u.permalink || '#')}" target="_blank" rel="noopener">SoundCloud ↗</a></li>`).join('');
       sheet(`<div class="sheet-head"><h2>${esc(rid)} · connects</h2><button type="button" class="btn ghost sm" data-ch="sheet-close">Close</button></div>${rows.length ? `<ol class="list ch-members">${items}</ol>` : '<p class="info">No connects yet.</p>'}`);
     } catch (e) { toast(e.message); }
@@ -3637,6 +3638,14 @@
     if (stBtn) { chainStatsDays = Number(stBtn.dataset.chst) || 30; render(); return; }
     const t = e.target.closest('[data-ch]'); if (!t || busy) return;
     const li = t.closest('[data-rid]'), rid = li?.dataset.rid, a = t.dataset.ch;
+    if (a === 'member-remove') {
+      const mid = Number(t.dataset.mid), mem = chainData.members.find(x => x.id === mid) || {};
+      if (!await confirmBox(`Remove ${mem.name || 'this account'} from the chain? Their account will no longer be used for follows, likes or reposts, and their queued actions are cancelled. Past downloads still count in Stats.`, 'Remove')) return;
+      busy = true;
+      try { await api('POST', '/api/chain/member/remove', { id: mid }); toast('Removed from the chain'); chainData = null; await loadChain(); }
+      catch (err) { toast(err.message); }
+      busy = false; return;
+    }
     if (a === 'toggle') {
       // instantáneo: se marca ya y la llamada va por detrás (resolver el track puede tardar ~1s)
       const on = t.checked, rel = (repo?.releases || []).find(x => x.id === rid) || {};

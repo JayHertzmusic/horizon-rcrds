@@ -29,6 +29,9 @@ export const CHAIN_SCHEMA = [
   // gate por release: si está activo, el archivo (clave en KV), el track de SoundCloud y las acciones al desbloquear
   `CREATE TABLE IF NOT EXISTS sc_gates (release_id TEXT PRIMARY KEY, active INTEGER NOT NULL DEFAULT 0, file TEXT, file_name TEXT, file_size INTEGER,
      track_url TEXT, track_id TEXT, actions TEXT, notice TEXT, downloads INTEGER NOT NULL DEFAULT 0, updated_at INTEGER, created_by TEXT)`,
+  // cada descarga real (para las estadísticas por día y el ranking)
+  `CREATE TABLE IF NOT EXISTS sc_downloads (id INTEGER PRIMARY KEY AUTOINCREMENT, release_id TEXT NOT NULL, member_id INTEGER, at INTEGER NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS sc_downloads_at ON sc_downloads (at)`,
 ];
 
 /* ---------------- SoundCloud API ---------------- */
@@ -227,6 +230,16 @@ export async function chainApi(req, env, s, url, audit) {
   if (p === '/api/chain/run' && m === 'POST') { const processed = await runChainActions(env, 30); return { ok: true, processed }; }
   if (p === '/api/chain/clear' && m === 'POST') { await DB.prepare("DELETE FROM sc_actions WHERE status = 'queued'").run(); await audit('Cleared the queued chain actions'); return { ok: true }; }
 
+  // estadísticas: descargas y connects con fecha de los últimos N días (el panel los agrupa por día en su hora local)
+  if (p === '/api/chain/stats' && m === 'GET') {
+    const days = Math.max(7, Math.min(365, Number(url.searchParams.get('days')) || 90)), since = now() - (days + 1) * 86400e3;
+    const [dl, un, first] = await Promise.all([
+      DB.prepare('SELECT release_id AS r, at FROM sc_downloads WHERE at >= ? ORDER BY at LIMIT 20000').bind(since).all(),
+      DB.prepare('SELECT release_id AS r, at FROM sc_unlocks WHERE at >= ? ORDER BY at LIMIT 20000').bind(since).all(),
+      DB.prepare('SELECT MIN(at) AS at FROM sc_downloads').first(),
+    ]);
+    return { days, downloads: dl.results, connects: un.results, tracked_since: first?.at || null };
+  }
   // quién desbloqueó un release
   if (p === '/api/chain/unlocks' && m === 'GET') {
     const rid = clean(url.searchParams.get('release') || '', 80);
@@ -320,7 +333,10 @@ export async function chainPublic(req, env, url) {
     if (!pass || pass.rid !== rid) throw new ChainError(403, 'Connect your SoundCloud to unlock this download.');
     // de un solo uso: se quema al descargar, así compartir el link no sirve (hay 3 usos de margen por si el navegador reintenta)
     const uses = (pass.uses || 0) + 1;
-    if (uses === 1) await DB.prepare('UPDATE sc_gates SET downloads = COALESCE(downloads, 0) + 1 WHERE release_id = ?').bind(rid).run().catch(() => {});   // cuenta una vez por descarga
+    if (uses === 1) await DB.batch([   // cuenta una vez por descarga (total + registro con fecha para las estadísticas)
+      DB.prepare('UPDATE sc_gates SET downloads = COALESCE(downloads, 0) + 1 WHERE release_id = ?').bind(rid),
+      DB.prepare('INSERT INTO sc_downloads (release_id, member_id, at) VALUES (?, ?, ?)').bind(rid, pass.member || null, now()),
+    ]).catch(() => {});
     if (uses >= 3) await env.FILES.delete(`dl/${dl}`).catch(() => {});
     else await env.FILES.put(`dl/${dl}`, JSON.stringify({ ...pass, uses }), { expirationTtl: 1800 }).catch(() => {});
     const gate = await DB.prepare('SELECT file, file_name FROM sc_gates WHERE release_id = ? AND active = 1').bind(rid).first();

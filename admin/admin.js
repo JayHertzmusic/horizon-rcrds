@@ -3425,9 +3425,9 @@
       <div class="head"><div><p class="eyebrow">SoundCloud</p><h1>GATES</h1></div></div>
       ${warn}
       <div class="ct-tabs" role="tablist">
-        ${tab('gates', 'Downloads', onN)}${tab('support', 'Support', null)}${tab('members', 'Members', chainData.members.length)}${tab('settings', 'Settings', null)}
+        ${tab('gates', 'Downloads', onN)}${tab('stats', 'Stats', null)}${tab('support', 'Support', null)}${tab('members', 'Members', chainData.members.length)}${tab('settings', 'Settings', null)}
       </div>
-      ${chainTab === 'settings' ? chainSettingsHtml() : chainTab === 'gates' ? chainGatesHtml() : chainTab === 'members' ? chainMembersHtml() : chainSupportHtml()}
+      ${chainTab === 'settings' ? chainSettingsHtml() : chainTab === 'gates' ? chainGatesHtml() : chainTab === 'members' ? chainMembersHtml() : chainTab === 'stats' ? chainStatsHtml() : chainSupportHtml()}
       <input type="file" id="ch-file" class="sr-only" accept="audio/mpeg,.mp3">`;
   }
   function chainSettingsHtml() {
@@ -3498,6 +3498,80 @@
       ${(pend + done + fail) ? `<div class="ch-queue"><span>${pend} queued · ${done} done${fail ? ' · ' + fail + ' failed' : ''}</span>
         <span class="row-btns">${pend ? '<button type="button" class="btn ghost sm" data-ch="run">Run due now</button><button type="button" class="btn ghost sm danger-txt" data-ch="clear">Clear queued</button>' : ''}</span></div>` : ''}`;
   }
+  // Stats: descargas por día (en la hora local del navegador) + ranking de tracks
+  let chainStats = null, chainStatsDays = 30, chainStatsLoading = false;
+  async function loadChainStats() {
+    if (chainStatsLoading) return;
+    chainStatsLoading = true;
+    try { chainStats = await api('GET', '/api/chain/stats?days=90'); }
+    catch (e) { chainStats = { error: e.message }; }
+    chainStatsLoading = false;
+    if (view === 'chain' && chainTab === 'stats') render();
+  }
+  const dayKey = t => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+  function chainStatsHtml() {
+    if (!chainStats) { setTimeout(loadChainStats, 0); return '<p class="info">Loading…</p>'; }
+    if (chainStats.error) return `<p class="login-error" role="alert">${esc(chainStats.error)}</p>`;
+    const N = chainStatsDays, today = new Date(); today.setHours(0, 0, 0, 0);
+    const days = Array.from({ length: N }, (_, i) => { const d = new Date(today); d.setDate(d.getDate() - (N - 1 - i)); return { d, key: dayKey(d), dl: 0, cn: 0 }; });
+    const byKey = Object.fromEntries(days.map(x => [x.key, x]));
+    for (const r of chainStats.downloads || []) { const x = byKey[dayKey(r.at)]; if (x) x.dl++; }
+    for (const r of chainStats.connects || []) { const x = byKey[dayKey(r.at)]; if (x) x.cn++; }
+    const since = ms => (chainStats.downloads || []).filter(r => r.at >= ms).length;
+    const t0 = today.getTime(), allDl = chainData.gates.reduce((a, g) => a + (g.downloads || 0), 0);
+    const tiles = [['Today', since(t0)], ['Last 7 days', since(t0 - 6 * 86400e3)], ['Last 30 days', since(t0 - 29 * 86400e3)], ['All time', allDl]];
+    // eje: máximo «redondo» para que las líneas de guía caigan en números enteros
+    const top = Math.max(...days.map(x => x.dl)), step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000].find(v => v * 4 >= top) || Math.ceil(top / 4000) * 1000, yMax = step * Math.max(1, Math.ceil(top / step));
+    const grid = []; for (let v = 0; v <= yMax; v += step) grid.push(v);
+    const dfmt = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    const every = N <= 7 ? 1 : N <= 30 ? 7 : 15;
+    const bars = days.map((x, i) => `<span class="ch-bar" tabindex="0" data-tip="${esc(x.d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }))}|${x.dl}|${x.cn}" aria-label="${esc(dfmt(x.d))}: ${x.dl} downloads, ${x.cn} connects"><i style="height:${(x.dl / yMax * 100).toFixed(2)}%"></i>${(N - 1 - i) % every === 0 ? `<em${i === N - 1 && N > 7 ? ' class="end"' : ''}>${esc(dfmt(x.d))}</em>` : ''}</span>`).join('');
+    // ranking: todos los releases con gate que tienen descargas o connects
+    const rangeStart = days[0].d.getTime(), inRange = {};
+    for (const r of chainStats.downloads || []) if (r.at >= rangeStart) inRange[r.r] = (inRange[r.r] || 0) + 1;
+    const rel = id => (repo?.releases || []).find(r => r.id === id) || {};
+    const rank = chainData.gates.filter(g => (g.downloads || 0) + (g.unlocks || 0) > 0)
+      .sort((a, b) => (b.downloads || 0) - (a.downloads || 0) || (b.unlocks || 0) - (a.unlocks || 0));
+    const tracked = chainStats.tracked_since ? new Date(chainStats.tracked_since).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+    const rb = n => `<button type="button" class="${N === n ? 'on' : ''}" data-chst="${n}">${n} days</button>`;
+    return `
+      <div class="ch-tiles">${tiles.map(([l, v]) => `<div class="ch-tile"><span>${l}</span><b>${v}</b><small>download${v === 1 ? '' : 's'}</small></div>`).join('')}</div>
+      <div class="ch-chart">
+        <div class="ch-chart-head"><h2>Downloads per day</h2><span class="ch-range" role="group" aria-label="Period">${rb(7)}${rb(30)}${rb(90)}</span></div>
+        <div class="ch-plot">
+          <div class="ch-grid">${grid.map(v => `<span style="bottom:${(v / yMax * 100).toFixed(2)}%"><em>${v}</em></span>`).join('')}</div>
+          <div class="ch-bars">${bars}</div>
+          <div class="ch-tip" hidden></div>
+        </div>
+        <p class="muted sm-txt">${tracked ? `Daily downloads are counted since ${esc(tracked)}.` : 'Daily downloads are counted from now on.'} Hover a day to see its connects too.</p>
+      </div>
+      <h2 class="ch-h2">Top tracks</h2>
+      <ol class="list ch-rank">
+        ${rank.length ? rank.map((g, i) => { const r = rel(g.release_id); return `
+          <li class="row ch-rank-row">
+            <span class="ch-pos">${i + 1}</span>
+            ${imgTag(r.image, 'thumb')}
+            <span class="meta"><b>${esc(r.artist || '')}${r.title ? ' - ' + esc(r.title) : ''}${!r.artist && !r.title ? esc(g.release_id) : ''}</b><span>${esc(catOf(r) || g.release_id)}${g.active ? '' : ' · <span class="muted">gate off</span>'}</span></span>
+            <span class="ch-num"><b>${g.downloads || 0}</b><small>downloads</small></span>
+            <span class="ch-num"><b>${inRange[g.release_id] || 0}</b><small>last ${N} days</small></span>
+            <span class="ch-num"><b>${g.unlocks || 0}</b><small>connects</small></span>
+          </li>`; }).join('') : '<li class="empty">No downloads yet.</li>'}
+      </ol>`;
+  }
+  // tooltip de las barras (ratón y teclado)
+  const chTip = e => {
+    const bar = e.target.closest?.('.ch-bar'), plot = bar?.closest('.ch-plot'), tip = plot?.querySelector('.ch-tip');
+    if (!bar || !tip) return;
+    const [d, dl, cn] = bar.dataset.tip.split('|');
+    tip.innerHTML = `<b>${esc(d)}</b><span>${dl} download${dl === '1' ? '' : 's'}</span><span>${cn} connect${cn === '1' ? '' : 's'}</span>`;
+    tip.hidden = false;
+    const pr = plot.getBoundingClientRect(), br = bar.getBoundingClientRect(), w = tip.offsetWidth;
+    tip.style.left = Math.max(0, Math.min(pr.width - w, br.left - pr.left + br.width / 2 - w / 2)) + 'px';
+  };
+  document.addEventListener('mouseover', chTip);
+  document.addEventListener('focusin', chTip);
+  document.addEventListener('mouseout', e => { if (e.target.closest?.('.ch-bar') && !e.relatedTarget?.closest?.('.ch-bar')) { const t = document.querySelector('.ch-tip'); if (t) t.hidden = true; } });
+  document.addEventListener('focusout', e => { if (e.target.closest?.('.ch-bar')) { const t = document.querySelector('.ch-tip'); if (t) t.hidden = true; } });
   const nfmt = n => n == null ? '' : n >= 1000 ? (n / 1000).toFixed(n >= 10000 ? 0 : 1).replace('.0', '') + 'k' : String(n);
   function chainMembersHtml() {
     return `
@@ -3558,7 +3632,9 @@
   document.addEventListener('click', async e => {
     if (view !== 'chain') return;
     const tabBtn = e.target.closest('[data-chtab]');
-    if (tabBtn) { chainTab = tabBtn.dataset.chtab; render(); return; }
+    if (tabBtn) { chainTab = tabBtn.dataset.chtab; if (chainTab === 'stats') chainStats = null; render(); return; }
+    const stBtn = e.target.closest('[data-chst]');
+    if (stBtn) { chainStatsDays = Number(stBtn.dataset.chst) || 30; render(); return; }
     const t = e.target.closest('[data-ch]'); if (!t || busy) return;
     const li = t.closest('[data-rid]'), rid = li?.dataset.rid, a = t.dataset.ch;
     if (a === 'toggle') {

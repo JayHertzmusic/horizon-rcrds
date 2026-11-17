@@ -3582,9 +3582,21 @@
             ${m.avatar ? `<img class="ch-av" src="${esc(m.avatar)}" alt="" referrerpolicy="no-referrer" loading="lazy">` : `<span class="ch-av ph">${esc((m.name || '?').trim()[0] || '?').toUpperCase()}</span>`}
             <span class="meta"><b>${esc(m.name || ('#' + m.id))}</b><span>${m.followers != null ? nfmt(m.followers) + ' followers · ' : ''}joined ${esc(fmtDate(m.connected_at))}${m.revoked ? ' · <span class="danger-txt">disconnected</span>' : ''}</span></span>
             <a class="btn ghost sm" href="${esc(scProfile(m))}" target="_blank" rel="noopener">SoundCloud ↗</a>
+            <button type="button" class="btn ghost sm danger-txt" data-ch="member-block" data-mid="${esc(m.id)}">Block</button>
             <button type="button" class="btn ghost sm danger-txt" data-ch="member-remove" data-mid="${esc(m.id)}">Remove</button>
           </li>`).join('') : '<li class="empty">Nobody has connected yet.</li>'}
-      </ol>`;
+      </ol>
+      ${(chainData.blocked || []).length ? `
+      <h2 class="ch-h2 ch-blocked-h">Blocked <span class="muted">(can’t connect again)</span></h2>
+      <ol class="list ch-members">
+        ${chainData.blocked.map(m => `
+          <li class="row ch-member is-off">
+            ${m.avatar ? `<img class="ch-av" src="${esc(m.avatar)}" alt="" referrerpolicy="no-referrer" loading="lazy">` : `<span class="ch-av ph">${esc((m.name || '?').trim()[0] || '?').toUpperCase()}</span>`}
+            <span class="meta"><b>${esc(m.name || ('#' + m.id))}</b><span>${m.followers != null ? nfmt(m.followers) + ' followers · ' : ''}blocked ${esc(fmtDate(m.at))}</span></span>
+            <a class="btn ghost sm" href="${esc(scProfile(m))}" target="_blank" rel="noopener">SoundCloud ↗</a>
+            <button type="button" class="btn ghost sm" data-ch="member-unblock" data-mid="${esc(m.id)}">Unblock</button>
+          </li>`).join('')}
+      </ol>` : ''}`;
   }
   // panel de desbloqueos de un release (quién descargó)
   async function chainUnlocks(rid) {
@@ -3638,6 +3650,18 @@
     if (stBtn) { chainStatsDays = Number(stBtn.dataset.chst) || 30; render(); return; }
     const t = e.target.closest('[data-ch]'); if (!t || busy) return;
     const li = t.closest('[data-rid]'), rid = li?.dataset.rid, a = t.dataset.ch;
+    if (a === 'member-block' || a === 'member-unblock') {
+      const mid = Number(t.dataset.mid), block = a === 'member-block';
+      const mem = (block ? chainData.members : chainData.blocked || []).find(x => x.id === mid) || {};
+      const ask = block
+        ? `Block ${mem.name || 'this account'}? They are removed from the chain and can’t connect again (no downloads, no follows, likes or reposts) until you unblock them.`
+        : `Unblock ${mem.name || 'this account'}? They will be able to connect again from a download gate.`;
+      if (!await confirmBox(ask, block ? 'Block' : 'Unblock')) return;
+      busy = true;
+      try { await api('POST', `/api/chain/member/${block ? 'block' : 'unblock'}`, { id: mid }); toast(block ? 'Blocked' : 'Unblocked'); chainData = null; await loadChain(); }
+      catch (err) { toast(err.message); }
+      busy = false; return;
+    }
     if (a === 'member-remove') {
       const mid = Number(t.dataset.mid), mem = chainData.members.find(x => x.id === mid) || {};
       if (!await confirmBox(`Remove ${mem.name || 'this account'} from the chain? Their account will no longer be used for follows, likes or reposts, and their queued actions are cancelled. Past downloads still count in Stats.`, 'Remove')) return;

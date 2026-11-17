@@ -1136,3 +1136,5 @@ html, body, * { scrollbar-width: none; }
 }
 .ch-tip[hidden] { display: none; }
 .ch-bar em.end { left: auto; right: 0; transform: none; }
+.ch-blocked-h { margin-top: 24px; }
+.ch-blocked-h .muted { font-size: 12px; text-transform: none; letter-spacing: 0; }

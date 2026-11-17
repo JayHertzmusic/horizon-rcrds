@@ -32,6 +32,8 @@ export const CHAIN_SCHEMA = [
   // cada descarga real (para las estadísticas por día y el ranking)
   `CREATE TABLE IF NOT EXISTS sc_downloads (id INTEGER PRIMARY KEY AUTOINCREMENT, release_id TEXT NOT NULL, member_id INTEGER, at INTEGER NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS sc_downloads_at ON sc_downloads (at)`,
+  // cuentas bloqueadas por un owner: no pueden volver a conectar (ni entrar en la cadena ni descargar)
+  `CREATE TABLE IF NOT EXISTS sc_blocked (id INTEGER PRIMARY KEY, name TEXT, permalink TEXT, avatar TEXT, followers INTEGER, at INTEGER NOT NULL, by TEXT)`,
 ];
 
 /* ---------------- SoundCloud API ---------------- */
@@ -143,7 +145,8 @@ export async function chainApi(req, env, s, url, audit) {
     const members = (await DB.prepare('SELECT id, name, permalink, avatar, followers, connected_at, last_action_at, revoked FROM sc_members ORDER BY connected_at DESC').all()).results;
     const gates = (await DB.prepare('SELECT g.*, (SELECT COUNT(*) FROM sc_unlocks u WHERE u.release_id = g.release_id) AS unlocks FROM sc_gates g').all()).results
       .map(g => ({ ...g, actions: parse(g.actions) || st.actions, active: !!g.active, file: !!g.file }));
-    return { settings: st, members, gates };
+    const blocked = (await DB.prepare('SELECT id, name, permalink, avatar, followers, at FROM sc_blocked ORDER BY at DESC').all()).results;
+    return { settings: st, members, gates, blocked };
   }
   // ajustes generales: aviso, cuenta de Horizon a seguir, acciones por defecto
   if (p === '/api/chain/settings' && m === 'POST') {
@@ -243,6 +246,27 @@ export async function chainApi(req, env, s, url, audit) {
     await audit(`Removed ${mem.name || '#' + id} from the SoundCloud chain`);
     return { ok: true };
   }
+  // bloquear: se saca de la cadena (como Remove) y además no puede volver a conectar. Solo para quien el owner elija.
+  if (p === '/api/chain/member/block' && m === 'POST') {
+    const id = Number(body.id);
+    const mem = id ? await DB.prepare('SELECT id, name, permalink, avatar, followers FROM sc_members WHERE id = ?').bind(id).first() : null;
+    if (!mem) throw new ChainError(404, 'That account is not in the chain.');
+    await DB.batch([
+      DB.prepare('INSERT OR REPLACE INTO sc_blocked (id, name, permalink, avatar, followers, at, by) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, mem.name, mem.permalink, mem.avatar, mem.followers, now(), s.email),
+      DB.prepare("DELETE FROM sc_actions WHERE member_id = ? AND status = 'queued'").bind(id),
+      DB.prepare('DELETE FROM sc_members WHERE id = ?').bind(id),
+    ]);
+    await audit(`Blocked ${mem.name || '#' + id} from the SoundCloud chain`);
+    return { ok: true };
+  }
+  if (p === '/api/chain/member/unblock' && m === 'POST') {
+    const id = Number(body.id);
+    const b = id ? await DB.prepare('SELECT name FROM sc_blocked WHERE id = ?').bind(id).first() : null;
+    if (!b) throw new ChainError(404, 'That account is not blocked.');
+    await DB.prepare('DELETE FROM sc_blocked WHERE id = ?').bind(id).run();
+    await audit(`Unblocked ${b.name || '#' + id} in the SoundCloud chain`);
+    return { ok: true };
+  }
   // estadísticas: descargas y connects con fecha de los últimos N días (el panel los agrupa por día en su hora local)
   if (p === '/api/chain/stats' && m === 'GET') {
     const days = Math.max(7, Math.min(365, Number(url.searchParams.get('days')) || 90)), since = now() - (days + 1) * 86400e3;
@@ -297,6 +321,7 @@ export async function scOauth(req, env, url) {
       const meR = await scGet(tj.access_token, '/me');
       if (!meR.ok || !meR.j?.id) { console.error('sc /me', meR.status, JSON.stringify(meR.j).slice(0, 200)); throw new ChainError(502, `Could not read the SoundCloud account (${meR.status}).`); }
       const me = meR.j, exp = now() + (tj.expires_in || 3600) * 1000;
+      if (await DB.prepare('SELECT 1 FROM sc_blocked WHERE id = ?').bind(Number(me.id)).first()) return back('This SoundCloud account can’t use this download.', false, st.rid);
       const member = { id: String(me.id), access_token: tj.access_token, refresh_token: tj.refresh_token || null, token_exp: exp };
       await DB.prepare(`INSERT INTO sc_members (id, name, permalink, avatar, followers, city, access_token, refresh_token, token_exp, scope, connected_at, revoked)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)

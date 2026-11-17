@@ -249,9 +249,9 @@ export async function scOauth(req, env, url) {
     try {
       const tr = await scTokenReq(env, { grant_type: 'authorization_code', redirect_uri: REDIRECT(env), code_verifier: st.verifier, code });
       const tj = await tr.json().catch(() => ({}));
-      if (!tr.ok || !tj.access_token) throw new ChainError(502, 'SoundCloud sign-in failed.');
+      if (!tr.ok || !tj.access_token) { console.error('sc token', tr.status, JSON.stringify(tj).slice(0, 200)); throw new ChainError(502, `SoundCloud sign-in failed (${tr.status} ${tj.error || tj.error_description || ''}).`); }
       const meR = await scGet(tj.access_token, '/me');
-      if (!meR.ok || !meR.j?.id) throw new ChainError(502, 'Could not read the SoundCloud account.');
+      if (!meR.ok || !meR.j?.id) { console.error('sc /me', meR.status, JSON.stringify(meR.j).slice(0, 200)); throw new ChainError(502, `Could not read the SoundCloud account (${meR.status}).`); }
       const me = meR.j, exp = now() + (tj.expires_in || 3600) * 1000;
       const member = { id: String(me.id), access_token: tj.access_token, refresh_token: tj.refresh_token || null, token_exp: exp };
       await DB.prepare(`INSERT INTO sc_members (id, name, permalink, avatar, followers, city, access_token, refresh_token, token_exp, scope, connected_at, revoked)

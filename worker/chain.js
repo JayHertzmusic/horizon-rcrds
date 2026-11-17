@@ -269,7 +269,9 @@ export async function chainApi(req, env, s, url, audit) {
   }
   // estadísticas: descargas y connects con fecha de los últimos N días (el panel los agrupa por día en su hora local)
   if (p === '/api/chain/stats' && m === 'GET') {
-    const days = Math.max(7, Math.min(365, Number(url.searchParams.get('days')) || 90)), since = now() - (days + 1) * 86400e3;
+    // days=all → todo el historial
+    const all = url.searchParams.get('days') === 'all';
+    const days = all ? null : Math.max(7, Math.min(365, Number(url.searchParams.get('days')) || 90)), since = all ? 0 : now() - (days + 1) * 86400e3;
     const [dl, un, first] = await Promise.all([
       DB.prepare('SELECT release_id AS r, at FROM sc_downloads WHERE at >= ? ORDER BY at LIMIT 20000').bind(since).all(),
       DB.prepare('SELECT release_id AS r, at FROM sc_unlocks WHERE at >= ? ORDER BY at LIMIT 20000').bind(since).all(),

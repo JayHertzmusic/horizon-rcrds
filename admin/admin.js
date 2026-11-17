@@ -3503,7 +3503,7 @@
   async function loadChainStats() {
     if (chainStatsLoading) return;
     chainStatsLoading = true;
-    try { chainStats = await api('GET', '/api/chain/stats?days=90'); }
+    try { chainStats = await api('GET', '/api/chain/stats?days=all'); }
     catch (e) { chainStats = { error: e.message }; }
     chainStatsLoading = false;
     if (view === 'chain' && chainTab === 'stats') render();
@@ -3512,7 +3512,10 @@
   function chainStatsHtml() {
     if (!chainStats) { setTimeout(loadChainStats, 0); return '<p class="info">Loading…</p>'; }
     if (chainStats.error) return `<p class="login-error" role="alert">${esc(chainStats.error)}</p>`;
-    const N = chainStatsDays, today = new Date(); today.setHours(0, 0, 0, 0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    // All time: desde el primer día con descargas registradas hasta hoy (mínimo 7 días)
+    const first = chainStats.tracked_since ? new Date(chainStats.tracked_since) : today; first.setHours(0, 0, 0, 0);
+    const isAll = chainStatsDays === 'all', N = isAll ? Math.max(7, Math.round((today - first) / 86400e3) + 1) : chainStatsDays;
     const days = Array.from({ length: N }, (_, i) => { const d = new Date(today); d.setDate(d.getDate() - (N - 1 - i)); return { d, key: dayKey(d), dl: 0, cn: 0 }; });
     const byKey = Object.fromEntries(days.map(x => [x.key, x]));
     for (const r of chainStats.downloads || []) { const x = byKey[dayKey(r.at)]; if (x) x.dl++; }
@@ -3524,7 +3527,7 @@
     const top = Math.max(...days.map(x => x.dl)), step = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000].find(v => v * 4 >= top) || Math.ceil(top / 4000) * 1000, yMax = step * Math.max(1, Math.ceil(top / step));
     const grid = []; for (let v = 0; v <= yMax; v += step) grid.push(v);
     const dfmt = d => d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-    const every = N <= 7 ? 1 : N <= 30 ? 7 : 15;
+    const every = N <= 7 ? 1 : N <= 30 ? 7 : N <= 90 ? 15 : Math.ceil(N / 6);
     const bars = days.map((x, i) => `<span class="ch-bar" tabindex="0" data-tip="${esc(x.d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }))}|${x.dl}|${x.cn}" aria-label="${esc(dfmt(x.d))}: ${x.dl} downloads, ${x.cn} connects"><i style="height:${(x.dl / yMax * 100).toFixed(2)}%"></i>${(N - 1 - i) % every === 0 ? `<em${i === N - 1 && N > 7 ? ' class="end"' : ''}>${esc(dfmt(x.d))}</em>` : ''}</span>`).join('');
     // ranking: todos los releases con gate que tienen descargas o connects
     const rangeStart = days[0].d.getTime(), inRange = {};
@@ -3533,14 +3536,14 @@
     const rank = chainData.gates.filter(g => (g.downloads || 0) + (g.unlocks || 0) > 0)
       .sort((a, b) => (b.downloads || 0) - (a.downloads || 0) || (b.unlocks || 0) - (a.unlocks || 0));
     const tracked = chainStats.tracked_since ? new Date(chainStats.tracked_since).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
-    const rb = n => `<button type="button" class="${N === n ? 'on' : ''}" data-chst="${n}">${n} days</button>`;
+    const rb = n => `<button type="button" class="${chainStatsDays === n ? 'on' : ''}" data-chst="${n}">${n === 'all' ? 'All time' : n + ' days'}</button>`;
     return `
       <div class="ch-tiles">${tiles.map(([l, v]) => `<div class="ch-tile"><span>${l}</span><b>${v}</b><small>download${v === 1 ? '' : 's'}</small></div>`).join('')}</div>
       <div class="ch-chart">
-        <div class="ch-chart-head"><h2>Downloads per day</h2><span class="ch-range" role="group" aria-label="Period">${rb(7)}${rb(30)}${rb(90)}</span></div>
+        <div class="ch-chart-head"><h2>Downloads per day</h2><span class="ch-range" role="group" aria-label="Period">${rb(7)}${rb(30)}${rb(90)}${rb('all')}</span></div>
         <div class="ch-plot">
           <div class="ch-grid">${grid.map(v => `<span style="bottom:${(v / yMax * 100).toFixed(2)}%"><em>${v}</em></span>`).join('')}</div>
-          <div class="ch-bars">${bars}</div>
+          <div class="ch-bars${N > 90 ? ' dense' : ''}">${bars}</div>
           <div class="ch-tip" hidden></div>
         </div>
         <p class="muted sm-txt">${tracked ? `Daily downloads are counted since ${esc(tracked)}.` : 'Daily downloads are counted from now on.'} Hover a day to see its connects too.</p>
@@ -3553,7 +3556,7 @@
             ${imgTag(r.image, 'thumb')}
             <span class="meta"><b>${esc(r.artist || '')}${r.title ? ' - ' + esc(r.title) : ''}${!r.artist && !r.title ? esc(g.release_id) : ''}</b><span>${esc(catOf(r) || g.release_id)}${g.active ? '' : ' · <span class="muted">gate off</span>'}</span></span>
             <span class="ch-num"><b>${g.downloads || 0}</b><small>downloads</small></span>
-            <span class="ch-num"><b>${inRange[g.release_id] || 0}</b><small>last ${N} days</small></span>
+            ${isAll ? '' : `<span class="ch-num"><b>${inRange[g.release_id] || 0}</b><small>last ${N} days</small></span>`}
             <span class="ch-num"><b>${g.unlocks || 0}</b><small>connects</small></span>
           </li>`; }).join('') : '<li class="empty">No downloads yet.</li>'}
       </ol>`;
@@ -3647,7 +3650,7 @@
     const tabBtn = e.target.closest('[data-chtab]');
     if (tabBtn) { chainTab = tabBtn.dataset.chtab; if (chainTab === 'stats') chainStats = null; render(); return; }
     const stBtn = e.target.closest('[data-chst]');
-    if (stBtn) { chainStatsDays = Number(stBtn.dataset.chst) || 30; render(); return; }
+    if (stBtn) { chainStatsDays = stBtn.dataset.chst === 'all' ? 'all' : Number(stBtn.dataset.chst) || 30; render(); return; }
     const t = e.target.closest('[data-ch]'); if (!t || busy) return;
     const li = t.closest('[data-rid]'), rid = li?.dataset.rid, a = t.dataset.ch;
     if (a === 'member-block' || a === 'member-unblock') {

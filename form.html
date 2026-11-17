@@ -253,6 +253,14 @@
     /* sin barras de scroll visibles (se sigue pudiendo desplazar) */
     html, body, * { scrollbar-width: none; }
     ::-webkit-scrollbar { display: none; width: 0; height: 0; }
+  /* autocompletado del navegador (Chrome/Edge/Safari pintan el campo de azul claro; Firefox de amarillo): se queda con el fondo del form */
+  input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus, textarea:-webkit-autofill, select:-webkit-autofill {
+    -webkit-text-fill-color: #fff; caret-color: #fff; -webkit-box-shadow: 0 0 0 1000px transparent inset; transition: background-color 600000s 0s, color 600000s 0s; }
+  input:autofill { filter: none; }
+  /* «Thank you»: centrado en la pantalla (entre el logo y el pie), no pegado arriba */
+  html.sent:not(.embed):not(.excl) body { display: flex; flex-direction: column; }
+  html.sent:not(.embed):not(.excl) main { flex: 1; display: flex; align-items: center; padding-top: 32px; padding-bottom: 32px; }
+  html.sent:not(.embed):not(.excl) #root { width: 100%; }
 </style>
 <script>/* incrustado en la portada: modo compacto desde el primer instante (sin enseñar la página completa) */
 if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.documentElement.classList.add('embed');</script>
@@ -567,6 +575,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
       root.innerHTML = EXCL()
         ? `<div class="x-end"><a class="xa-brand x-end-brand" href="/"><img src="/assets/logo.png" alt=""><span>HORIZON RCRDS</span></a><div class="done"><span class="x-badge"><i></i>Received</span><h2 style="margin-top:22px">Thank you${form.note ? ', ' + esc(form.note) : ''}!</h2><p>Your details are with HORIZON RCRDS.<br>We’ll prepare everything for your release and be in touch soon.</p><a href="/">Back to the website</a></div></div>`
         : `<div class="done"><h2>Thank you!</h2><p>Your answer has been sent to HORIZON RCRDS.<br>We’ll get back to you soon.</p><a href="/">Back to the website</a></div>`;
+      document.documentElement.classList.add('sent');   // el «Thank you» va centrado en la pantalla
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (x) { err.textContent = x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Send'; }
   });

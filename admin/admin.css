@@ -1062,3 +1062,21 @@ html, body, * { scrollbar-width: none; }
 .lk-empty { padding: 30px 0; text-align: center; }
 @media (max-width: 760px) { .lk-made { grid-template-columns: 1fr; } .lk-search { width: 100%; } }
 @media (max-width: 420px) { .lk-card footer { flex-wrap: wrap; } }
+
+/* ---- Chain (download gates) ---- */
+.ch-set { max-width: 820px; }
+.ch-set .ch-acts { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 8px; }
+.ch-set .ch-acts .check { margin: 0; }
+.ch-gates { margin-top: 6px; }
+.row.ch-gate { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.row.ch-gate .thumb { width: 48px; height: 48px; border-radius: 6px; flex: none; }
+.row.ch-gate .meta { flex: 1 1 220px; min-width: 0; }
+.row.ch-gate .meta b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row.ch-gate .pub-sw { flex: none; }
+.row.ch-gate .row-btns { flex: none; display: flex; gap: 8px; align-items: center; }
+.row.ch-gate .ch-track { flex: 1 1 100%; display: flex; gap: 8px; margin: 4px 0 2px 62px; }
+.row.ch-gate .ch-track input { flex: 1; min-width: 0; }
+.ch-gate .ok-txt { color: #22c55e; }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.sheet-head h2 { margin: 0; }
+@media (max-width: 620px) { .row.ch-gate .ch-track { margin-left: 0; } }

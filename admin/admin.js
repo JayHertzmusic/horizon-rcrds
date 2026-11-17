@@ -1865,12 +1865,12 @@
   }
   /* Respuestas */
   async function openResponses(id) {
-    formOpen = { mode: 'responses', id, responses: null, more: false, err: '' };
+    formOpen = { mode: 'responses', id, responses: null, more: false, err: '', status: '' };
     render();
     try {
       const r = await api('GET', `/api/forms/${encodeURIComponent(id)}/responses`);
       if (formOpen?.id !== id) return;
-      formOpen.responses = r.responses; formOpen.more = r.more;
+      formOpen.responses = r.responses; formOpen.more = r.more; formOpen.counts = r.counts;
     } catch (e) { if (formOpen) formOpen.err = e.message; }
     if (view === 'forms') render();
   }
@@ -1890,7 +1890,15 @@
         <div class="head-btns" data-form="${esc(f.id)}">${rs && rs.some(r => !r.seen) && !preview && auth.user.owner ? '<button type="button" class="btn ghost" data-act="resp-all-seen">Mark all as seen</button>' : ''}${f.invite && !preview ? '<button type="button" class="btn ghost" data-act="form-links">Generate link</button>' : ''}${f.total ? '<button type="button" class="btn ghost" data-act="form-csv">Download (Excel / CSV)</button>' : ''}${canReply(f) ? '<button type="button" class="btn ghost" data-act="reply-tpl">Reply templates</button>' : ''}${canEditForm(f) && !preview ? '<button type="button" class="btn primary" data-act="form-edit">Edit form</button>' : ''}</div></div>
       ${formOpen.err ? `<p class="login-error" role="alert">${esc(formOpen.err)}</p>` : ''}
       ${f.total ? `<div class="resp-search"><input class="search" type="search" id="resp-filter" placeholder="Search by #number, name, track, email…" aria-label="Search responses" value="${esc(formOpen.q || '')}" autocomplete="off"></div>` : ''}
+      ${respTabs(f)}
       <div id="resp-list">${respList(f)}</div>`;
+  }
+  // demos: All / Pending / Accepted / Rejected
+  function respTabs(f) {
+    if (!isReplyForm(f) || !f.total) return '';
+    const c = formOpen.counts || {}, cur = formOpen.status || '';
+    const tab = (st, label, n) => `<button type="button" role="tab" class="${cur === st ? 'on' : ''}" data-act="resp-tab" data-st="${st}">${label}${n != null ? `<span>${n}</span>` : ''}</button>`;
+    return `<div class="ct-tabs resp-tabs" id="resp-tabs" role="tablist">${tab('', 'All', f.total)}${tab('pending', 'Pending', c.pending)}${tab('accept', 'Accepted', c.accept)}${tab('reject', 'Rejected', c.reject)}</div>`;
   }
   // Demos: contestar con plantilla (aceptar / rechazar) por correo. Solo en el form de demos y para quien lo puede editar.
   const isReplyForm = f => !!f && /demo/i.test(f.slug || '') && f.fields.some(x => x.type === 'email');
@@ -1934,7 +1942,7 @@
           ${respOpen(r, rs) ? `<dl>${qs.map(x => `<dt>${esc(x.label)}</dt><dd>${mark(answerHtml(r.data[x.id]), q)}</dd>`).join('')}</dl>` : ''}
           ${respOpen(r, rs) && canReply(f) ? `<div class="resp-reply">
             <span class="muted sm-txt">${r.reply ? `${replyLabel(r.reply)} by ${esc(r.reply.by_name || '')} · ${esc(fmtDate(r.reply.at))} — email sent` : respEmail(f, r) ? `Reply to ${esc(respEmail(f, r))}` : 'No email address in this response'}</span>
-            <span class="resp-btns"><button type="button" class="btn ghost sm acc-txt" data-act="resp-reply" data-kind="accept" ${respEmail(f, r) ? '' : 'disabled'}>Accept</button><button type="button" class="btn ghost sm danger-txt" data-act="resp-reply" data-kind="reject" ${respEmail(f, r) ? '' : 'disabled'}>Reject</button></span>
+            ${r.reply ? '' : `<span class="resp-btns"><button type="button" class="btn ghost sm acc-txt" data-act="resp-reply" data-kind="accept" ${respEmail(f, r) ? '' : 'disabled'}>Accept</button><button type="button" class="btn ghost sm danger-txt" data-act="resp-reply" data-kind="reject" ${respEmail(f, r) ? '' : 'disabled'}>Reject</button></span>`}
           </div>` : ''}
         </article>`;
   }
@@ -1978,14 +1986,17 @@
   }
   // buscar en las respuestas (en el servidor: también las que aún no se han cargado)
   let respTimer = 0;
+  // ?q= (búsqueda) y ?status= (pestañas de demos) juntos
+  const respQs = (extra = {}) => { const p = new URLSearchParams(extra), q = (formOpen?.q || '').trim(); if (q) p.set('q', q); if (formOpen?.status) p.set('status', formOpen.status); const s = p.toString(); return s ? '?' + s : ''; };
   async function searchResponses() {
-    const id = formOpen?.id, q = (formOpen?.q || '').trim();
+    const id = formOpen?.id, q = (formOpen?.q || '').trim(), st = formOpen?.status || '';
     try {
-      const r = await api('GET', `/api/forms/${encodeURIComponent(id)}/responses${q ? '?q=' + encodeURIComponent(q) : ''}`);
-      if (formOpen?.id !== id || (formOpen.q || '').trim() !== q) return;
-      formOpen.responses = r.responses; formOpen.more = r.more;
+      const r = await api('GET', `/api/forms/${encodeURIComponent(id)}/responses${respQs()}`);
+      if (formOpen?.id !== id || (formOpen.q || '').trim() !== q || (formOpen.status || '') !== st) return;
+      formOpen.responses = r.responses; formOpen.more = r.more; formOpen.counts = r.counts;
       const f = formsData.forms.find(x => x.id === id), box = $('#resp-list');
       if (f && box) box.innerHTML = respList(f);
+      const tabs = $('#resp-tabs'); if (f && tabs) tabs.outerHTML = respTabs(f);
     } catch (err) { toast(err.message); }
   }
   /* Editor (owners) */
@@ -2219,7 +2230,14 @@
         const x = formOpen?.id === fid && formOpen.responses.find(y => y.id === rid);
         if (x) x.reply = r.reply;
         closeSheet(); toast(kind === 'accept' ? 'Acceptance email sent' : 'Rejection email sent');
-        if (x) patchResps([rid]);
+        if (formOpen?.id === fid) {
+          const c = formOpen.counts || (formOpen.counts = {});
+          c.pending = Math.max(0, (c.pending || 0) - 1); c[kind] = (c[kind] || 0) + 1;
+          const f = formsData.forms.find(y => y.id === fid);
+          if (formOpen.status === 'pending') { formOpen.responses = formOpen.responses.filter(y => y.id !== rid); const box = $('#resp-list'); if (f && box) box.innerHTML = respList(f); }
+          else if (x) patchResps([rid]);
+          const tabs = $('#resp-tabs'); if (f && tabs) tabs.outerHTML = respTabs(f);
+        }
       }
     } catch (err) { if (err.status === 401) { busy = false; logout(err.message); return; } toast(err.message); }
     finally { busy = false; btn.disabled = false; }
@@ -2271,7 +2289,7 @@
     } else if (act === 'resp-more') {
       const last = formOpen.responses.at(-1)?.id;
       const q = (formOpen.q || '').trim();
-      try { const r = await api('GET', `/api/forms/${encodeURIComponent(formOpen.id)}/responses?from=${last}${q ? '&q=' + encodeURIComponent(q) : ''}`); formOpen.responses.push(...r.responses); formOpen.more = r.more; const f = formsData.forms.find(x => x.id === formOpen.id); $('#resp-list').innerHTML = respList(f); } catch (err) { toast(err.message); }
+      try { const r = await api('GET', `/api/forms/${encodeURIComponent(formOpen.id)}/responses${respQs({ from: last })}`); formOpen.responses.push(...r.responses); formOpen.more = r.more; const f = formsData.forms.find(x => x.id === formOpen.id); $('#resp-list').innerHTML = respList(f); } catch (err) { toast(err.message); }
     } else if (act === 'resp-toggle') {
       if (e.target.closest('button, a')) return;
       const rid = Number(t.closest('[data-resp]').dataset.resp);
@@ -2291,10 +2309,8 @@
       if (!f || !r) return;
       const kind = t.dataset.kind === 'accept' ? 'accept' : 'reject';
       let tpl; try { tpl = (await replyTemplatesFor(f))[kind]; } catch (err) { toast(err.message); return; }
-      const again = r.reply ? `<p class="info sm-txt">Already ${replyLabel(r.reply).toLowerCase()} on ${esc(fmtDate(r.reply.at))} by ${esc(r.reply.by_name || '')}. Sending again will email the artist one more time.</p>` : '';
       sheet(`<form id="reply-send" data-rid="${rid}" data-kind="${kind}">
         <div class="sheet-head"><h2>${kind === 'accept' ? 'Accept demo' : 'Reject demo'}</h2><button type="button" class="btn ghost sm" data-act="sheet-x">Close</button></div>
-        ${again}
         <div class="field"><label>To</label><input value="${esc(respEmail(f, r))}" readonly></div>
         <div class="field"><label for="rp-subj">Subject</label><input id="rp-subj" name="subject" maxlength="200" value="${esc(fillTpl(tpl.subject, f, r))}"></div>
         <div class="field"><label for="rp-body">Message</label><textarea id="rp-body" name="body" rows="11" maxlength="5000">${esc(fillTpl(tpl.body, f, r))}</textarea></div>
@@ -2313,6 +2329,13 @@
         ${part('accept', 'Accept')}${part('reject', 'Reject')}
         <div class="confirm-actions"><button type="submit" class="btn primary">Save templates</button></div>
       </form>`);
+    } else if (act === 'resp-tab') {
+      formOpen.status = t.dataset.st || '';
+      formOpen.responses = null; formOpen.more = false;
+      const f = formsData.forms.find(x => x.id === formOpen.id), box = $('#resp-list'), tabs = $('#resp-tabs');
+      if (f && tabs) tabs.outerHTML = respTabs(f);
+      if (f && box) box.innerHTML = respList(f);
+      searchResponses();
     } else if (act === 'sheet-x') {
       closeSheet();
     } else if (act === 'resp-del') {

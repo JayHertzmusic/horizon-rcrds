@@ -435,6 +435,7 @@ export async function formsApi(req, env, s, url, audit) {
     if (!kind) throw new FormError(400, 'Accept or reject?');
     const row = await DB.prepare('SELECT data FROM form_responses WHERE id = ? AND form_id = ?').bind(rid, f.id).first();
     if (!row) throw new FormError(404, 'That response no longer exists.');
+    if (await DB.prepare('SELECT 1 FROM form_replies WHERE response_id = ?').bind(rid).first()) throw new FormError(409, 'This demo was already answered.');
     const to = emailOf(f, parse(row.data) || {});
     if (!to) throw new FormError(400, 'This response has no valid email address.');
     const subject = clean(b.subject, 200), body = clean(b.body, 5000);
@@ -464,7 +465,9 @@ export async function formsApi(req, env, s, url, audit) {
     const like = '%' + q.replace(/[\\%_]/g, c => '\\' + c) + '%';
     // cada respuesta lleva su número (#1 = la primera que llegó), como las filas de Google; se puede buscar por él
     const num = /^#?\d{1,6}$/.test(q) ? Number(q.replace('#', '')) : -1;
-    const base = `WITH t AS (SELECT id, at, data, ROW_NUMBER() OVER (ORDER BY id) AS n FROM form_responses WHERE form_id = ?) SELECT r.*, ${SEEN_SQL} AS seen FROM t r WHERE id ${asc ? '>' : '<'} ?`;
+    // demos: filtrar por estado (pending = sin contestar; accept / reject = la última contestación)
+    const st = url.searchParams.get('status'), stSql = st === 'pending' ? ' AND rk IS NULL' : st === 'accept' ? " AND rk = 'accept'" : st === 'reject' ? " AND rk = 'reject'" : '';
+    const base = `WITH t AS (SELECT id, at, data, ROW_NUMBER() OVER (ORDER BY id) AS n, (SELECT x.kind FROM form_replies x WHERE x.response_id = form_responses.id ORDER BY x.id DESC LIMIT 1) AS rk FROM form_responses WHERE form_id = ?) SELECT r.*, ${SEEN_SQL} AS seen FROM t r WHERE id ${asc ? '>' : '<'} ?${stSql}`;
     const tail = ` ORDER BY id ${asc ? 'ASC' : 'DESC'} LIMIT 101`;
     const rows = (q
       ? await DB.prepare(base + " AND (data LIKE ? ESCAPE '\\' OR n = ?)" + tail).bind(f.id, s.email || '', from, like, num).all()
@@ -472,7 +475,9 @@ export async function formsApi(req, env, s, url, audit) {
     const list = rows.slice(0, 100), by = await seenBy(DB, list.map(r => r.id));
     const rep = {};
     if (list.length) for (const x of (await DB.prepare(`SELECT response_id, kind, at, by_name FROM form_replies WHERE response_id IN (${list.map(() => '?').join(',')}) ORDER BY id`).bind(...list.map(r => r.id)).all()).results) rep[x.response_id] = { kind: x.kind, at: x.at, by_name: x.by_name };
-    return { responses: list.map(r => ({ id: r.id, n: r.n, at: r.at, seen: !!r.seen, seen_by: by[r.id] || [], data: parse(r.data) || {}, reply: rep[r.id] || null })), more: rows.length > 100, asc };
+    const cnt = { pending: 0, accept: 0, reject: 0 };
+    for (const c of (await DB.prepare('SELECT rk, COUNT(*) AS n FROM (SELECT (SELECT x.kind FROM form_replies x WHERE x.response_id = r.id ORDER BY x.id DESC LIMIT 1) AS rk FROM form_responses r WHERE r.form_id = ?) GROUP BY rk').bind(f.id).all()).results) cnt[c.rk || 'pending'] = c.n;
+    return { responses: list.map(r => ({ id: r.id, n: r.n, at: r.at, seen: !!r.seen, seen_by: by[r.id] || [], data: parse(r.data) || {}, reply: rep[r.id] || null })), more: rows.length > 100, asc, counts: cnt };
   }
   if (mm[2] === 'responses' && mm[3] && m === 'POST') {
     // visto / nuevo solo para quien lo pulsa (el resto del team lo sigue viendo como estaba)

@@ -1150,3 +1150,4 @@ html, body, * { scrollbar-width: none; }
 .sheet .rp-h { margin: 18px 0 8px; font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #fff; }
 .sheet textarea { width: 100%; resize: vertical; }
 .sheet .field input { width: 100%; }
+.resp-tabs { margin: 4px 0 14px; }

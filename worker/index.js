@@ -11,6 +11,7 @@ import { CONTRACT_SCHEMA, CONTRACT_COLUMNS, SIGNER_COLUMNS, ContractError, contr
 import { EmailMessage } from 'cloudflare:email';
 import { loginCodeMail } from './contract-mail.js';
 import { CALENDAR_SCHEMA, CalendarError, calendarApi, discordCalendarHook } from './calendar.js';
+import { CHAIN_SCHEMA, ChainError, chainApi, scOauth, chainPublic, runChainActions } from './chain.js';
 import { horizonToken } from './gdocs.js';
 
 // Secciones del panel y lo que se puede hacer en cada una. Una sección nueva (p. ej. eventos) se añade aquí.
@@ -88,6 +89,7 @@ const BASE_SCHEMA = [
     ...FORM_SCHEMA,
     ...CONTRACT_SCHEMA,
     ...CALENDAR_SCHEMA,
+    ...CHAIN_SCHEMA,
 ];
 // columnas añadidas después: [ALTER, lo que hay que hacer solo la vez que se añade]
 const ALTERS = [
@@ -655,6 +657,8 @@ async function api(req, env, p, ctx) {
     if (!f.value) throw new HttpError(404, 'Not found.');
     return new Response(f.value, { headers: { 'Content-Type': f.metadata?.type || 'image/jpeg', 'Cache-Control': 'public, max-age=31536000, immutable' } });
   }
+  if (p === '/api/sc/login' || p === '/api/sc/callback') return await scOauth(req, env, url);   // cadena de SoundCloud (OAuth del artista)
+  if (p.startsWith('/api/public/download/')) { const r = await chainPublic(req, env, url); return r instanceof Response ? r : json(r); }   // download gate (sin sesión)
   if (p.startsWith('/api/hooks/gform/') && req.method === 'POST') return json(await gformHook(req, env, url));   // Google Forms ↔ web
   if (p === '/api/hooks/discord-calendar' && req.method === 'POST') return json(await discordCalendarHook(req, env));   // #horizon-calendar (bot de Discord) → Calendar
   if (p.startsWith('/api/public/')) return json(await publicFormsApi(req, env, url));   // formularios públicos (sin sesión)
@@ -704,6 +708,7 @@ async function api(req, env, p, ctx) {
     const r = await formsApi(req, env, s, url, action => audit(env, s, action));
     return r instanceof Response ? r : json(r);
   }
+  if (p === '/api/chain' || p.startsWith('/api/chain/')) { const r = await chainApi(req, env, s, url, action => audit(env, s, action)); return r instanceof Response ? r : json(r); }
   if (p === '/api/team' || p.startsWith('/api/team/')) return team(req, env, s, p);
   throw new HttpError(404, 'Not found.');
 }
@@ -714,6 +719,7 @@ export default {
     ctx.waitUntil(refreshScPhotos(env));
     // permiso de Google siempre listo (dura 50 min; se renueva si le quedan menos de 35): crear un contrato no espera por él
     ctx.waitUntil(horizonToken(env, 35 * 60e3).catch(e => console.error('google token', e.message)).then(() => checkDriveFiles(env)).catch(e => console.error('drive check', e)));
+    ctx.waitUntil(runChainActions(env).catch(e => console.error('chain actions', e)));   // reposts/likes programados de la cadena
   },
   async fetch(req, env, ctx) {
     const url = new URL(req.url), p = url.pathname;
@@ -723,6 +729,8 @@ export default {
       if (/^\/forms\/[a-z0-9-]+\/?$/.test(p)) return env.ASSETS.fetch(new Request(new URL('/form', url), req));
       // página de firma de cada contrato: /sign/<token>
       if (/^\/sign\/[\w-]{20,64}\/?$/.test(p)) return env.ASSETS.fetch(new Request(new URL('/sign', url), req));
+      // página de descarga (download gate): /download/<release>
+      if (/^\/download\/[\w-]+\/?$/.test(p) || p === '/download') return env.ASSETS.fetch(new Request(new URL('/download', url), req));
       if (req.method === 'GET' || req.method === 'HEAD') {
         const file = p.slice(1);
         if (BY_FILE[file]) { await ensureSchema(env); return await serveData(BY_FILE[file], req, env); }
@@ -731,7 +739,7 @@ export default {
       }
       return env.ASSETS.fetch(req);
     } catch (e) {
-      if (e instanceof HttpError || e instanceof FormError || e instanceof ContractError || e instanceof CalendarError) return fail(e.status, e.message);
+      if (e instanceof HttpError || e instanceof FormError || e instanceof ContractError || e instanceof CalendarError || e instanceof ChainError) return fail(e.status, e.message);
       console.error(e);
       return fail(500, 'Server error. Please try again.');
     }

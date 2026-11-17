@@ -3516,8 +3516,11 @@
     try {
       const r = await api('GET', `/api/chain/unlocks?release=${encodeURIComponent(rid)}`);
       const rows = r.unlocks || [];
-      const items = rows.map(u => `<li class="row"><span class="meta"><b>${esc(u.name || '')}</b><span>${u.followers != null ? u.followers + ' followers · ' : ''}${esc(fmtDate(u.at))}</span></span><a class="link" href="${esc(u.permalink || '#')}" target="_blank" rel="noopener">SoundCloud ↗</a></li>`).join('');
-      sheet(`<div class="sheet-head"><h2>${esc(rid)} · unlocks</h2><button type="button" class="btn ghost sm" onclick="this.closest('dialog').close()">Close</button></div>${rows.length ? `<ol class="list">${items}</ol>` : '<p class="info">No unlocks yet.</p>'}`);
+      const items = rows.map(u => `<li class="row ch-member">
+        ${u.avatar ? `<img class="ch-av" src="${esc(u.avatar)}" alt="" referrerpolicy="no-referrer" loading="lazy">` : `<span class="ch-av ph">${esc((u.name || '?').trim()[0] || '?').toUpperCase()}</span>`}
+        <span class="meta"><b>${esc(u.name || 'SoundCloud user')}</b><span>${u.followers != null ? nfmt(u.followers) + ' followers · ' : ''}${esc(fmtDate(u.at))}</span></span>
+        <a class="btn ghost sm" href="${esc(u.permalink || '#')}" target="_blank" rel="noopener">SoundCloud ↗</a></li>`).join('');
+      sheet(`<div class="sheet-head"><h2>${esc(rid)} · connects</h2><button type="button" class="btn ghost sm" data-ch="sheet-close">Close</button></div>${rows.length ? `<ol class="list ch-members">${items}</ol>` : '<p class="info">No connects yet.</p>'}`);
     } catch (e) { toast(e.message); }
   }
   document.addEventListener('submit', async e => {
@@ -3581,6 +3584,8 @@
       chainFileFor = rid; $('#ch-file').click();
     } else if (a === 'unlocks') {
       chainUnlocks(rid);
+    } else if (a === 'sheet-close') {
+      closeSheet();
     } else if (a === 'run') {
       busy = true; t.disabled = true; t.textContent = 'Running…';
       try { const r = await api('POST', '/api/chain/run'); toast(`Ran ${r.processed} action(s)`); chainData = null; await loadChain(); }

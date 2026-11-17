@@ -1068,11 +1068,14 @@ html, body, * { scrollbar-width: none; }
 .ch-set .ch-acts { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-top: 8px; }
 .ch-set .ch-acts .check { margin: 0; }
 .ch-gates { margin-top: 6px; }
-.row.ch-gate { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+.ch-gates { max-width: 960px; }
+.row.ch-gate { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .row.ch-gate .thumb { width: 48px; height: 48px; border-radius: 6px; flex: none; }
 .row.ch-gate .meta { flex: 1 1 220px; min-width: 0; }
-.row.ch-gate .meta b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row.ch-gate .meta > b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row.ch-gate .meta span b { font-weight: 700; color: #fff; }
 .row.ch-gate .pub-sw { flex: none; }
+.row.ch-gate .pub-sw { flex: none; min-width: 76px; }
 .row.ch-gate .row-btns { flex: none; display: flex; gap: 8px; align-items: center; }
 .row.ch-gate .ch-track { flex: 1 1 100%; display: flex; gap: 8px; margin: 4px 0 2px 62px; }
 .row.ch-gate .ch-track input { flex: 1; min-width: 0; }
@@ -1091,3 +1094,7 @@ html, body, * { scrollbar-width: none; }
 .ch-member .meta b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ch-member .btn { flex: none; }
 .ch-member.is-off { opacity: .55; }
+/* interruptor del gate: verde cuando está activo (más claro que el blanco) */
+.row.ch-gate .pub-sw.on { border-color: rgba(34,197,94,.5); background: rgba(34,197,94,.13); color: #eafff0; }
+.row.ch-gate .pub-sw.on .pub-knob { background: #22c55e; }
+.row.ch-gate .pub-sw.on .pub-knob::after { background: #05240f; }

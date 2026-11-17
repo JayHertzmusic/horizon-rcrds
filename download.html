@@ -80,8 +80,7 @@
 
     const head = brand +
       (d.image ? '<img class="cover" src="' + esc(img(d.image)) + '" alt="">' : '') +
-      '<p class="eyebrow">Extended Mix</p>' +
-      '<h1>' + esc(d.title || 'Download') + '</h1>' +
+      '<h1 style="margin-top:20px">' + esc(d.title || 'Download') + '</h1>' +
       (d.artist ? '<p class="artist">' + esc(d.artist) + '</p>' : '');
 
     if (params.get('done') === '1') {

@@ -28,7 +28,7 @@ export const CHAIN_SCHEMA = [
   `CREATE INDEX IF NOT EXISTS sc_actions_due ON sc_actions (status, scheduled_at)`,
   // gate por release: si está activo, el archivo (clave en KV), el track de SoundCloud y las acciones al desbloquear
   `CREATE TABLE IF NOT EXISTS sc_gates (release_id TEXT PRIMARY KEY, active INTEGER NOT NULL DEFAULT 0, file TEXT, file_name TEXT, file_size INTEGER,
-     track_url TEXT, track_id TEXT, actions TEXT, notice TEXT, updated_at INTEGER, created_by TEXT)`,
+     track_url TEXT, track_id TEXT, actions TEXT, notice TEXT, downloads INTEGER NOT NULL DEFAULT 0, updated_at INTEGER, created_by TEXT)`,
 ];
 
 /* ---------------- SoundCloud API ---------------- */
@@ -320,6 +320,7 @@ export async function chainPublic(req, env, url) {
     if (!pass || pass.rid !== rid) throw new ChainError(403, 'Connect your SoundCloud to unlock this download.');
     // de un solo uso: se quema al descargar, así compartir el link no sirve (hay 3 usos de margen por si el navegador reintenta)
     const uses = (pass.uses || 0) + 1;
+    if (uses === 1) await DB.prepare('UPDATE sc_gates SET downloads = COALESCE(downloads, 0) + 1 WHERE release_id = ?').bind(rid).run().catch(() => {});   // cuenta una vez por descarga
     if (uses >= 3) await env.FILES.delete(`dl/${dl}`).catch(() => {});
     else await env.FILES.put(`dl/${dl}`, JSON.stringify({ ...pass, uses }), { expirationTtl: 1800 }).catch(() => {});
     const gate = await DB.prepare('SELECT file, file_name FROM sc_gates WHERE release_id = ? AND active = 1').bind(rid).first();

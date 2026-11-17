@@ -105,6 +105,7 @@ const ALTERS = [
   ['ALTER TABLE forms ADD COLUMN invite INTEGER NOT NULL DEFAULT 0', "UPDATE forms SET invite = 1 WHERE slug = 'release-form'"],
   ...CONTRACT_COLUMNS.map(c => [`ALTER TABLE contracts ADD COLUMN ${c}`]),
   ...SIGNER_COLUMNS.map(c => [`ALTER TABLE contract_signers ADD COLUMN ${c}`]),
+  ['ALTER TABLE sc_gates ADD COLUMN downloads INTEGER NOT NULL DEFAULT 0'],   // conteo de descargas reales por release
 ];
 const ALL_SCHEMA = BASE_SCHEMA;   // (ya lleva las tablas de formularios, contratos y calendario)
 const SCHEMA_SIG = (() => { let h = 5381; for (const ch of JSON.stringify([ALL_SCHEMA, ALTERS])) h = (h * 33 + ch.charCodeAt(0)) >>> 0; return 'v' + h.toString(36); })();

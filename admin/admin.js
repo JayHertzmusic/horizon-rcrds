@@ -1281,6 +1281,7 @@
       else if (ctOpen?.mode === 'new' || ctOpen?.mode === 'new-tpl') p.ctNew = ctOpen.mode;
     }
     if (view === 'calendar' && calOpen) p.cal = calOpen.item?.id || 'new';
+    if (view === 'chain') p.chainTab = chainTab;   // Gates: recordar la sub-pestaña (Downloads/Support/Members/Settings)
     if (editing) p.edit = { view: editing.view, key: editing.key ?? null, index: editing.index ?? -1 };
     try { sessionStorage.setItem(PLACE_KEY, JSON.stringify(p)); } catch { /* nada */ }
   }
@@ -1316,6 +1317,7 @@
           if (tpl && view === 'contracts' && !ctOpen) { const b = document.createElement('button'); b.type = 'button'; b.dataset.ct = 'use'; b.hidden = true; const w = document.createElement('div'); w.dataset.ctid = tpl.id; w.appendChild(b); app.appendChild(w); b.click(); w.remove(); }
         } else render();
       }
+      if (view === 'chain' && p.chainTab) { chainTab = p.chainTab; render(); }
       if (view === 'calendar' && p.cal) {
         if (!calData) await loadCalendar();
         const item = p.cal === 'new' ? null : calData?.items.find(x => x.id === p.cal);
@@ -3450,15 +3452,17 @@
     const gateOf = id => chainData.gates.find(g => g.release_id === id) || {};
     const q = chainGateQ.trim().toLowerCase();
     const releases = (repo?.releases || []).filter(r => !q || `${r.artist || ''} ${r.title || ''} ${catOf(r)}`.toLowerCase().includes(q));
+    const totalDl = chainData.gates.reduce((a, g) => a + (g.downloads || 0), 0), totalUn = chainData.gates.reduce((a, g) => a + (g.unlocks || 0), 0), onN = chainData.gates.filter(g => g.active).length;
     return `
       <p class="info sm-txt">Turn a gate on for a release and upload the MP3 fans get (320 kbps, under 25 MB). The track is taken from the release’s own SoundCloud link automatically.</p>
+      ${onN ? `<div class="ch-queue"><span><b>${totalDl}</b> download${totalDl === 1 ? '' : 's'} · <b>${totalUn}</b> connect${totalUn === 1 ? '' : 's'} · ${onN} active gate${onN === 1 ? '' : 's'}</span></div>` : ''}
       <div class="field ch-search"><input id="ch-gq" placeholder="Search releases by artist, track or number…" value="${esc(chainGateQ)}" autocomplete="off"></div>
       <ol class="list ch-gates">
         ${releases.map(r => { const g = gateOf(r.id), noLink = !r.soundcloud_link; return `
           <li class="row ch-gate${g.active ? ' is-on' : ''}" data-rid="${esc(r.id)}">
             ${imgTag(r.image, 'thumb')}
             <span class="meta"><b>${esc(r.artist || '')}${r.title ? ' - ' + esc(r.title) : ''}</b>
-              <span>${esc(catOf(r))}${g.file ? ` · <span class="ok-txt">MP3 ✓${g.file_size ? ' ' + (g.file_size / 1048576).toFixed(1) + ' MB' : ''}</span>` : ' · <span class="muted">no file</span>'}${g.active && g.unlocks ? ` · <button type="button" class="link" data-ch="unlocks">${g.unlocks} unlock${g.unlocks === 1 ? '' : 's'}</button>` : ''}</span></span>
+              <span>${esc(catOf(r))}${g.file ? ` · <span class="ok-txt">MP3 ✓${g.file_size ? ' ' + (g.file_size / 1048576).toFixed(1) + ' MB' : ''}</span>` : ' · <span class="muted">no file</span>'}${g.active ? ` · <b>${g.downloads || 0}</b> download${(g.downloads || 0) === 1 ? '' : 's'}${g.unlocks ? ` · <button type="button" class="link" data-ch="unlocks">${g.unlocks} connect${g.unlocks === 1 ? '' : 's'}</button>` : ''}` : ''}</span></span>
             <label class="pub-sw${g.active ? ' on' : ''}" title="${g.active ? 'Gate on' : 'Gate off'}"><input type="checkbox" data-ch="toggle" ${g.active ? 'checked' : ''} hidden><span class="pub-knob"></span>${g.active ? 'On' : 'Off'}</label>
             <span class="row-btns">
               <button type="button" class="btn ghost sm" data-ch="file">${g.file ? 'Replace MP3' : 'Upload MP3'}</button>

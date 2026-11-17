@@ -318,6 +318,10 @@ export async function chainPublic(req, env, url) {
     const dl = String(url.searchParams.get('t') || '');
     const pass = dl ? parse(await env.FILES.get(`dl/${dl}`)) : null;
     if (!pass || pass.rid !== rid) throw new ChainError(403, 'Connect your SoundCloud to unlock this download.');
+    // de un solo uso: se quema al descargar, así compartir el link no sirve (hay 3 usos de margen por si el navegador reintenta)
+    const uses = (pass.uses || 0) + 1;
+    if (uses >= 3) await env.FILES.delete(`dl/${dl}`).catch(() => {});
+    else await env.FILES.put(`dl/${dl}`, JSON.stringify({ ...pass, uses }), { expirationTtl: 1800 }).catch(() => {});
     const gate = await DB.prepare('SELECT file, file_name FROM sc_gates WHERE release_id = ? AND active = 1').bind(rid).first();
     if (!gate?.file) throw new ChainError(404, 'Not available.');
     const f = await env.FILES.get(gate.file, { type: 'arrayBuffer' });

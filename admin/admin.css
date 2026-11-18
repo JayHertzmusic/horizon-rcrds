@@ -1185,7 +1185,7 @@ html, body, * { scrollbar-width: none; }
 .rp-links .sm-txt { margin: 0; }
 
 /* Mail (Gmail de Horizon): lista a la izquierda, correo a la derecha; cabe en una pantalla */
-.main:has(.m-wrap) { padding-bottom: 24px; }
+.main:has(.m-wrap) { padding-bottom: 40px; }
 .main:has(.m-wrap) .head { margin-bottom: 16px; }
 .m-warn { margin: -6px 0 12px; }
 .m-warn b { color: #ffc861; font-weight: 600; }

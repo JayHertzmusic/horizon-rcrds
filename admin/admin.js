@@ -3772,7 +3772,7 @@
   }
   function sizeMail() {
     const w = $('#m-wrap'); if (!w || view !== 'mail') return;
-    w.style.height = Math.max(360, innerHeight - (w.getBoundingClientRect().top + scrollY) - 24) + 'px';
+    w.style.height = Math.max(360, innerHeight - (w.getBoundingClientRect().top + scrollY) - 40) + 'px';   // mismo margen abajo que arriba
   }
   addEventListener('resize', sizeMail);
   document.addEventListener('click', async e => {

@@ -2165,22 +2165,17 @@
         <button type="submit" class="btn primary">Generate link</button>
       </form>
       ${o.made ? (() => {
-        // enlaces recién creados: tarjeta con el aviso, una fila por artista y su enlace listo para copiar
+        // enlaces recién creados: una línea por artista (nombre · enlace · Copy), sin recuadros
         const ls = o.made.links?.length ? o.made.links : [{ note: o.made.note, url: o.made.url }], many = ls.length > 1;
-        const who = ls.map(x => esc(x.note || 'the artist')).join(many ? ' and ' : '');
-        return `<section class="lk-made" aria-live="polite">
-          <header class="lk-made-top">
-            <span class="lk-made-ok" aria-hidden="true">✓</span>
-            <div class="lk-made-title"><h3>${many ? 'Links ready' : 'Link ready'}</h3><p>Send ${many ? 'each artist their own link' : 'it to <b>' + who + '</b>'} — it works once, on one device, for 30 days.</p></div>
-            <button type="button" class="lk-made-x" data-lk="made-x" aria-label="Close" title="Close">✕</button>
-          </header>
+        return `<div class="lk-made" aria-live="polite">
           ${ls.map((x, i) => `<div class="lk-made-row">
-            <span class="lk-made-av" aria-hidden="true">${esc(((x.note || '?').trim()[0] || '?').toUpperCase())}</span>
-            <div class="lk-made-who"><b>${esc(x.note || 'Artist')}</b>${many ? `<small>Artist ${i + 1} of ${ls.length}</small>` : ''}</div>
-            <div class="lk-made-link"><span title="${esc(x.url)}">${esc(String(x.url).replace(/^https?:\/\//, ''))}</span><button type="button" class="btn primary sm" data-lk="copy-made" data-i="${i}">Copy link</button></div>
+            <span class="lk-made-name"><i aria-hidden="true">✓</i>${esc(x.note || 'Artist')}</span>
+            <span class="lk-made-url" title="${esc(x.url)}">${esc(String(x.url).replace(/^https?:\/\//, ''))}</span>
+            <button type="button" class="lk-made-btn" data-lk="copy-made" data-i="${i}">Copy</button>
+            ${i === 0 ? '<button type="button" class="lk-made-btn lk-made-x" data-lk="made-x" aria-label="Close" title="Close">✕</button>' : '<span></span>'}
           </div>`).join('')}
-          ${many ? '<footer class="lk-made-foot"><button type="button" class="btn ghost sm" data-lk="copy-all">Copy all links</button></footer>' : ''}
-        </section>`;
+          ${many ? '<div class="lk-made-row"><span></span><span></span><button type="button" class="lk-made-btn" data-lk="copy-all">Copy all</button><span></span></div>' : ''}
+        </div>`;
       })() : ''}
       <div class="lk-tools">
         <input class="lk-search" type="search" placeholder="Search by artist…" value="${esc(o.q)}" aria-label="Search links">

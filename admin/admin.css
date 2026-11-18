@@ -1339,3 +1339,29 @@ html, body, * { scrollbar-width: none; }
   .mrow .m-subj { grid-column: 3 / -1; grid-row: 2; padding-left: 4px; }
   .mrow .m-clip { display: none; }
 }
+
+/* ventana de redactar flotante (como Gmail): abajo a la derecha, no tapa la bandeja ni se cierra al hacer clic fuera */
+.m-composer { position: fixed; right: 84px; bottom: 0; z-index: 60; display: flex; flex-direction: column; width: 560px; height: min(620px, calc(100vh - 56px)); background: #141414; border: 1px solid #333; border-bottom: 0; border-radius: 12px 12px 0 0; box-shadow: 0 8px 40px rgba(0, 0, 0, .7); animation: mcup .22s ease; transition: width .2s, height .2s; }
+@keyframes mcup { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+.m-chead { display: flex; align-items: center; justify-content: space-between; gap: 10px; height: 42px; padding: 0 6px 0 16px; background: #1f1f1f; border-radius: 12px 12px 0 0; flex: none; }
+.m-chead b { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; color: #fff; }
+.m-chead b span { color: var(--muted); font-weight: 400; }
+.m-cbtns { display: flex; gap: 2px; flex: none; }
+.m-cbtns button { width: 30px; height: 30px; border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 13px; cursor: pointer; transition: background .15s, color .15s; }
+.m-cbtns button:hover { background: rgba(255, 255, 255, .1); color: #fff; }
+.m-composer.min { width: 320px; height: 42px; }
+.m-composer.min form { display: none; }
+.m-composer.min .m-chead { cursor: pointer; }
+.m-composer.max { right: 50%; bottom: 50%; transform: translate(50%, 50%); width: min(1100px, calc(100vw - 80px)); height: calc(100vh - 80px); border-bottom: 1px solid #333; border-radius: 12px; box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .55), 0 8px 40px rgba(0, 0, 0, .7); animation: none; }
+.m-composer form { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 0 16px; }
+.m-composer .m-crow > span { width: 52px; }
+.m-cbody { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; }
+.m-composer .m-editor { min-height: 140px; max-height: none; padding: 12px 2px; }
+.m-composer .m-toolbar { margin: 6px 0 0; flex: none; }
+.m-composer .ed-error { margin: 6px 0 0; }
+.m-cfoot { display: flex; align-items: center; gap: 6px; padding: 10px 0 12px; flex: none; }
+.m-send { min-height: 38px; padding: 0 26px; border-radius: 19px; }
+.m-cfoot label.m-tb { cursor: pointer; }
+.m-discard { margin-left: auto; }
+.m-composer .m-tplmenu { top: auto; bottom: calc(100% + 6px); }
+@media (max-width: 760px) { .m-composer { right: 8px; width: calc(100vw - 16px); } .m-composer.min { width: 220px; } }

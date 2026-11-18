@@ -17,6 +17,7 @@ const BOXES = {
 };
 const CATS = { primary: 'CATEGORY_PERSONAL', promotions: 'CATEGORY_PROMOTIONS', social: 'CATEGORY_SOCIAL', updates: 'CATEGORY_UPDATES', forums: 'CATEGORY_FORUMS' };
 const ID = /^[\w-]{1,80}$/;
+const BUSY = 'Gmail is busy: too many requests in the last minute. It will try again in a few seconds.';
 
 async function gmail(env, path, init = {}, retry = true) {
   let tok;
@@ -27,6 +28,7 @@ async function gmail(env, path, init = {}, retry = true) {
   const msg = j.error?.message || `Error ${r.status}`;
   // token antiguo (sin el permiso de Gmail) o caducado: se pide uno nuevo una vez
   if (retry && (r.status === 401 || (r.status === 403 && /insufficient|scope/i.test(msg)))) { await dropHorizonToken(env); return gmail(env, path, init, false); }
+  if (r.status === 429 || /quota|rate limit|too many/i.test(msg)) throw new MailError(429, BUSY);
   if (/has not been used|is disabled|not been enabled/i.test(msg)) throw new MailError(503, 'The Gmail API is not enabled in the Horizon script (Services → + → Gmail API).');
   if (r.status === 403 && /insufficient|scope/i.test(msg)) throw new MailError(503, 'The Horizon script has no Gmail permission yet. Run _gmailScope in the script and deploy a new version.');
   if (r.status === 404) throw new MailError(404, 'That email no longer exists.');
@@ -43,9 +45,10 @@ async function gmailBatch(env, paths, retry = true) {
   const body = paths.map((p, i) => `--${b}\r\nContent-Type: application/http\r\nContent-ID: <q${i}>\r\n\r\nGET /gmail/v1/users/me${p}\r\n\r\n`).join('') + `--${b}--`;
   const r = await fetch('https://gmail.googleapis.com/batch/gmail/v1', { method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': `multipart/mixed; boundary=${b}` }, body });
   if (r.status === 401 && retry) { await dropHorizonToken(env); return gmailBatch(env, paths, false); }
-  if (!r.ok) return Promise.all(paths.map(p => gmail(env, p).catch(() => null)));   // (si el batch falla, uno a uno)
+  if (r.status === 429) throw new MailError(429, BUSY);
+  if (!r.ok) return Promise.all(paths.slice(0, 15).map(p => gmail(env, p).catch(() => null)));   // (si el batch falla, uno a uno; pocos)
   const rb = (r.headers.get('Content-Type') || '').match(/boundary="?([^";]+)"?/)?.[1];
-  const text = await r.text(), out = paths.map(() => null), gone = new Set();
+  const text = await r.text(), out = paths.map(() => null), gone = new Set(), slow = new Set();
   for (const part of rb ? text.split('--' + rb) : []) {
     const id = part.match(/Content-ID:\s*<response-q(\d+)>/i)?.[1];
     if (id == null) continue;
@@ -53,7 +56,10 @@ async function gmailBatch(env, paths, retry = true) {
     if (st === 200 && a >= 0) { try { out[+id] = JSON.parse(part.slice(a, z + 1)); continue; } catch { /* abajo */ } }
     if ((st === 401 || st === 403) && retry) { await dropHorizonToken(env); return gmailBatch(env, paths, false); }
     if (st === 404) gone.add(+id);
+    if (st === 429) slow.add(+id);
   }
+  // Google pide esperar: no se repite nada (gastaría más); si no ha llegado nada, se avisa
+  if (slow.size) { if (out.every(x => x == null)) throw new MailError(429, BUSY); return out; }
   // lo que Google no contestó bien en el batch (p. ej. demasiadas a la vez), uno a uno
   const redo = out.map((x, i) => x == null && !gone.has(i) ? i : -1).filter(i => i >= 0).slice(0, 20);
   if (redo.length) await Promise.all(redo.map(async i => { out[i] = await gmail(env, paths[i]).catch(() => null); }));

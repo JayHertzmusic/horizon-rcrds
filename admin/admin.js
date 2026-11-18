@@ -3609,10 +3609,12 @@
   const mailListSize = () => { const w = $('#m-wrap'); return Math.max(5, Math.min(25, Math.floor(((w ? w.clientHeight : innerHeight - 216) - 52 - (mailCats() ? 44 : 0)) / 41))); };
   // Se piden 25 correos y se enseñan los que caben en la pantalla (se calcula al pintar, antes de que se vea: sin saltos);
   // las filas se estiran lo que sobre para llenar la caja. «Older» enseña los siguientes ya pedidos y solo pide más al acabarse.
+  const savedFit = () => { try { return +localStorage.getItem('hz_mail_fit') || 0; } catch { return 0; } };
   const mailShown = () => (mail.list || []).slice(mail.off, mail.off + (mail.fit || 25));
   function fitMail() {
     const l = $('.m-list'); if (!l || !mail.list || mail.open) return;
     const fit = mail.fit = mailListSize();
+    if (fit !== savedFit()) try { localStorage.setItem('hz_mail_fit', String(fit)); } catch { /* nada */ }
     const rows = [...l.querySelectorAll('.mrow')];
     rows.forEach((r, i) => { r.hidden = i >= fit; });
     const n = Math.min(rows.length, fit);
@@ -3621,7 +3623,7 @@
     const nx = $('[data-mail="next"]'); if (nx) nx.disabled = !(mail.off + fit < mail.list.length || mail.next);
     const ca = $('[data-mselall]'); if (ca) { const ids = mailShown().map(x => x.id), k = ids.filter(id => mail.sel.has(id)).length; ca.checked = !!ids.length && k === ids.length; ca.nextElementSibling?.classList.toggle('part', k > 0 && k < ids.length); }
     // la última página se ha quedado corta y hay más en Gmail: se piden
-    if (mail.off && rows.length < fit && mail.next && !mail.loading) loadMail(true);
+    if (rows.length < fit && mail.next && !mail.loading && !mail.err) loadMail(true);
   }
   async function loadMail(more) {
     if (mail.loading) return;
@@ -3629,12 +3631,17 @@
     try {
       // la cabecera (carpetas, firma) y la lista se piden a la vez
       const [info, r] = await Promise.all([mail.info || api('GET', '/api/mail/info' + mq('?')),
-        api('GET', `/api/mail/threads?box=${encodeURIComponent(mail.box)}&cat=${mailCats() ? mail.cat : ''}&n=25&q=${encodeURIComponent(mail.q)}&page=${encodeURIComponent(more ? mail.next : '')}${mq()}`)]);
+        api('GET', `/api/mail/threads?box=${encodeURIComponent(mail.box)}&cat=${mailCats() ? mail.cat : ''}&n=${Math.max(5, Math.min(25, more ? Math.max(mail.fit, 10) : (mail.fit || savedFit() || 18)))}&q=${encodeURIComponent(mail.q)}&page=${encodeURIComponent(more ? mail.next : '')}${mq()}`)]);
       mail.info = info; if (r.unread != null) { mail.info.unread = r.unread; if (mail.info.counts) mail.info.counts.inbox = r.unread; }
       if (more && mail.list) { const have = new Set(mail.list.map(x => x.id)); mail.list = mail.list.concat(r.threads.filter(x => !have.has(x.id))); }
       else { mail.list = r.threads; mail.off = 0; mail.pre = {}; mail.sel = new Set(); }
       mail.next = r.next;
-    } catch (e) { if (e.status === 401) { mail.loading = false; logout(e.message); return; } mail.err = e.message; }
+    } catch (e) {
+      if (e.status === 401) { mail.loading = false; logout(e.message); return; }
+      mail.err = e.message;
+      // Gmail ocupado (límite por minuto): se vuelve a intentar solo
+      if (e.status === 429) { clearTimeout(mail.retryT); mail.retryT = setTimeout(() => { if (mail.err) { mail.err = ''; if (view === 'mail') loadMail(more); } }, 8000); }
+    }
     mail.loading = false; mail.more = false;
     if (view === 'mail') { render(); if (mail.open && !mail.thread) openThread(mail.open); }
   }
@@ -3834,27 +3841,38 @@
       quote = kind; files = kind === 'forward' ? (m.parsed || walkParts(m.payload)).files : [];
     }
     if (preset) { to = preset.to ?? to; subject = preset.subject ?? subject; }
-    mail.compose = { kind, files: files.map(f => ({ ...f, fromMail: true })) };
+    mail.compose = { kind, t: kind ? t : null, files: files.map(f => ({ ...f, fromMail: true })) };
     const sig = info.signature ? cleanHtml(info.signature) : '';
     const tb = (cmd, label, html) => `<button type="button" class="m-tb" data-mfmt="${cmd}" title="${label}" aria-label="${label}">${html}</button>`;
-    sheet(`
+    const title = kind === 'forward' ? 'Forward' : kind ? 'Reply' : 'New Message';
+    let d = $('#m-composer');
+    if (!d) { d = document.createElement('section'); d.id = 'm-composer'; d.className = 'm-composer'; d.setAttribute('aria-label', 'Compose email'); document.body.appendChild(d); }
+    d.className = 'm-composer';
+    d.innerHTML = `
+      <header class="m-chead" data-mail="cbar"><b>${esc(title)}${subject && kind ? ` <span>· ${esc(subject)}</span>` : ''}</b>
+        <span class="m-cbtns"><button type="button" data-mail="cmin" title="Minimize" aria-label="Minimize">▁</button><button type="button" data-mail="cmax" title="Full screen" aria-label="Full screen">⤢</button><button type="button" data-mail="cclose" title="Close" aria-label="Close">✕</button></span></header>
       <form class="m-compose" id="m-compose" novalidate>
-        <div class="sheet-head"><h2>${kind === 'forward' ? 'Forward' : kind ? 'Reply' : 'New email'}</h2><button type="button" class="ic" data-act="sheet-close" aria-label="Close">✕</button></div>
         <div class="m-crow"><span>From</span><b>${esc(info.name || 'HORIZON RCRDS')} <span class="muted">&lt;${esc(info.from || '')}&gt;</span></b></div>
         <label class="m-crow"><span>To</span><input id="mc-to" name="to" value="${esc(to)}" autocomplete="off" spellcheck="false" placeholder="name@email.com"></label>
         <label class="m-crow"><span>Cc</span><input id="mc-cc" name="cc" value="${esc(cc)}" autocomplete="off" spellcheck="false"></label>
         <label class="m-crow"><span>Subject</span><input id="mc-subj" name="subject" value="${esc(subject)}" maxlength="200" autocomplete="off"></label>
-        <div class="m-toolbar">${tb('bold', 'Bold', '<b>B</b>')}${tb('italic', 'Italic', '<i>I</i>')}${tb('underline', 'Underline', '<u>U</u>')}${tb('strikeThrough', 'Strikethrough', '<s>S</s>')}<span class="m-tbsep"></span>${tb('insertUnorderedList', 'Bulleted list', '•≡')}${tb('insertOrderedList', 'Numbered list', '1≡')}${tb('createLink', 'Link', '🔗')}${tb('removeFormat', 'Clear formatting', 'T̸')}
-          <span class="m-tbsep"></span><div class="m-tplwrap"><button type="button" class="m-tb m-tplbtn" data-mail="tpl" aria-haspopup="true" aria-expanded="false">${mico('template')}<span>Templates</span></button><div class="m-tplmenu" id="mc-tplmenu" hidden></div></div></div>
-        <div class="m-editor" id="mc-body" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Message">${preset?.html ? cleanHtml(preset.html) : ''}</div>
-        ${sig ? `<label class="m-sigsw"><input type="checkbox" id="mc-sig" checked> Signature</label><div class="m-sig" id="mc-sigbox">${sig}</div>` : ''}
-        ${quote ? `<p class="muted sm-txt m-qnote">${kind === 'forward' ? 'The original email is added below your message.' : 'The previous message is quoted below your reply.'}</p>` : ''}
-        <div class="m-attach" id="mc-files">${composeFiles()}</div>
+        <div class="m-cbody">
+          <div class="m-editor" id="mc-body" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Message">${preset?.html ? cleanHtml(preset.html) : ''}</div>
+          ${sig ? `<label class="m-sigsw"><input type="checkbox" id="mc-sig" checked> Signature</label><div class="m-sig" id="mc-sigbox">${sig}</div>` : ''}
+          ${quote ? `<p class="muted sm-txt m-qnote">${kind === 'forward' ? 'The original email is added below your message.' : 'The previous message is quoted below your reply.'}</p>` : ''}
+          <div class="m-attach" id="mc-files">${composeFiles()}</div>
+        </div>
         <p class="ed-error" role="alert" hidden></p>
-        <div class="confirm-actions"><label class="btn ghost push-l" for="mc-file">Attach</label><input type="file" id="mc-file" class="sr-only" multiple><button type="submit" class="btn primary">Send</button></div>
-      </form>`);
+        <div class="m-toolbar">${tb('bold', 'Bold', '<b>B</b>')}${tb('italic', 'Italic', '<i>I</i>')}${tb('underline', 'Underline', '<u>U</u>')}${tb('strikeThrough', 'Strikethrough', '<s>S</s>')}<span class="m-tbsep"></span>${tb('insertUnorderedList', 'Bulleted list', '•≡')}${tb('insertOrderedList', 'Numbered list', '1≡')}${tb('createLink', 'Link', '🔗')}${tb('removeFormat', 'Clear formatting', 'T̸')}</div>
+        <div class="m-cfoot"><button type="submit" class="btn primary m-send">Send</button><label class="m-tb" for="mc-file" title="Attach files">⎘ <span>Attach</span></label><input type="file" id="mc-file" class="sr-only" multiple>
+          <div class="m-tplwrap"><button type="button" class="m-tb m-tplbtn" data-mail="tpl" aria-haspopup="true" aria-expanded="false">${mico('template')}<span>Templates</span></button><div class="m-tplmenu" id="mc-tplmenu" hidden></div></div>
+          <button type="button" class="m-tb m-discard" data-mail="cclose" title="Discard" aria-label="Discard">${mico('trash')}</button></div>
+      </form>`;
     setTimeout(() => (to ? $('#mc-body') : $('#mc-to'))?.focus(), 0);
   }
+  const composerDirty = () => { const d = $('#m-composer'); return !!d && (!!$('#mc-body')?.textContent.trim() || (mail.compose?.files || []).some(f => f.file)); };
+  function closeComposer() { $('#m-composer')?.remove(); mail.compose = null; mailTpls = mailTpls; }
+  async function askCloseComposer() { if (composerDirty() && !await confirmBox('Discard this email?', 'Discard')) return false; closeComposer(); return true; }
   const composeFiles = () => (mail.compose?.files || []).map((f, i) => `<span class="m-chip">${esc(f.name)} <span class="muted">${fmtSize(f.size)}</span><button type="button" data-mail="unattach" data-i="${i}" aria-label="Remove">✕</button></span>`).join('');
   // plantillas
   let mailTpls = null;
@@ -3891,7 +3909,7 @@
   const encAddrs = s => String(s || '').split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(x => x.trim()).filter(Boolean).map(a => { const m = a.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>$/); return m && m[1] ? `${encWord(m[1])} <${m[2]}>` : a; }).join(', ');
   async function sendMail(form) {
     const box = form.querySelector('.ed-error'); box.hidden = true;
-    const v = n => form.elements[n].value.trim(), c = mail.compose, t = c.kind ? mail.thread : null, info = mail.info;
+    const v = n => form.elements[n].value.trim(), c = mail.compose, t = c.kind ? c.t : null, info = mail.info;
     const bad = [v('to'), v('cc')].join(',').split(',').map(x => mailAddr(x.trim())).filter(Boolean).find(a => !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(a));
     if (!v('to')) { box.textContent = 'Add who it goes to.'; box.hidden = false; form.elements.to.focus(); return; }
     if (bad) { box.textContent = `“${bad}” is not a valid email.`; box.hidden = false; return; }
@@ -3923,7 +3941,7 @@
       }
       L.push(`--${B}--`, '');
       await authFetch(`/api/mail/send${t ? '?thread=' + encodeURIComponent(t.id) : ''}`, { method: 'POST', headers: { 'Content-Type': 'message/rfc822' }, body: L.join('\r\n') });
-      busyOff(form); closeSheet(); toast('Email sent');
+      busyOff(form); closeComposer(); toast('Email sent');
       if (t && mail.pre) delete mail.pre[t.id];
       if (t && mail.open === t.id) openThread(t.id);
       if (mail.box === 'sent' || !t) { mail.list = null; loadMail(); }
@@ -3938,7 +3956,7 @@
   let fitT = 0;
   addEventListener('resize', () => { sizeMail(); clearTimeout(fitT); fitT = setTimeout(fitMail, 100); });
   document.addEventListener('click', async e => {
-    if (view !== 'mail' && !e.target.closest('#m-compose')) return;
+    if (view !== 'mail' && !e.target.closest('#m-composer')) return;
     // formato del editor
     const fmt = e.target.closest('[data-mfmt]');
     if (fmt) {
@@ -4017,6 +4035,10 @@
     const act = b.dataset.mail, t = mail.thread;
     if (['compose', 'reply', 'replyall', 'forward', 'star', 'important'].includes(act) && mailTest()) return;
     if (act === 'refresh') { mail.list = null; mail.info = null; render(); loadMail(); return; }
+    if (act === 'cmin' || (act === 'cbar' && $('#m-composer')?.classList.contains('min') && !e.target.closest('button'))) { const d = $('#m-composer'); d?.classList.toggle('min'); d?.classList.remove('max'); return; }
+    if (act === 'cmax') { const d = $('#m-composer'); d?.classList.toggle('max'); d?.classList.remove('min'); return; }
+    if (act === 'cclose') { askCloseComposer(); return; }
+    if ((act === 'compose' || act === 'reply' || act === 'replyall' || act === 'forward') && $('#m-composer') && !await askCloseComposer()) return;
     if ((act === 'compose' || act === 'reply' || act === 'replyall' || act === 'forward') && !mail.info) { try { mail.info = await api('GET', '/api/mail/info' + mq('?')); } catch (er) { toast(er.message); return; } }
     if (act === 'compose') return composeSheet(null);
     if (act === 'reply' || act === 'replyall' || act === 'forward') return t && composeSheet(act);
@@ -4066,7 +4088,13 @@
     if (e.key === 'Enter' && e.target.matches?.('.mrow')) e.target.click();
     if (e.key === 'Enter' && e.target.id === 'mc-tplname') { e.preventDefault(); $('[data-mtpl="dosave"]')?.click(); }
   });
-  document.addEventListener('mouseover', e => { const r = e.target.closest?.('[data-mth]'); if (r && view === 'mail') fetchThread(r.dataset.mth).catch(() => {}); });
+  let hoverT = 0, hoverId = '';
+  document.addEventListener('mouseover', e => {
+    const r = e.target.closest?.('[data-mth]'), id = r && view === 'mail' ? r.dataset.mth : '';
+    if (id === hoverId) return;
+    hoverId = id; clearTimeout(hoverT);
+    if (id) hoverT = setTimeout(() => fetchThread(id).catch(() => {}), 250);
+  });
   document.addEventListener('submit', e => {
     if (e.target.id === 'm-search') { e.preventDefault(); mail.q = e.target.elements.q.value.trim(); mail.off = 0; mail.list = null; mail.open = null; mail.thread = null; mail.sel = new Set(); render(); loadMail(); return; }
     if (e.target.id === 'm-compose') { e.preventDefault(); if (!busy) sendMail(e.target); }

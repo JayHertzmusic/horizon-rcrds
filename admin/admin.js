@@ -3574,7 +3574,8 @@
     mail.loading = true; mail.err = '';
     try {
       if (!mail.info) mail.info = await api('GET', '/api/mail/info');
-      const r = await api('GET', `/api/mail/threads?box=${mail.box}&q=${encodeURIComponent(mail.q)}&page=${encodeURIComponent(mail.pages[mail.page] || '')}`);
+      if (!mail.size) { const w = $('#m-wrap'); mail.size = Math.max(6, Math.min(25, Math.floor(((w ? w.clientHeight : innerHeight - 260) - 52) / 41))); }
+      const r = await api('GET', `/api/mail/threads?box=${mail.box}&n=${mail.size}&q=${encodeURIComponent(mail.q)}&page=${encodeURIComponent(mail.pages[mail.page] || '')}`);
       mail.list = r.threads; mail.next = r.next;
     } catch (e) { if (e.status === 401) { mail.loading = false; logout(e.message); return; } mail.err = e.message; }
     mail.loading = false;
@@ -3589,33 +3590,37 @@
     return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(d.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {}) });
   }
   function mailPage() {
-    const info = mail.info;
+    const info = mail.info, boxName = (MAIL_BOXES.find(x => x[0] === mail.box) || [])[1] || 'Inbox';
     if (!mail.list && !mail.err && !mail.loading) setTimeout(loadMail, 0);
     const tab = (id, label) => `<button type="button" role="tab" class="${mail.box === id ? 'on' : ''}" data-mbox="${id}">${label}${id === 'inbox' && info?.unread ? `<span>${info.unread}</span>` : ''}</button>`;
     const rows = !mail.list ? `<li class="empty">${mail.err ? '' : 'Loading…'}</li>` : !mail.list.length ? `<li class="empty">${mail.q ? `Nothing matches “${esc(mail.q)}”.` : 'No emails here.'}</li>`
-      : mail.list.map(t => `<li class="mrow${t.unread ? ' unread' : ''}${mail.open === t.id ? ' on' : ''}" data-mth="${esc(t.id)}" tabindex="0">
+      : mail.list.map(t => `<li class="mrow${t.unread ? ' unread' : ''}" data-mth="${esc(t.id)}" tabindex="0">
           <span class="m-from">${esc(mailWho(t.from) || '(no sender)')}${t.count > 1 ? ` <i>${t.count}</i>` : ''}</span>
-          <span class="m-date">${t.files ? '<span class="m-clip" aria-label="Has attachments">⎘</span>' : ''}${esc(mailDate(t.at))}</span>
-          <span class="m-subj"><b>${esc(t.subject || '(no subject)')}</b> <span>${esc(t.snippet.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&'))}</span></span>
+          <span class="m-subj"><b>${esc(t.subject || '(no subject)')}</b><span> — ${esc(t.snippet.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&'))}</span></span>
+          <span class="m-clip" aria-label="${t.files ? 'Has attachments' : ''}">${t.files ? '⎘' : ''}</span>
+          <span class="m-date">${esc(mailDate(t.at))}</span>
         </li>`).join('');
+    const from = mail.page * (mail.size || 0) + 1, to = from - 1 + (mail.list?.length || 0);
+    const inner = mail.open ? `
+        <div class="m-tool"><button type="button" class="btn ghost sm" data-mail="close">← ${esc(boxName)}</button>${mailActions()}</div>
+        <section class="m-read" id="m-read" aria-live="polite">${mailReader()}</section>` : `
+        <div class="m-tool"><span class="muted sm-txt">${info?.shared ? 'contact@ · demos@ · contracts@' : ''}</span>
+          <span class="m-pager">${mail.list?.length ? `<span class="muted sm-txt">${from}–${to}</span>` : ''}<button type="button" class="ic" data-mail="prev" title="Newer" aria-label="Newer" ${mail.page ? '' : 'disabled'}>‹</button><button type="button" class="ic" data-mail="next" title="Older" aria-label="Older" ${mail.next ? '' : 'disabled'}>›</button></span></div>
+        <ol class="m-list" aria-busy="${mail.loading}">${rows}</ol>`;
     return `
-      <div class="head"><div><p class="eyebrow">Gmail</p><h1>MAIL${info?.unread ? ` <span class="count">${info.unread}</span>` : ''}</h1></div>
-        <div class="head-btns"><button type="button" class="btn primary" data-mail="compose">+ Compose</button></div></div>
+      <div class="head m-head"><div><p class="eyebrow">Gmail</p><h1>MAIL${info?.unread ? ` <span class="count">${info.unread}</span>` : ''}</h1></div>
+        <div class="head-btns m-hbtns"><form class="m-search" id="m-search" role="search"><input type="search" name="q" placeholder="Search mail" aria-label="Search mail" value="${esc(mail.q)}" autocomplete="off"></form><button type="button" class="btn primary" data-mail="compose">+ Compose</button></div></div>
       ${mail.err ? `<p class="login-error" role="alert">${esc(mail.err)}</p>` : ''}
       ${info && !info.contact ? `<p class="info m-warn">Replies go out as <b>${esc(info.from)}</b> until contact@horizonrcrds.com is set up in Gmail (“Send mail as”).</p>` : ''}
-      <div class="m-bar">
-        <div class="ct-tabs" role="tablist">${MAIL_BOXES.map(([id, l]) => tab(id, l)).join('')}</div>
-        <form class="m-search" id="m-search" role="search"><input type="search" name="q" placeholder="Search mail" aria-label="Search mail" value="${esc(mail.q)}" autocomplete="off"></form>
-      </div>
-      <div class="m-wrap" id="m-wrap">
-        <div class="m-side">
-          <ol class="m-list" aria-busy="${mail.loading}">${rows}</ol>
-          <div class="m-pager"><button type="button" class="btn ghost sm" data-mail="prev" ${mail.page ? '' : 'disabled'}>← Newer</button>
-            <span class="muted sm-txt">${info?.shared ? 'contact@ · demos@ · contracts@' : `Page ${mail.page + 1}`}</span>
-            <button type="button" class="btn ghost sm" data-mail="next" ${mail.next ? '' : 'disabled'}>Older →</button></div>
-        </div>
-        <section class="m-read" id="m-read" aria-live="polite">${mailReader()}</section>
-      </div>`;
+      <div class="ct-tabs m-tabs" role="tablist">${MAIL_BOXES.map(([id, l]) => tab(id, l)).join('')}</div>
+      <div class="m-wrap${mail.open ? ' reading' : ''}" id="m-wrap">${inner}</div>`;
+  }
+  function mailActions() {
+    const t = mail.thread; if (!t) return '<span></span>';
+    const starred = t.messages.some(m => m.labels.includes('STARRED'));
+    return `<span class="m-ract"><button type="button" class="ic" data-mail="star" title="${starred ? 'Unstar' : 'Star'}" aria-label="${starred ? 'Unstar' : 'Star'}">${starred ? '★' : '☆'}</button>
+      <button type="button" class="ic" data-mail="unread" title="Mark as unread" aria-label="Mark as unread">●</button>
+      <button type="button" class="ic" data-mail="trash" title="Move to trash" aria-label="Move to trash">🗑</button></span>`;
   }
   // ---- leer: el navegador descodifica el correo (el servidor lo pasa tal cual) ----
   function b64uText(s) { try { const bin = atob(String(s).replace(/-/g, '+').replace(/_/g, '/')); return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))); } catch { return ''; } }
@@ -3636,19 +3641,13 @@
   const textHtml = t => `<div style="white-space:pre-wrap;font:14px/1.55 Arial,sans-serif">${esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')}</div>`;
   const fmtSize = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
   function mailReader() {
-    if (!mail.open) return `<div class="m-empty"><p>Select an email to read it.</p></div>`;
     if (mail.threadErr) return `<div class="m-empty"><p class="login-error" role="alert">${esc(mail.threadErr)}</p></div>`;
     const t = mail.thread;
     if (!t) return `<div class="m-empty"><p class="muted">Loading…</p></div>`;
     const first = t.messages[0], hd = (m, n) => (m.payload?.headers || []).find(x => x.name.toLowerCase() === n)?.value || '';
-    const starred = t.messages.some(m => m.labels.includes('STARRED'));
     const last = t.messages.length - 1;
     return `
-      <div class="m-rhead"><h2>${esc(hd(first, 'subject') || '(no subject)')}</h2>
-        <div class="m-ract"><button type="button" class="ic" data-mail="star" title="${starred ? 'Unstar' : 'Star'}" aria-label="${starred ? 'Unstar' : 'Star'}">${starred ? '★' : '☆'}</button>
-          <button type="button" class="ic" data-mail="unread" title="Mark as unread" aria-label="Mark as unread">●</button>
-          <button type="button" class="ic" data-mail="trash" title="Move to trash" aria-label="Move to trash">🗑</button>
-          <button type="button" class="ic" data-mail="close" title="Close" aria-label="Close">✕</button></div></div>
+      <div class="m-rhead"><h2>${esc(hd(first, 'subject') || '(no subject)')}</h2></div>
       <div class="m-msgs">${t.messages.map((m, i) => {
         const b = m.parsed || (m.parsed = walkParts(m.payload));
         const open = i === last || m.openUi;
@@ -3683,7 +3682,7 @@
   async function openThread(id) {
     mail.open = id; mail.thread = null; mail.threadErr = '';
     const row = mail.list?.find(x => x.id === id);
-    if (view === 'mail') { $$('.mrow').forEach(r => r.classList.toggle('on', r.dataset.mth === id)); const rd = $('#m-read'); if (rd) rd.innerHTML = mailReader(); }
+    if (view === 'mail') render();
     try {
       const t = await api('GET', `/api/mail/thread/${id}`);
       if (mail.open !== id) return;
@@ -3772,7 +3771,7 @@
   }
   function sizeMail() {
     const w = $('#m-wrap'); if (!w || view !== 'mail') return;
-    w.style.height = Math.max(360, innerHeight - (w.getBoundingClientRect().top + scrollY) - 40) + 'px';   // mismo margen abajo que arriba
+    w.style.height = Math.max(360, innerHeight - (w.getBoundingClientRect().top + scrollY) - 26) + 'px';   // mismo margen abajo que arriba
   }
   addEventListener('resize', sizeMail);
   document.addEventListener('click', async e => {
@@ -3785,7 +3784,7 @@
     const act = b.dataset.mail, t = mail.thread;
     if (act === 'compose') return composeSheet(null);
     if (act === 'reply' || act === 'replyall' || act === 'forward') return t && composeSheet(act);
-    if (act === 'close') { mail.open = null; mail.thread = null; $$('.mrow.on').forEach(r => r.classList.remove('on')); $('#m-read').innerHTML = mailReader(); return; }
+    if (act === 'close') { mail.open = null; mail.thread = null; mail.threadErr = ''; render(); return; }
     if (act === 'prev' || act === 'next') {
       if (act === 'next') { if (!mail.next) return; mail.pages[mail.page + 1] = mail.next; mail.page++; } else if (mail.page) mail.page--;
       mail.list = null; render(); loadMail(); return;
@@ -3811,7 +3810,7 @@
         const row = mail.list?.find(x => x.id === t.id);
         if (op === 'trash') mail.list = mail.list?.filter(x => x.id !== t.id); else if (row) { row.unread = true; if (mail.info) mail.info.unread = (mail.info.unread || 0) + 1; }
         mail.open = null; mail.thread = null; toast(op === 'trash' ? 'Moved to trash' : 'Marked as unread'); render();
-      } else { t.messages.forEach(m => { m.labels = op === 'star' ? [...m.labels, 'STARRED'] : m.labels.filter(x => x !== 'STARRED'); }); const row = mail.list?.find(x => x.id === t.id); if (row) row.starred = op === 'star'; const y = $('#m-read').scrollTop; $('#m-read').innerHTML = mailReader(); $('#m-read').scrollTop = y; fillFrames(); }
+      } else { t.messages.forEach(m => { m.labels = op === 'star' ? [...m.labels, 'STARRED'] : m.labels.filter(x => x !== 'STARRED'); }); const row = mail.list?.find(x => x.id === t.id); if (row) row.starred = op === 'star'; const ra = $('.m-ract'); if (ra) ra.outerHTML = mailActions(); }
     } catch (er) { toast(er.message); }
   });
   document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches?.('.mrow')) e.target.click(); });

@@ -54,7 +54,8 @@ export async function mailApi(req, env, s, url, audit) {
     const box = BOXES[url.searchParams.get('box')] ? url.searchParams.get('box') : 'inbox';
     const q = [BOXES[box], String(url.searchParams.get('q') || '').slice(0, 200), full ? '' : SHARED_Q].filter(Boolean).join(' ');
     const page = String(url.searchParams.get('page') || '').replace(/[^\w-]/g, '').slice(0, 80);
-    const j = await gmail(env, `/threads?maxResults=12&q=${encodeURIComponent(q)}${page ? '&pageToken=' + page : ''}`);
+    const n = Math.max(5, Math.min(25, Number(url.searchParams.get('n')) || 12));
+    const j = await gmail(env, `/threads?maxResults=${n}&q=${encodeURIComponent(q)}${page ? '&pageToken=' + page : ''}`);
     const ids = (j.threads || []).map(t => t.id);
     const meta = await Promise.all(ids.map(id => gmail(env, `/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`).catch(() => null)));
     const threads = meta.filter(Boolean).map(t => {

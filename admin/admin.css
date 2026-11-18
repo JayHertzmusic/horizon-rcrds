@@ -1155,11 +1155,15 @@ html, body, * { scrollbar-width: none; }
 .resp.is-demo .new-pill { background: rgba(250,204,21,.12); border-color: rgba(250,204,21,.5); color: #fde047; }
 .resp.is-demo .new-pill::before { background: #facc15; }
 .resp.is-demo.is-new { border-color: rgba(250,204,21,.5); box-shadow: inset 3px 0 0 #facc15; }
-/* Personal links · collab */
-.lk-co { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; }
-.lk-co .ic { width: 46px; height: 46px; }
-.lk-co-add { max-width: 640px; margin: -4px 0 16px; }
-.lk-co-add[hidden] { display: none; }
+/* Personal links · varios artistas: todo en una fila */
+.lk-new { display: flex; flex-wrap: wrap; align-items: center; max-width: 900px; }
+.lk-new > input { flex: 1 1 220px; min-width: 0; }
+.lk-new > .btn { flex: none; min-height: 46px; }
+.lk-new > .btn[hidden] { display: none; }
+.lk-co { position: relative; flex: 1 1 200px; min-width: 0; }
+.lk-co input { width: 100%; padding-right: 40px !important; box-sizing: border-box; }
+.lk-co button { position: absolute; top: 50%; right: 8px; width: 28px; height: 28px; transform: translateY(-50%); border: 0; border-radius: 6px; background: none; color: var(--faint); font-size: 13px; cursor: pointer; }
+.lk-co button:hover { background: rgba(255,255,255,.08); color: #fff; }
 .lk-made-group { grid-template-columns: 1fr; gap: 8px; }
 .lk-made-row { display: grid; grid-template-columns: 150px 130px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
 .lk-made-row b { color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

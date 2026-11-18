@@ -122,8 +122,7 @@
   .xa-side h1 { margin: -8px 0 0; font-size: 46px; line-height: .92; text-align: left; }
   .x-for { margin: -12px 0 0; font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
   .x-for b { color: #fff; font-weight: 600; }
-  .x-collab { margin: -10px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
-  .x-collab b { color: #fff; font-weight: 600; }
+  .x-with { margin-top: -16px; }
   .x-steps { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
   .x-steps li { display: grid; grid-template-columns: 34px minmax(0, 1fr); align-items: center; gap: 2px 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background .2s; }
   .x-steps li:hover { background: rgba(255, 255, 255, .04); }
@@ -359,7 +358,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
           <span class="x-badge"><i></i>Private invitation</span>
           <h1>${esc(form.title || 'Form')}</h1>
           ${form.note ? `<p class="x-for">Prepared for <b>${esc(form.note)}</b></p>` : ''}
-          ${form.collab ? `<p class="x-collab">Collab with <b>${esc((form.collab.with || []).join(' & '))}</b><br>${form.collab.pos > 1 ? `Only your own details here — ${esc(form.collab.main || 'the main artist')} fills in the track info.` : 'You fill in the track info. Each artist gets their own link for their details.'}</p>` : ''}
+          ${form.collab?.with?.length ? `<p class="x-for x-with">In collaboration with <b>${esc(form.collab.with.join(' & '))}</b></p>` : ''}
           <ol class="x-steps">${steps.map((st, i) => `<li data-go="${i}"><span class="n"><b>${i + 1}</b></span><span class="t">${esc(plain(st.title) || 'Step ' + (i + 1))}</span><small>${qCount(st)}</small></li>`).join('')}</ol>
           <div class="xa-prog"><div><i id="x-bar"></i></div><small id="x-pct">0% done</small></div>
           ${form.description ? `<details class="xa-about"><summary>About this form</summary><p>${linky(form.description)}</p></details>` : ''}

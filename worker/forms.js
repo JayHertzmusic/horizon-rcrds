@@ -147,7 +147,8 @@ async function collabToGoogle(env, f, grp) {
 const normQ = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const answerKey = v => Array.isArray(v) ? v.map(x => String(x).trim()).sort().join('|') : String(v ?? '').trim();
 async function respHash(formId, data) {
-  const body = formId + '\n' + Object.keys(data).sort().map(k => k + '=' + answerKey(data[k])).join('\n');
+  // (las preguntas sin contestar no cuentan: Google no las devuelve)
+  const body = formId + '\n' + Object.keys(data).filter(k => answerKey(data[k]) !== '').sort().map(k => k + '=' + answerKey(data[k])).join('\n');
   return [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(body)))].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 // firma de las preguntas (para saber si cambiaron desde la última sincronización)
@@ -255,7 +256,7 @@ export async function gformHook(req, env, url) {
   }
   if (url.pathname === '/api/hooks/gform/response') {
     const gid = String(b.googleId || '');
-    const f = gid ? (await DB.prepare('SELECT id, fields, google FROM forms WHERE google IS NOT NULL').all()).results.find(r => (parse(r.google) || {}).id === gid) : null;
+    const f = gid ? (await DB.prepare('SELECT id, fields, google, collab FROM forms WHERE google IS NOT NULL').all()).results.find(r => (parse(r.google) || {}).id === gid) : null;
     if (!f) throw new FormError(404, 'That Google Form is not connected.');
     const fields = (parse(f.fields) || []).filter(x => x.type !== 'section'), byQ = new Map(fields.map(x => [normQ(x.label), x]));
     const data = {};
@@ -270,11 +271,20 @@ export async function gformHook(req, env, url) {
     if (sent && now() - sent.at < 30 * 60e3) return { ok: true, duplicate: true };
     // también es la misma si coincide con una respuesta de la web de hace poco en todo lo que trae
     // (Google a veces se queda solo con una parte, p. ej. la primera página de un formulario de varias páginas)
-    const recent = (await DB.prepare("SELECT data FROM form_responses WHERE form_id = ? AND ip <> 'google' AND at > ? ORDER BY id DESC LIMIT 20").bind(f.id, now() - 30 * 60e3).all()).results;
+    // (la de un artista invitado de una colaboración se copió a Google con los datos del track del principal: se compara así)
+    const recent = [];
+    for (const x of (await DB.prepare("SELECT r.data, l.grp, l.grp_pos FROM form_responses r LEFT JOIN form_links l ON l.response_id = r.id WHERE r.form_id = ? AND r.ip <> 'google' AND r.at > ? ORDER BY r.id DESC LIMIT 20").bind(f.id, now() - 30 * 60e3).all()).results) {
+      const d = parse(x.data) || {};
+      recent.push(d);
+      if (x.grp && x.grp_pos > 1) {
+        const mr = await DB.prepare('SELECT r.data FROM form_links l JOIN form_responses r ON r.id = l.response_id WHERE l.grp = ? AND l.grp_pos = 1').bind(x.grp).first();
+        if (mr) { const ids = collabIds(f); recent.push({ ...Object.fromEntries(Object.entries(parse(mr.data) || {}).filter(([k]) => !ids.has(k))), ...d }); }
+      }
+    }
     const same = (a, b) => JSON.stringify(Array.isArray(a) ? [...a].sort() : String(a ?? '').trim()) === JSON.stringify(Array.isArray(b) ? [...b].sort() : String(b ?? '').trim());
     const keys = Object.keys(data).filter(k => Array.isArray(data[k]) ? data[k].length : data[k]);
     // (con al menos 2 respuestas iguales: una sola coincidencia, p. ej. la misma opción elegida, no basta para tirarla)
-    if (keys.length >= 2 && recent.some(r => { const w = parse(r.data) || {}; return keys.every(k => same(data[k], w[k])); })) return { ok: true, duplicate: true };
+    if (keys.length >= 2 && recent.some(w => keys.every(k => same(data[k], w[k])))) return { ok: true, duplicate: true };
     const at = Number(b.at) > 0 && Number(b.at) < now() + 60e3 ? Number(b.at) : now();
     await DB.prepare('INSERT INTO form_responses (form_id, at, data, ip) VALUES (?, ?, ?, ?)').bind(f.id, at, JSON.stringify(data), 'google').run();
     return { ok: true };
@@ -547,8 +557,9 @@ export async function formsApi(req, env, s, url, audit) {
     if (list.length) {
       const ls = (await DB.prepare(`SELECT response_id, grp, grp_pos, grp_n, note FROM form_links WHERE grp IS NOT NULL AND response_id IN (${list.map(() => '?').join(',')})`).bind(...list.map(r => r.id)).all()).results;
       const grps = [...new Set(ls.map(x => x.grp))];
-      const mains = grps.length ? Object.fromEntries((await DB.prepare(`SELECT grp, note FROM form_links WHERE grp_pos = 1 AND grp IN (${grps.map(() => '?').join(',')})`).bind(...grps).all()).results.map(x => [x.grp, x.note])) : {};
-      for (const x of ls) col[x.response_id] = { grp: x.grp, pos: x.grp_pos, n: x.grp_n, main: mains[x.grp] || '' };
+      const mates = grps.length ? (await DB.prepare(`SELECT grp, grp_pos, note FROM form_links WHERE grp IN (${grps.map(() => '?').join(',')}) ORDER BY grp_pos`).bind(...grps).all()).results : [];
+      for (const x of ls) col[x.response_id] = { grp: x.grp, pos: x.grp_pos, n: x.grp_n, main: mates.find(m => m.grp === x.grp && m.grp_pos === 1)?.note || '',
+        with: mates.filter(m => m.grp === x.grp && m.grp_pos !== x.grp_pos).map(m => m.note) };
     }
     return { responses: list.map(r => ({ id: r.id, n: r.n, at: r.at, seen: !!r.seen, seen_by: by[r.id] || [], data: parse(r.data) || {}, reply: rep[r.id] || null, collab: col[r.id] || null })), more: rows.length > 100, asc, counts: cnt };
   }

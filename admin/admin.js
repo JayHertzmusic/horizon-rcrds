@@ -3570,7 +3570,8 @@
   /* ---------------- Mail: el Gmail de Horizon (owners + la persona a la que un owner le dé acceso) ----------------
      Como Gmail: carpetas y etiquetas a la izquierda, pestañas Primary/Promotions/Social/Updates, casillas y acciones en lote,
      redactar con formato, firma de Gmail y plantillas. */
-  const MAIL0 = () => ({ info: null, box: 'inbox', cat: 'primary', q: '', pages: [''], page: 0, list: null, next: '', err: '', loading: false, open: null, thread: null, threadErr: '', size: 0, sel: new Set(), pre: {} });
+  // list = correos ya pedidos (de 25 en 25); off = desde cuál se ven; fit = cuántos caben en la pantalla
+  const MAIL0 = () => ({ info: null, box: 'inbox', cat: 'primary', q: '', off: 0, fit: 0, list: null, next: '', err: '', loading: false, more: false, open: null, thread: null, threadErr: '', sel: new Set(), pre: {} });
   const mail = MAIL0();
   // en «Test» se ve Mail si alguien con ese rol tiene acceso, tal cual lo ve esa persona (sin cambiar nada)
   const canMail = () => preview ? !!preview.mail : !!auth?.user?.mail;
@@ -3606,27 +3607,35 @@
   const mico = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${MAIL_ICO[k] || MAIL_ICO.label}</svg>`;
   const mailCats = () => mail.box === 'inbox' && !mail.q;
   const mailListSize = () => { const w = $('#m-wrap'); return Math.max(5, Math.min(25, Math.floor(((w ? w.clientHeight : innerHeight - 216) - 52 - (mailCats() ? 44 : 0)) / 41))); };
-  // la lista llena la caja hasta abajo: si caben más (o menos) correos de los pedidos, se vuelven a pedir (primera página)
-  // y las filas se estiran lo que sobre
+  // Se piden 25 correos y se enseñan los que caben en la pantalla (se calcula al pintar, antes de que se vea: sin saltos);
+  // las filas se estiran lo que sobre para llenar la caja. «Older» enseña los siguientes ya pedidos y solo pide más al acabarse.
+  const mailShown = () => (mail.list || []).slice(mail.off, mail.off + (mail.fit || 25));
   function fitMail() {
     const l = $('.m-list'); if (!l || !mail.list || mail.open) return;
-    const fit = mailListSize();
-    if (fit !== mail.size && !mail.page && !mail.loading && mail.refit !== fit) { mail.refit = fit; loadMail(); return; }
-    const n = mail.list.length;
-    l.style.setProperty('--mrow-h', n && n >= mail.size ? Math.max(41, Math.floor(l.clientHeight / n)) + 'px' : '41px');
+    const fit = mail.fit = mailListSize();
+    const rows = [...l.querySelectorAll('.mrow')];
+    rows.forEach((r, i) => { r.hidden = i >= fit; });
+    const n = Math.min(rows.length, fit);
+    l.style.setProperty('--mrow-h', n && n >= fit ? Math.max(41, Math.floor(l.clientHeight / n)) + 'px' : '41px');
+    const rg = $('#m-range'); if (rg) rg.textContent = n ? `${mail.off + 1}–${mail.off + n}` : '';
+    const nx = $('[data-mail="next"]'); if (nx) nx.disabled = !(mail.off + fit < mail.list.length || mail.next);
+    const ca = $('[data-mselall]'); if (ca) { const ids = mailShown().map(x => x.id), k = ids.filter(id => mail.sel.has(id)).length; ca.checked = !!ids.length && k === ids.length; ca.nextElementSibling?.classList.toggle('part', k > 0 && k < ids.length); }
+    // la última página se ha quedado corta y hay más en Gmail: se piden
+    if (mail.off && rows.length < fit && mail.next && !mail.loading) loadMail(true);
   }
-  async function loadMail() {
+  async function loadMail(more) {
     if (mail.loading) return;
-    mail.loading = true; mail.err = '';
+    mail.loading = true; mail.more = !!more; mail.err = '';
     try {
-      // la cabecera (carpetas, firma) y la lista se piden a la vez; los correos que caben en la pantalla
-      mail.size = mailListSize();
+      // la cabecera (carpetas, firma) y la lista se piden a la vez
       const [info, r] = await Promise.all([mail.info || api('GET', '/api/mail/info' + mq('?')),
-        api('GET', `/api/mail/threads?box=${encodeURIComponent(mail.box)}&cat=${mailCats() ? mail.cat : ''}&n=${mail.size}&q=${encodeURIComponent(mail.q)}&page=${encodeURIComponent(mail.pages[mail.page] || '')}${mq()}`)]);
+        api('GET', `/api/mail/threads?box=${encodeURIComponent(mail.box)}&cat=${mailCats() ? mail.cat : ''}&n=25&q=${encodeURIComponent(mail.q)}&page=${encodeURIComponent(more ? mail.next : '')}${mq()}`)]);
       mail.info = info; if (r.unread != null) { mail.info.unread = r.unread; if (mail.info.counts) mail.info.counts.inbox = r.unread; }
-      mail.list = r.threads; mail.next = r.next; mail.pre = {}; mail.sel = new Set();
+      if (more && mail.list) { const have = new Set(mail.list.map(x => x.id)); mail.list = mail.list.concat(r.threads.filter(x => !have.has(x.id))); }
+      else { mail.list = r.threads; mail.off = 0; mail.pre = {}; mail.sel = new Set(); }
+      mail.next = r.next;
     } catch (e) { if (e.status === 401) { mail.loading = false; logout(e.message); return; } mail.err = e.message; }
-    mail.loading = false;
+    mail.loading = false; mail.more = false;
     if (view === 'mail') { render(); if (mail.open && !mail.thread) openThread(mail.open); }
   }
   // contadores de las carpetas al día después de una acción (sin esperar)
@@ -3663,8 +3672,8 @@
     const info = mail.info;
     if (!mail.list && !mail.err && !mail.loading) setTimeout(loadMail, 0);
     const lab = id => (info?.labels || []).find(l => l.id === id);
-    const rows = !mail.list ? `<li class="empty">${mail.err ? '' : 'Loading…'}</li>` : !mail.list.length ? `<li class="empty">${mail.q ? `Nothing matches “${esc(mail.q)}”.` : mail.box === 'inbox' ? 'Nothing here. 🎉' : 'No emails here.'}</li>`
-      : mail.list.map(t => `<li class="mrow${t.unread ? ' unread' : ''}${mail.sel.has(t.id) ? ' sel' : ''}" data-mth="${esc(t.id)}" tabindex="0">
+    const rows = !mail.list || (mail.more && !mail.list.slice(mail.off).length) ? `<li class="empty">${mail.err ? '' : 'Loading…'}</li>` : !mail.list.length ? `<li class="empty">${mail.q ? `Nothing matches “${esc(mail.q)}”.` : mail.box === 'inbox' ? 'Nothing here. 🎉' : 'No emails here.'}</li>`
+      : mail.list.slice(mail.off, mail.off + 25).map(t => `<li class="mrow${t.unread ? ' unread' : ''}${mail.sel.has(t.id) ? ' sel' : ''}" data-mth="${esc(t.id)}" tabindex="0">
           <label class="m-ck" title="Select"><input type="checkbox" data-msel="${esc(t.id)}" ${mail.sel.has(t.id) ? 'checked' : ''} aria-label="Select"><span></span></label>
           <button type="button" class="m-star${t.starred ? ' on' : ''}" data-mstar="${esc(t.id)}" title="${t.starred ? 'Unstar' : 'Star'}" aria-label="${t.starred ? 'Unstar' : 'Star'}" aria-pressed="${!!t.starred}">${t.starred ? '★' : '☆'}</button>
           <span class="m-from">${t.draft && mail.box !== 'sent' ? '<em>Draft</em> ' : ''}${esc(mailWho(t.from) || (t.draft ? '(no recipient)' : '(no sender)'))}${t.count > 1 ? ` <i>${t.count}</i>` : ''}</span>
@@ -3672,15 +3681,15 @@
           <span class="m-clip" aria-label="${t.files ? 'Has attachments' : ''}">${t.files ? '⎘' : ''}</span>
           <span class="m-date">${esc(mailDate(t.at))}</span>
         </li>`).join('');
-    const from = mail.page * (mail.size || 0) + 1, to = from - 1 + (mail.list?.length || 0), nSel = mail.sel.size, all = mail.list?.length && nSel === mail.list.length;
+    const nSel = mail.sel.size;
     const cats = mailCats() ? `<div class="m-cats" role="tablist">${MAIL_CATS.map(([id, l]) => `<button type="button" role="tab" class="${mail.cat === id ? 'on' : ''}" data-mcat="${id}" aria-selected="${mail.cat === id}">${mico(id)}<span>${l}</span></button>`).join('')}</div>` : '';
     const inner = mail.open ? `
         <div class="m-tool"><span class="m-tl"><button type="button" class="ic m-act" data-mail="close" title="Back to ${esc(boxLabel(mail.box))}" aria-label="Back">←</button>${mail.thread ? mailBulkBtns(' one') : ''}</span>${mailActions()}</div>
         <section class="m-read" id="m-read" aria-live="polite">${mailReader()}</section>` : `
-        <div class="m-tool"><span class="m-tl"><label class="m-ck all" title="Select all"><input type="checkbox" data-mselall ${all ? 'checked' : ''} aria-label="Select all"><span${nSel && !all ? ' class="part"' : ''}></span></label>
+        <div class="m-tool"><span class="m-tl"><label class="m-ck all" title="Select all"><input type="checkbox" data-mselall aria-label="Select all"><span></span></label>
           ${nSel ? `<span class="m-nsel">${nSel} selected</span>${mailBulkBtns()}` : `<button type="button" class="ic m-act" data-mail="refresh" title="Refresh" aria-label="Refresh">${mico('refresh')}</button>`}</span>
-          <span class="m-pager">${mail.list?.length ? `<span class="muted sm-txt">${from}–${to}</span>` : ''}<button type="button" class="ic" data-mail="prev" title="Newer" aria-label="Newer" ${mail.page ? '' : 'disabled'}>‹</button><button type="button" class="ic" data-mail="next" title="Older" aria-label="Older" ${mail.next ? '' : 'disabled'}>›</button></span></div>
-        ${cats}<ol class="m-list" aria-busy="${mail.loading}">${rows}</ol>`;
+          <span class="m-pager"><span class="muted sm-txt" id="m-range"></span><button type="button" class="ic" data-mail="prev" title="Newer" aria-label="Newer" ${mail.off ? '' : 'disabled'}>‹</button><button type="button" class="ic" data-mail="next" title="Older" aria-label="Older" ${mail.more ? 'disabled' : ''}>›</button></span></div>
+        ${cats}<ol class="m-list" aria-busy="${mail.loading && !mail.more}">${rows}</ol>`;
     return `
       <div class="head m-head"><div><p class="eyebrow">Gmail</p><h1>MAIL${info?.unread ? ` <span class="count">${info.unread}</span>` : ''}</h1></div>
         <div class="head-btns m-hbtns"><form class="m-search" id="m-search" role="search"><input type="search" name="q" placeholder="Search mail" aria-label="Search mail" value="${esc(mail.q)}" autocomplete="off"></form></div></div>
@@ -3792,11 +3801,11 @@
       const r = await api('POST', '/api/mail/bulk', { ids, act: api_act, label, from: act === 'move' ? boxLab() : '' });
       ids.forEach(id => { if (mail.pre) delete mail.pre[id]; });
       const leaves = mailLeaves(act, label);
-      if (leaves && mail.list) mail.list = mail.list.filter(x => !ids.includes(x.id));
+      if (leaves && mail.list) { mail.list = mail.list.filter(x => !ids.includes(x.id)); if (mail.off >= mail.list.length) mail.off = Math.max(0, mail.off - (mail.fit || 25)); }
       else if (mail.list) for (const x of mail.list) if (ids.includes(x.id)) { if (act === 'read') x.unread = false; if (act === 'unread') x.unread = true; if (act === 'label') x.labels = [...new Set([...(x.labels || []), label])]; if (act === 'unlabel') x.labels = (x.labels || []).filter(l => l !== label); if (act === 'move') x.labels = [...new Set([...(x.labels || []).filter(l => l !== boxLab()), label])].filter(l => /^Label_/.test(l)); }
       if (mail.open && ids.includes(mail.open)) {
         if (leaves || act === 'unread') { mail.open = null; mail.thread = null; }
-        else if (mail.thread) mail.thread.messages.forEach(m => { if (act === 'label') m.labels = [...new Set([...m.labels, label])]; if (act === 'unlabel') m.labels = m.labels.filter(l => l !== label); if (act === 'read') m.labels = m.labels.filter(l => l !== 'UNREAD'); });
+        else if (mail.thread) mail.thread.messages.forEach(m => { if (act === 'label') m.labels = [...new Set([...m.labels, label])]; if (act === 'unlabel') m.labels = m.labels.filter(l => l !== label); if (act === 'read') m.labels = m.labels.filter(l => l !== 'UNREAD'); if (act === 'archive') m.labels = m.labels.filter(l => l !== 'INBOX'); if (act === 'move') m.labels = [...new Set([...m.labels.filter(l => l !== boxLab() && (label === 'INBOX' || l !== 'INBOX')), label])]; });
       }
       if (leaves) mail.sel = new Set([...mail.sel].filter(id => !ids.includes(id)));
       const word = { archive: 'Archived', trash: 'Moved to trash', restore: 'Restored', spam: 'Reported as spam', notspam: 'Moved to Inbox', read: 'Marked as read', unread: 'Marked as unread', move: 'Moved', label: 'Label added', unlabel: 'Label removed' }[act] || 'Done';
@@ -3927,7 +3936,7 @@
     const n = $('.m-nav'); if (n) n.style.maxHeight = h + 'px';
   }
   let fitT = 0;
-  addEventListener('resize', () => { sizeMail(); clearTimeout(fitT); fitT = setTimeout(fitMail, 300); });
+  addEventListener('resize', () => { sizeMail(); clearTimeout(fitT); fitT = setTimeout(fitMail, 100); });
   document.addEventListener('click', async e => {
     if (view !== 'mail' && !e.target.closest('#m-compose')) return;
     // formato del editor
@@ -3974,7 +3983,7 @@
     const ck = e.target.closest('[data-msel]');
     if (ck) { if (ck.checked) mail.sel.add(ck.dataset.msel); else mail.sel.delete(ck.dataset.msel); render(); return; }
     const ca = e.target.closest('[data-mselall]');
-    if (ca) { mail.sel = ca.checked ? new Set((mail.list || []).map(x => x.id)) : new Set(); render(); return; }
+    if (ca) { mail.sel = ca.checked ? new Set(mailShown().map(x => x.id)) : new Set(); render(); return; }
     if (e.target.closest('.m-ck, .m-move')) return;
     const bk = e.target.closest('[data-mbulk]');
     if (bk) {
@@ -3993,14 +4002,14 @@
       st.classList.toggle('on', on); st.textContent = on ? '★' : '☆'; st.title = on ? 'Unstar' : 'Star'; st.setAttribute('aria-label', st.title); st.setAttribute('aria-pressed', String(on));
       try {
         await api('POST', `/api/mail/thread/${row.id}/${on ? 'star' : 'unstar'}`); if (mail.pre) delete mail.pre[row.id];
-        if (!on && mail.box === 'starred') { mail.list = mail.list.filter(x => x.id !== row.id); render(); }
+        if (!on && mail.box === 'starred') { mail.list = mail.list.filter(x => x.id !== row.id); if (mail.off >= mail.list.length) mail.off = Math.max(0, mail.off - (mail.fit || 25)); render(); }
       } catch (er) { row.starred = !on; render(); toast(er.message); }
       return;
     }
     const cat = e.target.closest('[data-mcat]');
-    if (cat) { mail.cat = cat.dataset.mcat; mail.pages = ['']; mail.page = 0; mail.list = null; render(); loadMail(); return; }
+    if (cat) { mail.cat = cat.dataset.mcat; mail.off = 0; mail.list = null; render(); loadMail(); return; }
     const bx = e.target.closest('[data-mbox]');
-    if (bx) { mail.box = bx.dataset.mbox; mail.pages = ['']; mail.page = 0; mail.list = null; mail.open = null; mail.thread = null; mail.sel = new Set(); render(); loadMail(); return; }
+    if (bx) { mail.box = bx.dataset.mbox; mail.off = 0; mail.list = null; mail.open = null; mail.thread = null; mail.sel = new Set(); render(); loadMail(); return; }
     const row = e.target.closest('[data-mth]');
     if (row) { if (mail.open !== row.dataset.mth) openThread(row.dataset.mth); return; }
     const b = e.target.closest('[data-mail]');
@@ -4013,8 +4022,11 @@
     if (act === 'reply' || act === 'replyall' || act === 'forward') return t && composeSheet(act);
     if (act === 'close') { mail.open = null; mail.thread = null; mail.threadErr = ''; render(); return; }
     if (act === 'prev' || act === 'next') {
-      if (act === 'next') { if (!mail.next) return; mail.pages[mail.page + 1] = mail.next; mail.page++; } else if (mail.page) mail.page--;
-      mail.list = null; render(); loadMail(); return;
+      const fit = mail.fit || 25; mail.sel = new Set();
+      if (act === 'prev') { mail.off = Math.max(0, mail.off - fit); render(); return; }
+      if (mail.off + fit < mail.list.length) { mail.off += fit; render(); return; }
+      if (mail.next && !mail.loading) { mail.off += fit; loadMail(true); render(); }
+      return;
     }
     if (act === 'toggle') { const i = +b.closest('[data-mmsg]').dataset.mmsg; if (i === t.messages.length - 1) return; t.messages[i].openUi = !t.messages[i].openUi; const y = $('#m-read').scrollTop; $('#m-read').innerHTML = mailReader(); $('#m-read').scrollTop = y; fillFrames(); return; }
     if (act === 'unattach') { mail.compose.files.splice(+b.dataset.i, 1); $('#mc-files').innerHTML = composeFiles(); return; }
@@ -4056,7 +4068,7 @@
   });
   document.addEventListener('mouseover', e => { const r = e.target.closest?.('[data-mth]'); if (r && view === 'mail') fetchThread(r.dataset.mth).catch(() => {}); });
   document.addEventListener('submit', e => {
-    if (e.target.id === 'm-search') { e.preventDefault(); mail.q = e.target.elements.q.value.trim(); mail.pages = ['']; mail.page = 0; mail.list = null; mail.open = null; mail.thread = null; mail.sel = new Set(); render(); loadMail(); return; }
+    if (e.target.id === 'm-search') { e.preventDefault(); mail.q = e.target.elements.q.value.trim(); mail.off = 0; mail.list = null; mail.open = null; mail.thread = null; mail.sel = new Set(); render(); loadMail(); return; }
     if (e.target.id === 'm-compose') { e.preventDefault(); if (!busy) sendMail(e.target); }
   });
 

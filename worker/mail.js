@@ -136,7 +136,7 @@ export async function mailApi(req, env, s, url, audit) {
   mt = p.match(/^\/api\/mail\/thread\/([\w-]{6,40})\/(\w+)$/);
   if ((mt && m === 'POST') || (p === '/api/mail/bulk' && m === 'POST')) {
     const b = mt ? { ids: [mt[1]], act: mt[2] } : await req.json().catch(() => ({}));
-    const ids = (Array.isArray(b.ids) ? b.ids : []).map(String).filter(x => ID.test(x)).slice(0, 50), act = String(b.act || '');
+    const ids = (Array.isArray(b.ids) ? b.ids : []).map(String).filter(x => ID.test(x)).slice(0, 40), act = String(b.act || '');
     if (!ids.length) throw new MailError(400, 'Choose at least one email.');
     let one;
     if (act === 'trash' || act === 'untrash') one = id => post(env, `/threads/${id}/${act}`);

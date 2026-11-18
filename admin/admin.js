@@ -380,6 +380,7 @@
     try { window.google?.accounts?.id?.disableAutoSelect(); } catch { /* nada */ }
     chatStop();
     preview = null;
+    $('#m-composer')?.remove();   // (la ventana de redactar de Mail no se queda abierta)
     clearAuth(); auth = null; repo = null; editing = null; setDirtyBase(null); teamData = null; teamErr = '';
     watchId++; deploy();
     loginView(message);
@@ -3625,28 +3626,47 @@
     // la última página se ha quedado corta y hay más en Gmail: se piden
     if (rows.length < fit && mail.next && !mail.loading && !mail.err) loadMail(true);
   }
+  // correos ya cargados (clave = id.historyId.tipo): el servidor no los vuelve a pedir a Google mientras no cambien
+  const mailMeta = new Map();
+  const knownKeys = () => [...mailMeta.keys()].slice(-200).join(',');
+  const remember = rows => { for (const x of rows) if (x.k && !x.same) { mailMeta.delete(x.k); mailMeta.set(x.k, x); } while (mailMeta.size > 600) mailMeta.delete(mailMeta.keys().next().value); };
+  // cuántos pedir: los que caben en esta carpeta (medido si ya se ve); al rellenar, solo los que faltan
+  function mailWant(more) {
+    const fit = $('#m-wrap') ? mailListSize() : (mail.fit || savedFit() || 18);
+    return Math.max(5, Math.min(25, more ? fit - Math.max(0, (mail.list?.length || 0) - mail.off) : fit));
+  }
   async function loadMail(more) {
     if (mail.loading) return;
     mail.loading = true; mail.more = !!more; mail.err = '';
+    const had = !!mail.list;
     try {
       // la cabecera (carpetas, firma) y la lista se piden a la vez
       const [info, r] = await Promise.all([mail.info || api('GET', '/api/mail/info' + mq('?')),
-        api('GET', `/api/mail/threads?box=${encodeURIComponent(mail.box)}&cat=${mailCats() ? mail.cat : ''}&n=${Math.max(5, Math.min(25, more ? Math.max(mail.fit, 10) : (mail.fit || savedFit() || 18)))}&q=${encodeURIComponent(mail.q)}&page=${encodeURIComponent(more ? mail.next : '')}${mq()}`)]);
+        api('GET', `/api/mail/threads?box=${encodeURIComponent(mail.box)}&cat=${mailCats() ? mail.cat : ''}&n=${mailWant(more)}&q=${encodeURIComponent(mail.q)}&page=${encodeURIComponent(more ? mail.next : '')}&known=${encodeURIComponent(knownKeys())}${mq()}`)]);
+      const rows = r.threads.map(x => x.same ? mailMeta.get(x.k) : x).filter(Boolean); remember(r.threads);
       mail.info = info; if (r.unread != null) { mail.info.unread = r.unread; if (mail.info.counts) mail.info.counts.inbox = r.unread; }
-      if (more && mail.list) { const have = new Set(mail.list.map(x => x.id)); mail.list = mail.list.concat(r.threads.filter(x => !have.has(x.id))); }
-      else { mail.list = r.threads; mail.off = 0; mail.pre = {}; mail.sel = new Set(); }
+      if (more && mail.list) { const have = new Set(mail.list.map(x => x.id)); mail.list = mail.list.concat(rows.filter(x => !have.has(x.id))); }
+      else { const keep = mail.list && had; mail.list = rows; if (!keep) { mail.off = 0; mail.sel = new Set(); } else { const ids = new Set(rows.map(x => x.id)); mail.sel = new Set([...mail.sel].filter(id => ids.has(id))); if (mail.off >= rows.length) mail.off = 0; } }
       mail.next = r.next;
     } catch (e) {
       if (e.status === 401) { mail.loading = false; logout(e.message); return; }
-      mail.err = e.message;
-      // Gmail ocupado (límite por minuto): se vuelve a intentar solo
-      if (e.status === 429) { clearTimeout(mail.retryT); mail.retryT = setTimeout(() => { if (mail.err) { mail.err = ''; if (view === 'mail') loadMail(more); } }, 8000); }
+      // con correos ya en pantalla no se bloquea nada: aviso pequeño y se reintenta solo
+      if (mail.list?.length) toast(e.status === 429 ? 'Gmail is busy for a moment — trying again…' : e.message);
+      else mail.err = e.message;
+      if (e.status === 429 || e.status >= 500 || e.status === 0) { clearTimeout(mail.retryT); mail.retryT = setTimeout(() => { mail.err = ''; if (view === 'mail' && !mail.loading) loadMail(more); }, 6000); }
     }
     mail.loading = false; mail.more = false;
     if (view === 'mail') { render(); if (mail.open && !mail.thread) openThread(mail.open); }
   }
   // contadores de las carpetas al día después de una acción (sin esperar)
-  const refreshMailInfo = () => api('GET', '/api/mail/info' + mq('?')).then(i => { mail.info = i; if (view === 'mail') { const n = $('.m-nav'); if (n) { n.outerHTML = mailNav(); sizeMail(); } } }).catch(() => {});
+  let infoT = 0, infoAt = 0;
+  const refreshMailInfo = () => {
+    clearTimeout(infoT);
+    infoT = setTimeout(() => {
+      infoAt = Date.now();
+      api('GET', '/api/mail/info?fresh=1' + mq()).then(i => { mail.info = i; if (view === 'mail') { const n = $('.m-nav'); if (n) { n.outerHTML = mailNav(); sizeMail(); } } }).catch(() => {});
+    }, Math.max(1500, 10000 - (Date.now() - infoAt)));
+  };
   const mailWho = s => { const m = String(s || '').match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>/); return m ? (m[1].trim() || m[2]) : String(s || '').trim(); };
   const mailAddr = s => (String(s || '').match(/<([^>]+)>/) || [, String(s || '')])[1].trim();
   function mailDate(t, long) {
@@ -3777,7 +3797,14 @@
   }
   const b64uBytes = s => Uint8Array.from(atob(String(s).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
   // el correo se empieza a pedir al pasar el ratón por encima (sin marcarlo como leído): al pulsar ya está
-  const fetchThread = id => (mail.pre ||= {})[id] ||= api('GET', `/api/mail/thread/${id}?peek=1`).catch(e => { delete mail.pre[id]; throw e; });
+  function fetchThread(id) {
+    const pre = mail.pre ||= {}, k = mail.list?.find(x => x.id === id)?.k || id;
+    if (pre[id]?.k === k) return pre[id].p;
+    const ks = Object.keys(pre); if (ks.length > 60) ks.slice(0, 20).forEach(x => delete pre[x]);
+    const p = api('GET', `/api/mail/thread/${id}?peek=1`).catch(e => { if (pre[id]?.p === p) delete pre[id]; throw e; });
+    pre[id] = { k, p };
+    return p;
+  }
   async function openThread(id) {
     mail.open = id; mail.thread = null; mail.threadErr = '';
     const row = mail.list?.find(x => x.id === id);
@@ -3789,7 +3816,12 @@
       // leído: se marca aparte, sin esperar (en «Test» no)
       if (!preview && t.messages.some(m => m.labels.includes('UNREAD'))) { api('POST', `/api/mail/thread/${id}/read`).catch(() => {}); t.messages.forEach(m => { m.labels = m.labels.filter(x => x !== 'UNREAD'); }); delete mail.pre[id]; }
       if (row?.unread) { row.unread = false; if (mail.info?.unread && mail.box === 'inbox') { mail.info.unread--; if (mail.info.counts) mail.info.counts.inbox = mail.info.unread; } }
-    } catch (e) { if (mail.open !== id) return; mail.threadErr = e.message; }
+    } catch (e) {
+      if (mail.open !== id) return;
+      // Gmail ocupado un momento: se sigue cargando y se reintenta solo
+      if (e.status === 429 || e.status >= 500 || e.status === 0) { setTimeout(() => { if (mail.open === id && !mail.thread) openThread(id); }, 4000); return; }
+      mail.threadErr = e.message;
+    }
     if (view === 'mail') { render(); }
   }
   // acción sobre uno o varios correos
@@ -3871,7 +3903,7 @@
     setTimeout(() => (to ? $('#mc-body') : $('#mc-to'))?.focus(), 0);
   }
   const composerDirty = () => { const d = $('#m-composer'); return !!d && (!!$('#mc-body')?.textContent.trim() || (mail.compose?.files || []).some(f => f.file)); };
-  function closeComposer() { $('#m-composer')?.remove(); mail.compose = null; mailTpls = mailTpls; }
+  function closeComposer() { $('#m-composer')?.remove(); mail.compose = null; }
   async function askCloseComposer() { if (composerDirty() && !await confirmBox('Discard this email?', 'Discard')) return false; closeComposer(); return true; }
   const composeFiles = () => (mail.compose?.files || []).map((f, i) => `<span class="m-chip">${esc(f.name)} <span class="muted">${fmtSize(f.size)}</span><button type="button" data-mail="unattach" data-i="${i}" aria-label="Remove">✕</button></span>`).join('');
   // plantillas
@@ -3953,6 +3985,7 @@
     w.style.height = h + 'px';
     const n = $('.m-nav'); if (n) n.style.maxHeight = h + 'px';
   }
+  setInterval(() => { if (view === 'mail' && !document.hidden && mail.list && !mail.loading && !mail.open && !mail.off && !mail.sel.size && !mail.err && canMail()) loadMail(); }, 60e3);
   let fitT = 0;
   addEventListener('resize', () => { sizeMail(); clearTimeout(fitT); fitT = setTimeout(fitMail, 100); });
   document.addEventListener('click', async e => {
@@ -4034,7 +4067,7 @@
     if (!b) return;
     const act = b.dataset.mail, t = mail.thread;
     if (['compose', 'reply', 'replyall', 'forward', 'star', 'important'].includes(act) && mailTest()) return;
-    if (act === 'refresh') { mail.list = null; mail.info = null; render(); loadMail(); return; }
+    if (act === 'refresh') { if (mail.loading) return; loadMail(); refreshMailInfo(); render(); return; }
     if (act === 'cmin' || (act === 'cbar' && $('#m-composer')?.classList.contains('min') && !e.target.closest('button'))) { const d = $('#m-composer'); d?.classList.toggle('min'); d?.classList.remove('max'); return; }
     if (act === 'cmax') { const d = $('#m-composer'); d?.classList.toggle('max'); d?.classList.remove('min'); return; }
     if (act === 'cclose') { askCloseComposer(); return; }
@@ -4097,7 +4130,7 @@
   });
   document.addEventListener('submit', e => {
     if (e.target.id === 'm-search') { e.preventDefault(); mail.q = e.target.elements.q.value.trim(); mail.off = 0; mail.list = null; mail.open = null; mail.thread = null; mail.sel = new Set(); render(); loadMail(); return; }
-    if (e.target.id === 'm-compose') { e.preventDefault(); if (!busy) sendMail(e.target); }
+    if (e.target.id === 'm-compose') { e.preventDefault(); if (!busy && !mailTest()) sendMail(e.target); }
   });
 
   /* ---------------- Chain: download gates + cadena de SoundCloud (solo owners) ---------------- */

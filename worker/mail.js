@@ -17,9 +17,10 @@ const BOXES = {
 };
 const CATS = { primary: 'CATEGORY_PERSONAL', promotions: 'CATEGORY_PROMOTIONS', social: 'CATEGORY_SOCIAL', updates: 'CATEGORY_UPDATES', forums: 'CATEGORY_FORUMS' };
 const ID = /^[\w-]{1,80}$/;
-const BUSY = 'Gmail is busy: too many requests in the last minute. It will try again in a few seconds.';
+const BUSY = 'Gmail is busy for a moment (too many requests in the last minute). Wait a few seconds and try again.';
 
-async function gmail(env, path, init = {}, retry = true) {
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function gmail(env, path, init = {}, retry = true, again = true) {
   let tok;
   try { tok = await horizonToken(env); } catch (e) { throw new MailError(503, e.message); }
   const r = await fetch(path.startsWith('http') ? path : G + path, { ...init, headers: { Authorization: `Bearer ${tok}`, ...(init.headers || {}) } });
@@ -27,8 +28,10 @@ async function gmail(env, path, init = {}, retry = true) {
   const j = await r.json().catch(() => ({}));
   const msg = j.error?.message || `Error ${r.status}`;
   // token antiguo (sin el permiso de Gmail) o caducado: se pide uno nuevo una vez
-  if (retry && (r.status === 401 || (r.status === 403 && /insufficient|scope/i.test(msg)))) { await dropHorizonToken(env); return gmail(env, path, init, false); }
-  if (r.status === 429 || /quota|rate limit|too many/i.test(msg)) throw new MailError(429, BUSY);
+  if (retry && (r.status === 401 || (r.status === 403 && /insufficient|scope/i.test(msg)))) { await dropHorizonToken(env); return gmail(env, path, init, false, again); }
+  const busy = r.status === 429 || /quota|rate limit|too many|backend error/i.test(msg) || r.status >= 500;
+  if (busy && again) { await sleep(1500); return gmail(env, path, init, retry, false); }
+  if (busy) throw new MailError(429, BUSY);
   if (/has not been used|is disabled|not been enabled/i.test(msg)) throw new MailError(503, 'The Gmail API is not enabled in the Horizon script (Services → + → Gmail API).');
   if (r.status === 403 && /insufficient|scope/i.test(msg)) throw new MailError(503, 'The Horizon script has no Gmail permission yet. Run _gmailScope in the script and deploy a new version.');
   if (r.status === 404) throw new MailError(404, 'That email no longer exists.');
@@ -37,15 +40,15 @@ async function gmail(env, path, init = {}, retry = true) {
 const post = (env, path, body) => gmail(env, path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) });
 // varias lecturas en UNA sola petición a Google (batch): el plan gratis solo deja 6 conexiones a la vez,
 // así que pedir 20 correos uno a uno iba en tandas y tardaba. Devuelve un resultado (o null) por ruta, en orden.
-async function gmailBatch(env, paths, retry = true) {
+async function gmailBatch(env, paths, retry = true, again = true) {
   if (!paths.length) return [];
   let tok;
   try { tok = await horizonToken(env); } catch (e) { throw new MailError(503, e.message); }
   const b = 'hzb' + crypto.randomUUID().replace(/-/g, '');
   const body = paths.map((p, i) => `--${b}\r\nContent-Type: application/http\r\nContent-ID: <q${i}>\r\n\r\nGET /gmail/v1/users/me${p}\r\n\r\n`).join('') + `--${b}--`;
   const r = await fetch('https://gmail.googleapis.com/batch/gmail/v1', { method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': `multipart/mixed; boundary=${b}` }, body });
-  if (r.status === 401 && retry) { await dropHorizonToken(env); return gmailBatch(env, paths, false); }
-  if (r.status === 429) throw new MailError(429, BUSY);
+  if (r.status === 401 && retry) { await dropHorizonToken(env); return gmailBatch(env, paths, false, again); }
+  if (r.status === 429 || r.status >= 500) { if (again) { await sleep(1500); return gmailBatch(env, paths, retry, false); } throw new MailError(429, BUSY); }
   if (!r.ok) return Promise.all(paths.slice(0, 15).map(p => gmail(env, p).catch(() => null)));   // (si el batch falla, uno a uno; pocos)
   const rb = (r.headers.get('Content-Type') || '').match(/boundary="?([^";]+)"?/)?.[1];
   const text = await r.text(), out = paths.map(() => null), gone = new Set(), slow = new Set();
@@ -54,12 +57,17 @@ async function gmailBatch(env, paths, retry = true) {
     if (id == null) continue;
     const st = Number(part.match(/HTTP\/1\.1\s+(\d{3})/)?.[1] || 0), a = part.indexOf('{'), z = part.lastIndexOf('}');
     if (st === 200 && a >= 0) { try { out[+id] = JSON.parse(part.slice(a, z + 1)); continue; } catch { /* abajo */ } }
-    if ((st === 401 || st === 403) && retry) { await dropHorizonToken(env); return gmailBatch(env, paths, false); }
+    const limited = st === 429 || (st === 403 && /rate ?limit|quota/i.test(part));
+    if ((st === 401 || st === 403) && !limited && retry) { await dropHorizonToken(env); return gmailBatch(env, paths, false, again); }
     if (st === 404) gone.add(+id);
-    if (st === 429) slow.add(+id);
+    if (limited || st >= 500) slow.add(+id);
   }
-  // Google pide esperar: no se repite nada (gastaría más); si no ha llegado nada, se avisa
-  if (slow.size) { if (out.every(x => x == null)) throw new MailError(429, BUSY); return out; }
+  // Google pide esperar con algunas: se espera un poco y se piden solo esas otra vez (una vez)
+  if (slow.size) {
+    if (again) { await sleep(1500); const idx = [...slow], got = await gmailBatch(env, idx.map(i => paths[i]), retry, false).catch(() => []); idx.forEach((i, k) => { out[i] = got[k] ?? null; }); }
+    if (out.every(x => x == null)) throw new MailError(429, BUSY);
+    return out;
+  }
   // lo que Google no contestó bien en el batch (p. ej. demasiadas a la vez), uno a uno
   const redo = out.map((x, i) => x == null && !gone.has(i) ? i : -1).filter(i => i >= 0).slice(0, 20);
   if (redo.length) await Promise.all(redo.map(async i => { out[i] = await gmail(env, paths[i]).catch(() => null); }));
@@ -80,16 +88,20 @@ async function senders(env) {
   return sendAsCache;
 }
 // carpetas y etiquetas con sus contadores
-async function folders(env) {
+let foldersCache = null;
+async function folders(env, fresh) {
+  if (!fresh && foldersCache && foldersCache.at > Date.now() - 20e3) return foldersCache.v;
   const list = (await gmail(env, '/labels')).labels || [];
   const user = list.filter(l => l.type === 'user' && l.labelListVisibility !== 'labelHide').sort((a, b) => a.name.localeCompare(b.name)).slice(0, 40);
   const ids = ['INBOX', 'STARRED', 'IMPORTANT', 'DRAFT', 'SPAM', 'TRASH', ...user.map(l => l.id)];
   const got = await gmailBatch(env, ids.map(id => `/labels/${encodeURIComponent(id)}`));
   const n = Object.fromEntries(ids.map((id, i) => [id, got[i] || {}]));
-  return {
+  const v = {
     counts: { inbox: n.INBOX.threadsUnread || 0, drafts: n.DRAFT.messagesTotal || 0, spam: n.SPAM.threadsUnread || 0, important: n.IMPORTANT.threadsUnread || 0 },
     labels: user.map(l => ({ id: l.id, name: l.name, unread: n[l.id]?.threadsUnread || 0, color: l.color?.backgroundColor || '' })),
   };
+  foldersCache = { at: Date.now(), v };
+  return v;
 }
 const ACTS = {
   archive: { removeLabelIds: ['INBOX'] }, read: { removeLabelIds: ['UNREAD'] }, unread: { addLabelIds: ['UNREAD'] },
@@ -106,7 +118,7 @@ export async function mailApi(req, env, s, url, audit) {
   if (s.sync || !(s.owner || s.mail)) throw new MailError(403, 'You have no access to Mail. Ask an owner.');
   const p = url.pathname, m = req.method, peek = url.searchParams.get('peek') === '1';   // peek: «Test» (no marca como leído)
   if (p === '/api/mail/info' && m === 'GET') {
-    const [who, f] = await Promise.all([senders(env), folders(env)]);
+    const [who, f] = await Promise.all([senders(env), folders(env, url.searchParams.get('fresh') === '1')]);
     return { me: who.me, from: who.from, contact: who.contact, name: who.name, signature: who.signature, unread: f.counts.inbox, counts: f.counts, labels: f.labels };
   }
   if (p === '/api/mail/threads' && m === 'GET') {
@@ -117,19 +129,23 @@ export async function mailApi(req, env, s, url, audit) {
     const page = String(url.searchParams.get('page') || '').replace(/[^\w-]/g, '').slice(0, 80);
     const n = Math.max(5, Math.min(25, Number(url.searchParams.get('n')) || 12));
     const qs = [`maxResults=${n}`, ...(box.labels || []).concat(cat ? [cat] : []).map(l => 'labelIds=' + encodeURIComponent(l)), q ? 'q=' + encodeURIComponent(q) : '', page ? 'pageToken=' + page : '', box.st ? 'includeSpamTrash=true' : ''].filter(Boolean).join('&');
+    const sentBox = boxId === 'sent' || boxId === 'drafts', sk = sentBox ? 's' : 'r';
+    const known = new Set(String(url.searchParams.get('known') || '').split(',').filter(x => /^[\w-]{6,40}\.\d{1,24}\.[sr]$/.test(x)).slice(0, 400));
     const j = await gmail(env, `/threads?${qs}`);
-    const ids = (j.threads || []).map(t => t.id);
-    const all = await gmailBatch(env, [...ids.map(id => `/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`), '/labels/INBOX']);
-    const lab = all.pop(), meta = all;
-    const sentBox = boxId === 'sent' || boxId === 'drafts';
-    const threads = meta.filter(Boolean).map(t => {
+    const list = j.threads || [], key = t => `${t.id}.${t.historyId}.${sk}`;
+    const need = list.filter(t => !known.has(key(t)));
+    const all = await gmailBatch(env, [...need.map(t => `/threads/${t.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`), '/labels/INBOX']);
+    const lab = all.pop(), got = Object.fromEntries(all.filter(Boolean).map(t => [t.id, t]));
+    const row = t => {
       const msgs = t.messages || [], first = msgs[0] || {}, last = msgs[msgs.length - 1] || {};
       const other = [...msgs].reverse().find(x => !(x.labelIds || []).some(l => l === 'SENT' || l === 'DRAFT')) || last;
       const labs = [...new Set(msgs.flatMap(x => x.labelIds || []))];
-      return { id: t.id, subject: hdr(first, 'subject'), from: hdr(sentBox ? last : other, sentBox ? 'to' : 'from'), at: Number(last.internalDate) || 0, snippet: last.snippet || '', count: msgs.length,
+      return { id: t.id, k: `${t.id}.${t.historyId}.${sk}`, subject: hdr(first, 'subject'), from: hdr(sentBox ? last : other, sentBox ? 'to' : 'from'), at: Number(last.internalDate) || 0, snippet: last.snippet || '', count: msgs.length,
         unread: labs.includes('UNREAD'), starred: labs.includes('STARRED'), important: labs.includes('IMPORTANT'), draft: labs.includes('DRAFT'), labels: labs.filter(l => /^Label_/.test(l)),
         files: msgs.some(x => /mixed/i.test(x.payload?.mimeType || '')) };
-    });
+    };
+    // en orden; los que el panel ya tiene van solo con su clave
+    const threads = list.map(t => known.has(key(t)) ? { id: t.id, k: key(t), same: 1 } : got[t.id] ? row(got[t.id]) : null).filter(Boolean);
     return { threads, next: j.nextPageToken || '', total: j.resultSizeEstimate || 0, unread: lab ? lab.threadsUnread || 0 : null };
   }
   let mt = p.match(/^\/api\/mail\/thread\/([\w-]{6,40})$/);
@@ -202,7 +218,7 @@ export async function mailApi(req, env, s, url, audit) {
     const thread = String(url.searchParams.get('thread') || '').replace(/[^\w-]/g, '').slice(0, 40);
     const b = 'hz' + crypto.randomUUID().replace(/-/g, '');
     const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(thread ? { threadId: thread } : {})}\r\n--${b}\r\nContent-Type: message/rfc822\r\n\r\n${raw}\r\n--${b}--`;
-    const r = await gmail(env, 'https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=multipart', { method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${b}` }, body });
+    const r = await gmail(env, 'https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=multipart', { method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${b}` }, body }, true, false);   // (sin reintento: nunca dos envíos)
     await audit(`Sent an email${thread ? ' (reply)' : ''} to ${decodeWord(get('To')).slice(0, 120)}: ${decodeWord(get('Subject')).slice(0, 120)}`);
     return { ok: true, id: r.id, threadId: r.threadId };
   }

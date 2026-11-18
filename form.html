@@ -687,12 +687,22 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
   // ordenador: si el formulario no cabe en la pantalla, se escala entero (mismo aspecto) en vez de hacer bajar
   function fitScreen() {
     const main = document.querySelector('main');
-    if (!main || !document.documentElement.classList.contains('fit')) return;
+    if (!main || !document.documentElement.classList.contains('fit')) return placeClose();
     main.style.zoom = '';
     if (innerWidth <= 760 || document.documentElement.classList.contains('sent')) return;
     const head = document.querySelector('header.top')?.offsetHeight || 0, foot = document.querySelector('footer.sig')?.offsetHeight || 0;
     const z = Math.min(1, (innerHeight - head - foot) / main.scrollHeight);
     if (z < 1) main.style.zoom = Math.max(.5, z - .012).toFixed(3);
+    placeClose();
+  }
+  // la X va alineada con el borde derecho del formulario (no en la esquina de la pantalla), a la altura del logo
+  function placeClose() {
+    const x = document.querySelector('.x-close'), f = document.getElementById('f'), logo = document.querySelector('header.top .home');
+    if (!x || !f) return;
+    if (innerWidth <= 760) { x.style.right = x.style.top = ''; return; }
+    const r = f.getBoundingClientRect(), l = logo?.getBoundingClientRect();
+    x.style.right = Math.max(16, Math.round(innerWidth - r.right)) + 'px';
+    if (l) x.style.top = Math.round(l.top + l.height / 2 - x.offsetHeight / 2) + 'px';
   }
   // (la escala se calcula al cargar y al cambiar el tamaño de la ventana; los dos modos miden igual, así que al cambiar no se mueve)
   addEventListener('resize', () => { clearTimeout(fitScreen.t); fitScreen.t = setTimeout(() => { coThumbs(); fitScreen(); }, 120); });
@@ -709,6 +719,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     }
     // X para salir: vuelve a la página de la web de la que vino (o a la portada)
     if (!document.querySelector('.x-close')) document.body.insertAdjacentHTML('beforeend', '<a class="x-close" href="/" aria-label="Close" title="Close"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></a>');
+    placeClose();
     f.insertAdjacentHTML('afterbegin', `<div class="x-mode"><div class="x-seg" role="radiogroup" aria-label="Release type">
       <span class="x-thumb" aria-hidden="true"></span><button type="button" role="radio" data-mode="solo">Solo release</button><button type="button" role="radio" data-mode="collab">Collaboration</button></div>
       <div class="x-seg x-n" aria-label="Number of artists"><span class="x-thumb" aria-hidden="true"></span><button type="button" data-n="2">2 artists</button><button type="button" data-n="3">3 artists</button></div>

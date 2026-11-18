@@ -1,7 +1,6 @@
 /* Mail: el Gmail de Horizon dentro del panel (Gmail API, gratis).
    - El permiso de Google sale del script de Apps Script de Horizon (el mismo token que Contracts, con el permiso de Gmail).
-   - Lo ven los owners y la persona a la que un owner le dé acceso (panel_members.mail = 1). Esa persona solo ve los
-     correos de contact@, demos@ y contracts@horizonrcrds.com (no lo privado de la cuenta de Google).
+   - Lo ven los owners y la persona a la que un owner le dé acceso (panel_members.mail = 1), las dos con la bandeja completa.
    - Los correos salen como contact@horizonrcrds.com cuando ese «Enviar como» está listo en Gmail; si no, como el Gmail.
    - El servidor casi no procesa nada (plan gratis = poca CPU): el navegador descodifica los correos y monta el mensaje. */
 import { horizonToken, dropHorizonToken } from './gdocs.js';
@@ -46,7 +45,8 @@ async function senders(env) {
 export async function mailApi(req, env, s, url, audit) {
   if (s.sync || !(s.owner || s.mail)) throw new MailError(403, 'You have no access to Mail. Ask an owner.');
   // as=shared: un owner ve Mail como la persona con acceso (Test en el panel)
-  const p = url.pathname, m = req.method, full = s.owner && url.searchParams.get('as') !== 'shared', peek = url.searchParams.get('peek') === '1';
+  // la persona con acceso ve todo el Gmail de Horizon, igual que los owners (lo pidió el owner, 2026-11-18). peek = «Test» (no marca como leído)
+  const p = url.pathname, m = req.method, full = true, peek = url.searchParams.get('peek') === '1';
   if (p === '/api/mail/info' && m === 'GET') {
     const [who, lab] = await Promise.all([senders(env), gmail(env, '/labels/INBOX')]);
     return { me: full ? who.me : '', from: who.from, contact: who.contact, name: who.name, unread: full ? lab.threadsUnread || 0 : null, shared: !full };

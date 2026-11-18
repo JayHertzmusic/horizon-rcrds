@@ -500,7 +500,7 @@
         </div>
         <div class="field"><label for="m-sc">SoundCloud profile</label><input id="m-sc" name="soundcloud" value="${esc(m.soundcloud || '')}" placeholder="https://soundcloud.com/name" autocomplete="off" spellcheck="false"><p class="info sm-txt">Their photo is taken from SoundCloud and updates by itself when they change it.</p></div>
         <div class="field"><label for="m-role">Role</label>${roles.length ? `<select id="m-role" name="role_id">${roles.map(r => `<option value="${esc(r.id)}" ${r.id === m.role_id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>` : '<p class="info">Create a role first.</p>'}</div>
-        ${isNew ? '' : `<div class="field m-mailsw"><label class="switch"><input type="checkbox" name="mail" ${m.mail ? 'checked' : ''}><span></span><b>Mail access</b></label><p class="info sm-txt">Horizon’s Gmail in the panel: only the emails of contact@, demos@ and contracts@. One person at a time.</p></div>`}
+        ${isNew ? '' : `<div class="field m-mailsw"><label class="switch"><input type="checkbox" name="mail" ${m.mail ? 'checked' : ''}><span></span><b>Mail access</b></label><p class="info sm-txt">Horizon’s Gmail (contacthorizonids@gmail.com) in the panel: read, reply and write emails. One person at a time.</p></div>`}
         <p class="ed-error" role="alert" hidden></p>
         <div class="confirm-actions">${isNew ? '' : '<button type="button" class="btn danger push-l" data-act="remove-member">Remove from team</button>'}<button type="submit" class="btn primary" ${roles.length ? '' : 'disabled'}>${isNew ? 'Add' : 'Save'}</button></div>
       </form>`);

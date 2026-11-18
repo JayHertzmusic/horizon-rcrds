@@ -1162,15 +1162,26 @@ html, body, * { scrollbar-width: none; }
 .lk-co input { width: 100%; padding-right: 40px !important; box-sizing: border-box; }
 .lk-co button { position: absolute; top: 50%; right: 8px; width: 28px; height: 28px; transform: translateY(-50%); border: 0; border-radius: 6px; background: none; color: var(--faint); font-size: 13px; cursor: pointer; }
 .lk-co button:hover { background: rgba(255,255,255,.08); color: #fff; }
-.lk-made { max-width: 900px; margin: 0 0 22px; border: 1px solid var(--line-2); border-radius: 10px; background: rgba(255,255,255,.025); overflow: hidden; }
-.lk-made-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 0 16px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
-.lk-made-row { display: grid; grid-template-columns: 170px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 12px 16px; }
-.lk-made-row + .lk-made-row { border-top: 1px solid var(--line); }
+.lk-made { max-width: 900px; margin: 0 0 24px; border: 1px solid var(--line-2); border-radius: 12px; background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015)); overflow: hidden; }
+.lk-made-top { display: flex; align-items: center; gap: 14px; padding: 18px 20px; }
+.lk-made-ok { flex: none; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: #fff; color: #000; font-size: 15px; font-weight: 700; }
+.lk-made-title { flex: 1; min-width: 0; }
+.lk-made-title h3 { margin: 0; font: 400 24px/1 'Bebas Neue', sans-serif; letter-spacing: .05em; color: #fff; }
+.lk-made-title p { margin: 4px 0 0; font-size: 13.5px; color: var(--muted, #9a9a9a); }
+.lk-made-title p b { color: #fff; font-weight: 600; }
+.lk-made-x { flex: none; align-self: flex-start; width: 30px; height: 30px; border: 0; border-radius: 6px; background: none; color: var(--faint); cursor: pointer; }
+.lk-made-x:hover { background: rgba(255,255,255,.08); color: #fff; }
+.lk-made-row { display: grid; grid-template-columns: 36px 150px minmax(0, 1fr); gap: 14px; align-items: center; padding: 14px 20px; border-top: 1px solid var(--line); }
+.lk-made-av { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: #1c1c1c; border: 1px solid var(--line-2); color: #ddd; font-weight: 700; }
 .lk-made-who { min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
-.lk-made-who b { color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lk-made-who b { color: #fff; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lk-made-who small { color: var(--faint); font-size: 12px; }
-.lk-made-url { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted, #9a9a9a); font-size: 13px; }
-@media (max-width: 640px) { .lk-made-row { grid-template-columns: minmax(0, 1fr) auto; } .lk-made-url { grid-column: 1 / -1; grid-row: 2; } }
+.lk-made-link { min-width: 0; display: flex; align-items: center; gap: 10px; padding: 5px 5px 5px 14px; border: 1px solid var(--line-2); border-radius: 8px; background: #0b0b0b; }
+.lk-made-link span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12.5px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #cfcfcf; }
+.lk-made-link .btn { flex: none; min-width: 96px; }
+.lk-made-link .btn.is-copied { background: #fff; color: #000; }
+.lk-made-foot { display: flex; justify-content: flex-end; padding: 12px 20px; border-top: 1px solid var(--line); }
+@media (max-width: 640px) { .lk-made-row { grid-template-columns: 36px minmax(0, 1fr); } .lk-made-link { grid-column: 1 / -1; } }
 .collab-pill { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; background: rgba(168,85,247,.12); border: 1px solid rgba(168,85,247,.45); color: #d8b4fe; font-size: 12px; font-weight: 700; white-space: nowrap; }
 /* Personal links: filtros como pestañas (igual que en las respuestas) */
 .lk-tools { display: block; margin: 6px 0 0; padding-bottom: 0; border-bottom: 0; }

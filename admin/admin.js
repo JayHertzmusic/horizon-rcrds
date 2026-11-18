@@ -2165,16 +2165,22 @@
         <button type="submit" class="btn primary">Generate link</button>
       </form>
       ${o.made ? (() => {
-        // enlaces recién creados: una tarjeta sobria, una fila por artista (nombre, enlace y «Copy»)
+        // enlaces recién creados: tarjeta con el aviso, una fila por artista y su enlace listo para copiar
         const ls = o.made.links?.length ? o.made.links : [{ note: o.made.note, url: o.made.url }], many = ls.length > 1;
-        return `<div class="lk-made">
-          <div class="lk-made-head"><span>${many ? 'Links ready to send' : 'Link ready to send'}</span>${many ? '<button type="button" class="btn ghost sm" data-lk="copy-all">Copy all</button>' : ''}</div>
+        const who = ls.map(x => esc(x.note || 'the artist')).join(many ? ' and ' : '');
+        return `<section class="lk-made" aria-live="polite">
+          <header class="lk-made-top">
+            <span class="lk-made-ok" aria-hidden="true">✓</span>
+            <div class="lk-made-title"><h3>${many ? 'Links ready' : 'Link ready'}</h3><p>Send ${many ? 'each artist their own link' : 'it to <b>' + who + '</b>'} — it works once, on one device, for 30 days.</p></div>
+            <button type="button" class="lk-made-x" data-lk="made-x" aria-label="Close" title="Close">✕</button>
+          </header>
           ${ls.map((x, i) => `<div class="lk-made-row">
+            <span class="lk-made-av" aria-hidden="true">${esc(((x.note || '?').trim()[0] || '?').toUpperCase())}</span>
             <div class="lk-made-who"><b>${esc(x.note || 'Artist')}</b>${many ? `<small>Artist ${i + 1} of ${ls.length}</small>` : ''}</div>
-            <span class="lk-made-url" title="${esc(x.url)}">${esc(String(x.url).replace(/^https?:\/\//, ''))}</span>
-            <button type="button" class="btn ghost sm" data-lk="copy-made" data-i="${i}">Copy</button>
+            <div class="lk-made-link"><span title="${esc(x.url)}">${esc(String(x.url).replace(/^https?:\/\//, ''))}</span><button type="button" class="btn primary sm" data-lk="copy-made" data-i="${i}">Copy link</button></div>
           </div>`).join('')}
-        </div>`;
+          ${many ? '<footer class="lk-made-foot"><button type="button" class="btn ghost sm" data-lk="copy-all">Copy all links</button></footer>' : ''}
+        </section>`;
       })() : ''}
       <div class="lk-tools">
         <input class="lk-search" type="search" placeholder="Search by artist…" value="${esc(o.q)}" aria-label="Search links">
@@ -2231,8 +2237,15 @@
     }
     if (a === 'copy-made' || a === 'copy-all') {
       const ls = formOpen.made?.links?.length ? formOpen.made.links : [{ note: formOpen.made?.note, url: formOpen.made?.url }], txt = a === 'copy-all' ? ls.map(x => `${x.note}: ${x.url}`).join('\n') : ls[Number(b.dataset.i)]?.url;
-      try { await navigator.clipboard.writeText(txt || ''); toast(a === 'copy-all' ? 'All links copied' : 'Link copied'); } catch { toast('Could not copy'); }
+      try {
+        await navigator.clipboard.writeText(txt || '');
+        // el botón confirma la copia unos segundos
+        const was = b.textContent; b.textContent = 'Copied ✓'; b.classList.add('is-copied');
+        setTimeout(() => { b.textContent = was; b.classList.remove('is-copied'); }, 1800);
+      } catch { toast('Could not copy'); }
       return;
+    }
+    if (a === 'made-x') { formOpen.made = null; $('.lk-made')?.remove(); return;
     }
     if (a === 'copy-new' || a === 'copy') {
       const u = a === 'copy' ? l.url : formOpen.made.url;

@@ -1163,7 +1163,9 @@ html, body, * { scrollbar-width: none; }
 .lk-co button { position: absolute; top: 50%; right: 8px; width: 28px; height: 28px; transform: translateY(-50%); border: 0; border-radius: 6px; background: none; color: var(--faint); font-size: 13px; cursor: pointer; }
 .lk-co button:hover { background: rgba(255,255,255,.08); color: #fff; }
 .lk-made { max-width: 900px; margin: -2px 0 20px; }
-.lk-made-row { display: grid; grid-template-columns: 180px minmax(0, 1fr) 84px 24px; gap: 14px; align-items: center; min-height: 30px; }
+.lk-made-row { display: grid; grid-template-columns: 180px minmax(0, 1fr) 84px 24px; gap: 14px; align-items: center; padding: 8px 0; }
+.lk-made-row + .lk-made-row { border-top: 1px solid var(--line-2); }
+.lk-made-row > .btn { justify-self: end; }
 .lk-made-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; font-weight: 600; font-size: 14px; }
 .lk-made-url { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted, #9a9a9a); font-size: 13px; }
 .lk-made-btn { justify-self: end; padding: 0; border: 0; background: none; color: #fff; font: 700 12px/1 'Barlow', sans-serif; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }

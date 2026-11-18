@@ -2171,10 +2171,9 @@
           ${ls.map((x, i) => `<div class="lk-made-row">
             <span class="lk-made-name">${esc(x.note || 'Artist')}</span>
             <span class="lk-made-url" title="${esc(x.url)}">${esc(String(x.url).replace(/^https?:\/\//, ''))}</span>
-            <button type="button" class="lk-made-btn" data-lk="copy-made" data-i="${i}">Copy</button>
+            <button type="button" class="btn ghost sm" data-lk="copy-made" data-i="${i}">Copy</button>
             ${i === 0 ? '<button type="button" class="lk-made-btn lk-made-x" data-lk="made-x" aria-label="Close" title="Close">✕</button>' : '<span></span>'}
           </div>`).join('')}
-          ${many ? '<div class="lk-made-row"><span></span><span></span><button type="button" class="lk-made-btn" data-lk="copy-all">Copy all</button><span></span></div>' : ''}
         </div>`;
       })() : ''}
       <div class="lk-tools">

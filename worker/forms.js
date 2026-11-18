@@ -95,6 +95,31 @@ const linkState = l => l.revoked ? 'revoked' : l.used_at ? 'sent' : l.expires_at
 export const FORM_LINK_COLUMNS = ['token TEXT', 'revoked INTEGER NOT NULL DEFAULT 0', 'grp TEXT', 'grp_pos INTEGER', 'grp_n INTEGER', 'gsent INTEGER'];
 
 /* Varios artistas en un release: un enlace por artista, agrupados (grp). Cada uno rellena el formulario completo. */
+// «Krisna Artha & Tebedayeng», «A x B», «A feat. B», «A, B»… → cada artista por separado
+export const splitArtists = v => {
+  const seen = new Set();
+  // («x» solo en minúscula: «DJ X» es un nombre, «A x B» son dos)
+  return String(v || '').split(/\s*[,&+\/]\s*|\s+(?:feat\.?|ft\.?|featuring|vs\.?|and)\s+/i).flatMap(x => x.split(/\s+x\s+/)).map(x => x.trim()).filter(x => x && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase()));
+};
+// demos: qué pregunta es el nombre del artista y cuál el email (para pedir el email de cada artista de una colaboración)
+const multiOf = f => {
+  if (!/demo/i.test(f.slug || '')) return null;
+  const qs = (parse(f.fields) || []).filter(x => x.type !== 'section');
+  const artist = qs.find(x => x.type === 'text' && /artist/i.test(x.label || '')), email = qs.find(x => x.type === 'email');
+  return artist && email ? { artist: artist.id, email: email.id } : null;
+};
+// enlaces personales de un release (uno por artista; con varios, agrupados y el primero es el principal)
+async function makeLinks(DB, f, names, by, origin) {
+  const t = now(), grp = names.length > 1 ? linkToken().slice(0, 16) : null, made = [];
+  for (let i = 0; i < names.length; i++) {
+    const tok = linkToken();
+    await DB.prepare('INSERT INTO form_links (hash, form_id, note, created_by, created_at, expires_at, token, grp, grp_pos, grp_n) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(await sha(tok), f.id, names[i], by, t, t + LINK_DAYS * 864e5, tok, grp, grp ? i + 1 : null, grp ? names.length : null).run();
+    made.push({ note: names[i], url: `${origin}/forms/${f.slug}?k=${tok}` });
+  }
+  return { links: made, expires_at: t + LINK_DAYS * 864e5 };
+}
+const siteOrigin = url => /(^|\.)horizonrcrds\.com$/.test(url.hostname) ? 'https://horizonrcrds.com' : url.origin;
 
 /* ---------- Conexión con Google Forms (script de Apps Script en la cuenta de Horizon) ----------
    - Google → web: cada respuesta de un Google Form llega aquí y se guarda en su formulario de la web.
@@ -412,16 +437,9 @@ export async function formsApi(req, env, s, url, audit) {
       // collab: un enlace por artista (el primero es el principal), todos del mismo release
       const others = (Array.isArray(b.collab) ? b.collab : []).map(x => clean(x, 120)).filter(Boolean).slice(0, 2);
       if (Array.isArray(b.collab) && b.collab.length && others.length !== b.collab.length) throw new FormError(400, 'Write the name of every artist.');
-      const names = [clean(b.note, 120), ...others], t = now(), origin = /(^|\.)horizonrcrds\.com$/.test(url.hostname) ? 'https://horizonrcrds.com' : url.origin;
-      const grp = names.length > 1 ? linkToken().slice(0, 16) : null, made = [];
-      for (let i = 0; i < names.length; i++) {
-        const tok = linkToken();
-        await DB.prepare('INSERT INTO form_links (hash, form_id, note, created_by, created_at, expires_at, token, grp, grp_pos, grp_n) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-          .bind(await sha(tok), f.id, names[i], s.email, t, t + LINK_DAYS * 864e5, tok, grp, grp ? i + 1 : null, grp ? names.length : null).run();
-        made.push({ note: names[i], url: `${origin}/forms/${f.slug}?k=${tok}` });
-      }
-      await audit(grp ? `Created collab links for “${f.title}” (${names.join(' & ')})` : `Created a personal link for “${f.title}” (${names[0]})`);
-      return { ok: true, url: made[0].url, links: made, expires_at: t + LINK_DAYS * 864e5 };
+      const names = [clean(b.note, 120), ...others], r = await makeLinks(DB, f, names, s.email, siteOrigin(url));
+      await audit(names.length > 1 ? `Created links for “${f.title}” (${names.join(' & ')})` : `Created a personal link for “${f.title}” (${names[0]})`);
+      return { ok: true, url: r.links[0].url, links: r.links, expires_at: r.expires_at };
     }
     // quién lo creó, con su nombre del team (el mismo que sale en el panel), no el correo
     const rows = (await DB.prepare(`SELECT l.*, COALESCE(m.label, (SELECT ps.name FROM panel_sessions ps WHERE ps.email = l.created_by AND length(ps.name) > 0 ORDER BY ps.created_at DESC LIMIT 1), m.name) AS by_name
@@ -449,17 +467,32 @@ export async function formsApi(req, env, s, url, audit) {
     const row = await DB.prepare('SELECT data FROM form_responses WHERE id = ? AND form_id = ?').bind(rid, f.id).first();
     if (!row) throw new FormError(404, 'That response no longer exists.');
     if (await DB.prepare('SELECT 1 FROM form_replies WHERE response_id = ?').bind(rid).first()) throw new FormError(409, 'This demo was already answered.');
-    const to = emailOf(f, parse(row.data) || {});
-    if (!to) throw new FormError(400, 'This response has no valid email address.');
-    const subject = clean(b.subject, 200), body = clean(b.body, 5000);
+    const rd = parse(row.data) || {}, main = emailOf(f, rd);
+    if (!main) throw new FormError(400, 'This response has no valid email address.');
+    // varios artistas: el correo les llega a todos
+    const to = [main, ...(Array.isArray(rd._artists) ? rd._artists.map(x => String(x.email || '').trim()).filter(e => /^[^\s@<>,;]+@[^\s@<>,;]+\.[^\s@<>,;]+$/.test(e)) : [])].filter((e, i, a) => a.findIndex(x => x.toLowerCase() === e.toLowerCase()) === i);
+    const subject = clean(b.subject, 200);
+    let body = clean(b.body, 5000);
     if (!subject || !body) throw new FormError(400, 'Write the subject and the message.');
+    // aceptar con los enlaces del Release Form (uno por artista), antes de la despedida
+    let made = null;
+    if (kind === 'accept' && b.links) {
+      const names = splitArtists(clean(b.links_for, 300)).slice(0, 3);
+      const rf = await DB.prepare("SELECT * FROM forms WHERE slug = 'release-form'").first();
+      if (!names.length) throw new FormError(400, 'Write the artist name(s) for the Release Form links.');
+      if (!rf) throw new FormError(404, 'The Release Form was not found.');
+      made = (await makeLinks(DB, rf, names, s.email, siteOrigin(url))).links;
+      const block = `${made.length > 1 ? 'Release Form — each artist fills in their own link:' : 'Release Form — please fill it in here:'}\n${made.map(x => made.length > 1 ? `${x.note}: ${x.url}` : x.url).join('\n')}\n(The link is personal, works once and for 30 days.)`;
+      const k = body.search(/\n\s*(best|cheers|thanks|thank you|regards|kind regards)\b[^\n]*\n?[^\n]*$/i);
+      body = k >= 0 ? `${body.slice(0, k)}\n\n${block}\n${body.slice(k)}` : `${body}\n\n${block}`;
+    }
     try { await demoReplyMail(env, to, subject, body); }
     catch (e) { throw new FormError(502, e.message); }
     const who = clean(s.name, 120) || String(s.email || '').split('@')[0];
     await DB.prepare('INSERT INTO form_replies (response_id, form_id, kind, to_email, subject, body, at, by, by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(rid, f.id, kind, to, subject, body, now(), s.email || '', who).run();
-    await audit(`${kind === 'accept' ? 'Accepted' : 'Rejected'} the response ${await respName(DB, f, rid)} in “${f.title}” (email sent to ${to})`);
-    return { ok: true, reply: { kind, at: now(), by_name: who } };
+      .bind(rid, f.id, kind, to.join(', '), subject, body, now(), s.email || '', who).run();
+    await audit(`${kind === 'accept' ? 'Accepted' : 'Rejected'} the response ${await respName(DB, f, rid)} in “${f.title}” (email sent to ${to.join(', ')}${made ? `, with ${made.length} Release Form link${made.length > 1 ? 's' : ''}` : ''})`);
+    return { ok: true, reply: { kind, at: now(), by_name: who }, links: made };
   }
   if (!mm[2] && m === 'DELETE') {
     if (!s.owner || s.sync) throw new FormError(403, 'Only owners can delete a form.');
@@ -593,7 +626,7 @@ export async function publicFormsApi(req, env, url) {
       const mates = (await DB.prepare('SELECT note, grp_pos FROM form_links WHERE grp = ? ORDER BY grp_pos').bind(link.grp).all()).results;
       collab = { pos: link.grp_pos, n: link.grp_n, main: mates.find(x => x.grp_pos === 1)?.note || '', with: mates.filter(x => x.grp_pos !== link.grp_pos).map(x => x.note) };
     }
-    return { title: f.title, description: f.description || '', fields, invite: !!f.invite, note: link?.note || '', collab };
+    return { title: f.title, description: f.description || '', fields, invite: !!f.invite, note: link?.note || '', collab, multi: multiOf(f) };
   }
   if (req.method !== 'POST') throw new FormError(405, 'Not allowed.');
   if (b._hp) return { ok: true };   // campo trampa para bots: se ignora en silencio
@@ -617,6 +650,17 @@ export async function publicFormsApi(req, env, url) {
     }
     if (x.required && (!v || (Array.isArray(v) && !v.length))) throw new FormError(400, `Please answer “${x.label.trim()}”.`);
     data[x.id] = v;
+  }
+  // demos con varios artistas («A & B»): el email de cada uno es obligatorio
+  const multi = multiOf(f);
+  if (multi) {
+    const others = splitArtists(data[multi.artist]).slice(1, 4), sent = Array.isArray(b.answers?._artists) ? b.answers._artists : [];
+    data._artists = others.map((name, i) => {
+      const e = clean(sent[i]?.email, 200);
+      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(e)) throw new FormError(400, `Please add the email of ${name}.`);
+      return { name: clean(name, 120), email: e };
+    });
+    if (!data._artists.length) delete data._artists;
   }
   // el enlace se gasta ANTES de guardar: dos envíos a la vez (doble clic, dos pestañas) no crean dos respuestas
   if (link && !(await DB.prepare('UPDATE form_links SET used_at = ? WHERE hash = ? AND used_at IS NULL').bind(now(), link.hash).run()).meta.changes)

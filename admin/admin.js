@@ -1904,6 +1904,8 @@
   const isReplyForm = f => !!f && /demo/i.test(f.slug || '') && f.fields.some(x => x.type === 'email');
   const canReply = f => isReplyForm(f) && canEditForm(f) && !preview;
   const respEmail = (f, r) => { const x = f.fields.find(q => q.type === 'email' && /@/.test(String(r.data[q.id] || ''))); return x ? String(r.data[x.id]).trim() : ''; };
+  const coArtists = r => Array.isArray(r.data?._artists) ? r.data._artists.filter(x => x && x.name) : [];
+  const respEmails = (f, r) => [respEmail(f, r), ...coArtists(r).map(x => x.email)].filter(Boolean);
   const fillTpl = (txt, f, r) => { const w = respWho(f, r); return String(txt || '').replace(/\{artist\}/gi, w.who || 'there').replace(/\{track\}/gi, w.what || 'your track'); };
   const replyLabel = rp => rp ? `${rp.kind === 'accept' ? 'Accepted' : 'Rejected'}` : '';
   async function replyTemplatesFor(f) {
@@ -1937,9 +1939,9 @@
   function respItem(f, r, rs, q, qs, own) {
     return `
         <article class="resp${r.seen ? '' : ' is-new'}${respOpen(r, rs) ? ' is-open' : ''}${isReplyForm(f) ? ' is-demo' : ''}" data-resp="${r.id}">
-          <header data-act="resp-toggle" title="Show / hide the answers"><span class="resp-num">#${r.n || ''}</span>${(() => { const w = respWho(f, r); return w.who ? `<span class="resp-who"><b>${mark(esc(w.who), q)}</b>${w.what ? `<span>${mark(esc(w.what), q)}</span>` : ''}</span>` : ''; })()}${r.collab ? `<span class="collab-pill" title="Artist ${r.collab.pos} of ${r.collab.n}">${r.collab.pos}/${r.collab.n} w/${esc((r.collab.with || [r.collab.main]).filter(Boolean).join(' & '))}</span>` : ''}${r.seen ? '' : '<span class="new-pill">New</span>'}${r.reply ? `<span class="reply-pill ${r.reply.kind === 'accept' ? 'is-acc' : 'is-rej'}" title="${esc(replyLabel(r.reply))} by ${esc(r.reply.by_name || '')} · ${esc(fmtDate(r.reply.at))}">${replyLabel(r.reply)}</span>` : ''}<span class="resp-date">${esc(fmtDate(r.at))}</span>${seenByHtml(r)}
+          <header data-act="resp-toggle" title="Show / hide the answers"><span class="resp-num">#${r.n || ''}</span>${(() => { const w = respWho(f, r); return w.who ? `<span class="resp-who"><b>${mark(esc(w.who), q)}</b>${w.what ? `<span>${mark(esc(w.what), q)}</span>` : ''}</span>` : ''; })()}${coArtists(r).length ? `<span class="collab-pill">w/${esc(coArtists(r).map(x => x.name).join(' & '))}</span>` : ''}${r.collab ? `<span class="collab-pill" title="Artist ${r.collab.pos} of ${r.collab.n}">${r.collab.pos}/${r.collab.n} w/${esc((r.collab.with || [r.collab.main]).filter(Boolean).join(' & '))}</span>` : ''}${r.seen ? '' : '<span class="new-pill">New</span>'}${r.reply ? `<span class="reply-pill ${r.reply.kind === 'accept' ? 'is-acc' : 'is-rej'}" title="${esc(replyLabel(r.reply))} by ${esc(r.reply.by_name || '')} · ${esc(fmtDate(r.reply.at))}">${replyLabel(r.reply)}</span>` : ''}<span class="resp-date">${esc(fmtDate(r.at))}</span>${seenByHtml(r)}
             <span class="resp-btns">${preview || !auth.user.owner ? '' : r.seen ? '<button type="button" class="btn ghost sm" data-act="resp-unseen">Mark as new</button>' : '<button type="button" class="btn primary sm" data-act="resp-seen">Mark as seen</button>'}${own ? '<button type="button" class="btn ghost sm" data-act="resp-del">Delete</button>' : ''}</span></header>
-          ${respOpen(r, rs) ? `<dl>${qs.map(x => `<dt>${esc(x.label)}</dt><dd>${mark(answerHtml(r.data[x.id]), q)}</dd>`).join('')}</dl>` : ''}
+          ${respOpen(r, rs) ? `<dl>${qs.map(x => `<dt>${esc(x.label)}</dt><dd>${mark(answerHtml(r.data[x.id]), q)}</dd>`).join('')}${coArtists(r).map(x => `<dt>Email of ${esc(x.name)}</dt><dd>${mark(answerHtml(x.email), q)}</dd>`).join('')}</dl>` : ''}
           ${respOpen(r, rs) && canReply(f) ? `<div class="resp-reply">
             <span class="muted sm-txt">${r.reply ? `${replyLabel(r.reply)} by ${esc(r.reply.by_name || '')} · ${esc(fmtDate(r.reply.at))} — email sent` : respEmail(f, r) ? `Reply to ${esc(respEmail(f, r))}` : 'No email address in this response'}</span>
             ${r.reply ? '' : `<span class="resp-btns"><button type="button" class="btn ghost sm acc-txt" data-act="resp-reply" data-kind="accept" ${respEmail(f, r) ? '' : 'disabled'}>Accept</button><button type="button" class="btn ghost sm danger-txt" data-act="resp-reply" data-kind="reject" ${respEmail(f, r) ? '' : 'disabled'}>Reject</button></span>`}
@@ -2271,10 +2273,10 @@
         closeSheet(); toast('Templates saved');
       } else {
         const rid = Number(fm.dataset.rid), kind = fm.dataset.kind;
-        const r = await api('POST', `/api/forms/${encodeURIComponent(fid)}/reply/${rid}`, { kind, subject: d.subject, body: d.body });
+        const r = await api('POST', `/api/forms/${encodeURIComponent(fid)}/reply/${rid}`, { kind, subject: d.subject, body: d.body, links: !!d.links, links_for: d.links_for || '' });
         const x = formOpen?.id === fid && formOpen.responses.find(y => y.id === rid);
         if (x) x.reply = r.reply;
-        closeSheet(); toast(kind === 'accept' ? 'Acceptance email sent' : 'Rejection email sent');
+        closeSheet(); toast(kind === 'accept' ? `Acceptance email sent${r.links?.length ? ` with ${r.links.length} Release Form link${r.links.length > 1 ? 's' : ''}` : ''}` : 'Rejection email sent');
         if (formOpen?.id === fid) {
           const c = formOpen.counts || (formOpen.counts = {});
           c.pending = Math.max(0, (c.pending || 0) - 1); c[kind] = (c[kind] || 0) + 1;
@@ -2356,9 +2358,14 @@
       let tpl; try { tpl = (await replyTemplatesFor(f))[kind]; } catch (err) { toast(err.message); return; }
       sheet(`<form id="reply-send" data-rid="${rid}" data-kind="${kind}">
         <div class="sheet-head"><h2>${kind === 'accept' ? 'Accept demo' : 'Reject demo'}</h2><button type="button" class="btn ghost sm" data-act="sheet-x">Close</button></div>
-        <div class="field"><label>To</label><input value="${esc(respEmail(f, r))}" readonly></div>
+        <div class="field"><label>To</label><input value="${esc(respEmails(f, r).join(', '))}" readonly></div>
         <div class="field"><label for="rp-subj">Subject</label><input id="rp-subj" name="subject" maxlength="200" value="${esc(fillTpl(tpl.subject, f, r))}"></div>
         <div class="field"><label for="rp-body">Message</label><textarea id="rp-body" name="body" rows="11" maxlength="5000">${esc(fillTpl(tpl.body, f, r))}</textarea></div>
+        ${kind === 'accept' ? `<div class="field rp-links">
+          <label class="check"><input type="checkbox" name="links" checked> <span>Add the Release Form links to the email (one per artist)</span></label>
+          <input name="links_for" maxlength="300" value="${esc(respWho(f, r).who)}" placeholder="Artist names, e.g. Krisna Artha & Tebedayeng" aria-label="Artists for the Release Form links">
+          <p class="muted sm-txt">If it’s a collaboration, write every artist separated with &amp; — each one gets their own link.</p>
+        </div>` : ''}
         <div class="confirm-actions"><button type="submit" class="btn ${kind === 'accept' ? 'primary' : 'danger'}">Send email</button></div>
       </form>`);
     } else if (act === 'reply-tpl') {

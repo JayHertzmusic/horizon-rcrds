@@ -48,7 +48,7 @@ const hello = sg => sg.label && !/^Artista?\s*\d*$/i.test(sg.label) ? `Hi ${esc(
 async function send(env, msg) {
   const from = msg.from || env.MAIL_FROM || 'contracts@horizonrcrds.com';
   const body = {
-    from: `HORIZON RCRDS <${from}>`, to: [msg.to], reply_to: env.MAIL_TO || from,   // solo al artista (sin copia a Horizon); si responde, llega a Horizon
+    from: `HORIZON RCRDS <${from}>`, to: Array.isArray(msg.to) ? msg.to : [msg.to], reply_to: env.MAIL_TO || from,   // solo al artista (sin copia a Horizon); si responde, llega a Horizon
     subject: msg.subject, html: msg.html, text: textOf(msg.html),
     ...(msg.attachments ? { attachments: msg.attachments.map(a => ({ filename: a.filename, content: a.content })) } : {}),
   };
@@ -68,7 +68,7 @@ async function send(env, msg) {
 
 // respuesta a una demo (aceptada / rechazada): sale de demos@, y si el artista contesta llega al correo de Horizon
 export function demoReplyMail(env, to, subject, text) {
-  const body = esc(text).replace(/\r?\n/g, '<br>');
+  const body = esc(text).replace(/https?:\/\/[^\s<>&"]+/g, u => `<a href="${u}" style="color:#111111;word-break:break-all">${u}</a>`).replace(/\r?\n/g, '<br>');
   return send(env, { to, from: env.DEMO_FROM || 'demos@horizonrcrds.com', subject, html: layout(esc(subject), body, null) });
 }
 

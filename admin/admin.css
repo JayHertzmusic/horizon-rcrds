@@ -1178,3 +1178,8 @@ html, body, * { scrollbar-width: none; }
 .lk-tools { display: block; margin: 6px 0 0; padding-bottom: 0; border-bottom: 0; }
 .lk-tools .lk-search { display: block; width: min(520px, 100%); margin: 0 0 18px; }
 .lk-tabs { flex-wrap: wrap; }
+/* Aceptar demo: enlaces del Release Form */
+.rp-links { display: flex; flex-direction: column; gap: 8px; }
+.rp-links .check { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 14px; font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--text); cursor: pointer; }
+.rp-links .check input { flex: none; width: 16px !important; height: 16px; margin: 0; }
+.rp-links .sm-txt { margin: 0; }

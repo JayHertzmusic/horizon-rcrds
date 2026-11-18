@@ -465,7 +465,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
   function saveDraft() {
     if (!DRAFT || !form || !document.getElementById('f')) return;
     clearTimeout(draftTimer);
-    draftTimer = setTimeout(() => { try { localStorage.setItem(DRAFT, JSON.stringify({ at: Date.now(), step: EXCL() ? cur : 0, a: draftState() })); } catch { /* sin espacio o bloqueado */ } }, 300);
+    draftTimer = setTimeout(() => { try { localStorage.setItem(DRAFT, JSON.stringify({ at: Date.now(), step: EXCL() ? cur : 0, a: draftState(), co: form.multi ? coValues(document.getElementById('f')) : undefined })); } catch { /* sin espacio o bloqueado */ } }, 300);
   }
   const dropDraft = () => { clearTimeout(draftTimer); try { if (DRAFT) localStorage.removeItem(DRAFT); } catch { /* nada */ } };
   function restoreDraft() {
@@ -481,6 +481,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
         const o = f.querySelector(`[data-other="${CSS.escape(x.id)}"]`); if (o && v.o) o.value = v.o;
       } else if (f.elements[x.id] && typeof v.v === 'string') f.elements[x.id].value = v.v;
     }
+    if (form.multi) coUpdate(Array.isArray(d.co) ? d.co : []);
     progress();
     // vuelve al paso donde se quedó (o al primero que tenga algo obligatorio sin contestar)
     if (EXCL() && d.step > 0) { let k = 0; while (k < Math.min(d.step, steps.length - 1) && !stepMissing(k)) k++; goStep(k, false); }
@@ -539,8 +540,36 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
         out[x.id] = !c ? '' : c.value === '__other' ? f.querySelector(`[data-other="${CSS.escape(x.id)}"]`).value.trim() : c.value;
       } else out[x.id] = (f.elements[x.id]?.value || '').trim();
     }
+    if (form.multi) out._artists = coValues(f);
     return out;
   }
+  /* Demos con varios artistas: si el nombre lleva más de uno («A & B», «A x B», «A feat. B», «A, B»),
+     aparece un campo obligatorio «Email of B» por cada uno (sin botones ni casillas) */
+  const splitArtists = v => {
+    const seen = new Set();
+    return String(v || '').split(/\s*[,&+\/]\s*|\s+(?:feat\.?|ft\.?|featuring|vs\.?|and)\s+/i).flatMap(x => x.split(/\s+x\s+/)).map(x => x.trim()).filter(x => x && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase()));
+  };
+  const coValues = f => [...f.querySelectorAll('[data-co-name]')].map(i => ({ name: i.dataset.coName, email: i.value.trim() }));
+  function coUpdate(keep) {
+    const f = document.getElementById('f');
+    if (!form?.multi || !f || !f.elements[form.multi.artist]) return;
+    const prev = new Map([...(keep || []), ...coValues(f)].map(x => [String(x.name).toLowerCase(), x.email]));
+    const names = splitArtists(f.elements[form.multi.artist].value).slice(1, 4);
+    const now = coValues(f).map(x => x.name).join('\n');
+    if (now === names.join('\n') && !keep) return;   // nada cambió: no se redibuja (no se pierde el foco)
+    f.querySelectorAll('.q.x-co').forEach(q => q.remove());
+    if (!names.length) return;
+    // detrás de la fila del email (si va emparejado con otra pregunta, detrás de la pareja)
+    let anchor = f.querySelector(`[data-q="${CSS.escape(form.multi.email)}"]`);
+    if (!anchor) return;
+    if (anchor.classList.contains('half') && anchor.nextElementSibling?.classList.contains('half')) anchor = anchor.nextElementSibling;
+    const one = names.length === 1;
+    anchor.insertAdjacentHTML('afterend', names.map((n, i) => `<div class="q x-co${one ? '' : ' half'}" data-q="_co${i}">
+      <label for="co-${i}">Email of ${esc(n)}<span class="req" aria-hidden="true">*</span></label>
+      <input id="co-${i}" type="email" data-co-name="${esc(n)}" required aria-required="true" maxlength="200" autocomplete="off" placeholder="name@email.com" value="${esc(prev.get(n.toLowerCase()) || '')}">
+    </div>`).join(''));
+  }
+  document.addEventListener('input', e => { if (form?.multi && e.target.name === form.multi.artist) coUpdate(); });
   function progress() {
     const f = document.getElementById('f'), bar = document.getElementById('bar');
     if (!f || !form) return;
@@ -560,6 +589,13 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     f.querySelectorAll('.q.bad').forEach(q => q.classList.remove('bad'));
     const missing = form.fields.find(x => x.required && (!a[x.id] || (Array.isArray(a[x.id]) && !a[x.id].length)));
     if (missing && EXCL()) { const k = steps.findIndex(st => st.fields.includes(missing)); if (k >= 0 && k !== cur) goStep(k, false); markMissing(missing); return; }
+    const coMiss = !missing && form.multi ? [...f.querySelectorAll('[data-co-name]')].find(i => !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(i.value.trim())) : null;
+    if (coMiss) {
+      const q = coMiss.closest('.q');
+      q.classList.add('bad'); q.scrollIntoView({ block: 'center', behavior: 'smooth' }); coMiss.focus();
+      err.textContent = coMiss.value.trim() ? `Please enter a valid email for ${coMiss.dataset.coName}.` : `Please add the email of ${coMiss.dataset.coName}.`; err.hidden = false;
+      return;
+    }
     if (missing) {
       const q = f.querySelector(`[data-q="${CSS.escape(missing.id)}"]`);
       q.classList.add('bad'); q.scrollIntoView({ block: 'center', behavior: 'smooth' });

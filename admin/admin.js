@@ -3757,8 +3757,9 @@
   }
   function mailReader() {
     if (mail.threadErr) return `<div class="m-empty"><p class="login-error" role="alert">${esc(mail.threadErr)}</p></div>`;
-    const t = mail.thread;
-    if (!t) return `<div class="m-empty"><p class="muted">Loading…</p></div>`;
+    const t0 = mail.thread;
+    if (!t0) return `<div class="m-empty"><p class="muted">Loading…</p></div>`;
+    const t = { ...t0, messages: visMsgs(t0) };
     const first = t.messages[0], hd = (m, n) => (m.payload?.headers || []).find(x => x.name.toLowerCase() === n)?.value || '';
     const last = t.messages.length - 1;
     const labs = [...new Set(t.messages.flatMap(m => m.labels))].map(id => (mail.info?.labels || []).find(l => l.id === id)).filter(Boolean);
@@ -3781,11 +3782,15 @@
   function fillFrames() {
     const t = mail.thread; if (!t || view !== 'mail') return;
     $$('[data-mframe]').forEach(fr => {
-      const m = t.messages[+fr.dataset.mframe], b = m.parsed;
+      const m = visMsgs(t)[+fr.dataset.mframe], b = m.parsed || (m.parsed = walkParts(m.payload));
       let html = b.html || textHtml(b.text || '');
       html = html.replace(/cid:([^"' )>]+)/g, (x, id) => b.cids[id]?.url || (b.cids[id]?.data ? `data:${b.cids[id].type};base64,${b.cids[id].data.replace(/-/g, '+').replace(/_/g, '/')}` : x));
       fr.srcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data: blob:; style-src 'unsafe-inline' https:; font-src https: data:"><base target="_blank"><style>html,body{margin:0;background:#fff;color:#111}body{padding:16px;font:14px/1.5 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}blockquote{margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex;color:#555}</style>${html}`;
-      fr.onload = () => { try { fr.style.height = Math.min(fr.contentDocument.documentElement.scrollHeight + 4, 4000) + 'px'; } catch { /* nada */ } };
+      fr.onload = () => { try {
+        const doc = fr.contentDocument, fit = () => { fr.style.height = Math.min(doc.documentElement.scrollHeight + 4, 30000) + 'px'; };
+        fit(); new ResizeObserver(fit).observe(doc.body);
+        doc.querySelectorAll('img').forEach(im => im.complete || im.addEventListener('load', fit, { once: true }));
+      } catch { /* nada */ } };
       // imágenes incrustadas (cid) que vienen aparte
       Object.entries(b.cids).forEach(async ([id, c]) => {
         if (c.url || c.data || !c.id || c.loading) return;
@@ -3795,6 +3800,10 @@
     });
     const box = $('#m-read'); if (box && t.scrollLast) { t.scrollLast = false; const art = box.querySelector('.m-msg.open:last-of-type'); if (art && t.messages.length > 1) box.scrollTop = art.offsetTop - 8; }
   }
+  const visMsgs = t => { const v = mail.box === 'trash' ? t.messages : t.messages.filter(m => !m.labels.includes('TRASH')); return v.length ? v : t.messages; };
+  const lastReal = t => [...t.messages].reverse().find(m => !m.labels.includes('DRAFT') && !m.labels.includes('TRASH')) || t.messages[t.messages.length - 1];
+  // separar direcciones respetando comillas ("Doe, John" <x@y.com>)
+  const splitAddrs = s => String(s || '').split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(x => x.trim()).filter(Boolean);
   const b64uBytes = s => Uint8Array.from(atob(String(s).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
   // el correo se empieza a pedir al pasar el ratón por encima (sin marcarlo como leído): al pulsar ya está
   function fetchThread(id) {
@@ -3824,6 +3833,19 @@
     }
     if (view === 'mail') { render(); }
   }
+  async function openDraft(id) {
+    if (mailTest()) return;
+    if ($('#m-composer') && !await askCloseComposer()) return;
+    try {
+      if (!mail.info) mail.info = await api('GET', '/api/mail/info' + mq('?'));
+      const t = await fetchThread(id), d = [...t.messages].reverse().find(m => m.labels.includes('DRAFT'));
+      if (!d) { openThread(id); return; }
+      const hd = n => (d.payload?.headers || []).find(x => x.name.toLowerCase() === n)?.value || '', p = walkParts(d.payload);
+      const real = t.messages.some(m => !m.labels.includes('DRAFT'));
+      composeSheet(null, { row: id, to: hd('to'), cc: hd('cc'), subject: hd('subject'), html: p.html || textHtml(p.text || ''), draft: d.id, thread: real ? t.id : '', irt: hd('in-reply-to'), refs: hd('references'),
+        files: p.files.map(f => ({ ...f, tid: t.id, mid: d.id })) });
+    } catch (e) { toast(e.message); }
+  }
   // acción sobre uno o varios correos
   const boxLab = () => mail.box.startsWith('L:') ? mail.box.slice(2) : '';
   // ¿el correo deja de estar en la carpeta que se ve?
@@ -3849,7 +3871,9 @@
       if (leaves) mail.sel = new Set([...mail.sel].filter(id => !ids.includes(id)));
       const word = { archive: 'Archived', trash: 'Moved to trash', restore: 'Restored', spam: 'Reported as spam', notspam: 'Moved to Inbox', read: 'Marked as read', unread: 'Marked as unread', move: 'Moved', label: 'Label added', unlabel: 'Label removed' }[act] || 'Done';
       toast(`${word}${r.done > 1 ? ` (${r.done})` : ''}`);
+      const y = $('#m-read')?.scrollTop || 0;
       busy = false; render(); refreshMailInfo();
+      if (y && $('#m-read')) $('#m-read').scrollTop = y;
     } catch (e) { busy = false; toast(e.message); }
   }
   // ---- escribir: editor con formato, firma de Gmail, plantillas; el navegador monta el correo (RFC 822) ----
@@ -3857,7 +3881,7 @@
     const t = mail.thread, info = mail.info || {};
     let to = '', cc = '', subject = '', quote = '', files = [];
     if (kind && t) {
-      const m = t.messages[t.messages.length - 1], hd = n => (m.payload?.headers || []).find(x => x.name.toLowerCase() === n)?.value || '';
+      const m = lastReal(t), hd = n => (m.payload?.headers || []).find(x => x.name.toLowerCase() === n)?.value || '';
       const subj = hd('subject');
       const ours = a => /@horizonrcrds\.com$/i.test(a) || (info.me && a.toLowerCase() === info.me.toLowerCase());
       if (kind === 'forward') subject = /^fwd?:/i.test(subj) ? subj : 'Fwd: ' + subj;
@@ -3870,10 +3894,10 @@
           cc = all.filter(a => !ours(mailAddr(a)) && mailAddr(a).toLowerCase() !== mailAddr(to).toLowerCase()).join(', ');
         }
       }
-      quote = kind; files = kind === 'forward' ? (m.parsed || walkParts(m.payload)).files : [];
+      quote = kind; files = kind === 'forward' ? (m.parsed || walkParts(m.payload)).files.map(f => ({ ...f, tid: t.id, mid: m.id })) : [];
     }
-    if (preset) { to = preset.to ?? to; subject = preset.subject ?? subject; }
-    mail.compose = { kind, t: kind ? t : null, files: files.map(f => ({ ...f, fromMail: true })) };
+    if (preset) { to = preset.to ?? to; subject = preset.subject ?? subject; cc = preset.cc ?? cc; if (preset.files) files = preset.files; }
+    mail.compose = { kind, t: kind ? t : null, preset: preset || null, files: files.map(f => ({ ...f, fromMail: true })) };
     const sig = info.signature ? cleanHtml(info.signature) : '';
     const tb = (cmd, label, html) => `<button type="button" class="m-tb" data-mfmt="${cmd}" title="${label}" aria-label="${label}">${html}</button>`;
     const title = kind === 'forward' ? 'Forward' : kind ? 'Reply' : 'New Message';
@@ -3938,18 +3962,20 @@
   const b64 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/.{76}/g, '$&\r\n'); };
   const utf8 = s => new TextEncoder().encode(s);
   const encWord = s => /^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${btoa(String.fromCharCode(...utf8(s)))}?=`;
-  const encAddrs = s => String(s || '').split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(x => x.trim()).filter(Boolean).map(a => { const m = a.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>$/); return m && m[1] ? `${encWord(m[1])} <${m[2]}>` : a; }).join(', ');
+  // nombre del destinatario: entre comillas si lleva comas u otros signos (si no, «Doe, John» serían dos direcciones)
+  const qName = n => /^[\x20-\x7e]*$/.test(n) ? (/[(),.:;<>@\[\]\\"]/.test(n) ? `"${n.replace(/[\\"]/g, '\\$&')}"` : n) : encWord(n);
+  const encAddrs = s => String(s || '').split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(x => x.trim()).filter(Boolean).map(a => { const m = a.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>$/); return m && m[1] ? `${qName(m[1])} <${m[2]}>` : a; }).join(', ');
   async function sendMail(form) {
     const box = form.querySelector('.ed-error'); box.hidden = true;
     const v = n => form.elements[n].value.trim(), c = mail.compose, t = c.kind ? c.t : null, info = mail.info;
-    const bad = [v('to'), v('cc')].join(',').split(',').map(x => mailAddr(x.trim())).filter(Boolean).find(a => !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(a));
+    const bad = [...splitAddrs(v('to')), ...splitAddrs(v('cc'))].map(x => mailAddr(x)).filter(Boolean).find(a => !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(a));
     if (!v('to')) { box.textContent = 'Add who it goes to.'; box.hidden = false; form.elements.to.focus(); return; }
     if (bad) { box.textContent = `“${bad}” is not a valid email.`; box.hidden = false; return; }
     const total = c.files.reduce((a, f) => a + (f.size || 0), 0);
     if (total > 12 * 1048576) { box.textContent = 'Attachments can be up to 12 MB in total.'; box.hidden = false; return; }
     const btn = form.querySelector('[type=submit]'); busyOn(form, btn, 'Sending…');
     try {
-      const last = t?.messages[t.messages.length - 1], hd = n => (last?.payload?.headers || []).find(x => x.name.toLowerCase() === n)?.value || '';
+      const last = t ? lastReal(t) : null, hd = n => (last?.payload?.headers || []).find(x => x.name.toLowerCase() === n)?.value || '';
       const ed = $('#mc-body'), sigOn = $('#mc-sig')?.checked, sigBox = $('#mc-sigbox');
       let html = `<div style="font:14px/1.55 Arial,sans-serif">${cleanHtml(ed.innerHTML)}${sigOn && sigBox ? `<br><div class="gmail_signature">-- <br>${sigBox.innerHTML}</div>` : ''}</div>`;
       let text = ed.innerText.trim() + (sigOn && sigBox ? `\n\n-- \n${sigBox.innerText.trim()}` : '');
@@ -3963,17 +3989,20 @@
       if (v('cc')) L.push(`Cc: ${encAddrs(v('cc'))}`);
       L.push(`Subject: ${encWord(v('subject'))}`, `Date: ${new Date().toUTCString()}`, `Message-ID: <${crypto.randomUUID()}@horizonrcrds.com>`);
       if (last && c.kind !== 'forward') { const mid = hd('message-id'); if (mid) { L.push(`In-Reply-To: ${mid}`, `References: ${[hd('references'), mid].filter(Boolean).join(' ')}`); } }
+      else if (c.preset?.irt) L.push(`In-Reply-To: ${c.preset.irt.replace(/[\r\n]/g, '')}`, `References: ${(c.preset.refs || c.preset.irt).replace(/[\r\n]/g, '')}`);
       L.push('MIME-Version: 1.0', `Content-Type: multipart/mixed; boundary="${B}"`, '', `--${B}`, `Content-Type: multipart/alternative; boundary="${A}"`, '',
         `--${A}`, 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', b64(utf8(text)),
         `--${A}`, 'Content-Type: text/html; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', b64(utf8(html)), `--${A}--`);
       for (const f of c.files) {
-        const bytes = f.file ? new Uint8Array(await f.file.arrayBuffer()) : f.data ? b64uBytes(f.data) : b64uBytes((await api('GET', `/api/mail/attachment/${t.id}/${last.id}/${f.id}`)).data);
+        const bytes = f.file ? new Uint8Array(await f.file.arrayBuffer()) : f.data ? b64uBytes(f.data) : b64uBytes((await api('GET', `/api/mail/attachment/${f.tid}/${f.mid}/${f.id}`)).data);
         const nm = encWord(f.name).replace(/"/g, '');
         L.push(`--${B}`, `Content-Type: ${f.type || 'application/octet-stream'}; name="${nm}"`, `Content-Disposition: attachment; filename="${nm}"`, 'Content-Transfer-Encoding: base64', '', b64(bytes));
       }
       L.push(`--${B}--`, '');
-      await authFetch(`/api/mail/send${t ? '?thread=' + encodeURIComponent(t.id) : ''}`, { method: 'POST', headers: { 'Content-Type': 'message/rfc822' }, body: L.join('\r\n') });
+      const tid = t ? t.id : c.preset?.thread || '';
+      await authFetch(`/api/mail/send${tid ? '?thread=' + encodeURIComponent(tid) : ''}`, { method: 'POST', headers: { 'Content-Type': 'message/rfc822' }, body: L.join('\r\n') });
       busyOff(form); closeComposer(); toast('Email sent');
+      if (c.preset?.draft) { await api('POST', '/api/mail/draft-delete', { msg: c.preset.draft }).catch(() => {}); if (mail.box === 'drafts') { if (mail.list) mail.list = mail.list.filter(x => x.id !== c.preset.row); render(); loadMail(); } refreshMailInfo(); }
       if (t && mail.pre) delete mail.pre[t.id];
       if (t && mail.open === t.id) openThread(t.id);
       if (mail.box === 'sent' || !t) { mail.list = null; loadMail(); }
@@ -4025,7 +4054,9 @@
       if (mailTest()) return;
       const d = mail.drafts?.[+ti.dataset.mtplimp]; if (!d) return;
       const p = walkParts(d.payload), html = p.html || textHtml(p.text || '');
-      try { mailTpls = (await api('POST', '/api/mail/templates', { name: d.subject || 'Template', subject: d.subject, html: cleanHtml(html) })).templates; toast(`“${d.subject || 'Template'}” saved as a template`); useTpl(mailTpls.find(x => x.name.toLowerCase() === (d.subject || 'Template').toLowerCase()) || mailTpls[mailTpls.length - 1]); } catch (er) { toast(er.message); }
+      const base = (d.subject || 'Template').slice(0, 70), taken = new Set((mailTpls || []).map(x => x.name.toLowerCase()));
+      let name = base; for (let i = 2; taken.has(name.toLowerCase()); i++) name = `${base} (${i})`;
+      try { mailTpls = (await api('POST', '/api/mail/templates', { name, subject: d.subject, html: cleanHtml(html) })).templates; toast(`“${name}” saved as a template`); useTpl(mailTpls.find(x => x.name === name) || mailTpls[mailTpls.length - 1]); } catch (er) { toast(er.message); }
       return;
     }
     if (!e.target.closest('.m-tplwrap')) closeTpl();
@@ -4062,7 +4093,7 @@
     const bx = e.target.closest('[data-mbox]');
     if (bx) { mail.box = bx.dataset.mbox; mail.off = 0; mail.list = null; mail.open = null; mail.thread = null; mail.sel = new Set(); render(); loadMail(); return; }
     const row = e.target.closest('[data-mth]');
-    if (row) { if (mail.open !== row.dataset.mth) openThread(row.dataset.mth); return; }
+    if (row) { if (mail.box === 'drafts') { openDraft(row.dataset.mth); return; } if (mail.open !== row.dataset.mth) openThread(row.dataset.mth); return; }
     const b = e.target.closest('[data-mail]');
     if (!b) return;
     const act = b.dataset.mail, t = mail.thread;
@@ -4083,10 +4114,10 @@
       if (mail.next && !mail.loading) { mail.off += fit; loadMail(true); render(); }
       return;
     }
-    if (act === 'toggle') { const i = +b.closest('[data-mmsg]').dataset.mmsg; if (i === t.messages.length - 1) return; t.messages[i].openUi = !t.messages[i].openUi; const y = $('#m-read').scrollTop; $('#m-read').innerHTML = mailReader(); $('#m-read').scrollTop = y; fillFrames(); return; }
+    if (act === 'toggle') { const i = +b.closest('[data-mmsg]').dataset.mmsg, ms = visMsgs(t); if (i === ms.length - 1) return; ms[i].openUi = !ms[i].openUi; const y = $('#m-read').scrollTop; $('#m-read').innerHTML = mailReader(); $('#m-read').scrollTop = y; fillFrames(); return; }
     if (act === 'unattach') { mail.compose.files.splice(+b.dataset.i, 1); $('#mc-files').innerHTML = composeFiles(); return; }
     if (act === 'file') {
-      const [i, j] = b.dataset.mfile.split(':').map(Number), m = t.messages[i], f = m.parsed.files[j];
+      const [i, j] = b.dataset.mfile.split(':').map(Number), m = visMsgs(t)[i], f = m.parsed.files[j];
       try {
         const data = f.data || (await api('GET', `/api/mail/attachment/${t.id}/${m.id}/${f.id}`)).data;
         const url = URL.createObjectURL(new Blob([b64uBytes(data)], { type: f.type || 'application/octet-stream' }));
@@ -4120,6 +4151,7 @@
   document.addEventListener('keydown', e => {
     if (e.key === 'Enter' && e.target.matches?.('.mrow')) e.target.click();
     if (e.key === 'Enter' && e.target.id === 'mc-tplname') { e.preventDefault(); $('[data-mtpl="dosave"]')?.click(); }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && e.target.closest?.('#m-compose')) { e.preventDefault(); $('#m-compose')?.requestSubmit(); }
   });
   let hoverT = 0, hoverId = '';
   document.addEventListener('mouseover', e => {

@@ -45,18 +45,21 @@ async function gmailBatch(env, paths, retry = true, again = true) {
   let tok;
   try { tok = await horizonToken(env); } catch (e) { throw new MailError(503, e.message); }
   const b = 'hzb' + crypto.randomUUID().replace(/-/g, '');
-  const body = paths.map((p, i) => `--${b}\r\nContent-Type: application/http\r\nContent-ID: <q${i}>\r\n\r\nGET /gmail/v1/users/me${p}\r\n\r\n`).join('') + `--${b}--`;
+  // cada elemento: '/ruta' (lectura) o { p: '/ruta', b: {…} } (acción POST)
+  const body = paths.map((p, i) => typeof p === 'string'
+    ? `--${b}\r\nContent-Type: application/http\r\nContent-ID: <q${i}>\r\n\r\nGET /gmail/v1/users/me${p}\r\n\r\n`
+    : `--${b}\r\nContent-Type: application/http\r\nContent-ID: <q${i}>\r\n\r\nPOST /gmail/v1/users/me${p.p}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(p.b || {})}\r\n`).join('') + `--${b}--`;
   const r = await fetch('https://gmail.googleapis.com/batch/gmail/v1', { method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': `multipart/mixed; boundary=${b}` }, body });
   if (r.status === 401 && retry) { await dropHorizonToken(env); return gmailBatch(env, paths, false, again); }
   if (r.status === 429 || r.status >= 500) { if (again) { await sleep(1500); return gmailBatch(env, paths, retry, false); } throw new MailError(429, BUSY); }
-  if (!r.ok) return Promise.all(paths.slice(0, 15).map(p => gmail(env, p).catch(() => null)));   // (si el batch falla, uno a uno; pocos)
+  if (!r.ok) return Promise.all(paths.slice(0, 15).map(p => (typeof p === 'string' ? gmail(env, p) : post(env, p.p, p.b)).catch(() => null)));   // (si el batch falla, uno a uno; pocos)
   const rb = (r.headers.get('Content-Type') || '').match(/boundary="?([^";]+)"?/)?.[1];
   const text = await r.text(), out = paths.map(() => null), gone = new Set(), slow = new Set();
   for (const part of rb ? text.split('--' + rb) : []) {
     const id = part.match(/Content-ID:\s*<response-q(\d+)>/i)?.[1];
     if (id == null) continue;
     const st = Number(part.match(/HTTP\/1\.1\s+(\d{3})/)?.[1] || 0), a = part.indexOf('{'), z = part.lastIndexOf('}');
-    if (st === 200 && a >= 0) { try { out[+id] = JSON.parse(part.slice(a, z + 1)); continue; } catch { /* abajo */ } }
+    if (st >= 200 && st < 300) { try { out[+id] = a >= 0 ? JSON.parse(part.slice(a, z + 1)) : {}; continue; } catch { out[+id] = {}; continue; } }
     const limited = st === 429 || (st === 403 && /rate ?limit|quota/i.test(part));
     if ((st === 401 || st === 403) && !limited && retry) { await dropHorizonToken(env); return gmailBatch(env, paths, false, again); }
     if (st === 404) gone.add(+id);
@@ -70,7 +73,7 @@ async function gmailBatch(env, paths, retry = true, again = true) {
   }
   // lo que Google no contestó bien en el batch (p. ej. demasiadas a la vez), uno a uno
   const redo = out.map((x, i) => x == null && !gone.has(i) ? i : -1).filter(i => i >= 0).slice(0, 20);
-  if (redo.length) await Promise.all(redo.map(async i => { out[i] = await gmail(env, paths[i]).catch(() => null); }));
+  if (redo.length) await Promise.all(redo.map(async i => { const p = paths[i]; out[i] = await (typeof p === 'string' ? gmail(env, p) : post(env, p.p, p.b)).catch(() => null); }));
   return out;
 }
 const hdr = (m, name) => (m.payload?.headers || []).find(h => h.name.toLowerCase() === name)?.value || '';
@@ -136,16 +139,16 @@ export async function mailApi(req, env, s, url, audit) {
     const need = list.filter(t => !known.has(key(t)));
     const all = await gmailBatch(env, [...need.map(t => `/threads/${t.id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`), '/labels/INBOX']);
     const lab = all.pop(), got = Object.fromEntries(all.filter(Boolean).map(t => [t.id, t]));
-    const row = t => {
+    const row = (t, k) => {
       const msgs = t.messages || [], first = msgs[0] || {}, last = msgs[msgs.length - 1] || {};
       const other = [...msgs].reverse().find(x => !(x.labelIds || []).some(l => l === 'SENT' || l === 'DRAFT')) || last;
       const labs = [...new Set(msgs.flatMap(x => x.labelIds || []))];
-      return { id: t.id, k: `${t.id}.${t.historyId}.${sk}`, subject: hdr(first, 'subject'), from: hdr(sentBox ? last : other, sentBox ? 'to' : 'from'), at: Number(last.internalDate) || 0, snippet: last.snippet || '', count: msgs.length,
+      return { id: t.id, k, subject: hdr(first, 'subject'), from: hdr(sentBox ? last : other, sentBox ? 'to' : 'from'), at: Number(last.internalDate) || 0, snippet: last.snippet || '', count: msgs.length,
         unread: labs.includes('UNREAD'), starred: labs.includes('STARRED'), important: labs.includes('IMPORTANT'), draft: labs.includes('DRAFT'), labels: labs.filter(l => /^Label_/.test(l)),
         files: msgs.some(x => /mixed/i.test(x.payload?.mimeType || '')) };
     };
     // en orden; los que el panel ya tiene van solo con su clave
-    const threads = list.map(t => known.has(key(t)) ? { id: t.id, k: key(t), same: 1 } : got[t.id] ? row(got[t.id]) : null).filter(Boolean);
+    const threads = list.map(t => known.has(key(t)) ? { id: t.id, k: key(t), same: 1 } : got[t.id] ? row(got[t.id], key(t)) : null).filter(Boolean);
     return { threads, next: j.nextPageToken || '', total: j.resultSizeEstimate || 0, unread: lab ? lab.threadsUnread || 0 : null };
   }
   let mt = p.match(/^\/api\/mail\/thread\/([\w-]{6,40})$/);
@@ -161,16 +164,18 @@ export async function mailApi(req, env, s, url, audit) {
     const ids = (Array.isArray(b.ids) ? b.ids : []).map(String).filter(x => ID.test(x)).slice(0, 40), act = String(b.act || '');
     if (!ids.length) throw new MailError(400, 'Choose at least one email.');
     let one;
-    if (act === 'trash' || act === 'untrash') one = id => post(env, `/threads/${id}/${act}`);
+    if (act === 'trash' || act === 'untrash') one = id => ({ p: `/threads/${id}/${act}` });
     else if (act === 'move' || act === 'label' || act === 'unlabel') {
       const label = String(b.label || '');
       if (!ID.test(label)) throw new MailError(400, 'Choose a label.');
       const from = ID.test(String(b.from || '')) && b.from !== label ? [String(b.from)] : [];
       const body = act === 'unlabel' ? { removeLabelIds: [label] } : act === 'label' ? { addLabelIds: [label] } : label === 'INBOX' ? { addLabelIds: ['INBOX'], ...(from.length ? { removeLabelIds: from } : {}) } : { addLabelIds: [label], removeLabelIds: ['INBOX', ...from] };
-      one = id => post(env, `/threads/${id}/modify`, body);
-    } else if (ACTS[act]) one = id => post(env, `/threads/${id}/modify`, ACTS[act]);
+      one = id => ({ p: `/threads/${id}/modify`, b: body });
+    } else if (ACTS[act]) one = id => ({ p: `/threads/${id}/modify`, b: ACTS[act] });
     else throw new MailError(400, 'Unknown action.');
-    const res = await Promise.all(ids.map(id => one(id).then(() => true, () => false)));
+    // todas en una sola petición a Google
+    const res = ids.length === 1 ? [await (async () => { const x = one(ids[0]); return post(env, x.p, x.b).then(() => true, e => { if (e.status === 429) throw e; return false; }); })()]
+      : (await gmailBatch(env, ids.map(one))).map(x => x != null);
     const ok = res.filter(Boolean).length;
     if (ACT_LOG[act]) await audit(`${ACT_LOG[act]} ${ok} email${ok === 1 ? '' : 's'} in Mail`);
     if (!ok) throw new MailError(502, 'Gmail did not accept the change. Try again.');
@@ -204,6 +209,14 @@ export async function mailApi(req, env, s, url, audit) {
     const j = await gmail(env, '/drafts?maxResults=25');
     const got = await gmailBatch(env, (j.drafts || []).map(d => `/drafts/${d.id}?format=full`));
     return { drafts: got.filter(Boolean).map(d => ({ id: d.id, subject: hdr(d.message || {}, 'subject'), to: hdr(d.message || {}, 'to'), snippet: d.message?.snippet || '', payload: d.message?.payload })) };
+  }
+  if (p === '/api/mail/draft-delete' && m === 'POST') {
+    const msg = String((await req.json().catch(() => ({}))).msg || '');
+    if (!ID.test(msg)) throw new MailError(400, 'No draft.');
+    const j = await gmail(env, '/drafts?maxResults=100');
+    const d = (j.drafts || []).find(x => x.message?.id === msg);
+    if (d) await gmail(env, `/drafts/${d.id}`, { method: 'DELETE' }).catch(() => {});
+    return { ok: true };
   }
   if (p === '/api/mail/send' && m === 'POST') {
     // el navegador manda el correo ya montado (RFC 822); aquí solo se miran las cabeceras

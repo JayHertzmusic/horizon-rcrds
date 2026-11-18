@@ -3,7 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <style>
+    /* llegando a una sección (/#demos): la página no se enseña hasta estar ya colocada en ella (sin ver la portada y luego el salto) */
+    html.hz-hash body { opacity: 0; }
+    html.hz-hash-in body { transition: opacity .35s ease; }
+  </style>
   <script>
+    if (location.hash.length > 1) document.documentElement.classList.add('hz-hash');
     /* Start downloading the data straight away, in parallel with the styles and fonts
        (loadReleases / loadRadio / loadPlaylists use these instead of waiting for the end of the page). */
     window.HZ_DATA = {};
@@ -2306,7 +2312,16 @@ document.addEventListener('DOMContentLoaded', () => {
   let stop = false;
   for (const t of ['wheel', 'touchstart', 'keydown', 'mousedown']) addEventListener(t, () => { stop = true; }, { once: true, passive: true });
   const go = () => { if (stop) return; const el = document.getElementById(id); if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY, behavior: 'instant' }); };
-  addEventListener('load', () => { go(); setTimeout(go, 400); setTimeout(go, 1200); setTimeout(go, 2500); });
+  // aparece ya colocada: se espera a los datos (releases, mixtapes, playlists) y a la carga, se coloca y se enseña con un fundido
+  const html = document.documentElement;
+  let shown = false;
+  const show = () => { if (shown) return; shown = true; go(); html.classList.add('hz-hash-in'); requestAnimationFrame(() => html.classList.remove('hz-hash')); setTimeout(() => html.classList.remove('hz-hash'), 60); setTimeout(() => html.classList.remove('hz-hash-in'), 600); };
+  if (!document.getElementById(id)) { html.classList.remove('hz-hash'); return; }
+  const data = Promise.allSettled(Object.values(window.HZ_DATA || {}));
+  const loaded = new Promise(r => document.readyState === 'complete' ? r() : addEventListener('load', r, { once: true }));
+  Promise.all([data, loaded]).then(() => setTimeout(() => { go(); setTimeout(show, 120); }, 150));
+  setTimeout(show, 2500);   // por si algo tarda: nunca se queda en blanco
+  addEventListener('load', () => { setTimeout(go, 1200); setTimeout(go, 2500); });
 })();
 </script>
 </body>

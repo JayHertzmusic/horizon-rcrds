@@ -6,10 +6,17 @@
   <style>
     /* llegando a una sección (/#demos): la página no se enseña hasta estar ya colocada en ella (sin ver la portada y luego el salto) */
     html.hz-hash body { opacity: 0; }
+    html.hz-hash, html.hz-hash-in { scroll-behavior: auto !important; }
     html.hz-hash-in body { transition: opacity .35s ease; }
   </style>
   <script>
-    if (location.hash.length > 1) document.documentElement.classList.add('hz-hash');
+    // el navegador no hace su propio desplazamiento (animado, desde arriba) a la sección: se quita el #… de la
+    // dirección y la página se coloca de golpe antes de enseñarse
+    if (location.hash.length > 1) {
+      window.HZ_HASH = decodeURIComponent(location.hash.slice(1));
+      try { history.scrollRestoration = 'manual'; history.replaceState(history.state, '', location.pathname + location.search); } catch (e) { /* nada */ }
+      document.documentElement.classList.add('hz-hash');
+    }
     /* Start downloading the data straight away, in parallel with the styles and fonts
        (loadReleases / loadRadio / loadPlaylists use these instead of waiting for the end of the page). */
     window.HZ_DATA = {};
@@ -2307,7 +2314,7 @@ document.addEventListener('DOMContentLoaded', () => {
 /* Llegar a una sección desde otra página (p. ej. la X del formulario de demos → /#demos): se coloca cuando
    ya cargó el contenido que la empuja hacia abajo (releases, etc.). Si la persona empieza a moverse, se deja. */
 (() => {
-  const id = decodeURIComponent(location.hash.slice(1));
+  const id = window.HZ_HASH || '';
   if (!id) return;
   let stop = false;
   for (const t of ['wheel', 'touchstart', 'keydown', 'mousedown']) addEventListener(t, () => { stop = true; }, { once: true, passive: true });

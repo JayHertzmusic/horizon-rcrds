@@ -2167,12 +2167,14 @@
       ${o.made ? (() => {
         // enlaces recién creados: una línea por artista (nombre · enlace · Copy), sin recuadros
         const ls = o.made.links?.length ? o.made.links : [{ note: o.made.note, url: o.made.url }], many = ls.length > 1;
+        // ocultos con la ✕: se pueden volver a enseñar (si se cierran sin querer, el enlace no se pierde)
+        if (o.madeHidden) return `<div class="lk-made"><button type="button" class="lk-made-btn" data-lk="made-show">Show the new link${many ? 's' : ''}</button></div>`;
         return `<div class="lk-made" aria-live="polite">
           ${ls.map((x, i) => `<div class="lk-made-row">
             <span class="lk-made-name">${esc(x.note || 'Artist')}</span>
             <span class="lk-made-url" title="${esc(x.url)}">${esc(String(x.url).replace(/^https?:\/\//, ''))}</span>
             <button type="button" class="btn ghost sm" data-lk="copy-made" data-i="${i}">Copy</button>
-            ${i === 0 ? '<button type="button" class="lk-made-btn lk-made-x" data-lk="made-x" aria-label="Close" title="Close">✕</button>' : '<span></span>'}
+            ${i === 0 ? '<button type="button" class="lk-made-btn lk-made-x" data-lk="made-x" aria-label="Hide" title="Hide">✕</button>' : '<span></span>'}
           </div>`).join('')}
         </div>`;
       })() : ''}
@@ -2198,7 +2200,7 @@
       const txt = r.links?.length > 1 ? r.links.map(x => `${x.note}: ${x.url}`).join('\n') : r.url;
       try { await navigator.clipboard.writeText(txt); } catch { /* se copia a mano */ }
       toast(r.links?.length > 1 ? 'Links created and copied' : 'Link created and copied');
-      openLinks(formOpen.id, { made: { url: r.url, note, links: r.links }, filter: 'all', q: '', links: formOpen.links });
+      openLinks(formOpen.id, { made: { url: r.url, note, links: r.links }, madeHidden: false, filter: 'all', q: '', links: formOpen.links });
     } catch (x) { toast(x.message); btn.disabled = false; }
   }, true);
   document.addEventListener('input', e => {
@@ -2239,7 +2241,7 @@
       } catch { toast('Could not copy'); }
       return;
     }
-    if (a === 'made-x') { formOpen.made = null; $('.lk-made')?.remove(); return;
+    if (a === 'made-x' || a === 'made-show') { formOpen.madeHidden = a === 'made-x'; render(); return;
     }
     if (a === 'copy-new' || a === 'copy') {
       const u = a === 'copy' ? l.url : formOpen.made.url;
@@ -2252,7 +2254,7 @@
     try {
       await api('POST', `/api/forms/${encodeURIComponent(formOpen.id)}/links`, { action: a, id });
       toast({ extend: '30 more days', reset: 'It can be opened on a new device now', revoke: 'Link cancelled', delete: 'Link deleted' }[a]);
-      openLinks(formOpen.id, { filter: formOpen.filter, q: formOpen.q, show: formOpen.show, made: formOpen.made, links: formOpen.links });
+      openLinks(formOpen.id, { filter: formOpen.filter, q: formOpen.q, show: formOpen.show, made: formOpen.made, madeHidden: formOpen.madeHidden, links: formOpen.links });
     } catch (x) { toast(x.message); }
   });
   document.addEventListener('submit', async e => {

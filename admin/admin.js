@@ -395,7 +395,7 @@
           <span class="word">HORIZON<small>RCRDS</small></span>
         </a>
         <nav class="tabs" aria-label="Sections">
-          ${ORDER().filter(canTab).map(v => tab(v, names[v])).join('')}${MODE === 'admin' && u.owner && !preview ? tab('chain', 'Gates') + tab('team', 'Team') + tab('log', 'History') : ''}
+          ${ORDER().filter(canTab).map(v => tab(v, names[v])).join('')}${canMail() ? tab('mail', 'Mail') : ''}${MODE === 'admin' && u.owner && !preview ? tab('chain', 'Gates') + tab('team', 'Team') + tab('log', 'History') : ''}
         </nav>
         <div class="top-end">
           <span class="who" title="${esc(u.email)}">
@@ -500,6 +500,7 @@
         </div>
         <div class="field"><label for="m-sc">SoundCloud profile</label><input id="m-sc" name="soundcloud" value="${esc(m.soundcloud || '')}" placeholder="https://soundcloud.com/name" autocomplete="off" spellcheck="false"><p class="info sm-txt">Their photo is taken from SoundCloud and updates by itself when they change it.</p></div>
         <div class="field"><label for="m-role">Role</label>${roles.length ? `<select id="m-role" name="role_id">${roles.map(r => `<option value="${esc(r.id)}" ${r.id === m.role_id ? 'selected' : ''}>${esc(r.name)}</option>`).join('')}</select>` : '<p class="info">Create a role first.</p>'}</div>
+        ${isNew ? '' : `<div class="field m-mailsw"><label class="switch"><input type="checkbox" name="mail" ${m.mail ? 'checked' : ''}><span></span><b>Mail access</b></label><p class="info sm-txt">Horizon’s Gmail in the panel: only the emails of contact@, demos@ and contracts@. One person at a time.</p></div>`}
         <p class="ed-error" role="alert" hidden></p>
         <div class="confirm-actions">${isNew ? '' : '<button type="button" class="btn danger push-l" data-act="remove-member">Remove from team</button>'}<button type="submit" class="btn primary" ${roles.length ? '' : 'disabled'}>${isNew ? 'Add' : 'Save'}</button></div>
       </form>`);
@@ -555,7 +556,7 @@
           <li class="row tm" data-email="${esc(m.email)}">
             ${avatar(m.picture, nm, m.color)}
             <span class="meta"><b style="color:${esc(m.color || '#ffffff')}">${esc(nm)}</b><span>${esc(m.email)}${m.last_login ? ' · signed in ' + esc(fmtDate(m.last_login)) : ' · never signed in'}</span></span>
-            <span class="role-tag" style="--c:${esc(m.color || '#ffffff')}">${esc(r?.name || 'No role')}</span>
+            <span class="role-tag" style="--c:${esc(m.color || '#ffffff')}">${esc(r?.name || 'No role')}${m.mail ? ' · Mail' : ''}</span>
             <button type="button" class="btn ghost sm" data-act="edit-member">Edit</button>
           </li>`; }).join('')}
       </ol>
@@ -1345,7 +1346,8 @@
     if (!auth || !repo) return;
     accent();
     if (view === 'forms' && !showForms()) view = firstView();
-    if (view !== 'team' && view !== 'log' && view !== 'chain' && view !== 'none' && view !== 'forms' && view !== 'contracts' && !can(view)) { view = firstView(); editing = null; }
+    if (view === 'mail' && !canMail()) view = firstView();
+    if (view !== 'mail' && view !== 'team' && view !== 'log' && view !== 'chain' && view !== 'none' && view !== 'forms' && view !== 'contracts' && !can(view)) { view = firstView(); editing = null; }
     if (view === 'contracts' && !can('contracts')) view = firstView();
     if (view === 'calendar' && !can('calendar')) view = firstView();
     if ((view === 'team' || view === 'log' || view === 'chain') && (preview || !(MODE === 'admin' && auth.user.owner))) view = firstView();
@@ -1356,6 +1358,7 @@
     else if (view === 'team') inner = teamView();
     else if (view === 'log') inner = logView();
     else if (view === 'chain') inner = chainPage();
+    else if (view === 'mail') inner = mailPage();
     else if (view === 'forms') inner = formsPage();
     else if (view === 'contracts') inner = contractsPage();
     else if (view === 'calendar') inner = calendarPage();
@@ -1367,8 +1370,9 @@
     else if (view === 'player') inner = filesView(view);
     else inner = releasesView();
     app.innerHTML = shell(inner);
+    if (view === 'mail') { sizeMail(); fillFrames(); }
     chatStart();
-    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', team: 'Team', log: 'History', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', chain: 'Gates', none: 'Team' };
+    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', team: 'Team', log: 'History', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', chain: 'Gates', mail: 'Mail', none: 'Team' };
     document.title = `${unseen.total && !preview ? `(${unseen.total > 99 ? '99+' : unseen.total}) ` : ''}${editing ? (editing.orig?.title || 'New') + ' · ' : ''}${names[view] || ''} — Panel HORIZON RCRDS`;
   }
   function busyOn(scope, btn, label) {
@@ -1646,7 +1650,7 @@
       const isNew = !form.dataset.email;
       const email = isNew ? form.elements.email.value.trim().toLowerCase() : form.dataset.email;
       if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(email)) { box.textContent = 'Enter a valid email.'; box.hidden = false; form.elements.email.focus(); return; }
-      teamAction(() => api('POST', '/api/team/members', { email, label: form.elements.label.value.trim(), color: form.elements.color.value, role_id: form.elements.role_id?.value, soundcloud: form.elements.soundcloud.value.trim() }), isNew ? `${email} added to the team` : 'Saved', box);
+      teamAction(() => api('POST', '/api/team/members', { email, label: form.elements.label.value.trim(), color: form.elements.color.value, role_id: form.elements.role_id?.value, soundcloud: form.elements.soundcloud.value.trim(), ...(form.elements.mail ? { mail: form.elements.mail.checked } : {}) }), isNew ? `${email} added to the team` : 'Saved', box);
       return;
     }
     if (form.classList.contains('role-form')) {
@@ -3560,6 +3564,266 @@
     const f = e.target;
     await calSave({ id: calOpen.item?.id, date: f.elements.date.value, kind: f.elements.kind.value, artist: f.elements.artist.value, title: f.elements.title.value, cat: f.elements.cat.value, note: f.elements.note.value, programmed: f.elements.programmed.checked }, 'Saved');
   }, true);
+
+  /* ---------------- Mail: el Gmail de Horizon (owners + la persona a la que un owner le dé acceso) ---------------- */
+  const mail = { info: null, box: 'inbox', q: '', pages: [''], page: 0, list: null, next: '', err: '', loading: false, open: null, thread: null, threadErr: '' };
+  const canMail = () => !preview && !!auth?.user?.mail;
+  const MAIL_BOXES = [['inbox', 'Inbox'], ['sent', 'Sent'], ['starred', 'Starred'], ['all', 'All mail']];
+  async function loadMail() {
+    if (mail.loading) return;
+    mail.loading = true; mail.err = '';
+    try {
+      if (!mail.info) mail.info = await api('GET', '/api/mail/info');
+      const r = await api('GET', `/api/mail/threads?box=${mail.box}&q=${encodeURIComponent(mail.q)}&page=${encodeURIComponent(mail.pages[mail.page] || '')}`);
+      mail.list = r.threads; mail.next = r.next;
+    } catch (e) { if (e.status === 401) { mail.loading = false; logout(e.message); return; } mail.err = e.message; }
+    mail.loading = false;
+    if (view === 'mail') { render(); if (mail.open && !mail.thread) openThread(mail.open); }
+  }
+  const mailWho = s => { const m = String(s || '').match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>/); return m ? (m[1].trim() || m[2]) : String(s || '').trim(); };
+  const mailAddr = s => (String(s || '').match(/<([^>]+)>/) || [, String(s || '')])[1].trim();
+  function mailDate(t, long) {
+    const d = new Date(t), today = new Date();
+    if (long) return d.toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    if (d.toDateString() === today.toDateString()) return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(d.getFullYear() !== today.getFullYear() ? { year: 'numeric' } : {}) });
+  }
+  function mailPage() {
+    const info = mail.info;
+    if (!mail.list && !mail.err && !mail.loading) setTimeout(loadMail, 0);
+    const tab = (id, label) => `<button type="button" role="tab" class="${mail.box === id ? 'on' : ''}" data-mbox="${id}">${label}${id === 'inbox' && info?.unread ? `<span>${info.unread}</span>` : ''}</button>`;
+    const rows = !mail.list ? `<li class="empty">${mail.err ? '' : 'Loading…'}</li>` : !mail.list.length ? `<li class="empty">${mail.q ? `Nothing matches “${esc(mail.q)}”.` : 'No emails here.'}</li>`
+      : mail.list.map(t => `<li class="mrow${t.unread ? ' unread' : ''}${mail.open === t.id ? ' on' : ''}" data-mth="${esc(t.id)}" tabindex="0">
+          <span class="m-from">${esc(mailWho(t.from) || '(no sender)')}${t.count > 1 ? ` <i>${t.count}</i>` : ''}</span>
+          <span class="m-date">${t.files ? '<span class="m-clip" aria-label="Has attachments">⎘</span>' : ''}${esc(mailDate(t.at))}</span>
+          <span class="m-subj"><b>${esc(t.subject || '(no subject)')}</b> <span>${esc(t.snippet.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&'))}</span></span>
+        </li>`).join('');
+    return `
+      <div class="head"><div><p class="eyebrow">Gmail</p><h1>MAIL${info?.unread ? ` <span class="count">${info.unread}</span>` : ''}</h1></div>
+        <div class="head-btns"><button type="button" class="btn primary" data-mail="compose">+ Compose</button></div></div>
+      ${mail.err ? `<p class="login-error" role="alert">${esc(mail.err)}</p>` : ''}
+      ${info && !info.contact ? `<p class="info m-warn">Replies go out as <b>${esc(info.from)}</b> until contact@horizonrcrds.com is set up in Gmail (“Send mail as”).</p>` : ''}
+      <div class="m-bar">
+        <div class="ct-tabs" role="tablist">${MAIL_BOXES.map(([id, l]) => tab(id, l)).join('')}</div>
+        <form class="m-search" id="m-search" role="search"><input type="search" name="q" placeholder="Search mail" aria-label="Search mail" value="${esc(mail.q)}" autocomplete="off"></form>
+      </div>
+      <div class="m-wrap" id="m-wrap">
+        <div class="m-side">
+          <ol class="m-list" aria-busy="${mail.loading}">${rows}</ol>
+          <div class="m-pager"><button type="button" class="btn ghost sm" data-mail="prev" ${mail.page ? '' : 'disabled'}>← Newer</button>
+            <span class="muted sm-txt">${info?.shared ? 'contact@ · demos@ · contracts@' : `Page ${mail.page + 1}`}</span>
+            <button type="button" class="btn ghost sm" data-mail="next" ${mail.next ? '' : 'disabled'}>Older →</button></div>
+        </div>
+        <section class="m-read" id="m-read" aria-live="polite">${mailReader()}</section>
+      </div>`;
+  }
+  // ---- leer: el navegador descodifica el correo (el servidor lo pasa tal cual) ----
+  function b64uText(s) { try { const bin = atob(String(s).replace(/-/g, '+').replace(/_/g, '/')); return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))); } catch { return ''; } }
+  function walkParts(p, out = { html: '', text: '', files: [], cids: {} }) {
+    if (!p) return out;
+    const type = (p.mimeType || '').toLowerCase(), h = n => (p.headers || []).find(x => x.name.toLowerCase() === n)?.value || '';
+    if (p.parts?.length) { p.parts.forEach(x => walkParts(x, out)); return out; }
+    const cid = h('content-id').replace(/[<>]/g, '');
+    if (p.filename || p.body?.attachmentId) {
+      if (cid && /^image\//.test(type)) out.cids[cid] = { id: p.body?.attachmentId, data: p.body?.data, type };
+      if (p.filename && !(cid && /inline/i.test(h('content-disposition')))) out.files.push({ name: p.filename, size: p.body?.size || 0, id: p.body?.attachmentId, data: p.body?.data, type });
+      return out;
+    }
+    if (type === 'text/html' && !out.html) out.html = b64uText(p.body?.data || '');
+    else if (type === 'text/plain' && !out.text) out.text = b64uText(p.body?.data || '');
+    return out;
+  }
+  const textHtml = t => `<div style="white-space:pre-wrap;font:14px/1.55 Arial,sans-serif">${esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')}</div>`;
+  const fmtSize = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
+  function mailReader() {
+    if (!mail.open) return `<div class="m-empty"><p>Select an email to read it.</p></div>`;
+    if (mail.threadErr) return `<div class="m-empty"><p class="login-error" role="alert">${esc(mail.threadErr)}</p></div>`;
+    const t = mail.thread;
+    if (!t) return `<div class="m-empty"><p class="muted">Loading…</p></div>`;
+    const first = t.messages[0], hd = (m, n) => (m.payload?.headers || []).find(x => x.name.toLowerCase() === n)?.value || '';
+    const starred = t.messages.some(m => m.labels.includes('STARRED'));
+    const last = t.messages.length - 1;
+    return `
+      <div class="m-rhead"><h2>${esc(hd(first, 'subject') || '(no subject)')}</h2>
+        <div class="m-ract"><button type="button" class="ic" data-mail="star" title="${starred ? 'Unstar' : 'Star'}" aria-label="${starred ? 'Unstar' : 'Star'}">${starred ? '★' : '☆'}</button>
+          <button type="button" class="ic" data-mail="unread" title="Mark as unread" aria-label="Mark as unread">●</button>
+          <button type="button" class="ic" data-mail="trash" title="Move to trash" aria-label="Move to trash">🗑</button>
+          <button type="button" class="ic" data-mail="close" title="Close" aria-label="Close">✕</button></div></div>
+      <div class="m-msgs">${t.messages.map((m, i) => {
+        const b = m.parsed || (m.parsed = walkParts(m.payload));
+        const open = i === last || m.openUi;
+        return `<article class="m-msg${open ? ' open' : ''}" data-mmsg="${i}">
+          <header data-mail="toggle"><b>${esc(mailWho(hd(m, 'from')))}</b> <span class="muted">&lt;${esc(mailAddr(hd(m, 'from')))}&gt;</span><time>${esc(mailDate(m.at, true))}</time>
+            ${open ? `<small class="muted">to ${esc(hd(m, 'to'))}${hd(m, 'cc') ? ' · cc ' + esc(hd(m, 'cc')) : ''}</small>` : `<small class="muted m-snip">${esc((b.text || b.html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').slice(0, 140))}</small>`}</header>
+          ${open ? `<iframe class="m-body" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" title="Email" data-mframe="${i}"></iframe>
+          ${b.files.length ? `<div class="m-files">${b.files.map((f, j) => `<button type="button" class="m-file" data-mail="file" data-mfile="${i}:${j}">⎘ ${esc(f.name)} <span class="muted">${fmtSize(f.size)}</span></button>`).join('')}</div>` : ''}` : ''}
+        </article>`;
+      }).join('')}</div>
+      <div class="m-reply"><button type="button" class="btn ghost sm" data-mail="reply">Reply</button><button type="button" class="btn ghost sm" data-mail="replyall">Reply all</button><button type="button" class="btn ghost sm" data-mail="forward">Forward</button></div>`;
+  }
+  // el cuerpo va en un iframe aislado (sin scripts): el correo no puede tocar el panel
+  function fillFrames() {
+    const t = mail.thread; if (!t || view !== 'mail') return;
+    $$('[data-mframe]').forEach(fr => {
+      const m = t.messages[+fr.dataset.mframe], b = m.parsed;
+      let html = b.html || textHtml(b.text || '');
+      html = html.replace(/cid:([^"' )>]+)/g, (x, id) => b.cids[id]?.url || (b.cids[id]?.data ? `data:${b.cids[id].type};base64,${b.cids[id].data.replace(/-/g, '+').replace(/_/g, '/')}` : x));
+      fr.srcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data: blob:; style-src 'unsafe-inline' https:; font-src https: data:"><base target="_blank"><style>html,body{margin:0;background:#fff;color:#111}body{padding:16px;font:14px/1.5 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}blockquote{margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex;color:#555}</style>${html}`;
+      fr.onload = () => { try { fr.style.height = Math.min(fr.contentDocument.documentElement.scrollHeight + 4, 4000) + 'px'; } catch { /* nada */ } };
+      // imágenes incrustadas (cid) que vienen aparte
+      Object.entries(b.cids).forEach(async ([id, c]) => {
+        if (c.url || c.data || !c.id || c.loading) return;
+        c.loading = true;
+        try { const r = await api('GET', `/api/mail/attachment/${t.id}/${m.id}/${c.id}`); c.url = URL.createObjectURL(new Blob([b64uBytes(r.data)], { type: c.type })); if (view === 'mail' && mail.thread === t) fillFrames(); } catch { /* sin imagen */ }
+      });
+    });
+    const box = $('#m-read'); if (box && t.scrollLast) { t.scrollLast = false; const art = box.querySelector('.m-msg.open:last-of-type'); if (art && t.messages.length > 1) box.scrollTop = art.offsetTop - 8; }
+  }
+  const b64uBytes = s => Uint8Array.from(atob(String(s).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  async function openThread(id) {
+    mail.open = id; mail.thread = null; mail.threadErr = '';
+    const row = mail.list?.find(x => x.id === id);
+    if (view === 'mail') { $$('.mrow').forEach(r => r.classList.toggle('on', r.dataset.mth === id)); const rd = $('#m-read'); if (rd) rd.innerHTML = mailReader(); }
+    try {
+      const t = await api('GET', `/api/mail/thread/${id}`);
+      if (mail.open !== id) return;
+      t.scrollLast = true; mail.thread = t;
+      if (row?.unread) { row.unread = false; if (mail.info?.unread) mail.info.unread--; }
+    } catch (e) { if (mail.open !== id) return; mail.threadErr = e.message; }
+    if (view === 'mail') { render(); }
+  }
+  // ---- escribir: el navegador monta el correo (RFC 822) y el servidor lo manda por Gmail ----
+  function composeSheet(kind) {
+    const t = mail.thread, info = mail.info || {};
+    let to = '', cc = '', subject = '', quote = '', files = [];
+    if (kind && t) {
+      const m = t.messages[t.messages.length - 1], hd = n => (m.payload?.headers || []).find(x => x.name.toLowerCase() === n)?.value || '';
+      const subj = hd('subject');
+      const ours = a => /@horizonrcrds\.com$/i.test(a) || (info.me && a.toLowerCase() === info.me.toLowerCase());
+      if (kind === 'forward') subject = /^fwd?:/i.test(subj) ? subj : 'Fwd: ' + subj;
+      else {
+        subject = /^re:/i.test(subj) ? subj : 'Re: ' + subj;
+        const sentByUs = m.labels.includes('SENT') || ours(mailAddr(hd('from')));
+        to = sentByUs ? hd('to') : (hd('reply-to') || hd('from'));
+        if (kind === 'replyall') {
+          const all = [hd('to'), hd('cc')].join(',').split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(x => x.trim()).filter(Boolean);
+          cc = all.filter(a => !ours(mailAddr(a)) && mailAddr(a).toLowerCase() !== mailAddr(to).toLowerCase()).join(', ');
+        }
+      }
+      quote = kind; files = kind === 'forward' ? m.parsed.files : [];
+    }
+    mail.compose = { kind, files: files.map(f => ({ ...f, fromMail: true })) };
+    sheet(`
+      <form class="m-compose" id="m-compose" novalidate>
+        <div class="sheet-head"><h2>${kind === 'forward' ? 'Forward' : kind ? 'Reply' : 'New email'}</h2><button type="button" class="ic" data-act="sheet-close" aria-label="Close">✕</button></div>
+        <p class="muted sm-txt m-fromline">From <b>${esc(info.name || 'HORIZON RCRDS')}</b> &lt;${esc(info.from || '')}&gt;</p>
+        <div class="field"><label for="mc-to">To</label><input id="mc-to" name="to" value="${esc(to)}" autocomplete="off" spellcheck="false" placeholder="name@email.com"></div>
+        <div class="field"><label for="mc-cc">Cc</label><input id="mc-cc" name="cc" value="${esc(cc)}" autocomplete="off" spellcheck="false"></div>
+        <div class="field"><label for="mc-subj">Subject</label><input id="mc-subj" name="subject" value="${esc(subject)}" maxlength="200" autocomplete="off"></div>
+        <div class="field"><label for="mc-body">Message</label><textarea id="mc-body" name="body" rows="7"></textarea></div>
+        ${quote ? `<p class="muted sm-txt">${kind === 'forward' ? 'The original email is added below your message.' : 'The previous message is quoted below your reply.'}</p>` : ''}
+        <div class="m-attach" id="mc-files">${composeFiles()}</div>
+        <p class="ed-error" role="alert" hidden></p>
+        <div class="confirm-actions"><label class="btn ghost push-l" for="mc-file">Attach</label><input type="file" id="mc-file" class="sr-only" multiple><button type="submit" class="btn primary">Send</button></div>
+      </form>`);
+    setTimeout(() => (to ? $('#mc-body') : $('#mc-to'))?.focus(), 0);
+  }
+  const composeFiles = () => (mail.compose?.files || []).map((f, i) => `<span class="m-chip">${esc(f.name)} <span class="muted">${fmtSize(f.size)}</span><button type="button" data-mail="unattach" data-i="${i}" aria-label="Remove">✕</button></span>`).join('');
+  const b64 = bytes => { let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/.{76}/g, '$&\r\n'); };
+  const utf8 = s => new TextEncoder().encode(s);
+  const encWord = s => /^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${btoa(String.fromCharCode(...utf8(s)))}?=`;
+  const encAddrs = s => String(s || '').split(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/).map(x => x.trim()).filter(Boolean).map(a => { const m = a.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>$/); return m && m[1] ? `${encWord(m[1])} <${m[2]}>` : a; }).join(', ');
+  async function sendMail(form) {
+    const box = form.querySelector('.ed-error'); box.hidden = true;
+    const v = n => form.elements[n].value.trim(), c = mail.compose, t = c.kind ? mail.thread : null, info = mail.info;
+    const bad = [v('to'), v('cc')].join(',').split(',').map(x => mailAddr(x.trim())).filter(Boolean).find(a => !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(a));
+    if (!v('to')) { box.textContent = 'Add who it goes to.'; box.hidden = false; form.elements.to.focus(); return; }
+    if (bad) { box.textContent = `“${bad}” is not a valid email.`; box.hidden = false; return; }
+    const total = c.files.reduce((a, f) => a + (f.size || 0), 0);
+    if (total > 12 * 1048576) { box.textContent = 'Attachments can be up to 12 MB in total.'; box.hidden = false; return; }
+    const btn = form.querySelector('[type=submit]'); busyOn(form, btn, 'Sending…');
+    try {
+      const last = t?.messages[t.messages.length - 1], hd = n => (last?.payload?.headers || []).find(x => x.name.toLowerCase() === n)?.value || '';
+      let html = `<div style="font:14px/1.55 Arial,sans-serif;white-space:pre-wrap">${esc(v('body')).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')}</div>`, text = v('body');
+      if (last) {
+        const p = last.parsed || walkParts(last.payload), orig = p.html || textHtml(p.text || ''), when = new Date(last.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+        if (c.kind === 'forward') { html += `<br><div>---------- Forwarded message ---------<br>From: ${esc(hd('from'))}<br>Date: ${esc(when)}<br>Subject: ${esc(hd('subject'))}<br>To: ${esc(hd('to'))}<br><br>${orig}</div>`; text += `\n\n---------- Forwarded message ---------\nFrom: ${hd('from')}\nDate: ${when}\nSubject: ${hd('subject')}\n\n${p.text || ''}`; }
+        else { html += `<br><div>On ${esc(when)}, ${esc(hd('from'))} wrote:<br><blockquote style="margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex">${orig}</blockquote></div>`; text += `\n\nOn ${when}, ${hd('from')} wrote:\n` + (p.text || '').split('\n').map(l => '> ' + l).join('\n'); }
+      }
+      const B = 'hzm' + Math.random().toString(36).slice(2), A = 'hza' + Math.random().toString(36).slice(2), L = [];
+      L.push(`From: ${encWord(info.name || 'HORIZON RCRDS')} <${info.from}>`, `To: ${encAddrs(v('to'))}`);
+      if (v('cc')) L.push(`Cc: ${encAddrs(v('cc'))}`);
+      L.push(`Subject: ${encWord(v('subject'))}`, `Date: ${new Date().toUTCString()}`, `Message-ID: <${crypto.randomUUID()}@horizonrcrds.com>`);
+      if (last && c.kind !== 'forward') { const mid = hd('message-id'); if (mid) { L.push(`In-Reply-To: ${mid}`, `References: ${[hd('references'), mid].filter(Boolean).join(' ')}`); } }
+      L.push('MIME-Version: 1.0', `Content-Type: multipart/mixed; boundary="${B}"`, '', `--${B}`, `Content-Type: multipart/alternative; boundary="${A}"`, '',
+        `--${A}`, 'Content-Type: text/plain; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', b64(utf8(text)),
+        `--${A}`, 'Content-Type: text/html; charset=UTF-8', 'Content-Transfer-Encoding: base64', '', b64(utf8(html)), `--${A}--`);
+      for (const f of c.files) {
+        const bytes = f.file ? new Uint8Array(await f.file.arrayBuffer()) : f.data ? b64uBytes(f.data) : b64uBytes((await api('GET', `/api/mail/attachment/${t.id}/${last.id}/${f.id}`)).data);
+        const nm = encWord(f.name).replace(/"/g, '');
+        L.push(`--${B}`, `Content-Type: ${f.type || 'application/octet-stream'}; name="${nm}"`, `Content-Disposition: attachment; filename="${nm}"`, 'Content-Transfer-Encoding: base64', '', b64(bytes));
+      }
+      L.push(`--${B}--`, '');
+      await authFetch(`/api/mail/send${t ? '?thread=' + encodeURIComponent(t.id) : ''}`, { method: 'POST', headers: { 'Content-Type': 'message/rfc822' }, body: L.join('\r\n') });
+      busyOff(form); closeSheet(); toast('Email sent');
+      if (t && mail.open === t.id) openThread(t.id);
+      if (mail.box === 'sent' || !t) { mail.list = null; loadMail(); }
+    } catch (e) { busyOff(form); if (e.status === 401) { logout(e.message); return; } box.textContent = e.message; box.hidden = false; }
+  }
+  function sizeMail() {
+    const w = $('#m-wrap'); if (!w || view !== 'mail') return;
+    w.style.height = Math.max(360, innerHeight - (w.getBoundingClientRect().top + scrollY) - 24) + 'px';
+  }
+  addEventListener('resize', sizeMail);
+  document.addEventListener('click', async e => {
+    const bx = e.target.closest('[data-mbox]');
+    if (bx && view === 'mail') { mail.box = bx.dataset.mbox; mail.pages = ['']; mail.page = 0; mail.list = null; mail.open = null; mail.thread = null; render(); loadMail(); return; }
+    const row = e.target.closest('[data-mth]');
+    if (row && view === 'mail') { if (mail.open !== row.dataset.mth) openThread(row.dataset.mth); return; }
+    const b = e.target.closest('[data-mail]');
+    if (!b) return;
+    const act = b.dataset.mail, t = mail.thread;
+    if (act === 'compose') return composeSheet(null);
+    if (act === 'reply' || act === 'replyall' || act === 'forward') return t && composeSheet(act);
+    if (act === 'close') { mail.open = null; mail.thread = null; $$('.mrow.on').forEach(r => r.classList.remove('on')); $('#m-read').innerHTML = mailReader(); return; }
+    if (act === 'prev' || act === 'next') {
+      if (act === 'next') { if (!mail.next) return; mail.pages[mail.page + 1] = mail.next; mail.page++; } else if (mail.page) mail.page--;
+      mail.list = null; render(); loadMail(); return;
+    }
+    if (act === 'toggle') { const i = +b.closest('[data-mmsg]').dataset.mmsg; if (i === t.messages.length - 1) return; t.messages[i].openUi = !t.messages[i].openUi; const y = $('#m-read').scrollTop; $('#m-read').innerHTML = mailReader(); $('#m-read').scrollTop = y; fillFrames(); return; }
+    if (act === 'unattach') { mail.compose.files.splice(+b.dataset.i, 1); $('#mc-files').innerHTML = composeFiles(); return; }
+    if (act === 'file') {
+      const [i, j] = b.dataset.mfile.split(':').map(Number), m = t.messages[i], f = m.parsed.files[j];
+      try {
+        const data = f.data || (await api('GET', `/api/mail/attachment/${t.id}/${m.id}/${f.id}`)).data;
+        const url = URL.createObjectURL(new Blob([b64uBytes(data)], { type: f.type || 'application/octet-stream' }));
+        const a = document.createElement('a'); a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 30e3);
+      } catch (er) { toast(er.message); }
+      return;
+    }
+    if (!t) return;
+    if (act === 'trash' && !await confirmBox('Move this email to the Gmail trash? (It can be restored from Gmail for 30 days.)', 'Move to trash')) return;
+    const starred = t.messages.some(m => m.labels.includes('STARRED'));
+    const op = act === 'star' ? (starred ? 'unstar' : 'star') : act;
+    try {
+      await api('POST', `/api/mail/thread/${t.id}/${op}`);
+      if (op === 'trash' || op === 'unread') {
+        const row = mail.list?.find(x => x.id === t.id);
+        if (op === 'trash') mail.list = mail.list?.filter(x => x.id !== t.id); else if (row) { row.unread = true; if (mail.info) mail.info.unread = (mail.info.unread || 0) + 1; }
+        mail.open = null; mail.thread = null; toast(op === 'trash' ? 'Moved to trash' : 'Marked as unread'); render();
+      } else { t.messages.forEach(m => { m.labels = op === 'star' ? [...m.labels, 'STARRED'] : m.labels.filter(x => x !== 'STARRED'); }); const row = mail.list?.find(x => x.id === t.id); if (row) row.starred = op === 'star'; const y = $('#m-read').scrollTop; $('#m-read').innerHTML = mailReader(); $('#m-read').scrollTop = y; fillFrames(); }
+    } catch (er) { toast(er.message); }
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches?.('.mrow')) e.target.click(); });
+  document.addEventListener('change', e => {
+    if (e.target.id !== 'mc-file' || !mail.compose) return;
+    for (const f of e.target.files) mail.compose.files.push({ name: f.name, size: f.size, type: f.type, file: f });
+    e.target.value = ''; $('#mc-files').innerHTML = composeFiles();
+  });
+  document.addEventListener('submit', e => {
+    if (e.target.id === 'm-search') { e.preventDefault(); mail.q = e.target.elements.q.value.trim(); mail.pages = ['']; mail.page = 0; mail.list = null; mail.open = null; mail.thread = null; render(); loadMail(); return; }
+    if (e.target.id === 'm-compose') { e.preventDefault(); if (!busy) sendMail(e.target); }
+  });
 
   /* ---------------- Chain: download gates + cadena de SoundCloud (solo owners) ---------------- */
   let chainData = null, chainErr = '', chainLoading = false, chainOpen = null;   // chainOpen = release cuyos desbloqueos se ven

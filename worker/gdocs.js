@@ -16,6 +16,8 @@ export async function horizonToken(env, margin = 60e3) {
   await env.FILES.put('google/token', JSON.stringify(cached), { expirationTtl: 3000 });
   return j.token;
 }
+// token guardado sin un permiso nuevo (p. ej. Gmail recién añadido al script): se tira y se pide otro
+export async function dropHorizonToken(env) { cached = null; await env.FILES.delete('google/token').catch(() => {}); }
 async function gapi(tok, url, body, method, patch) {
   if (patch) body = patch;
   const r = await fetch(url, { method: method || (body ? 'POST' : 'GET'), headers: { Authorization: `Bearer ${tok}`, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined });

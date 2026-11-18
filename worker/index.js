@@ -13,6 +13,7 @@ import { loginCodeMail } from './contract-mail.js';
 import { CALENDAR_SCHEMA, CalendarError, calendarApi, discordCalendarHook } from './calendar.js';
 import { CHAIN_SCHEMA, ChainError, chainApi, scOauth, chainPublic, runChainActions } from './chain.js';
 import { horizonToken } from './gdocs.js';
+import { MailError, mailApi } from './mail.js';
 
 // Secciones del panel y lo que se puede hacer en cada una. Una sección nueva (p. ej. eventos) se añade aquí.
 const SECTIONS = [
@@ -95,6 +96,7 @@ const BASE_SCHEMA = [
 const ALTERS = [
   ['ALTER TABLE panel_members ADD COLUMN label TEXT'],   // nombre que le pone el owner a cada persona
   ['ALTER TABLE panel_members ADD COLUMN color TEXT'],
+  ['ALTER TABLE panel_members ADD COLUMN mail INTEGER NOT NULL DEFAULT 0'],   // acceso a Mail (el Gmail de Horizon): solo quien elija un owner
   ['ALTER TABLE panel_profiles ADD COLUMN color TEXT'],
   ['ALTER TABLE panel_profiles ADD COLUMN soundcloud TEXT'],   // perfil de SoundCloud (la foto se toma de ahí) y la última foto copiada
   ['ALTER TABLE panel_profiles ADD COLUMN sc_pic TEXT'],
@@ -143,10 +145,10 @@ function normPerms(p) {
 const fullPerms = () => Object.fromEntries(SECTIONS.map(s => [s.id, Object.fromEntries(s.actions.map(a => [a, true]))]));
 async function resolve(env, email) {
   if (owners(env).includes(email)) return { owner: true, role: { id: 'owner', name: 'Owner' }, perms: fullPerms() };
-  const m = await env.DB.prepare('SELECT m.email, m.role_id, m.label, r.name AS role_name, r.perms, r.forms FROM panel_members m LEFT JOIN panel_roles r ON r.id = m.role_id WHERE m.email = ?').bind(email).first();
+  const m = await env.DB.prepare('SELECT m.email, m.role_id, m.label, m.mail, r.name AS role_name, r.perms, r.forms FROM panel_members m LEFT JOIN panel_roles r ON r.id = m.role_id WHERE m.email = ?').bind(email).first();
   if (!m) return null;
   const forms = parse(m.forms);
-  return { owner: false, label: m.label || '', role: m.role_name ? { id: m.role_id, name: m.role_name, forms: forms && typeof forms === 'object' ? forms : null } : null, perms: normPerms(m.role_name ? parse(m.perms) : null) };
+  return { owner: false, label: m.label || '', mail: m.mail === 1, role: m.role_name ? { id: m.role_id, name: m.role_name, forms: forms && typeof forms === 'object' ? forms : null } : null, perms: normPerms(m.role_name ? parse(m.perms) : null) };
 }
 const can = (s, sec, act) => s.owner || !!s.perms?.[sec]?.[act];
 const anyCan = (s, act) => s.owner || SECTIONS.some(x => s.perms?.[x.id]?.[act]);
@@ -298,7 +300,7 @@ async function colorApi(req, env, s) {
   await env.DB.prepare('INSERT INTO panel_profiles (email, color, updated_at) VALUES (?, ?, ?) ON CONFLICT(email) DO UPDATE SET color = excluded.color, updated_at = excluded.updated_at').bind(s.email, c, now()).run();
   return { ok: true, color: c };
 }
-const userOut = s => ({ email: s.email, name: s.name, picture: s.picture, color: s.color, soundcloud: s.soundcloud || '', owner: s.owner, role: s.role, perms: s.perms });
+const userOut = s => ({ email: s.email, name: s.name, picture: s.picture, color: s.color, soundcloud: s.soundcloud || '', owner: s.owner, mail: !!(s.owner || s.mail), role: s.role, perms: s.perms });
 
 /* ---------------- Datos y archivos de la web ---------------- */
 async function readData(env) {
@@ -447,7 +449,7 @@ async function team(req, env, s, p) {
   const body = m === 'POST' ? parse(await req.text()) || {} : null;
   if (p === '/api/team' && m === 'GET') {
     const [members, roles] = await Promise.all([
-      DB.prepare(`SELECT m.email, m.role_id, m.label, COALESCE(p.color, m.color) AS color, m.name, COALESCE(${AVATAR_SQL}, m.picture) AS picture, p.soundcloud, m.added_at, m.last_login FROM panel_members m LEFT JOIN panel_profiles p ON p.email = m.email ORDER BY m.added_at`).all(),
+      DB.prepare(`SELECT m.email, m.role_id, m.label, m.mail, COALESCE(p.color, m.color) AS color, m.name, COALESCE(${AVATAR_SQL}, m.picture) AS picture, p.soundcloud, m.added_at, m.last_login FROM panel_members m LEFT JOIN panel_profiles p ON p.email = m.email ORDER BY m.added_at`).all(),
       DB.prepare('SELECT id, name, perms, forms FROM panel_roles ORDER BY created_at').all(),
     ]);
     const profs = (await DB.prepare(`SELECT p.email, ${AVATAR_SQL} AS picture, p.color FROM panel_profiles p`).all()).results, pics = Object.fromEntries(profs.map(r => [r.email, r.picture])), cols = Object.fromEntries(profs.map(r => [r.email, r.color]));
@@ -481,6 +483,15 @@ async function team(req, env, s, p) {
     if ('soundcloud' in body) {
       const cur = await DB.prepare('SELECT soundcloud FROM panel_profiles WHERE email = ?').bind(email).first();
       if ((normSc(body.soundcloud) || null) !== (cur?.soundcloud || null)) await setSoundcloud(env, email, body.soundcloud);
+    }
+    // acceso a Mail: solo una persona a la vez (además de los owners)
+    if ('mail' in body && exists) {
+      const on = body.mail ? 1 : 0, cur = await DB.prepare('SELECT mail FROM panel_members WHERE email = ?').bind(email).first();
+      if (on !== (cur?.mail || 0)) {
+        if (on) { const other = await DB.prepare('SELECT email, COALESCE(label, name, email) AS n FROM panel_members WHERE mail = 1 AND email != ?').bind(email).first(); if (other) throw new HttpError(409, `${other.n} already has Mail. Turn it off for them first.`); }
+        await DB.prepare('UPDATE panel_members SET mail = ? WHERE email = ?').bind(on, email).run();
+        await audit(env, s, `${on ? 'Gave' : 'Removed'} Mail access ${on ? 'to' : 'from'} ${email}`);
+      }
     }
     // solo cambiar el nombre o el color
     if (exists && !body.role_id) {
@@ -712,6 +723,7 @@ async function api(req, env, p, ctx) {
   }
   if (p === '/api/chain' || p.startsWith('/api/chain/')) { const r = await chainApi(req, env, s, url, action => audit(env, s, action)); return r instanceof Response ? r : json(r); }
   if (p === '/api/team' || p.startsWith('/api/team/')) return team(req, env, s, p);
+  if (p.startsWith('/api/mail/')) { const r = await mailApi(req, env, s, url, action => audit(env, s, action)); return r instanceof Response ? r : json(r); }
   throw new HttpError(404, 'Not found.');
 }
 
@@ -741,7 +753,7 @@ export default {
       }
       return env.ASSETS.fetch(req);
     } catch (e) {
-      if (e instanceof HttpError || e instanceof FormError || e instanceof ContractError || e instanceof CalendarError || e instanceof ChainError) return fail(e.status, e.message);
+      if (e instanceof HttpError || e instanceof FormError || e instanceof ContractError || e instanceof CalendarError || e instanceof ChainError || e instanceof MailError) return fail(e.status, e.message);
       console.error(e);
       return fail(500, 'Server error. Please try again.');
     }

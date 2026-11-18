@@ -55,7 +55,7 @@ async function gmailBatch(env, paths, retry = true) {
     if (st === 404) gone.add(+id);
   }
   // lo que Google no contestó bien en el batch (p. ej. demasiadas a la vez), uno a uno
-  const redo = out.map((x, i) => x == null && !gone.has(i) ? i : -1).filter(i => i >= 0);
+  const redo = out.map((x, i) => x == null && !gone.has(i) ? i : -1).filter(i => i >= 0).slice(0, 20);
   if (redo.length) await Promise.all(redo.map(async i => { out[i] = await gmail(env, paths[i]).catch(() => null); }));
   return out;
 }
@@ -143,7 +143,8 @@ export async function mailApi(req, env, s, url, audit) {
     else if (act === 'move' || act === 'label' || act === 'unlabel') {
       const label = String(b.label || '');
       if (!ID.test(label)) throw new MailError(400, 'Choose a label.');
-      const body = act === 'unlabel' ? { removeLabelIds: [label] } : act === 'label' ? { addLabelIds: [label] } : label === 'INBOX' ? { addLabelIds: ['INBOX'] } : { addLabelIds: [label], removeLabelIds: ['INBOX'] };
+      const from = ID.test(String(b.from || '')) && b.from !== label ? [String(b.from)] : [];
+      const body = act === 'unlabel' ? { removeLabelIds: [label] } : act === 'label' ? { addLabelIds: [label] } : label === 'INBOX' ? { addLabelIds: ['INBOX'], ...(from.length ? { removeLabelIds: from } : {}) } : { addLabelIds: [label], removeLabelIds: ['INBOX', ...from] };
       one = id => post(env, `/threads/${id}/modify`, body);
     } else if (ACTS[act]) one = id => post(env, `/threads/${id}/modify`, ACTS[act]);
     else throw new MailError(400, 'Unknown action.');

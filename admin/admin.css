@@ -1243,7 +1243,7 @@ html, body, * { scrollbar-width: none; }
 .m-list { list-style: none; margin: 0; padding: 0; flex: 1; overflow-y: auto; transition: opacity .2s; animation: mfade .2s ease; }
 .m-list[aria-busy="true"] { opacity: .55; }
 .m-list .empty { text-align: center; }
-.mrow { display: grid; grid-template-columns: 36px 26px 184px minmax(0, 1fr) 18px 72px; align-items: center; gap: 6px; height: 41px; padding: 0 16px 0 10px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .12s, box-shadow .12s; }
+.mrow { display: grid; grid-template-columns: 36px 26px 184px minmax(0, 1fr) 18px 72px; align-items: center; gap: 6px; height: var(--mrow-h, 41px); padding: 0 16px 0 10px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .12s, box-shadow .12s; }
 .mrow:hover { background: rgba(255, 255, 255, .04); box-shadow: inset 0 -1px 0 rgba(255, 255, 255, .06), 0 1px 3px rgba(0, 0, 0, .5); position: relative; z-index: 1; }
 .mrow.sel { background: rgba(var(--accent-rgb), .10); }
 .mrow .m-from, .mrow .m-subj { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

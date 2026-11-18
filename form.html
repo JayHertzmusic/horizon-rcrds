@@ -258,6 +258,19 @@
   input:-webkit-autofill, input:-webkit-autofill:hover, input:-webkit-autofill:focus, textarea:-webkit-autofill, select:-webkit-autofill {
     -webkit-text-fill-color: #fff; caret-color: #fff; -webkit-box-shadow: 0 0 0 1000px transparent inset; transition: background-color 600000s 0s, color 600000s 0s; }
   input:autofill { filter: none; }
+  /* Demos: Solo release / Collaboration (centrado, arriba) y en colaboración una fila por artista */
+  .x-mode { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin: 0 0 18px; }
+  .x-seg { display: inline-flex; padding: 4px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--card); }
+  .x-seg[hidden] { display: none; }
+  .x-seg button { padding: 9px 18px; border: 0; border-radius: 999px; background: none; color: var(--muted); font: 600 13px/1 'Barlow', sans-serif; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; transition: background .15s, color .15s; }
+  .x-seg button.on { background: #fff; color: #000; }
+  .x-seg button:not(.on):hover { color: #fff; }
+  .x-mode .x-note { flex: 1 1 100%; margin: 2px 0 0; text-align: center; color: var(--muted); font-size: 13.5px; }
+  .x-mode .x-note[hidden] { display: none; }
+  #f.is-collab > * { order: 30; }
+  #f.is-collab > .x-mode { order: 0; }
+  #f.is-collab > .x-co { order: 5; }
+  #f.is-collab > .hp, #f.is-collab > .err, #f.is-collab > .foot { order: 40; }
   /* «Thank you»: centrado en la pantalla (entre el logo y el pie), no pegado arriba */
   html.sent:not(.embed):not(.excl) body { display: flex; flex-direction: column; }
   html.sent:not(.embed):not(.excl) main { flex: 1; display: flex; align-items: center; padding-top: 32px; padding-bottom: 32px; }
@@ -465,7 +478,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
   function saveDraft() {
     if (!DRAFT || !form || !document.getElementById('f')) return;
     clearTimeout(draftTimer);
-    draftTimer = setTimeout(() => { try { localStorage.setItem(DRAFT, JSON.stringify({ at: Date.now(), step: EXCL() ? cur : 0, a: draftState(), co: form.multi ? coValues(document.getElementById('f')) : undefined })); } catch { /* sin espacio o bloqueado */ } }, 300);
+    draftTimer = setTimeout(() => { try { localStorage.setItem(DRAFT, JSON.stringify({ at: Date.now(), step: EXCL() ? cur : 0, a: draftState(), co: form.multi ? { mode: coMode, n: coN, list: coValues(document.getElementById('f')) } : undefined })); } catch { /* sin espacio o bloqueado */ } }, 300);
   }
   const dropDraft = () => { clearTimeout(draftTimer); try { if (DRAFT) localStorage.removeItem(DRAFT); } catch { /* nada */ } };
   function restoreDraft() {
@@ -481,7 +494,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
         const o = f.querySelector(`[data-other="${CSS.escape(x.id)}"]`); if (o && v.o) o.value = v.o;
       } else if (f.elements[x.id] && typeof v.v === 'string') f.elements[x.id].value = v.v;
     }
-    if (form.multi) coUpdate(Array.isArray(d.co) ? d.co : []);
+    if (form.multi && d.co?.mode === 'collab') coSet('collab', d.co.n === 3 ? 3 : 2, Array.isArray(d.co.list) ? d.co.list : []);
     progress();
     // vuelve al paso donde se quedó (o al primero que tenga algo obligatorio sin contestar)
     if (EXCL() && d.step > 0) { let k = 0; while (k < Math.min(d.step, steps.length - 1) && !stepMissing(k)) k++; goStep(k, false); }
@@ -491,7 +504,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
       const r = await fetch(apiUrl(), { cache: 'no-store', headers: linkHeaders });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.message || 'This form is not available.');
-      form = j; draw(false); restoreDraft();
+      form = j; draw(false); coBar(); restoreDraft();
     } catch (e) { root.innerHTML = `<h1>Not available</h1><p class="msg">${esc(e.message)}</p>`; }
   }
   // vista previa del panel: el formulario llega del editor (mismo sitio) y se redibuja al momento
@@ -540,36 +553,81 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
         out[x.id] = !c ? '' : c.value === '__other' ? f.querySelector(`[data-other="${CSS.escape(x.id)}"]`).value.trim() : c.value;
       } else out[x.id] = (f.elements[x.id]?.value || '').trim();
     }
-    if (form.multi) out._artists = coValues(f);
+    if (form.multi && coMode === 'collab') {
+      const co = coValues(f).slice(0, coN - 1);
+      out._artists = co;
+      out[form.multi.artist] = [out[form.multi.artist], ...co.map(x => x.name)].filter(Boolean).join(' & ');
+    }
     return out;
   }
-  /* Demos con varios artistas: si el nombre lleva más de uno («A & B», «A x B», «A feat. B», «A, B»),
-     aparece un campo obligatorio «Email of B» por cada uno (sin botones ni casillas) */
+  /* Demos: «Solo release» o «Collaboration». En colaboración, una fila por artista (nombre | email) y luego el track.
+     Si en «Solo» escriben varios nombres («A & B», «A, B», «A x B», «A feat. B»), pasa solo a «Collaboration». */
   const splitArtists = v => {
     const seen = new Set();
     return String(v || '').split(/\s*[,&+\/]\s*|\s+(?:feat\.?|ft\.?|featuring|vs\.?|and)\s+/i).flatMap(x => x.split(/\s+x\s+/)).map(x => x.trim()).filter(x => x && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase()));
   };
-  const coValues = f => [...f.querySelectorAll('[data-co-name]')].map(i => ({ name: i.dataset.coName, email: i.value.trim() }));
-  function coUpdate(keep) {
-    const f = document.getElementById('f');
-    if (!form?.multi || !f || !f.elements[form.multi.artist]) return;
-    const prev = new Map([...(keep || []), ...coValues(f)].map(x => [String(x.name).toLowerCase(), x.email]));
-    const names = splitArtists(f.elements[form.multi.artist].value).slice(1, 4);
-    const now = coValues(f).map(x => x.name).join('\n');
-    if (now === names.join('\n') && !keep) return;   // nada cambió: no se redibuja (no se pierde el foco)
+  let coMode = 'solo', coN = 2;
+  const coValues = f => [...f.querySelectorAll('.q.x-co[data-k]')].reduce((out, q) => {
+    const k = Number(q.dataset.k), it = out[k - 2] || (out[k - 2] = { name: '', email: '' });
+    const i = q.querySelector('input'); if (i) it[i.dataset.coField] = i.value.trim();
+    return out;
+  }, []);
+  function coDraw(vals = []) {
+    const f = document.getElementById('f'), m = form?.multi;
+    if (!m || !f) return;
+    const qa = f.querySelector(`[data-q="${CSS.escape(m.artist)}"]`), qe = f.querySelector(`[data-q="${CSS.escape(m.email)}"]`);
+    if (!qa || !qe) return;
+    const keep = vals.length ? vals : coValues(f);
     f.querySelectorAll('.q.x-co').forEach(q => q.remove());
-    if (!names.length) return;
-    // detrás de la fila del email (si va emparejado con otra pregunta, detrás de la pareja)
-    let anchor = f.querySelector(`[data-q="${CSS.escape(form.multi.email)}"]`);
-    if (!anchor) return;
-    if (anchor.classList.contains('half') && anchor.nextElementSibling?.classList.contains('half')) anchor = anchor.nextElementSibling;
-    const one = names.length === 1;
-    anchor.insertAdjacentHTML('afterend', names.map((n, i) => `<div class="q x-co${one ? '' : ' half'}" data-q="_co${i}">
-      <label for="co-${i}">Email of ${esc(n)}<span class="req" aria-hidden="true">*</span></label>
-      <input id="co-${i}" type="email" data-co-name="${esc(n)}" required aria-required="true" maxlength="200" autocomplete="off" placeholder="name@email.com" value="${esc(prev.get(n.toLowerCase()) || '')}">
-    </div>`).join(''));
+    const collab = coMode === 'collab';
+    f.classList.toggle('is-collab', collab);
+    document.querySelectorAll('.x-mode [data-mode]').forEach(b => { const on = b.dataset.mode === coMode; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
+    document.querySelectorAll('.x-mode [data-n]').forEach(b => b.classList.toggle('on', Number(b.dataset.n) === coN));
+    const nBox = document.querySelector('.x-mode .x-n'); if (nBox) nBox.hidden = !collab;
+    // los títulos de «Artist Name» y «Contact Email» pasan a ser los del artista 1
+    const la = qa.querySelector('label'), le = qe.querySelector('label');
+    la.dataset.orig ??= la.innerHTML; le.dataset.orig ??= le.innerHTML;
+    la.innerHTML = collab ? 'Main artist name<span class="req" aria-hidden="true">*</span>' : la.dataset.orig;
+    le.innerHTML = collab ? 'Main artist email<span class="req" aria-hidden="true">*</span>' : le.dataset.orig;
+    // orden en colaboración: una fila por artista (nombre | email) y después el track
+    qa.style.order = collab ? 1 : ''; qe.style.order = collab ? 2 : '';
+    const note = document.querySelector('.x-mode .x-note'); if (note) note.hidden = !collab;
+    if (!collab) return;
+    let html = '';
+    for (let k = 2; k <= coN; k++) {
+      const v = keep[k - 2] || {};
+      const who = k === 2 ? 'Second artist' : 'Third artist';
+      html += `<div class="q half x-co" data-k="${k}" data-q="_co${k}n"><label for="co${k}n">${who} name<span class="req" aria-hidden="true">*</span></label><input id="co${k}n" type="text" data-co-field="name" maxlength="120" autocomplete="off" placeholder="Your answer" value="${esc(v.name || '')}"></div>`
+        + `<div class="q half x-co" data-k="${k}" data-q="_co${k}e"><label for="co${k}e">${who} email<span class="req" aria-hidden="true">*</span></label><input id="co${k}e" type="email" data-co-field="email" maxlength="200" autocomplete="off" placeholder="name@email.com" value="${esc(v.email || '')}"></div>`;
+    }
+    qe.insertAdjacentHTML('afterend', html);
   }
-  document.addEventListener('input', e => { if (form?.multi && e.target.name === form.multi.artist) coUpdate(); });
+  function coSet(mode, n, vals) { coMode = mode; if (n) coN = n; coDraw(vals); progress(); saveDraft(); }
+  // la elección va arriba del formulario, centrada
+  function coBar() {
+    const f = document.getElementById('f');
+    if (!form?.multi || !f || f.querySelector('.x-mode')) return;
+    f.insertAdjacentHTML('afterbegin', `<div class="x-mode"><div class="x-seg" role="radiogroup" aria-label="Release type">
+      <button type="button" role="radio" data-mode="solo">Solo release</button><button type="button" role="radio" data-mode="collab">Collaboration</button></div>
+      <div class="x-seg x-n" hidden><button type="button" data-n="2">2 artists</button><button type="button" data-n="3">3 artists</button></div>
+      <p class="x-note" hidden>Add every artist on the track — each one receives their own release documents by email.</p></div>`);
+    coDraw();
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.x-mode button'); if (!b) return;
+    if (b.dataset.mode) coSet(b.dataset.mode);
+    else if (b.dataset.n) coSet('collab', Number(b.dataset.n));
+  });
+  document.addEventListener('input', e => {
+    const m = form?.multi;
+    if (!m || coMode !== 'solo' || e.target.name !== m.artist) return;
+    const names = splitArtists(e.target.value);
+    if (names.length < 2) return;
+    // varios nombres en «Solo»: se pasa a «Collaboration» con cada nombre en su sitio
+    e.target.value = names[0];
+    coSet('collab', Math.min(3, names.length), names.slice(1, 3).map(n => ({ name: n, email: '' })));
+    const next = document.querySelector('#co2n'); if (next) { next.focus(); next.setSelectionRange(next.value.length, next.value.length); }
+  });
   function progress() {
     const f = document.getElementById('f'), bar = document.getElementById('bar');
     if (!f || !form) return;
@@ -589,11 +647,12 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     f.querySelectorAll('.q.bad').forEach(q => q.classList.remove('bad'));
     const missing = form.fields.find(x => x.required && (!a[x.id] || (Array.isArray(a[x.id]) && !a[x.id].length)));
     if (missing && EXCL()) { const k = steps.findIndex(st => st.fields.includes(missing)); if (k >= 0 && k !== cur) goStep(k, false); markMissing(missing); return; }
-    const coMiss = !missing && form.multi ? [...f.querySelectorAll('[data-co-name]')].find(i => !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(i.value.trim())) : null;
+    const coMiss = !missing && form.multi && coMode === 'collab' ? [...f.querySelectorAll('.q.x-co input')].find(i => i.dataset.coField === 'email' ? !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(i.value.trim()) : !i.value.trim()) : null;
     if (coMiss) {
-      const q = coMiss.closest('.q');
+      const q = coMiss.closest('.q'), k = q.dataset.k;
       q.classList.add('bad'); q.scrollIntoView({ block: 'center', behavior: 'smooth' }); coMiss.focus();
-      err.textContent = coMiss.value.trim() ? `Please enter a valid email for ${coMiss.dataset.coName}.` : `Please add the email of ${coMiss.dataset.coName}.`; err.hidden = false;
+      const who = k === '2' ? 'second' : 'third';
+      err.textContent = coMiss.dataset.coField === 'name' ? `Please enter the ${who} artist’s name.` : coMiss.value.trim() ? `Please enter a valid email for the ${who} artist.` : `Please enter the ${who} artist’s email.`; err.hidden = false;
       return;
     }
     if (missing) {

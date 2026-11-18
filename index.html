@@ -2324,10 +2324,11 @@ document.addEventListener('DOMContentLoaded', () => {
   let shown = false;
   const show = () => { if (shown) return; shown = true; go(); html.classList.add('hz-hash-in'); requestAnimationFrame(() => html.classList.remove('hz-hash')); setTimeout(() => html.classList.remove('hz-hash'), 60); setTimeout(() => html.classList.remove('hz-hash-in'), 600); };
   if (!document.getElementById(id)) { html.classList.remove('hz-hash'); return; }
+  // (solo se esperan los datos que pintan las listas de encima, no las imágenes: así no se queda en negro con conexión lenta)
   const data = Promise.allSettled(Object.values(window.HZ_DATA || {}));
-  const loaded = new Promise(r => document.readyState === 'complete' ? r() : addEventListener('load', r, { once: true }));
-  Promise.all([data, loaded]).then(() => setTimeout(() => { go(); setTimeout(show, 120); }, 150));
-  setTimeout(show, 2500);   // por si algo tarda: nunca se queda en blanco
+  const ready = new Promise(r => document.readyState !== 'loading' ? r() : addEventListener('DOMContentLoaded', r, { once: true }));
+  Promise.all([data, ready]).then(() => setTimeout(() => { go(); setTimeout(show, 60); }, 100));
+  setTimeout(show, 1200);   // por si algo tarda: nunca más de un momento sin verse
   addEventListener('load', () => { setTimeout(go, 1200); setTimeout(go, 2500); });
 })();
 </script>

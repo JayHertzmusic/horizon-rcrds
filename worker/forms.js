@@ -95,12 +95,6 @@ const linkState = l => l.revoked ? 'revoked' : l.used_at ? 'sent' : l.expires_at
 export const FORM_LINK_COLUMNS = ['token TEXT', 'revoked INTEGER NOT NULL DEFAULT 0', 'grp TEXT', 'grp_pos INTEGER', 'grp_n INTEGER', 'gsent INTEGER'];
 
 /* Varios artistas en un release: un enlace por artista, agrupados (grp). Cada uno rellena el formulario completo. */
-// «Krisna Artha & Tebedayeng», «A x B», «A feat. B», «A, B»… → cada artista por separado
-export const splitArtists = v => {
-  const seen = new Set();
-  // («x» solo en minúscula: «DJ X» es un nombre, «A x B» son dos)
-  return String(v || '').split(/\s*[,&+\/]\s*|\s+(?:feat\.?|ft\.?|featuring|vs\.?|and)\s+/i).flatMap(x => x.split(/\s+x\s+/)).map(x => x.trim()).filter(x => x && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase()));
-};
 // demos: qué pregunta es el nombre del artista y cuál el email (para pedir el email de cada artista de una colaboración)
 const multiOf = f => {
   if (!/demo/i.test(f.slug || '')) return null;
@@ -110,14 +104,14 @@ const multiOf = f => {
 };
 // enlaces personales de un release (uno por artista; con varios, agrupados y el primero es el principal)
 async function makeLinks(DB, f, names, by, origin) {
-  const t = now(), grp = names.length > 1 ? linkToken().slice(0, 16) : null, made = [];
+  const t = now(), grp = names.length > 1 ? linkToken().slice(0, 16) : null, made = [], hashes = [];
   for (let i = 0; i < names.length; i++) {
-    const tok = linkToken();
+    const tok = linkToken(), hash = await sha(tok);
     await DB.prepare('INSERT INTO form_links (hash, form_id, note, created_by, created_at, expires_at, token, grp, grp_pos, grp_n) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(await sha(tok), f.id, names[i], by, t, t + LINK_DAYS * 864e5, tok, grp, grp ? i + 1 : null, grp ? names.length : null).run();
-    made.push({ note: names[i], url: `${origin}/forms/${f.slug}?k=${tok}` });
+      .bind(hash, f.id, names[i], by, t, t + LINK_DAYS * 864e5, tok, grp, grp ? i + 1 : null, grp ? names.length : null).run();
+    made.push({ note: names[i], url: `${origin}/forms/${f.slug}?k=${tok}` }); hashes.push(hash);
   }
-  return { links: made, expires_at: t + LINK_DAYS * 864e5 };
+  return { links: made, hashes, expires_at: t + LINK_DAYS * 864e5 };
 }
 const siteOrigin = url => /(^|\.)horizonrcrds\.com$/.test(url.hostname) ? 'https://horizonrcrds.com' : url.origin;
 
@@ -435,8 +429,10 @@ export async function formsApi(req, env, s, url, audit) {
       }
       if (!clean(b.note, 120)) throw new FormError(400, 'Write the artist name first.');   // cada enlace lleva siempre el nombre de para quién es
       // collab: un enlace por artista (el primero es el principal), todos del mismo release
-      const others = (Array.isArray(b.collab) ? b.collab : []).map(x => clean(x, 120)).filter(Boolean).slice(0, 2);
-      if (Array.isArray(b.collab) && b.collab.length && others.length !== b.collab.length) throw new FormError(400, 'Write the name of every artist.');
+      const list = Array.isArray(b.collab) ? b.collab : [];
+      if (list.length > 2) throw new FormError(400, 'A release can have up to 3 artists.');
+      const others = list.map(x => clean(x, 120)).filter(Boolean);
+      if (others.length !== list.length) throw new FormError(400, 'Write the name of every artist.');
       const names = [clean(b.note, 120), ...others], r = await makeLinks(DB, f, names, s.email, siteOrigin(url));
       await audit(names.length > 1 ? `Created links for “${f.title}” (${names.join(' & ')})` : `Created a personal link for “${f.title}” (${names[0]})`);
       return { ok: true, url: r.links[0].url, links: r.links, expires_at: r.expires_at };
@@ -466,7 +462,6 @@ export async function formsApi(req, env, s, url, audit) {
     if (!kind) throw new FormError(400, 'Accept or reject?');
     const row = await DB.prepare('SELECT data FROM form_responses WHERE id = ? AND form_id = ?').bind(rid, f.id).first();
     if (!row) throw new FormError(404, 'That response no longer exists.');
-    if (await DB.prepare('SELECT 1 FROM form_replies WHERE response_id = ?').bind(rid).first()) throw new FormError(409, 'This demo was already answered.');
     const rd = parse(row.data) || {}, main = emailOf(f, rd);
     if (!main) throw new FormError(400, 'This response has no valid email address.');
     // varios artistas: el correo les llega a todos
@@ -474,23 +469,35 @@ export async function formsApi(req, env, s, url, audit) {
     const subject = clean(b.subject, 200);
     let body = clean(b.body, 5000);
     if (!subject || !body) throw new FormError(400, 'Write the subject and the message.');
-    // aceptar con los enlaces del Release Form (uno por artista), antes de la despedida
-    let made = null;
-    if (kind === 'accept' && b.links) {
-      const names = splitArtists(clean(b.links_for, 300)).slice(0, 3);
-      const rf = await DB.prepare("SELECT * FROM forms WHERE slug = 'release-form'").first();
-      if (!names.length) throw new FormError(400, 'Write the artist name(s) for the Release Form links.');
-      if (!rf) throw new FormError(404, 'The Release Form was not found.');
-      made = (await makeLinks(DB, rf, names, s.email, siteOrigin(url))).links;
-      const block = `${made.length > 1 ? 'Release Form — each artist fills in their own link:' : 'Release Form — please fill it in here:'}\n${made.map(x => made.length > 1 ? `${x.note}: ${x.url}` : x.url).join('\n')}\n(The link is personal, works once and for 30 days.)`;
-      const k = body.search(/\n\s*(best|cheers|thanks|thank you|regards|kind regards)\b[^\n]*\n?[^\n]*$/i);
-      body = k >= 0 ? `${body.slice(0, k).trimEnd()}\n\n${block}\n\n${body.slice(k).trimStart()}` : `${body}\n\n${block}`;
-    }
-    try { await demoReplyMail(env, to, subject, body); }
-    catch (e) { throw new FormError(502, e.message); }
+    // los artistas para los enlaces del Release Form: separados por comas (así un dúo como «Chase & Status» es un solo artista)
+    const names = kind === 'accept' && b.links ? clean(b.links_for, 300).split(/\s*[,\n]\s*/).map(x => x.trim()).filter(Boolean).slice(0, 3) : [];
+    const rf = names.length ? await DB.prepare("SELECT * FROM forms WHERE slug = 'release-form'").first() : null;
+    if (kind === 'accept' && b.links && !names.length) throw new FormError(400, 'Write the artist name(s) for the Release Form links.');
+    if (names.length && !rf) throw new FormError(404, 'The Release Form was not found.');
+    // se reserva la contestación ANTES de enviar: dos clics o dos personas a la vez no mandan dos correos
     const who = clean(s.name, 120) || String(s.email || '').split('@')[0];
-    await DB.prepare('INSERT INTO form_replies (response_id, form_id, kind, to_email, subject, body, at, by, by_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(rid, f.id, kind, to.join(', '), subject, body, now(), s.email || '', who).run();
+    const claim = await DB.prepare(`INSERT INTO form_replies (response_id, form_id, kind, to_email, subject, body, at, by, by_name)
+      SELECT ?, ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM form_replies WHERE response_id = ?)`)
+      .bind(rid, f.id, kind, to.join(', '), subject, body, now(), s.email || '', who, rid).run();
+    if (!claim.meta.changes) throw new FormError(409, 'This demo was already answered.');
+    const replyId = claim.meta.last_row_id;
+    // aceptar con los enlaces del Release Form (uno por artista), antes de la despedida
+    let made = null, hashes = [];
+    try {
+      if (names.length) {
+        const r = await makeLinks(DB, rf, names, s.email, siteOrigin(url));
+        made = r.links; hashes = r.hashes;
+        const block = `${made.length > 1 ? 'Release Form — each artist fills in their own link:' : 'Release Form — please fill it in here:'}\n${made.map(x => made.length > 1 ? `${x.note}: ${x.url}` : x.url).join('\n')}\n(The link is personal, works once and for 30 days.)`;
+        const k = body.search(/\n\s*(best|cheers|thanks|thank you|regards|kind regards)\b[^\n]*\n?[^\n]*$/i);
+        body = k >= 0 ? `${body.slice(0, k).trimEnd()}\n\n${block}\n\n${body.slice(k).trimStart()}` : `${body}\n\n${block}`;
+      }
+      await demoReplyMail(env, to, subject, body);
+    } catch (e) {
+      // no salió: se deshace todo (la contestación reservada y los enlaces creados), así se puede volver a intentar limpio
+      await DB.batch([DB.prepare('DELETE FROM form_replies WHERE id = ?').bind(replyId), ...hashes.map(h => DB.prepare('DELETE FROM form_links WHERE hash = ?').bind(h))]).catch(() => {});
+      throw new FormError(502, e.message);
+    }
+    if (made) await DB.prepare('UPDATE form_replies SET body = ? WHERE id = ?').bind(body, replyId).run();
     await audit(`${kind === 'accept' ? 'Accepted' : 'Rejected'} the response ${await respName(DB, f, rid)} in “${f.title}” (email sent to ${to.join(', ')}${made ? `, with ${made.length} Release Form link${made.length > 1 ? 's' : ''}` : ''})`);
     return { ok: true, reply: { kind, at: now(), by_name: who }, links: made };
   }
@@ -521,8 +528,9 @@ export async function formsApi(req, env, s, url, audit) {
     const list = rows.slice(0, 100), by = await seenBy(DB, list.map(r => r.id));
     const rep = {};
     if (list.length) for (const x of (await DB.prepare(`SELECT response_id, kind, at, by_name FROM form_replies WHERE response_id IN (${list.map(() => '?').join(',')}) ORDER BY id`).bind(...list.map(r => r.id)).all()).results) rep[x.response_id] = { kind: x.kind, at: x.at, by_name: x.by_name };
+    // contadores de las pestañas (solo los formularios de demos las tienen, y solo hacen falta en la primera página)
     const cnt = { pending: 0, accept: 0, reject: 0 };
-    for (const c of (await DB.prepare('SELECT rk, COUNT(*) AS n FROM (SELECT (SELECT x.kind FROM form_replies x WHERE x.response_id = r.id ORDER BY x.id DESC LIMIT 1) AS rk FROM form_responses r WHERE r.form_id = ?) GROUP BY rk').bind(f.id).all()).results) cnt[c.rk || 'pending'] = c.n;
+    if (/demo/i.test(f.slug) && !url.searchParams.get('from') && !url.searchParams.get('before')) for (const c of (await DB.prepare('SELECT rk, COUNT(*) AS n FROM (SELECT (SELECT x.kind FROM form_replies x WHERE x.response_id = r.id ORDER BY x.id DESC LIMIT 1) AS rk FROM form_responses r WHERE r.form_id = ?) GROUP BY rk').bind(f.id).all()).results) cnt[c.rk || 'pending'] = c.n;
     // collab: de qué grupo es cada respuesta, su puesto (1 = principal) y quién es el principal
     const col = {};
     if (list.length) {
@@ -651,16 +659,17 @@ export async function publicFormsApi(req, env, url) {
     if (x.required && (!v || (Array.isArray(v) && !v.length))) throw new FormError(400, `Please answer “${x.label.trim()}”.`);
     data[x.id] = v;
   }
-  // demos con varios artistas («A & B»): el email de cada uno es obligatorio
-  const multi = multiOf(f);
-  if (multi) {
-    const others = splitArtists(data[multi.artist]).slice(1, 4), sent = Array.isArray(b.answers?._artists) ? b.answers._artists : [];
-    data._artists = others.map((name, i) => {
-      const e = clean(sent[i]?.email, 200);
-      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(e)) throw new FormError(400, `Please add the email of ${name}.`);
-      return { name: clean(name, 120), email: e };
+  // demos en «Collaboration»: los demás artistas llegan ya separados (nombre + email, ambos obligatorios). Así un nombre
+  // con «&» («Chase & Status») sigue siendo un solo artista. El nombre del artista guarda a todos («A & B») para el panel y Google.
+  const multi = multiOf(f), co = Array.isArray(b.answers?._artists) ? b.answers._artists.slice(0, 2) : [];
+  if (multi && co.length) {
+    data._artists = co.map((x, i) => {
+      const who = i ? 'third' : 'second', name = clean(x?.name, 120), e = clean(x?.email, 200);
+      if (!name) throw new FormError(400, `Please enter the ${who} artist’s name.`);
+      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(e)) throw new FormError(400, `Please enter a valid email for the ${who} artist.`);
+      return { name, email: e };
     });
-    if (!data._artists.length) delete data._artists;
+    data[multi.artist] = clean([data[multi.artist], ...data._artists.map(x => x.name)].filter(Boolean).join(' & '), 1000);
   }
   // el enlace se gasta ANTES de guardar: dos envíos a la vez (doble clic, dos pestañas) no crean dos respuestas
   if (link && !(await DB.prepare('UPDATE form_links SET used_at = ? WHERE hash = ? AND used_at IS NULL').bind(now(), link.hash).run()).meta.changes)

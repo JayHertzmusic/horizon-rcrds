@@ -273,8 +273,9 @@ export async function chainApi(req, env, s, url, audit) {
     const all = url.searchParams.get('days') === 'all';
     const days = all ? null : Math.max(7, Math.min(365, Number(url.searchParams.get('days')) || 90)), since = all ? 0 : now() - (days + 1) * 86400e3;
     const [dl, un, first] = await Promise.all([
-      DB.prepare('SELECT release_id AS r, at FROM sc_downloads WHERE at >= ? ORDER BY at LIMIT 20000').bind(since).all(),
-      DB.prepare('SELECT release_id AS r, at FROM sc_unlocks WHERE at >= ? ORDER BY at LIMIT 20000').bind(since).all(),
+      // (las más nuevas primero: si hubiera más de 20.000, las que faltan son las más antiguas, no las de estos días)
+      DB.prepare('SELECT release_id AS r, at FROM sc_downloads WHERE at >= ? ORDER BY at DESC LIMIT 20000').bind(since).all(),
+      DB.prepare('SELECT release_id AS r, at FROM sc_unlocks WHERE at >= ? ORDER BY at DESC LIMIT 20000').bind(since).all(),
       DB.prepare('SELECT MIN(at) AS at FROM sc_downloads').first(),
     ]);
     return { days, downloads: dl.results, connects: un.results, tracked_since: first?.at || null };

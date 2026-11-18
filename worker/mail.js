@@ -45,7 +45,8 @@ async function senders(env) {
 
 export async function mailApi(req, env, s, url, audit) {
   if (s.sync || !(s.owner || s.mail)) throw new MailError(403, 'You have no access to Mail. Ask an owner.');
-  const p = url.pathname, m = req.method, full = s.owner;
+  // as=shared: un owner ve Mail como la persona con acceso (Test en el panel)
+  const p = url.pathname, m = req.method, full = s.owner && url.searchParams.get('as') !== 'shared', peek = url.searchParams.get('peek') === '1';
   if (p === '/api/mail/info' && m === 'GET') {
     const [who, lab] = await Promise.all([senders(env), gmail(env, '/labels/INBOX')]);
     return { me: full ? who.me : '', from: who.from, contact: who.contact, name: who.name, unread: full ? lab.threadsUnread || 0 : null, shared: !full };
@@ -71,7 +72,7 @@ export async function mailApi(req, env, s, url, audit) {
     const t = await gmail(env, `/threads/${mt[1]}?format=full`);
     if (!full && !touchesShared(t.messages || [])) throw new MailError(403, 'That email is not one of Horizon’s shared addresses.');
     // al abrirlo queda leído
-    if ((t.messages || []).some(x => (x.labelIds || []).includes('UNREAD'))) await gmail(env, `/threads/${mt[1]}/modify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ removeLabelIds: ['UNREAD'] }) }).catch(() => {});
+    if (!peek && (t.messages || []).some(x => (x.labelIds || []).includes('UNREAD'))) await gmail(env, `/threads/${mt[1]}/modify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ removeLabelIds: ['UNREAD'] }) }).catch(() => {});
     return { id: t.id, messages: (t.messages || []).map(x => ({ id: x.id, labels: x.labelIds || [], at: Number(x.internalDate) || 0, payload: x.payload })) };
   }
   mt = p.match(/^\/api\/mail\/thread\/([\w-]{6,40})\/(read|unread|star|unstar|trash)$/);

@@ -1510,12 +1510,13 @@
       case 'preview-role': {
         const r = teamData?.roles.find(x => x.id === t.closest('[data-role]')?.dataset.role);
         if (!r) return;
-        preview = { id: r.id, name: r.name, perms: r.perms, forms: r.forms };
+        preview = { id: r.id, name: r.name, perms: r.perms, forms: r.forms, mail: (teamData?.members || []).some(m => m.role_id === r.id && m.mail) };
+        mailReset();
         if (!formsData) loadForms().then(() => render());
         filter = ''; go(firstView());
         break;
       }
-      case 'preview-off': preview = null; go('team'); checkUnseen(); break;
+      case 'preview-off': preview = null; mailReset(); go('team'); checkUnseen(); break;
       case 'open-role': { const r = teamData.roles.find(x => x.id === t.closest('[data-role]').dataset.role); if (r) roleSheet(r); break; }
       case 'new-role': roleSheet({ perms: {} }); break;
       case 'sheet-close': closeSheet(); break;
@@ -3567,15 +3568,19 @@
 
   /* ---------------- Mail: el Gmail de Horizon (owners + la persona a la que un owner le dé acceso) ---------------- */
   const mail = { info: null, box: 'inbox', q: '', pages: [''], page: 0, list: null, next: '', err: '', loading: false, open: null, thread: null, threadErr: '' };
-  const canMail = () => !preview && !!auth?.user?.mail;
+  // en «Test» se ve Mail si alguien con ese rol tiene acceso, tal cual lo ve esa persona (solo contact@/demos@/contracts@, sin cambiar nada)
+  const canMail = () => preview ? !!preview.mail : !!auth?.user?.mail;
+  const mq = (sep = '&') => preview ? `${sep}as=shared&peek=1` : '';
+  const mailReset = () => Object.assign(mail, { info: null, box: 'inbox', q: '', pages: [''], page: 0, list: null, next: '', err: '', loading: false, open: null, thread: null, threadErr: '', size: 0 });
+  const mailTest = () => { if (!preview) return false; toast(`You are testing the role ${preview.name}: nothing is sent or changed.`); return true; };
   const MAIL_BOXES = [['inbox', 'Inbox'], ['sent', 'Sent'], ['starred', 'Starred'], ['all', 'All mail']];
   async function loadMail() {
     if (mail.loading) return;
     mail.loading = true; mail.err = '';
     try {
-      if (!mail.info) mail.info = await api('GET', '/api/mail/info');
+      if (!mail.info) mail.info = await api('GET', '/api/mail/info' + mq('?'));
       if (!mail.size) { const w = $('#m-wrap'); mail.size = Math.max(6, Math.min(25, Math.floor(((w ? w.clientHeight : innerHeight - 260) - 52) / 41))); }
-      const r = await api('GET', `/api/mail/threads?box=${mail.box}&n=${mail.size}&q=${encodeURIComponent(mail.q)}&page=${encodeURIComponent(mail.pages[mail.page] || '')}`);
+      const r = await api('GET', `/api/mail/threads?box=${mail.box}&n=${mail.size}&q=${encodeURIComponent(mail.q)}&page=${encodeURIComponent(mail.pages[mail.page] || '')}${mq()}`);
       mail.list = r.threads; mail.next = r.next;
     } catch (e) { if (e.status === 401) { mail.loading = false; logout(e.message); return; } mail.err = e.message; }
     mail.loading = false;
@@ -3673,7 +3678,7 @@
       Object.entries(b.cids).forEach(async ([id, c]) => {
         if (c.url || c.data || !c.id || c.loading) return;
         c.loading = true;
-        try { const r = await api('GET', `/api/mail/attachment/${t.id}/${m.id}/${c.id}`); c.url = URL.createObjectURL(new Blob([b64uBytes(r.data)], { type: c.type })); if (view === 'mail' && mail.thread === t) fillFrames(); } catch { /* sin imagen */ }
+        try { const r = await api('GET', `/api/mail/attachment/${t.id}/${m.id}/${c.id}${mq('?')}`); c.url = URL.createObjectURL(new Blob([b64uBytes(r.data)], { type: c.type })); if (view === 'mail' && mail.thread === t) fillFrames(); } catch { /* sin imagen */ }
       });
     });
     const box = $('#m-read'); if (box && t.scrollLast) { t.scrollLast = false; const art = box.querySelector('.m-msg.open:last-of-type'); if (art && t.messages.length > 1) box.scrollTop = art.offsetTop - 8; }
@@ -3684,7 +3689,7 @@
     const row = mail.list?.find(x => x.id === id);
     if (view === 'mail') render();
     try {
-      const t = await api('GET', `/api/mail/thread/${id}`);
+      const t = await api('GET', `/api/mail/thread/${id}${mq('?')}`);
       if (mail.open !== id) return;
       t.scrollLast = true; mail.thread = t;
       if (row?.unread) { row.unread = false; if (mail.info?.unread) mail.info.unread--; }
@@ -3782,6 +3787,7 @@
     const b = e.target.closest('[data-mail]');
     if (!b) return;
     const act = b.dataset.mail, t = mail.thread;
+    if (['compose', 'reply', 'replyall', 'forward', 'star', 'unread', 'trash'].includes(act) && mailTest()) return;
     if (act === 'compose') return composeSheet(null);
     if (act === 'reply' || act === 'replyall' || act === 'forward') return t && composeSheet(act);
     if (act === 'close') { mail.open = null; mail.thread = null; mail.threadErr = ''; render(); return; }
@@ -3794,7 +3800,7 @@
     if (act === 'file') {
       const [i, j] = b.dataset.mfile.split(':').map(Number), m = t.messages[i], f = m.parsed.files[j];
       try {
-        const data = f.data || (await api('GET', `/api/mail/attachment/${t.id}/${m.id}/${f.id}`)).data;
+        const data = f.data || (await api('GET', `/api/mail/attachment/${t.id}/${m.id}/${f.id}${mq('?')}`)).data;
         const url = URL.createObjectURL(new Blob([b64uBytes(data)], { type: f.type || 'application/octet-stream' }));
         const a = document.createElement('a'); a.href = url; a.download = f.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 30e3);
       } catch (er) { toast(er.message); }

@@ -26,6 +26,32 @@ async function gmail(env, path, init = {}, retry = true) {
   if (r.status === 404) throw new MailError(404, 'That email no longer exists.');
   throw new MailError(502, `Gmail: ${msg}`);
 }
+// varias lecturas en UNA sola petición a Google (batch): el plan gratis solo deja 6 conexiones a la vez,
+// así que pedir 20 correos uno a uno iba en tandas y tardaba. Devuelve un resultado (o null) por ruta, en orden.
+async function gmailBatch(env, paths, retry = true) {
+  if (!paths.length) return [];
+  let tok;
+  try { tok = await horizonToken(env); } catch (e) { throw new MailError(503, e.message); }
+  const b = 'hzb' + crypto.randomUUID().replace(/-/g, '');
+  const body = paths.map((p, i) => `--${b}\r\nContent-Type: application/http\r\nContent-ID: <q${i}>\r\n\r\nGET /gmail/v1/users/me${p}\r\n\r\n`).join('') + `--${b}--`;
+  const r = await fetch('https://gmail.googleapis.com/batch/gmail/v1', { method: 'POST', headers: { Authorization: `Bearer ${tok}`, 'Content-Type': `multipart/mixed; boundary=${b}` }, body });
+  if (r.status === 401 && retry) { await dropHorizonToken(env); return gmailBatch(env, paths, false); }
+  if (!r.ok) return Promise.all(paths.map(p => gmail(env, p).catch(() => null)));   // (si el batch falla, uno a uno)
+  const rb = (r.headers.get('Content-Type') || '').match(/boundary="?([^";]+)"?/)?.[1];
+  const text = await r.text(), out = paths.map(() => null), gone = new Set();
+  for (const part of rb ? text.split('--' + rb) : []) {
+    const id = part.match(/Content-ID:\s*<response-q(\d+)>/i)?.[1];
+    if (id == null) continue;
+    const st = Number(part.match(/HTTP\/1\.1\s+(\d{3})/)?.[1] || 0), a = part.indexOf('{'), z = part.lastIndexOf('}');
+    if (st === 200 && a >= 0) { try { out[+id] = JSON.parse(part.slice(a, z + 1)); continue; } catch { /* abajo */ } }
+    if ((st === 401 || st === 403) && retry) { await dropHorizonToken(env); return gmailBatch(env, paths, false); }
+    if (st === 404) gone.add(+id);
+  }
+  // lo que Google no contestó bien en el batch (p. ej. demasiadas a la vez), uno a uno
+  const redo = out.map((x, i) => x == null && !gone.has(i) ? i : -1).filter(i => i >= 0);
+  if (redo.length) await Promise.all(redo.map(async i => { out[i] = await gmail(env, paths[i]).catch(() => null); }));
+  return out;
+}
 const hdr = (m, name) => (m.payload?.headers || []).find(h => h.name.toLowerCase() === name)?.value || '';
 const shared = txt => SHARED.some(a => String(txt).toLowerCase().includes(a));
 const touchesShared = msgs => msgs.some(m => ['from', 'to', 'cc', 'delivered-to', 'x-forwarded-to', 'x-original-to'].some(h => shared(hdr(m, h))));
@@ -58,14 +84,15 @@ export async function mailApi(req, env, s, url, audit) {
     const n = Math.max(5, Math.min(25, Number(url.searchParams.get('n')) || 12));
     const j = await gmail(env, `/threads?maxResults=${n}&q=${encodeURIComponent(q)}${page ? '&pageToken=' + page : ''}`);
     const ids = (j.threads || []).map(t => t.id);
-    const meta = await Promise.all(ids.map(id => gmail(env, `/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`).catch(() => null)));
+    const all = await gmailBatch(env, [...ids.map(id => `/threads/${id}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Date`), '/labels/INBOX']);
+    const lab = all.pop(), meta = all;
     const threads = meta.filter(Boolean).map(t => {
       const msgs = t.messages || [], first = msgs[0] || {}, last = msgs[msgs.length - 1] || {};
       const other = [...msgs].reverse().find(x => !(x.labelIds || []).includes('SENT')) || last;
       return { id: t.id, subject: hdr(first, 'subject'), from: hdr(box === 'sent' ? last : other, box === 'sent' ? 'to' : 'from'), at: Number(last.internalDate) || 0, snippet: last.snippet || '', count: msgs.length,
         unread: msgs.some(x => (x.labelIds || []).includes('UNREAD')), starred: msgs.some(x => (x.labelIds || []).includes('STARRED')), files: msgs.some(x => /mixed/i.test(x.payload?.mimeType || '')) };
     });
-    return { threads, next: j.nextPageToken || '', total: j.resultSizeEstimate || 0 };
+    return { threads, next: j.nextPageToken || '', total: j.resultSizeEstimate || 0, unread: lab ? lab.threadsUnread || 0 : null };
   }
   let mt = p.match(/^\/api\/mail\/thread\/([\w-]{6,40})$/);
   if (mt && m === 'GET') {

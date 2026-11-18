@@ -356,7 +356,8 @@
   const emptyRepo = () => ({ head: '', treeSha: '', files: new Map(), truncated: false, releases: [], mixtapes: [], playlists: [], ignore: [] });
   function useSession(res) {
     auth = { token: res.token || auth?.token, user: res.user, sections: res.sections };
-    checkUnseen();   // el aviso de respuestas nuevas se pide ya, a la vez que se carga el resto
+    checkUnseen();
+    if (auth.user?.mail) setTimeout(() => { if (!mail.list && !mail.loading) loadMail(); }, 0);   // Mail ya cargado al pulsarlo   // el aviso de respuestas nuevas se pide ya, a la vez que se carga el resto
   }
   async function login(cred) {
     const card = $('.login-card'), remember = $('#remember')?.checked !== false;
@@ -3578,10 +3579,12 @@
     if (mail.loading) return;
     mail.loading = true; mail.err = '';
     try {
-      if (!mail.info) mail.info = await api('GET', '/api/mail/info' + mq('?'));
-      if (!mail.size) { const w = $('#m-wrap'); mail.size = Math.max(6, Math.min(25, Math.floor(((w ? w.clientHeight : innerHeight - 260) - 52) / 41))); }
-      const r = await api('GET', `/api/mail/threads?box=${mail.box}&n=${mail.size}&q=${encodeURIComponent(mail.q)}&page=${encodeURIComponent(mail.pages[mail.page] || '')}${mq()}`);
-      mail.list = r.threads; mail.next = r.next;
+      // (sin la sección abierta: lo que cabe en una pantalla normal; la cabecera y la lista se piden a la vez)
+      if (!mail.size) { const w = $('#m-wrap'); mail.size = Math.max(6, Math.min(25, Math.floor(((w ? w.clientHeight : innerHeight - 216) - 52) / 41))); }
+      const [info, r] = await Promise.all([mail.info || api('GET', '/api/mail/info' + mq('?')),
+        api('GET', `/api/mail/threads?box=${mail.box}&n=${mail.size}&q=${encodeURIComponent(mail.q)}&page=${encodeURIComponent(mail.pages[mail.page] || '')}${mq()}`)]);
+      mail.info = info; if (r.unread != null) mail.info.unread = r.unread;
+      mail.list = r.threads; mail.next = r.next; mail.pre = {};
     } catch (e) { if (e.status === 401) { mail.loading = false; logout(e.message); return; } mail.err = e.message; }
     mail.loading = false;
     if (view === 'mail') { render(); if (mail.open && !mail.thread) openThread(mail.open); }
@@ -3684,14 +3687,18 @@
     const box = $('#m-read'); if (box && t.scrollLast) { t.scrollLast = false; const art = box.querySelector('.m-msg.open:last-of-type'); if (art && t.messages.length > 1) box.scrollTop = art.offsetTop - 8; }
   }
   const b64uBytes = s => Uint8Array.from(atob(String(s).replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
+  // el correo se empieza a pedir al pasar el ratón por encima (sin marcarlo como leído): al pulsar ya está
+  const fetchThread = id => (mail.pre ||= {})[id] ||= api('GET', `/api/mail/thread/${id}?peek=1${mq()}`).catch(e => { delete mail.pre[id]; throw e; });
   async function openThread(id) {
     mail.open = id; mail.thread = null; mail.threadErr = '';
     const row = mail.list?.find(x => x.id === id);
     if (view === 'mail') render();
     try {
-      const t = await api('GET', `/api/mail/thread/${id}${mq('?')}`);
+      const t = structuredClone(await fetchThread(id));
       if (mail.open !== id) return;
       t.scrollLast = true; mail.thread = t;
+      // leído: se marca aparte, sin esperar (en «Test» no)
+      if (!preview && t.messages.some(m => m.labels.includes('UNREAD'))) { api('POST', `/api/mail/thread/${id}/read`).catch(() => {}); t.messages.forEach(m => { m.labels = m.labels.filter(x => x !== 'UNREAD'); }); delete mail.pre[id]; }
       if (row?.unread) { row.unread = false; if (mail.info?.unread) mail.info.unread--; }
     } catch (e) { if (mail.open !== id) return; mail.threadErr = e.message; }
     if (view === 'mail') { render(); }
@@ -3770,6 +3777,7 @@
       L.push(`--${B}--`, '');
       await authFetch(`/api/mail/send${t ? '?thread=' + encodeURIComponent(t.id) : ''}`, { method: 'POST', headers: { 'Content-Type': 'message/rfc822' }, body: L.join('\r\n') });
       busyOff(form); closeSheet(); toast('Email sent');
+      if (t && mail.pre) delete mail.pre[t.id];
       if (t && mail.open === t.id) openThread(t.id);
       if (mail.box === 'sent' || !t) { mail.list = null; loadMail(); }
     } catch (e) { busyOff(form); if (e.status === 401) { logout(e.message); return; } box.textContent = e.message; box.hidden = false; }
@@ -3811,7 +3819,7 @@
     const starred = t.messages.some(m => m.labels.includes('STARRED'));
     const op = act === 'star' ? (starred ? 'unstar' : 'star') : act;
     try {
-      await api('POST', `/api/mail/thread/${t.id}/${op}`);
+      await api('POST', `/api/mail/thread/${t.id}/${op}`); if (mail.pre) delete mail.pre[t.id];
       if (op === 'trash' || op === 'unread') {
         const row = mail.list?.find(x => x.id === t.id);
         if (op === 'trash') mail.list = mail.list?.filter(x => x.id !== t.id); else if (row) { row.unread = true; if (mail.info) mail.info.unread = (mail.info.unread || 0) + 1; }
@@ -3820,6 +3828,7 @@
     } catch (er) { toast(er.message); }
   });
   document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches?.('.mrow')) e.target.click(); });
+  document.addEventListener('mouseover', e => { const r = e.target.closest?.('[data-mth]'); if (r && view === 'mail') fetchThread(r.dataset.mth).catch(() => {}); });
   document.addEventListener('change', e => {
     if (e.target.id !== 'mc-file' || !mail.compose) return;
     for (const f of e.target.files) mail.compose.files.push({ name: f.name, size: f.size, type: f.type, file: f });

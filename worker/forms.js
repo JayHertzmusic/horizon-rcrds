@@ -484,7 +484,7 @@ export async function formsApi(req, env, s, url, audit) {
       made = (await makeLinks(DB, rf, names, s.email, siteOrigin(url))).links;
       const block = `${made.length > 1 ? 'Release Form — each artist fills in their own link:' : 'Release Form — please fill it in here:'}\n${made.map(x => made.length > 1 ? `${x.note}: ${x.url}` : x.url).join('\n')}\n(The link is personal, works once and for 30 days.)`;
       const k = body.search(/\n\s*(best|cheers|thanks|thank you|regards|kind regards)\b[^\n]*\n?[^\n]*$/i);
-      body = k >= 0 ? `${body.slice(0, k)}\n\n${block}\n${body.slice(k)}` : `${body}\n\n${block}`;
+      body = k >= 0 ? `${body.slice(0, k).trimEnd()}\n\n${block}\n\n${body.slice(k).trimStart()}` : `${body}\n\n${block}`;
     }
     try { await demoReplyMail(env, to, subject, body); }
     catch (e) { throw new FormError(502, e.message); }

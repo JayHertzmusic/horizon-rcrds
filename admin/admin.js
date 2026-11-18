@@ -2177,8 +2177,8 @@
         </div>`;
       })() : ''}
       <div class="lk-tools">
-        <div class="lk-chips" role="tablist">${chips.map(([k, t]) => `<button type="button" role="tab" class="${o.filter === k ? 'on' : ''}" data-lk-filter="${k}">${t} <span>${count(k)}</span></button>`).join('')}</div>
         <input class="lk-search" type="search" placeholder="Search by artist…" value="${esc(o.q)}" aria-label="Search links">
+        <div class="ct-tabs lk-tabs" role="tablist">${chips.map(([k, t]) => `<button type="button" role="tab" class="${o.filter === k ? 'on' : ''}" data-lk-filter="${k}">${t}<span>${count(k)}</span></button>`).join('')}</div>
       </div>
       ${!all ? '<p class="info">Loading…</p>' : list.length ? `<div class="lk-grid">${list.slice(0, o.show).map(card).join('')}</div>
         ${list.length > o.show ? `<div class="lk-more"><button type="button" class="btn ghost" data-lk="more">Show more (${list.length - o.show})</button></div>` : ''}` : '<p class="info lk-empty">No links here.</p>'}`;

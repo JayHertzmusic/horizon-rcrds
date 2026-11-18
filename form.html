@@ -259,40 +259,24 @@
     -webkit-text-fill-color: #fff; caret-color: #fff; -webkit-box-shadow: 0 0 0 1000px transparent inset; transition: background-color 600000s 0s, color 600000s 0s; }
   input:autofill { filter: none; }
   /* Demos: Solo release / Collaboration (centrado, arriba) y en colaboración una fila por artista */
-  .x-mode { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin: 0 0 18px; }
-  .x-seg { display: inline-flex; padding: 4px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--card); }
-  .x-seg[hidden] { display: none; }
-  .x-seg button { padding: 9px 18px; border: 0; border-radius: 999px; background: none; color: var(--muted); font: 600 13px/1 'Barlow', sans-serif; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; transition: background .15s, color .15s; }
-  .x-seg button.on { background: #fff; color: #000; }
+  .x-mode { display: flex; justify-content: center; flex-wrap: wrap; margin: 0 0 18px; }
+  .x-seg { position: relative; display: inline-flex; padding: 4px; border: 1px solid var(--line-2); border-radius: 999px; background: var(--card); }
+  .x-seg button { position: relative; z-index: 1; padding: 9px 18px; border: 0; border-radius: 999px; background: none; color: var(--muted); font: 600 13px/1 'Barlow', sans-serif; letter-spacing: .06em; text-transform: uppercase; white-space: nowrap; cursor: pointer; transition: color .25s ease; }
+  .x-seg button.on { color: #000; }
   .x-seg button:not(.on):hover { color: #fff; }
-  .x-mode .x-note { flex: 1 1 100%; margin: 2px 0 0; text-align: center; color: var(--muted); font-size: 13.5px; }
-  .x-mode .x-note[hidden] { display: none; }
-  #f > .q, #f > .foot { transition: opacity .16s ease, border-color .2s; }
-  #f.x-fade > .q, #f.x-fade > .foot { opacity: 0; }
-  #f > .x-co { animation: x-in .28s ease both; }
+  .x-thumb { position: absolute; top: 4px; bottom: 4px; left: 0; width: 0; border-radius: 999px; background: #fff; pointer-events: none; }
+  .x-seg.ready .x-thumb { transition: transform .3s cubic-bezier(.3, .7, .2, 1), width .3s cubic-bezier(.3, .7, .2, 1); }
+  .x-n { max-width: 0; margin-left: 0; padding: 4px 0; border-color: transparent; opacity: 0; overflow: hidden; transition: max-width .35s ease, margin-left .35s ease, padding .35s ease, opacity .25s ease, border-color .35s ease; }
+  .x-n.open { max-width: 280px; margin-left: 10px; padding: 4px; border-color: var(--line-2); opacity: 1; }
+  .x-mode .x-note { flex: 1 1 100%; max-height: 0; margin: 0; overflow: hidden; opacity: 0; text-align: center; color: var(--muted); font-size: 13.5px; transition: max-height .3s ease, margin .3s ease, opacity .25s ease; }
+  .x-mode .x-note.open { max-height: 40px; margin-top: 10px; opacity: 1; }
+  #f > .x-co { animation: x-in .3s ease both; }
   @keyframes x-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-  @media (prefers-reduced-motion: reduce) { #f > .x-co { animation: none; } #f > .q, #f > .foot { transition: none; } }
-  /* Demo Submission: todo en una pantalla, sin bajar (ordenador) */
+  @media (prefers-reduced-motion: reduce) { #f > .x-co { animation: none; } .x-seg.ready .x-thumb, .x-n, .x-mode .x-note { transition: none; } }
+  /* Demo Submission en ordenador: centrado en la pantalla; si no cabe, se escala entero (mismo aspecto, sin bajar) */
   @media (min-width: 761px) {
-    html.compact header.top { padding-top: 16px; }
-    html.compact .home img { height: 24px; }
-    html.compact .home span { font-size: 18px; }
-    html.compact main { padding: 14px 16px 10px; }
-    html.compact .eyebrow { margin-bottom: 4px; }
-    html.compact h1 { margin-bottom: 12px; font-size: clamp(40px, 4.6vw, 58px); }
-    html.compact .desc { margin-bottom: 14px; font-size: 15px; }
-    html.compact .x-mode { margin-bottom: 12px; gap: 8px; }
-    html.compact .x-mode .x-note { margin: 0; font-size: 13px; }
-    html.compact .q { margin-bottom: 8px; padding: 10px 18px; border-radius: 12px; }
-    html.compact .q > label, html.compact .q > .lbl { font-size: 15px; margin-bottom: 0; }
-    html.compact .q > label + input, html.compact .q > label + textarea { margin-top: 2px; }
-    html.compact input[type=text], html.compact input[type=email], html.compact input[type=url] { min-height: 38px; padding: 6px 0; font-size: 15px; }
-    html.compact textarea { min-height: 54px; height: 54px; margin-top: 6px !important; padding: 8px 12px; font-size: 15px; }
-    html.compact .foot { margin-top: 6px; }
-    html.compact .send { min-height: 44px; }
-    html.compact footer.sig { padding-bottom: 6px; font-size: 11px; }
-    html.compact #f.is-collab .q { padding-top: 8px; padding-bottom: 8px; }
-    html.compact #f.is-collab input[type=text], html.compact #f.is-collab input[type=email], html.compact #f.is-collab input[type=url] { min-height: 34px; padding: 4px 0; }
+    html.fit:not(.sent) body { display: flex; flex-direction: column; min-height: 100vh; }
+    html.fit:not(.sent) main { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-top: 28px; padding-bottom: 28px; }
   }
   #f.is-collab > * { order: 30; }
   #f.is-collab > .x-mode { order: 0; }
@@ -521,7 +505,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
         const o = f.querySelector(`[data-other="${CSS.escape(x.id)}"]`); if (o && v.o) o.value = v.o;
       } else if (f.elements[x.id] && typeof v.v === 'string') f.elements[x.id].value = v.v;
     }
-    if (form.multi && d.co?.mode === 'collab') coSet('collab', d.co.n === 3 ? 3 : 2, Array.isArray(d.co.list) ? d.co.list : [], true);
+    if (form.multi && d.co?.mode === 'collab') coSet('collab', d.co.n === 3 ? 3 : 2, Array.isArray(d.co.list) ? d.co.list : []);
     progress();
     // vuelve al paso donde se quedó (o al primero que tenga algo obligatorio sin contestar)
     if (EXCL() && d.step > 0) { let k = 0; while (k < Math.min(d.step, steps.length - 1) && !stepMissing(k)) k++; goStep(k, false); }
@@ -605,12 +589,13 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     const qa = f.querySelector(`[data-q="${CSS.escape(m.artist)}"]`), qe = f.querySelector(`[data-q="${CSS.escape(m.email)}"]`);
     if (!qa || !qe) return;
     const keep = vals.length ? vals : coValues(f);
-    f.querySelectorAll('.q.x-co').forEach(q => q.remove());
     const collab = coMode === 'collab';
+    // solo se quitan las filas que sobran: las que siguen no se redibujan (no vuelven a animarse)
+    f.querySelectorAll('.q.x-co').forEach(q => { if (!collab || Number(q.dataset.k) > coN) q.remove(); });
     f.classList.toggle('is-collab', collab);
     document.querySelectorAll('.x-mode [data-mode]').forEach(b => { const on = b.dataset.mode === coMode; b.classList.toggle('on', on); b.setAttribute('aria-checked', on); });
     document.querySelectorAll('.x-mode [data-n]').forEach(b => b.classList.toggle('on', Number(b.dataset.n) === coN));
-    const nBox = document.querySelector('.x-mode .x-n'); if (nBox) nBox.hidden = !collab;
+    const nBox = document.querySelector('.x-mode .x-n'); if (nBox) nBox.classList.toggle('open', collab);
     // los títulos de «Artist Name» y «Contact Email» pasan a ser los del artista 1
     const la = qa.querySelector('label'), le = qe.querySelector('label');
     la.dataset.orig ??= la.innerHTML; le.dataset.orig ??= le.innerHTML;
@@ -618,38 +603,60 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     le.innerHTML = collab ? 'Main artist email<span class="req" aria-hidden="true">*</span>' : le.dataset.orig;
     // orden en colaboración: una fila por artista (nombre | email) y después el track
     qa.style.order = collab ? 1 : ''; qe.style.order = collab ? 2 : '';
-    const note = document.querySelector('.x-mode .x-note'); if (note) note.hidden = !collab;
-    if (!collab) return;
-    let html = '';
+    const note = document.querySelector('.x-mode .x-note'); if (note) note.classList.toggle('open', collab);
+    if (!collab) return coThumbs();
+    let html = '', after = qe;
     for (let k = 2; k <= coN; k++) {
-      const v = keep[k - 2] || {};
+      const v = keep[k - 2] || {}, have = f.querySelectorAll(`.q.x-co[data-k="${k}"]`);
+      if (have.length) {
+        if (vals.length) have.forEach(q => { const i = q.querySelector('input'); if (i && v[i.dataset.coField] != null) i.value = v[i.dataset.coField]; });
+        after = have[have.length - 1]; continue;
+      }
       const who = k === 2 ? 'Second artist' : 'Third artist';
       html += `<div class="q half x-co" data-k="${k}" data-q="_co${k}n"><label for="co${k}n">${who} name<span class="req" aria-hidden="true">*</span></label><input id="co${k}n" type="text" data-co-field="name" maxlength="120" autocomplete="off" placeholder="Your answer" value="${esc(v.name || '')}"></div>`
         + `<div class="q half x-co" data-k="${k}" data-q="_co${k}e"><label for="co${k}e">${who} email<span class="req" aria-hidden="true">*</span></label><input id="co${k}e" type="email" data-co-field="email" maxlength="200" autocomplete="off" placeholder="name@email.com" value="${esc(v.email || '')}"></div>`;
     }
-    qe.insertAdjacentHTML('afterend', html);
+    if (html) after.insertAdjacentHTML('afterend', html);
+    coThumbs();
   }
-  // cambio suave: el formulario se funde un instante, se recoloca y vuelve (sin saltos ni parpadeos)
-  let coBusy = null;
-  function coSet(mode, n, vals, instant) {
-    const f = document.getElementById('f');
+  function coSet(mode, n, vals) {
     if (mode === coMode && (!n || n === coN) && !vals) return;
-    const apply = () => { coMode = mode; if (n) coN = n; coDraw(vals); progress(); saveDraft(); };
-    if (instant || !f || matchMedia('(prefers-reduced-motion: reduce)').matches) return apply();
-    clearTimeout(coBusy);
-    f.classList.add('x-fade');
-    coBusy = setTimeout(() => { apply(); setTimeout(() => f.classList.remove('x-fade'), 30); }, 160);
+    coMode = mode; if (n) coN = n; coDraw(vals); progress(); saveDraft();
   }
+  // la pastilla blanca se coloca bajo la opción elegida (y se desliza al cambiar)
+  function coThumbs() {
+    document.querySelectorAll('.x-mode .x-seg').forEach(seg => {
+      const on = seg.querySelector('button.on'), th = seg.querySelector('.x-thumb');
+      if (!th) return;
+      if (!on) { th.style.width = '0px'; return; }
+      th.style.width = on.offsetWidth + 'px'; th.style.transform = `translateX(${on.offsetLeft}px)`;
+      if (!seg.classList.contains('ready')) setTimeout(() => seg.classList.add('ready'), 50);
+    });
+    fitScreen(); clearTimeout(coThumbs.t); coThumbs.t = setTimeout(fitScreen, 400);   // y otra vez al acabar la animación
+  }
+  // ordenador: si el formulario no cabe en la pantalla, se escala entero (mismo aspecto) en vez de hacer bajar
+  function fitScreen() {
+    const main = document.querySelector('main');
+    if (!main || !document.documentElement.classList.contains('fit')) return;
+    main.style.zoom = '';
+    if (innerWidth <= 760 || document.documentElement.classList.contains('sent')) return;
+    const head = document.querySelector('header.top')?.offsetHeight || 0, foot = document.querySelector('footer.sig')?.offsetHeight || 0;
+    const z = Math.min(1, (innerHeight - head - foot) / main.scrollHeight);
+    if (z < 1) main.style.zoom = Math.max(.5, z - .012).toFixed(3);
+  }
+  addEventListener('resize', () => { clearTimeout(fitScreen.t); fitScreen.t = setTimeout(coThumbs, 120); });
   // la elección va arriba del formulario, centrada
   function coBar() {
     const f = document.getElementById('f');
     if (!form?.multi || !f || f.querySelector('.x-mode')) return;
-    document.documentElement.classList.add('compact');
+    document.documentElement.classList.add('fit');
     f.insertAdjacentHTML('afterbegin', `<div class="x-mode"><div class="x-seg" role="radiogroup" aria-label="Release type">
-      <button type="button" role="radio" data-mode="solo">Solo release</button><button type="button" role="radio" data-mode="collab">Collaboration</button></div>
-      <div class="x-seg x-n" hidden><button type="button" data-n="2">2 artists</button><button type="button" data-n="3">3 artists</button></div>
-      <p class="x-note" hidden>Add every artist on the track — each one receives their own release documents by email.</p></div>`);
+      <span class="x-thumb" aria-hidden="true"></span><button type="button" role="radio" data-mode="solo">Solo release</button><button type="button" role="radio" data-mode="collab">Collaboration</button></div>
+      <div class="x-seg x-n" aria-label="Number of artists"><span class="x-thumb" aria-hidden="true"></span><button type="button" data-n="2">2 artists</button><button type="button" data-n="3">3 artists</button></div>
+      <p class="x-note">Add every artist on the track — each one receives their own release documents by email.</p></div>`);
     coDraw();
+    document.fonts?.ready.then(coThumbs);   // con la letra ya cargada, la pastilla queda exacta
+    const err = document.getElementById('err'); if (err) new MutationObserver(fitScreen).observe(err, { attributes: true, childList: true });
   }
   document.addEventListener('click', e => {
     const b = e.target.closest('.x-mode button'); if (!b) return;
@@ -663,7 +670,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     if (names.length < 2) return;
     // varios nombres en «Solo»: se pasa a «Collaboration» con cada nombre en su sitio
     e.target.value = names[0];
-    coSet('collab', Math.min(3, names.length), names.slice(1, 3).map(n => ({ name: n, email: '' })), true);
+    coSet('collab', Math.min(3, names.length), names.slice(1, 3).map(n => ({ name: n, email: '' })));
     const next = document.querySelector('#co2n'); if (next) { next.focus(); next.setSelectionRange(next.value.length, next.value.length); }
   });
   function progress() {
@@ -711,6 +718,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
         ? `<div class="x-end"><a class="xa-brand x-end-brand" href="/"><img src="/assets/logo.png" alt=""><span>HORIZON RCRDS</span></a><div class="done"><span class="x-badge"><i></i>Received</span><h2 style="margin-top:22px">Thank you${form.note ? ', ' + esc(form.note) : ''}!</h2><p>Your details are with HORIZON RCRDS.<br>We’ll prepare everything for your release and be in touch soon.</p><a href="/">Back to the website</a></div></div>`
         : `<div class="done"><h2>Thank you!</h2><p>Your answer has been sent to HORIZON RCRDS.<br>We’ll get back to you soon.</p><a href="/">Back to the website</a></div>`;
       document.documentElement.classList.add('sent');   // el «Thank you» va centrado en la pantalla
+      const mz = document.querySelector('main'); if (mz) mz.style.zoom = '';
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (x) { err.textContent = x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Send'; }
   });

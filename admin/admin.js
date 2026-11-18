@@ -2159,24 +2159,19 @@
       <button type="button" class="back" data-act="form-resp-back">← ${esc(f.title)}</button>
       <div class="head"><div><p class="eyebrow">Private form</p><h1>PERSONAL LINKS <span class="count">${(all || []).length}</span></h1></div></div>
       <p class="info lead">Each link is for one artist: it only works on the first device that opens it, only to send <b>${esc(f.title)}</b> once, and for 30 days. A release with several artists: add each artist — each one gets their own link to fill in the whole form.</p>
-      <form id="lk-new" class="lk-new" novalidate>
+      ${o.made ? (() => {
+        // recién generado: la misma fila enseña el enlace de cada artista (clic = copiar) y el botón pasa a «Copy link»
+        const ls = o.made.links?.length ? o.made.links : [{ note: o.made.note, url: o.made.url }], many = ls.length > 1;
+        return `<div class="lk-new is-made" aria-live="polite">
+          ${ls.map((x, i) => `<button type="button" class="lk-made-field" data-lk="copy-made" data-i="${i}" title="Copy the link for ${esc(x.note || 'the artist')}"><b>✓ ${esc(x.note || 'Artist')}</b><span>${esc(String(x.url).replace(/^https?:\/\//, ''))}</span></button>`).join('')}
+          <button type="button" class="btn ghost" data-lk="made-x">New link</button>
+          <button type="button" class="btn primary" data-lk="${many ? 'copy-all' : 'copy-made'}" data-i="0">${many ? 'Copy all links' : 'Copy link'}</button>
+        </div>`;
+      })() : `<form id="lk-new" class="lk-new" novalidate>
         <input name="note" maxlength="120" required placeholder="Artist name" aria-label="Artist name (required)" autocomplete="off">
         <button type="button" class="btn ghost" data-lk="co-add">Add artist</button>
         <button type="submit" class="btn primary">Generate link</button>
-      </form>
-      ${o.made ? (() => {
-        // enlaces recién creados: una línea por artista (nombre · enlace · Copy), sin recuadros
-        const ls = o.made.links?.length ? o.made.links : [{ note: o.made.note, url: o.made.url }], many = ls.length > 1;
-        return `<div class="lk-made" aria-live="polite">
-          ${ls.map((x, i) => `<div class="lk-made-row">
-            <span class="lk-made-name"><i aria-hidden="true">✓</i>${esc(x.note || 'Artist')}</span>
-            <span class="lk-made-url" title="${esc(x.url)}">${esc(String(x.url).replace(/^https?:\/\//, ''))}</span>
-            <button type="button" class="lk-made-btn" data-lk="copy-made" data-i="${i}">Copy</button>
-            ${i === 0 ? '<button type="button" class="lk-made-btn lk-made-x" data-lk="made-x" aria-label="Close" title="Close">✕</button>' : '<span></span>'}
-          </div>`).join('')}
-          ${many ? '<div class="lk-made-row"><span></span><span></span><button type="button" class="lk-made-btn" data-lk="copy-all">Copy all</button><span></span></div>' : ''}
-        </div>`;
-      })() : ''}
+      </form>`}
       <div class="lk-tools">
         <input class="lk-search" type="search" placeholder="Search by artist…" value="${esc(o.q)}" aria-label="Search links">
         <div class="ct-tabs lk-tabs" role="tablist">${chips.map(([k, t]) => `<button type="button" role="tab" class="${o.filter === k ? 'on' : ''}" data-lk-filter="${k}">${t}<span>${count(k)}</span></button>`).join('')}</div>
@@ -2235,12 +2230,12 @@
       try {
         await navigator.clipboard.writeText(txt || '');
         // el botón confirma la copia unos segundos
-        const was = b.textContent; b.textContent = 'Copied ✓'; b.classList.add('is-copied');
-        setTimeout(() => { b.textContent = was; b.classList.remove('is-copied'); }, 1800);
+        if (b.classList.contains('lk-made-field')) toast(`Link for ${ls[Number(b.dataset.i)]?.note || 'the artist'} copied`);
+        else { const was = b.textContent; b.textContent = 'Copied ✓'; setTimeout(() => { b.textContent = was; }, 1800); }
       } catch { toast('Could not copy'); }
       return;
     }
-    if (a === 'made-x') { formOpen.made = null; $('.lk-made')?.remove(); return;
+    if (a === 'made-x') { formOpen.made = null; render(); $('#lk-new input')?.focus(); return;
     }
     if (a === 'copy-new' || a === 'copy') {
       const u = a === 'copy' ? l.url : formOpen.made.url;

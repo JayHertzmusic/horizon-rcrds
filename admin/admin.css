@@ -1162,16 +1162,10 @@ html, body, * { scrollbar-width: none; }
 .lk-co input { width: 100%; padding-right: 40px !important; box-sizing: border-box; }
 .lk-co button { position: absolute; top: 50%; right: 8px; width: 28px; height: 28px; transform: translateY(-50%); border: 0; border-radius: 6px; background: none; color: var(--faint); font-size: 13px; cursor: pointer; }
 .lk-co button:hover { background: rgba(255,255,255,.08); color: #fff; }
-.lk-made { max-width: 900px; margin: -2px 0 20px; }
-.lk-made-row { display: grid; grid-template-columns: 180px minmax(0, 1fr) 84px 24px; gap: 14px; align-items: center; min-height: 30px; }
-.lk-made-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #fff; font-weight: 600; font-size: 14px; }
-.lk-made-name i { font-style: normal; margin-right: 8px; color: var(--faint); }
-.lk-made-url { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted, #9a9a9a); font-size: 13px; }
-.lk-made-btn { justify-self: end; padding: 0; border: 0; background: none; color: #fff; font: 700 12px/1 'Barlow', sans-serif; letter-spacing: .12em; text-transform: uppercase; cursor: pointer; white-space: nowrap; }
-.lk-made-btn:hover { text-decoration: underline; text-underline-offset: 4px; }
-.lk-made-x { color: var(--faint); font-size: 12px; letter-spacing: 0; }
-.lk-made-x:hover { color: #fff; text-decoration: none; }
-@media (max-width: 640px) { .lk-made-row { grid-template-columns: minmax(0, 1fr) 84px 24px; } .lk-made-url { grid-column: 1 / -1; grid-row: 2; } }
+.lk-made-field { flex: 1 1 220px; min-width: 0; min-height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border: 1px solid var(--line-2); border-radius: 6px; background: #121212; color: var(--text); font: inherit; font-size: 14.5px; text-align: left; cursor: copy; }
+.lk-made-field:hover { border-color: rgba(255, 255, 255, .6); }
+.lk-made-field b { flex: none; color: #fff; font-weight: 600; white-space: nowrap; }
+.lk-made-field span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted, #9a9a9a); font-size: 13px; }
 .collab-pill { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; background: rgba(168,85,247,.12); border: 1px solid rgba(168,85,247,.45); color: #d8b4fe; font-size: 12px; font-weight: 700; white-space: nowrap; }
 /* Personal links: filtros como pestañas (igual que en las respuestas) */
 .lk-tools { display: block; margin: 6px 0 0; padding-bottom: 0; border-bottom: 0; }

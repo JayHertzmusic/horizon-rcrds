@@ -1031,8 +1031,6 @@ html, body, * { scrollbar-width: none; }
 .lk-new { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; max-width: 640px; margin: 0 0 14px; }
 .lk-new input, .lk-search, .lk-made input { min-height: 46px; padding: 0 14px; border-radius: 6px; background: #121212; border: 1px solid var(--line-2); color: var(--text); font: inherit; font-size: 14.5px; outline: none; }
 .lk-new input:focus, .lk-search:focus { border-color: rgba(255, 255, 255, .6); }
-.lk-made { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; margin: 0 0 22px; padding: 12px 14px; border: 1px solid rgba(126, 226, 168, .35); border-radius: 8px; background: rgba(126, 226, 168, .05); font-size: 14px; }
-.lk-made input { min-height: 38px; font-size: 13px; color: #fff; }
 .lk-tools { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 6px 0 18px; padding-bottom: 14px; border-bottom: 1px solid var(--line-2); }
 .lk-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .lk-chips button { padding: 8px 14px; border: 1px solid var(--line-2); border-radius: 999px; background: none; color: var(--muted); font: 600 13px/1 'Barlow', sans-serif; letter-spacing: .04em; cursor: pointer; }
@@ -1060,7 +1058,7 @@ html, body, * { scrollbar-width: none; }
 .lk-card.is-expired, .lk-card.is-revoked { opacity: .65; }
 .lk-more { display: flex; justify-content: center; margin-top: 18px; }
 .lk-empty { padding: 30px 0; text-align: center; }
-@media (max-width: 760px) { .lk-made { grid-template-columns: 1fr; } .lk-search { width: 100%; } }
+@media (max-width: 760px) { .lk-search { width: 100%; } }
 @media (max-width: 420px) { .lk-card footer { flex-wrap: wrap; } }
 
 /* ---- Chain (download gates) ---- */
@@ -1164,11 +1162,15 @@ html, body, * { scrollbar-width: none; }
 .lk-co input { width: 100%; padding-right: 40px !important; box-sizing: border-box; }
 .lk-co button { position: absolute; top: 50%; right: 8px; width: 28px; height: 28px; transform: translateY(-50%); border: 0; border-radius: 6px; background: none; color: var(--faint); font-size: 13px; cursor: pointer; }
 .lk-co button:hover { background: rgba(255,255,255,.08); color: #fff; }
-.lk-made-group { grid-template-columns: 1fr; gap: 8px; }
-.lk-made-row { display: grid; grid-template-columns: 150px 130px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
-.lk-made-row b { color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.lk-made-row small { color: var(--faint); font-size: 12px; }
-@media (max-width: 760px) { .lk-made-row { grid-template-columns: 1fr auto; } .lk-made-row small, .lk-made-row span { display: none; } .lk-made-row input { grid-column: 1 / -1; grid-row: 2; } }
+.lk-made { max-width: 900px; margin: 0 0 22px; border: 1px solid var(--line-2); border-radius: 10px; background: rgba(255,255,255,.025); overflow: hidden; }
+.lk-made-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 0 16px; border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--faint); }
+.lk-made-row { display: grid; grid-template-columns: 170px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 12px 16px; }
+.lk-made-row + .lk-made-row { border-top: 1px solid var(--line); }
+.lk-made-who { min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.lk-made-who b { color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lk-made-who small { color: var(--faint); font-size: 12px; }
+.lk-made-url { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted, #9a9a9a); font-size: 13px; }
+@media (max-width: 640px) { .lk-made-row { grid-template-columns: minmax(0, 1fr) auto; } .lk-made-url { grid-column: 1 / -1; grid-row: 2; } }
 .cq-list { display: flex; flex-direction: column; gap: 6px; max-height: 55vh; overflow: auto; padding-right: 4px; }
 .cq-sec { margin: 12px 0 2px; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); }
 .cq-row { margin: 0; font-size: 13.5px; }

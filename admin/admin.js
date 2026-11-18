@@ -2164,10 +2164,18 @@
         <button type="button" class="btn ghost" data-lk="co-add">Add artist</button>
         <button type="submit" class="btn primary">Generate link</button>
       </form>
-      ${o.made ? (o.made.links?.length > 1 ? `<div class="lk-made lk-made-group"><span>One link per artist, ready to send:</span>
-          ${o.made.links.map((x, i) => `<div class="lk-made-row"><b>${esc(x.note)}</b><small>${i ? 'Own details' : 'Main artist'}</small><input readonly value="${esc(x.url)}" aria-label="Link for ${esc(x.note)}"><button type="button" class="btn ghost sm" data-lk="copy-made" data-i="${i}">Copy</button></div>`).join('')}
-          <div class="lk-made-row"><span></span><span></span><span></span><button type="button" class="btn ghost sm" data-lk="copy-all">Copy all</button></div></div>`
-        : `<div class="lk-made"><span>New link${o.made.note ? ` for <b>${esc(o.made.note)}</b>` : ''} — copied, ready to send:</span><input readonly value="${esc(o.made.url)}" aria-label="New link"><button type="button" class="btn ghost sm" data-lk="copy-new">Copy</button></div>`) : ''}
+      ${o.made ? (() => {
+        // enlaces recién creados: una tarjeta sobria, una fila por artista (nombre, enlace y «Copy»)
+        const ls = o.made.links?.length ? o.made.links : [{ note: o.made.note, url: o.made.url }], many = ls.length > 1;
+        return `<div class="lk-made">
+          <div class="lk-made-head"><span>${many ? 'Links ready to send' : 'Link ready to send'}</span>${many ? '<button type="button" class="btn ghost sm" data-lk="copy-all">Copy all</button>' : ''}</div>
+          ${ls.map((x, i) => `<div class="lk-made-row">
+            <div class="lk-made-who"><b>${esc(x.note || 'Artist')}</b>${many ? `<small>${i ? 'Own details' : 'Main artist'}</small>` : ''}</div>
+            <span class="lk-made-url" title="${esc(x.url)}">${esc(String(x.url).replace(/^https?:\/\//, ''))}</span>
+            <button type="button" class="btn ghost sm" data-lk="copy-made" data-i="${i}">Copy</button>
+          </div>`).join('')}
+        </div>`;
+      })() : ''}
       <div class="lk-tools">
         <div class="lk-chips" role="tablist">${chips.map(([k, t]) => `<button type="button" role="tab" class="${o.filter === k ? 'on' : ''}" data-lk-filter="${k}">${t} <span>${count(k)}</span></button>`).join('')}</div>
         <input class="lk-search" type="search" placeholder="Search by artist…" value="${esc(o.q)}" aria-label="Search links">
@@ -2230,7 +2238,7 @@
       return;
     }
     if (a === 'copy-made' || a === 'copy-all') {
-      const ls = formOpen.made?.links || [], txt = a === 'copy-all' ? ls.map(x => `${x.note}: ${x.url}`).join('\n') : ls[Number(b.dataset.i)]?.url;
+      const ls = formOpen.made?.links?.length ? formOpen.made.links : [{ note: formOpen.made?.note, url: formOpen.made?.url }], txt = a === 'copy-all' ? ls.map(x => `${x.note}: ${x.url}`).join('\n') : ls[Number(b.dataset.i)]?.url;
       try { await navigator.clipboard.writeText(txt || ''); toast(a === 'copy-all' ? 'All links copied' : 'Link copied'); } catch { toast('Could not copy'); }
       return;
     }

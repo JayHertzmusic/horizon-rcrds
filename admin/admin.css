@@ -1192,7 +1192,6 @@ html, body, * { scrollbar-width: none; }
 .m-search input { width: 100%; min-height: 44px; padding: 0 14px; border-radius: 6px; background: #121212; border: 1px solid var(--line-2); font-size: 14px; }
 .m-warn { margin: -6px 0 10px; }
 .m-warn b { color: #ffc861; font-weight: 600; }
-.m-tabs { margin: 0 0 12px; }
 .m-wrap { display: flex; flex-direction: column; min-height: 320px; border: 1px solid var(--line-2); border-radius: 8px; background: #0b0b0b; overflow: hidden; }
 .m-tool { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 50px; padding: 0 12px 0 16px; border-bottom: 1px solid var(--line-2); flex: none; }
 .m-tool .btn { min-height: 34px; padding: 0 14px; }
@@ -1202,8 +1201,11 @@ html, body, * { scrollbar-width: none; }
 .m-list { list-style: none; margin: 0; padding: 0; flex: 1; overflow-y: auto; transition: opacity .2s; animation: mfade .2s ease; }
 .m-list[aria-busy="true"] { opacity: .55; }
 .m-list .empty { text-align: center; }
-.mrow { display: grid; grid-template-columns: 210px minmax(0, 1fr) 18px 76px; align-items: center; gap: 14px; height: 41px; padding: 0 16px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .15s; }
+.mrow { display: grid; grid-template-columns: 22px 196px minmax(0, 1fr) 18px 76px; align-items: center; gap: 14px; height: 41px; padding: 0 16px; border-bottom: 1px solid var(--line); cursor: pointer; transition: background .15s; }
 .mrow:hover { background: rgba(255, 255, 255, .04); box-shadow: inset 2px 0 0 var(--accent); }
+.m-star { display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; background: none; color: var(--faint); font-size: 16px; line-height: 1; cursor: pointer; transition: color .15s, transform .15s; }
+.m-star:hover { color: #fff; transform: scale(1.12); }
+.m-star.on { color: #f5c518; }
 .mrow .m-from, .mrow .m-subj { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mrow .m-from { font-size: 14px; color: var(--muted); }
 .mrow .m-from i { font-style: normal; font-size: 12px; color: var(--faint); }
@@ -1244,7 +1246,30 @@ html, body, * { scrollbar-width: none; }
 @media (max-width: 760px) {
   .m-hbtns { width: 100%; }
   .m-search { flex: 1; }
-  .mrow { grid-template-columns: minmax(0, 1fr) auto; height: auto; padding: 8px 14px; gap: 2px 10px; }
-  .mrow .m-subj { grid-column: 1 / -1; grid-row: 2; }
+  .mrow { grid-template-columns: 22px minmax(0, 1fr) auto; height: auto; padding: 8px 14px; gap: 2px 10px; }
+  .mrow .m-star { grid-row: 1 / 3; }
+  .mrow .m-subj { grid-column: 2 / -1; }
+  .mrow .m-subj { grid-column: 2 / -1; grid-row: 2; }
   .mrow .m-clip { display: none; }
+}
+
+/* columna de carpetas, como en Gmail */
+.m-layout { display: grid; grid-template-columns: 210px minmax(0, 1fr); gap: 18px; align-items: start; }
+.m-nav { display: flex; flex-direction: column; gap: 2px; }
+.m-nav svg, .m-tool svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.m-compose-btn { display: inline-flex; align-items: center; gap: 12px; align-self: flex-start; height: 54px; padding: 0 24px 0 18px; margin: 0 0 14px; border: 0; border-radius: 16px; background: #fff; color: #000; font: 600 15px 'Barlow', sans-serif; cursor: pointer; box-shadow: 0 2px 10px rgba(0, 0, 0, .4); transition: box-shadow .2s, transform .2s; }
+.m-compose-btn:hover { box-shadow: 0 4px 18px rgba(255, 255, 255, .18); transform: translateY(-1px); }
+.m-fold { display: flex; align-items: center; gap: 14px; height: 36px; padding: 0 14px 0 16px; border: 0; border-radius: 0 18px 18px 0; background: none; color: var(--muted); font: 500 14px 'Barlow', sans-serif; text-align: left; cursor: pointer; transition: background .15s, color .15s; }
+.m-fold span { flex: 1; }
+.m-fold b { font-size: 12px; font-weight: 700; color: var(--text); }
+.m-fold:hover { background: rgba(255, 255, 255, .05); color: #fff; }
+.m-fold.on { background: rgba(var(--accent-rgb), .14); color: #fff; font-weight: 700; }
+.m-fold[data-mbox="starred"] svg { color: #f5c518; }
+.m-refresh { width: 34px; height: 32px; display: grid; place-items: center; }
+.m-refresh svg { width: 17px; height: 17px; }
+@media (max-width: 900px) {
+  .m-layout { grid-template-columns: 1fr; }
+  .m-nav { flex-direction: row; flex-wrap: wrap; align-items: center; }
+  .m-compose-btn { height: 42px; margin: 0 8px 0 0; }
+  .m-fold { border-radius: 18px; }
 }

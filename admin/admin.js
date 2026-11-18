@@ -3574,7 +3574,17 @@
   const mq = (sep = '&') => preview ? `${sep}as=shared&peek=1` : '';
   const mailReset = () => Object.assign(mail, { info: null, box: 'inbox', q: '', pages: [''], page: 0, list: null, next: '', err: '', loading: false, open: null, thread: null, threadErr: '', size: 0 });
   const mailTest = () => { if (!preview) return false; toast(`You are testing the role ${preview.name}: nothing is sent or changed.`); return true; };
-  const MAIL_BOXES = [['inbox', 'Inbox'], ['sent', 'Sent'], ['starred', 'Starred'], ['all', 'All mail']];
+  const MAIL_BOXES = [['inbox', 'Inbox'], ['starred', 'Starred'], ['sent', 'Sent'], ['all', 'All mail']];
+  // iconos de las carpetas (como en Gmail)
+  const MAIL_ICO = {
+    inbox: '<path d="M3.5 13.5h4.2l1.6 2.5h5.4l1.6-2.5h4.2"/><path d="M5.2 6.2 3.5 13.5v4.3a1.7 1.7 0 0 0 1.7 1.7h13.6a1.7 1.7 0 0 0 1.7-1.7v-4.3l-1.7-7.3a1.7 1.7 0 0 0-1.7-1.3H6.9a1.7 1.7 0 0 0-1.7 1.3z"/>',
+    starred: '<path d="m12 3.6 2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z"/>',
+    sent: '<path d="M20.5 3.5 10 14"/><path d="m20.5 3.5-6.6 17-3.9-7.5-7.5-3.9z"/>',
+    all: '<rect x="3.5" y="6.5" width="17" height="12" rx="1.8"/><path d="m3.8 7.2 8.2 6 8.2-6"/><path d="M6.5 3.5h11"/>',
+    compose: '<path d="M4 20h4L19.3 8.7a2.1 2.1 0 0 0-3-3L5 17v3z"/><path d="m14.5 7.5 3 3"/>',
+    refresh: '<path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4.2h-4.2"/>',
+  };
+  const mico = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${MAIL_ICO[k]}</svg>`;
   async function loadMail() {
     if (mail.loading) return;
     mail.loading = true; mail.err = '';
@@ -3600,9 +3610,10 @@
   function mailPage() {
     const info = mail.info, boxName = (MAIL_BOXES.find(x => x[0] === mail.box) || [])[1] || 'Inbox';
     if (!mail.list && !mail.err && !mail.loading) setTimeout(loadMail, 0);
-    const tab = (id, label) => `<button type="button" role="tab" class="${mail.box === id ? 'on' : ''}" data-mbox="${id}">${label}${id === 'inbox' && info?.unread ? `<span>${info.unread}</span>` : ''}</button>`;
+    const folder = (id, label) => `<button type="button" class="m-fold${mail.box === id ? ' on' : ''}" data-mbox="${id}" ${mail.box === id ? 'aria-current="page"' : ''}>${mico(id)}<span>${label}</span>${id === 'inbox' && info?.unread ? `<b>${info.unread > 9999 ? '9999+' : info.unread}</b>` : ''}</button>`;
     const rows = !mail.list ? `<li class="empty">${mail.err ? '' : 'Loading…'}</li>` : !mail.list.length ? `<li class="empty">${mail.q ? `Nothing matches “${esc(mail.q)}”.` : 'No emails here.'}</li>`
       : mail.list.map(t => `<li class="mrow${t.unread ? ' unread' : ''}" data-mth="${esc(t.id)}" tabindex="0">
+          <button type="button" class="m-star${t.starred ? ' on' : ''}" data-mstar="${esc(t.id)}" title="${t.starred ? 'Unstar' : 'Star'}" aria-label="${t.starred ? 'Unstar' : 'Star'}" aria-pressed="${!!t.starred}">${t.starred ? '★' : '☆'}</button>
           <span class="m-from">${esc(mailWho(t.from) || '(no sender)')}${t.count > 1 ? ` <i>${t.count}</i>` : ''}</span>
           <span class="m-subj"><b>${esc(t.subject || '(no subject)')}</b><span> — ${esc(t.snippet.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&'))}</span></span>
           <span class="m-clip" aria-label="${t.files ? 'Has attachments' : ''}">${t.files ? '⎘' : ''}</span>
@@ -3612,16 +3623,18 @@
     const inner = mail.open ? `
         <div class="m-tool"><button type="button" class="btn ghost sm" data-mail="close">← ${esc(boxName)}</button>${mailActions()}</div>
         <section class="m-read" id="m-read" aria-live="polite">${mailReader()}</section>` : `
-        <div class="m-tool"><span class="muted sm-txt">${info?.shared ? 'contact@ · demos@ · contracts@' : ''}</span>
+        <div class="m-tool"><button type="button" class="ic m-refresh" data-mail="refresh" title="Refresh" aria-label="Refresh">${mico('refresh')}</button>
           <span class="m-pager">${mail.list?.length ? `<span class="muted sm-txt">${from}–${to}</span>` : ''}<button type="button" class="ic" data-mail="prev" title="Newer" aria-label="Newer" ${mail.page ? '' : 'disabled'}>‹</button><button type="button" class="ic" data-mail="next" title="Older" aria-label="Older" ${mail.next ? '' : 'disabled'}>›</button></span></div>
         <ol class="m-list" aria-busy="${mail.loading}">${rows}</ol>`;
     return `
       <div class="head m-head"><div><p class="eyebrow">Gmail</p><h1>MAIL${info?.unread ? ` <span class="count">${info.unread}</span>` : ''}</h1></div>
-        <div class="head-btns m-hbtns"><form class="m-search" id="m-search" role="search"><input type="search" name="q" placeholder="Search mail" aria-label="Search mail" value="${esc(mail.q)}" autocomplete="off"></form><button type="button" class="btn primary" data-mail="compose">+ Compose</button></div></div>
+        <div class="head-btns m-hbtns"><form class="m-search" id="m-search" role="search"><input type="search" name="q" placeholder="Search mail" aria-label="Search mail" value="${esc(mail.q)}" autocomplete="off"></form></div></div>
       ${mail.err ? `<p class="login-error" role="alert">${esc(mail.err)}</p>` : ''}
       ${info && !info.contact ? `<p class="info m-warn">Replies go out as <b>${esc(info.from)}</b> until contact@horizonrcrds.com is set up in Gmail (“Send mail as”).</p>` : ''}
-      <div class="ct-tabs m-tabs" role="tablist">${MAIL_BOXES.map(([id, l]) => tab(id, l)).join('')}</div>
-      <div class="m-wrap${mail.open ? ' reading' : ''}" id="m-wrap">${inner}</div>`;
+      <div class="m-layout">
+        <nav class="m-nav" aria-label="Mail folders"><button type="button" class="m-compose-btn" data-mail="compose">${mico('compose')}<span>Compose</span></button>${MAIL_BOXES.map(([id, l]) => folder(id, l)).join('')}</nav>
+        <div class="m-wrap${mail.open ? ' reading' : ''}" id="m-wrap">${inner}</div>
+      </div>`;
   }
   function mailActions() {
     const t = mail.thread; if (!t) return '<span></span>';
@@ -3788,6 +3801,19 @@
   }
   addEventListener('resize', sizeMail);
   document.addEventListener('click', async e => {
+    // estrella en la lista (como en Gmail): marcar / desmarcar sin abrir el correo
+    const st = e.target.closest('[data-mstar]');
+    if (st && view === 'mail') {
+      if (mailTest()) return;
+      const row = mail.list?.find(x => x.id === st.dataset.mstar); if (!row) return;
+      const on = !row.starred; row.starred = on;
+      st.classList.toggle('on', on); st.textContent = on ? '★' : '☆'; st.title = on ? 'Unstar' : 'Star'; st.setAttribute('aria-label', st.title); st.setAttribute('aria-pressed', String(on));
+      try {
+        await api('POST', `/api/mail/thread/${row.id}/${on ? 'star' : 'unstar'}`); if (mail.pre) delete mail.pre[row.id];
+        if (!on && mail.box === 'starred') { mail.list = mail.list.filter(x => x.id !== row.id); render(); }
+      } catch (er) { row.starred = !on; render(); toast(er.message); }
+      return;
+    }
     const bx = e.target.closest('[data-mbox]');
     if (bx && view === 'mail') { mail.box = bx.dataset.mbox; mail.pages = ['']; mail.page = 0; mail.list = null; mail.open = null; mail.thread = null; render(); loadMail(); return; }
     const row = e.target.closest('[data-mth]');
@@ -3796,6 +3822,7 @@
     if (!b) return;
     const act = b.dataset.mail, t = mail.thread;
     if (['compose', 'reply', 'replyall', 'forward', 'star', 'unread', 'trash'].includes(act) && mailTest()) return;
+    if (act === 'refresh') { mail.list = null; mail.info = null; render(); loadMail(); return; }
     if (act === 'compose') return composeSheet(null);
     if (act === 'reply' || act === 'replyall' || act === 'forward') return t && composeSheet(act);
     if (act === 'close') { mail.open = null; mail.thread = null; mail.threadErr = ''; render(); return; }

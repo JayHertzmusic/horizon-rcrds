@@ -395,7 +395,7 @@
           <span class="word">HORIZON<small>RCRDS</small></span>
         </a>
         <nav class="tabs" aria-label="Sections">
-          ${ORDER().filter(canTab).map(v => tab(v, names[v])).join('')}${canMail() ? tab('mail', 'Mail') : ''}${MODE === 'admin' && u.owner && !preview ? tab('chain', 'Gates') + tab('team', 'Team') + tab('log', 'History') : ''}
+          ${(() => { const vs = ORDER().filter(canTab); if (canMail()) { const i = vs.indexOf('forms'); vs.splice(i < 0 ? vs.length : i, 0, 'mail'); } return vs.map(v => tab(v, v === 'mail' ? 'Mail' : names[v])).join(''); })()}${MODE === 'admin' && u.owner && !preview ? tab('chain', 'Gates') + tab('team', 'Team') + tab('log', 'History') : ''}
         </nav>
         <div class="top-end">
           <span class="who" title="${esc(u.email)}">

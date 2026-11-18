@@ -515,7 +515,7 @@
       <div class="me-form">
         <div class="sheet-head"><h2>Your profile</h2><button type="button" class="ic" data-act="sheet-close" aria-label="Close">✕</button></div>
         <div class="me-top">${avatar(u.picture, nm, col).replace('class="av"', 'class="av xl"')}
-          <div><b class="me-name nm" style="color:${esc(col)}">${esc(nm)}</b><span class="muted sm-txt">${esc(u.email)}</span>
+          <div><b class="me-name nm" style="--c:${esc(col)}">${esc(nm)}</b><span class="muted sm-txt">${esc(u.email)}</span>
             ${!u.owner ? '' : `<div class="me-btns"><label class="btn ghost sm" for="me-photo">${u.picture ? 'Change photo' : 'Upload photo'}</label><input type="file" id="me-photo" accept="image/*" class="sr-only">${u.picture ? '<button type="button" class="btn ghost sm" data-act="me-nophoto">Remove</button>' : ''}</div>`}</div></div>
         ${u.owner ? `<p class="mini">SoundCloud</p>
         <form class="me-sc" id="me-sc" novalidate><input name="url" value="${esc(u.soundcloud || '')}" placeholder="https://soundcloud.com/your-name" aria-label="Your SoundCloud profile" autocomplete="off" spellcheck="false"><button type="submit" class="btn ghost sm">Save</button></form>
@@ -552,12 +552,12 @@
       <ol class="list team-list">
         ${owners.map(e => { const me = e === auth.user.email; const nm = me ? auth.user.name || e.split('@')[0] : e.split('@')[0], oc = (teamData.ownerColors || {})[e] || '#ffffff'; return `<li class="row tm">
             ${avatar(me ? auth.user.picture : pics[e], nm, oc)}
-            <span class="meta"><b class="nm" style="color:${esc(oc)}">${esc(nm)}</b><span>${esc(e)}</span></span>
+            <span class="meta"><b class="nm" style="--c:${esc(oc)}">${esc(nm)}</b><span>${esc(e)}</span></span>
             <span class="role-tag owner">Owner</span><span></span></li>`; }).join('')}
         ${members.map(m => { const r = roleOf(m), nm = m.label || m.name || m.email.split('@')[0]; return `
           <li class="row tm" data-email="${esc(m.email)}">
             ${avatar(m.picture, nm, m.color)}
-            <span class="meta"><b class="nm" style="color:${esc(m.color || '#ffffff')}">${esc(nm)}</b><span>${esc(m.email)}${m.last_login ? ' · signed in ' + esc(fmtDate(m.last_login)) : ' · never signed in'}</span></span>
+            <span class="meta"><b class="nm" style="--c:${esc(m.color || '#ffffff')}">${esc(nm)}</b><span>${esc(m.email)}${m.last_login ? ' · signed in ' + esc(fmtDate(m.last_login)) : ' · never signed in'}</span></span>
             <span class="role-tag" style="--c:${esc(m.color || '#ffffff')}">${esc(r?.name || 'No role')}${m.mail ? ' · Mail' : ''}</span>
             <button type="button" class="btn ghost sm" data-act="edit-member">Edit</button>
           </li>`; }).join('')}
@@ -599,7 +599,7 @@
       const head = k !== day ? `<li class="log-day">${esc(d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</li>` : '';
       day = k;
       const kind = /^(Entró|Signed in)/.test(x.action) ? 'in' : /(Añadió|Quitó|rol|Added|Removed|role)/.test(x.action) ? 'team' : 'web';
-      return `${head}<li class="row lg ${kind}"><span class="muted">${esc(d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }))}</span><b class="nm" style="${x.color ? `color:${esc(x.color)}` : ''}" title="${esc(x.email)}">${esc(x.name || x.email)}</b><span>${esc(x.action)}</span></li>`;
+      return `${head}<li class="row lg ${kind}"><span class="muted">${esc(d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }))}</span><b class="nm" style="${x.color ? `--c:${esc(x.color)}` : ''}" title="${esc(x.email)}">${esc(x.name || x.email)}</b><span>${esc(x.action)}</span></li>`;
     }).join('');
     return `<div class="head"><div><p class="eyebrow">Who did what</p><h1>HISTORY</h1></div>
         <select class="log-who" aria-label="View history of"><option value="">Whole team</option>${opts}</select></div>
@@ -4530,7 +4530,7 @@
         <li class="chat-msg${mine ? ' mine' : ''}${same ? ' cont' : ''}" data-id="${m.id}">
           ${same || mine ? '' : `<span class="chat-av">${m.picture ? `<img src="${esc(m.picture)}" alt="" referrerpolicy="no-referrer">` : esc(who[0].toUpperCase())}</span>`}
           <div class="chat-bubble">
-            ${same || mine ? '' : `<b class="nm" style="${m.color ? `color:${esc(m.color)}` : ''}">${esc(who)}</b>`}
+            ${same || mine ? '' : `<b class="nm" style="${m.color ? `--c:${esc(m.color)}` : ''}">${esc(who)}</b>`}
             <p>${linkify(m.text)}</p>
             <time>${esc(d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }))}</time>
             ${mine || chatState.owner ? '<button type="button" class="chat-del" data-chat="del" aria-label="Delete message">×</button>' : ''}

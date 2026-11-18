@@ -1367,19 +1367,17 @@ html, body, * { scrollbar-width: none; }
 @media (max-width: 760px) { .m-composer { right: 8px; width: calc(100vw - 16px); } .m-composer.min { width: 220px; } }
 
 
-/* Nombres de colores con acabado brillante (gama alta): degradado con reflejo arriba, sombra suave de su color
-   y un destello de luz que los recorre de vez en cuando. El color de cada persona sigue siendo el suyo. */
+/* Nombres de colores: etiqueta tipo cristal con el color de cada persona (fondo translúcido de su color, borde fino
+   y el nombre en un tono claro de ese color: se lee bien aunque el color sea oscuro) */
 .nm {
-  display: inline-block;
-  background:
-    linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, .85) 48%, rgba(255, 255, 255, .85) 52%, transparent 62%) -160% 0 / 250% 100% no-repeat,
-    linear-gradient(180deg, color-mix(in srgb, currentColor 45%, #fff) 0%, currentColor 48%, color-mix(in srgb, currentColor 72%, #000) 100%);
-  -webkit-background-clip: text; background-clip: text;
-  -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 7px color-mix(in srgb, currentColor 38%, transparent)) drop-shadow(0 1px 0 rgba(0, 0, 0, .55));
-  animation: nm-shine 7s ease-in-out infinite;
+  --c: #ffffff;
+  display: inline-flex; align-items: center; width: fit-content; max-width: 100%; justify-self: start; align-self: flex-start;
+  padding: 2px 10px 1px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--c) 55%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--c) 30%, transparent), color-mix(in srgb, var(--c) 10%, transparent));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14), 0 2px 10px color-mix(in srgb, var(--c) 18%, transparent);
+  color: color-mix(in srgb, var(--c) 45%, #ffffff) !important;
+  line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.row:nth-child(2n) .nm { animation-delay: -2.3s; }
-.row:nth-child(3n) .nm { animation-delay: -4.6s; }
-@keyframes nm-shine { 0%, 72% { background-position: -160% 0, 0 0; } 100% { background-position: 260% 0, 0 0; } }
-@media (prefers-reduced-motion: reduce) { .nm { animation: none; } }
+.row.lg .nm { justify-self: start; font-size: 13px; }
+.chat-msg .nm { padding: 0 8px; font-size: .92em; }

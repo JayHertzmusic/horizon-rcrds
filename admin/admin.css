@@ -1365,3 +1365,21 @@ html, body, * { scrollbar-width: none; }
 .m-discard { margin-left: auto; }
 .m-composer .m-tplmenu { top: auto; bottom: calc(100% + 6px); }
 @media (max-width: 760px) { .m-composer { right: 8px; width: calc(100vw - 16px); } .m-composer.min { width: 220px; } }
+
+
+/* Nombres de colores con acabado brillante (gama alta): degradado con reflejo arriba, sombra suave de su color
+   y un destello de luz que los recorre de vez en cuando. El color de cada persona sigue siendo el suyo. */
+.nm {
+  display: inline-block;
+  background:
+    linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, .85) 48%, rgba(255, 255, 255, .85) 52%, transparent 62%) -160% 0 / 250% 100% no-repeat,
+    linear-gradient(180deg, color-mix(in srgb, currentColor 45%, #fff) 0%, currentColor 48%, color-mix(in srgb, currentColor 72%, #000) 100%);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 7px color-mix(in srgb, currentColor 38%, transparent)) drop-shadow(0 1px 0 rgba(0, 0, 0, .55));
+  animation: nm-shine 7s ease-in-out infinite;
+}
+.row:nth-child(2n) .nm { animation-delay: -2.3s; }
+.row:nth-child(3n) .nm { animation-delay: -4.6s; }
+@keyframes nm-shine { 0%, 72% { background-position: -160% 0, 0 0; } 100% { background-position: 260% 0, 0 0; } }
+@media (prefers-reduced-motion: reduce) { .nm { animation: none; } }

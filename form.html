@@ -279,8 +279,9 @@
     html.fit:not(.sent) body { display: flex; flex-direction: column; min-height: 100vh; }
     html.fit:not(.sent) main { flex: 1; display: flex; flex-direction: column; justify-content: center; padding-top: 28px; padding-bottom: 28px; }
   }
-  .x-close { position: fixed; top: 20px; right: 24px; z-index: 10; display: grid; place-items: center; width: 42px; height: 42px; border: 1px solid var(--line-2); border-radius: 50%; background: rgba(12, 12, 12, .8); color: #fff; text-decoration: none; transition: background .2s, border-color .2s, transform .2s; }
-  .x-close:hover { background: #fff; color: #000; border-color: #fff; transform: rotate(90deg); }
+  .x-close { position: fixed; top: 20px; right: 24px; z-index: 10; display: grid; place-items: center; width: 40px; height: 40px; border: 0; background: none; color: var(--muted); text-decoration: none; transition: color .2s, transform .25s ease; }
+  .x-close svg { width: 22px; height: 22px; }
+  .x-close:hover { color: #fff; transform: rotate(90deg); }
   html.sent .x-close { display: none; }
   @media (max-width: 560px) { .x-close { top: 14px; right: 14px; width: 38px; height: 38px; } }
   /* Demos en ordenador: rejilla de 6 columnas. Solo: artista | track, email | link, mensaje.
@@ -695,13 +696,13 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     if (z < 1) main.style.zoom = Math.max(.5, z - .012).toFixed(3);
     placeClose();
   }
-  // la X va alineada con el borde derecho del formulario (no en la esquina de la pantalla), a la altura del logo
+  // la X va alineada con el borde derecho del formulario (no en la esquina de la pantalla), a la altura del título
   function placeClose() {
-    const x = document.querySelector('.x-close'), f = document.getElementById('f'), logo = document.querySelector('header.top .home');
+    const x = document.querySelector('.x-close'), f = document.getElementById('f'), logo = document.querySelector('#root h1');
     if (!x || !f) return;
     if (innerWidth <= 760) { x.style.right = x.style.top = ''; return; }
     const r = f.getBoundingClientRect(), l = logo?.getBoundingClientRect();
-    x.style.right = Math.max(16, Math.round(innerWidth - r.right)) + 'px';
+    x.style.right = Math.max(16, Math.round(innerWidth - r.right - 9)) + 'px';   // (el dibujo de la X queda justo en el borde)
     if (l) x.style.top = Math.round(l.top + l.height / 2 - x.offsetHeight / 2) + 'px';
   }
   // (la escala se calcula al cargar y al cambiar el tamaño de la ventana; los dos modos miden igual, así que al cambiar no se mueve)

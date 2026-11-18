@@ -308,9 +308,6 @@
     html.fit .foot { flex-direction: row-reverse; }   /* SEND a la derecha */
     /* más ancho: las cajas más grandes sin que la página crezca hacia abajo */
     html.fit main { width: min(1240px, 100%); }
-    /* colaboración: Track y Link centrados en su caja (que es tan alta como la del mensaje) y con los campos a la misma altura */
-    html.fit #f.is-collab [data-role="trk"], html.fit #f.is-collab [data-role="lnk"] { display: flex; flex-direction: column; justify-content: center; }
-    html.fit #f.is-collab [data-role="trk"] > label, html.fit #f.is-collab [data-role="lnk"] > label { display: flex; align-items: flex-end; min-height: 2.9em; }
   }
   /* móvil: todo en una columna, cada artista con su nombre y su email seguidos */
   @media (max-width: 760px) {
@@ -708,8 +705,6 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     const halves = rest.filter(q => q.classList.contains('half')), full = rest.filter(q => !q.classList.contains('half'));
     if (qa && qe && halves.length === 2 && full.length === 1) {
       qa.dataset.role = 'a1n'; qe.dataset.role = 'a1e'; halves[0].dataset.role = 'trk'; halves[1].dataset.role = 'lnk'; full[0].dataset.role = 'add';
-      // (el texto de la etiqueta en un solo bloque: así se puede alinear abajo sin separar el asterisco)
-      halves.forEach(q => { const l = q.querySelector(':scope > label'); if (l && !l.querySelector('.lbl-in')) l.innerHTML = `<span class="lbl-in">${l.innerHTML}</span>`; });
       document.documentElement.classList.add('fit');
     }
     // X para salir: vuelve a la página de la web de la que vino (o a la portada)

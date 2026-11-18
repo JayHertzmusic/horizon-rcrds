@@ -309,6 +309,8 @@
     html.fit .foot { flex-direction: row-reverse; }   /* SEND a la derecha */
     /* más ancho: las cajas más grandes sin que la página crezca hacia abajo */
     html.fit main { width: min(1240px, 100%); }
+    /* colaboración: los títulos de Track y Link arriba y sus campos a la misma altura (el de Link ocupa dos líneas) */
+    html.fit #f.is-collab [data-role="trk"] > label, html.fit #f.is-collab [data-role="lnk"] > label { min-height: 3.3em; }
   }
   /* móvil: todo en una columna, cada artista con su nombre y su email seguidos */
   @media (max-width: 760px) {
@@ -718,8 +720,8 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
       qa.dataset.role = 'a1n'; qe.dataset.role = 'a1e'; halves[0].dataset.role = 'trk'; halves[1].dataset.role = 'lnk'; full[0].dataset.role = 'add';
       document.documentElement.classList.add('fit');
     }
-    // X para salir: vuelve a la página de la web de la que vino (o a la portada)
-    if (!document.querySelector('.x-close')) document.body.insertAdjacentHTML('beforeend', '<a class="x-close" href="/" aria-label="Close" title="Close"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></a>');
+    // X para salir: vuelve a la sección «Demos» de la portada
+    if (!document.querySelector('.x-close')) document.body.insertAdjacentHTML('beforeend', '<a class="x-close" href="/#demos" aria-label="Close" title="Close"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></a>');
     placeClose();
     f.insertAdjacentHTML('afterbegin', `<div class="x-mode"><div class="x-seg" role="radiogroup" aria-label="Release type">
       <span class="x-thumb" aria-hidden="true"></span><button type="button" role="radio" data-mode="solo">Solo release</button><button type="button" role="radio" data-mode="collab">Collaboration</button></div>
@@ -731,8 +733,6 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     const err = document.getElementById('err'); if (err) new MutationObserver(fitScreen).observe(err, { attributes: true, childList: true });
   }
   document.addEventListener('click', e => {
-    const x = e.target.closest('.x-close');
-    if (x) { let same = false; try { same = !!document.referrer && new URL(document.referrer).origin === location.origin; } catch { /* nada */ } if (same && history.length > 1) { e.preventDefault(); history.back(); } return; }
     const b = e.target.closest('.x-mode button'); if (!b) return;
     if (b.dataset.mode) coSet(b.dataset.mode);
     else if (b.dataset.n) coSet('collab', Number(b.dataset.n));

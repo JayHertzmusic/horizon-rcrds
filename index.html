@@ -2297,5 +2297,17 @@ document.addEventListener('DOMContentLoaded', () => {
   new MutationObserver(function (ms) { ms.forEach(function (m) { m.addedNodes.forEach(function (n) { if (n.nodeType === 1) fix(n); }); }); }).observe(document.body, { childList: true, subtree: true });
 })();
 </script>
+<script>
+/* Llegar a una sección desde otra página (p. ej. la X del formulario de demos → /#demos): se coloca cuando
+   ya cargó el contenido que la empuja hacia abajo (releases, etc.). Si la persona empieza a moverse, se deja. */
+(() => {
+  const id = decodeURIComponent(location.hash.slice(1));
+  if (!id) return;
+  let stop = false;
+  for (const t of ['wheel', 'touchstart', 'keydown', 'mousedown']) addEventListener(t, () => { stop = true; }, { once: true, passive: true });
+  const go = () => { if (stop) return; const el = document.getElementById(id); if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY, behavior: 'instant' }); };
+  addEventListener('load', () => { go(); setTimeout(go, 400); setTimeout(go, 1200); setTimeout(go, 2500); });
+})();
+</script>
 </body>
 </html>

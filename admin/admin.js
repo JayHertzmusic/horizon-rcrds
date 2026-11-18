@@ -2163,7 +2163,7 @@
         // recién generado: la misma fila enseña el enlace de cada artista (clic = copiar) y el botón pasa a «Copy link»
         const ls = o.made.links?.length ? o.made.links : [{ note: o.made.note, url: o.made.url }], many = ls.length > 1;
         return `<div class="lk-new is-made" aria-live="polite">
-          ${ls.map((x, i) => `<button type="button" class="lk-made-field" data-lk="copy-made" data-i="${i}" title="Copy the link for ${esc(x.note || 'the artist')}"><b>✓ ${esc(x.note || 'Artist')}</b><span>${esc(String(x.url).replace(/^https?:\/\//, ''))}</span></button>`).join('')}
+          ${ls.map((x, i) => `<button type="button" class="lk-made-field" data-lk="copy-made" data-i="${i}" title="Copy the link for ${esc(x.note || 'the artist')}"><b>${esc(x.note || 'Artist')}</b><span>${esc(String(x.url).replace(/^https?:\/\//, ''))}</span></button>`).join('')}
           <button type="button" class="btn ghost" data-lk="made-x">New link</button>
           <button type="button" class="btn primary" data-lk="${many ? 'copy-all' : 'copy-made'}" data-i="0">${many ? 'Copy all links' : 'Copy link'}</button>
         </div>`;

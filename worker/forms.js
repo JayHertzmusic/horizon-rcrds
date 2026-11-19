@@ -410,8 +410,10 @@ export async function formsApi(req, env, s, url, audit) {
   if (mm[2] === 'links') {
     // enlaces personales: se crea uno nuevo (POST) o se ven los últimos (GET)
     if (!f.invite) throw new FormError(400, 'This form doesn’t use personal links.');
+    const canEdit = !s.sync && formLevel(s, f) === 'edit';
     if (m === 'POST') {
-      if (s.sync) throw new FormError(403, 'Not allowed.');
+      // crear, alargar, anular o borrar enlaces: solo quien puede editar este formulario (con «View» solo se miran)
+      if (!canEdit) throw new FormError(403, 'Your role can only view this form’s links.');
       const b = parse(await req.text()) || {};
       if (b.action) {
         // un enlace concreto: alargar 30 días, dejar que se abra en otro dispositivo, anular o borrar
@@ -443,7 +445,8 @@ export async function formsApi(req, env, s, url, audit) {
     const origin = /(^|\.)horizonrcrds\.com$/.test(url.hostname) ? 'https://horizonrcrds.com' : url.origin;
     return { links: rows.map(l => ({ id: l.hash.slice(0, 16), note: l.note || '', by: l.created_by, by_name: l.by_name || String(l.created_by || '').split('@')[0], created_at: l.created_at, expires_at: l.expires_at, opened_at: l.opened_at, used_at: l.used_at, response_id: l.response_id || null,
       grp: l.grp || null, grp_pos: l.grp_pos || null, grp_n: l.grp_n || null,
-      state: linkState(l), url: l.token ? `${origin}/forms/${f.slug}?k=${l.token}` : '' })) };
+      // el enlace (con su clave) solo lo ve quien puede editar: con él se puede enviar el formulario
+      state: linkState(l), url: l.token && canEdit ? `${origin}/forms/${f.slug}?k=${l.token}` : '' })), canEdit };
   }
   // plantillas para contestar (aceptar / rechazar). Verlas: quien ve el formulario; cambiarlas y enviar: quien lo puede editar.
   if (mm[2] === 'replies' && m === 'GET') return { templates: await replyTemplates(env, f.id) };

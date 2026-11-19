@@ -2143,7 +2143,7 @@
   function formLinks() {
     const f = formsData.forms.find(x => x.id === formOpen.id);
     if (!f) { formOpen = null; return formsPage(); }
-    const all = formOpen.links, o = formOpen;
+    const all = formOpen.links, o = formOpen, ed = canEditForm(f) && !preview;   // con «View» los enlaces solo se miran
     const count = k => (all || []).filter(l => k === 'all' || l.state === k).length;
     const q = o.q.trim().toLowerCase();
     const list = (all || []).filter(l => (o.filter === 'all' || l.state === o.filter) && (!q || `${l.note} ${l.by} ${l.by_name || ''}`.toLowerCase().includes(q)));
@@ -2163,10 +2163,10 @@
           <footer>
             ${l.url && live ? '<button type="button" class="btn ghost sm" data-lk="copy">Copy link</button>' : ''}
             ${l.used_at && l.response_id ? '<button type="button" class="btn ghost sm" data-lk="resp">See answers</button>' : ''}
-            ${!l.used_at ? `<button type="button" class="btn ghost sm" data-lk="extend" title="30 more days">+30 days</button>` : ''}
-            ${l.state === 'opened' ? '<button type="button" class="btn ghost sm" data-lk="reset" title="If the artist changed phone or browser: the link can be opened again on a new device">New device</button>' : ''}
-            ${live ? '<button type="button" class="btn ghost sm" data-lk="revoke">Cancel</button>' : ''}
-            <button type="button" class="ic danger" data-lk="delete" aria-label="Delete link" title="Delete">✕</button>
+            ${ed && !l.used_at ? `<button type="button" class="btn ghost sm" data-lk="extend" title="30 more days">+30 days</button>` : ''}
+            ${ed && l.state === 'opened' ? '<button type="button" class="btn ghost sm" data-lk="reset" title="If the artist changed phone or browser: the link can be opened again on a new device">New device</button>' : ''}
+            ${ed && live ? '<button type="button" class="btn ghost sm" data-lk="revoke">Cancel</button>' : ''}
+            ${ed ? '<button type="button" class="ic danger" data-lk="delete" aria-label="Delete link" title="Delete">✕</button>' : ''}
           </footer>
         </article>`;
     };
@@ -2175,11 +2175,11 @@
       <button type="button" class="back" data-act="form-resp-back">← ${esc(f.title)}</button>
       <div class="head"><div><p class="eyebrow">Private form</p><h1>PERSONAL LINKS <span class="count">${(all || []).length}</span></h1></div></div>
       <p class="info lead">Each link is for one artist: it only works on the first device that opens it, only to send <b>${esc(f.title)}</b> once, and for 30 days. A release with several artists: add each artist — each one gets their own link to fill in the whole form.</p>
-      <form id="lk-new" class="lk-new" novalidate>
+      ${ed ? `<form id="lk-new" class="lk-new" novalidate>
         <input name="note" maxlength="120" required placeholder="Artist name" aria-label="Artist name (required)" autocomplete="off">
         <button type="button" class="btn ghost" data-lk="co-add">Add artist</button>
         <button type="submit" class="btn primary">Generate link</button>
-      </form>
+      </form>` : '<p class="info">Your role can view these links. To create or change them you need Edit on this form.</p>'}
       ${o.made ? (() => {
         // enlaces recién creados: una línea por artista (nombre · enlace · Copy), sin recuadros
         const ls = o.made.links?.length ? o.made.links : [{ note: o.made.note, url: o.made.url }], many = ls.length > 1;

@@ -331,7 +331,7 @@ async function fileList(env) {
 async function serveData(key, req, env) {
   const row = await env.DB.prepare('SELECT json, version FROM site_data WHERE name = ?').bind(key).first();
   const etag = `"${key}-${row?.version ?? 0}"`;
-  const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', ETag: etag };
+  const headers = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', ETag: etag, 'X-Content-Type-Options': 'nosniff' };
   if (req.headers.get('If-None-Match') === etag) return new Response(null, { status: 304, headers });
   return new Response(req.method === 'HEAD' ? null : (row?.json ?? '[]'), { headers });
 }

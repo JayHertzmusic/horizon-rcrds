@@ -63,19 +63,19 @@ function findBlanks(text) {
 }
 // texto de una pestaña del Doc con el índice de Google de cada carácter
 function docText(content) {
-  let text = ''; const idx = [], sty = [];
-  const walk = els => { for (const el of els || []) {
-    if (el.paragraph) for (const pe of el.paragraph.elements || []) { const t = pe.textRun?.content; if (t) for (let k = 0; k < t.length; k++) { text += t[k]; idx.push(pe.startIndex + k); sty.push(pe.textRun.textStyle || {}); } }
-    if (el.table) for (const row of el.table.tableRows || []) for (const cell of row.tableCells || []) walk(cell.content);
+  let text = ''; const idx = [], sty = [], tbl = [];
+  const walk = (els, inT) => { for (const el of els || []) {
+    if (el.paragraph) for (const pe of el.paragraph.elements || []) { const t = pe.textRun?.content; if (t) for (let k = 0; k < t.length; k++) { text += t[k]; idx.push(pe.startIndex + k); sty.push(pe.textRun.textStyle || {}); tbl.push(inT); } }
+    if (el.table) for (const row of el.table.tableRows || []) for (const cell of row.tableCells || []) walk(cell.content, true);
   } };
-  walk(content);
-  return { text, idx, sty };
+  walk(content, false);
+  return { text, idx, sty, tbl };
 }
 const findTab = (tabs, id) => { for (const t of tabs || []) { if (t.tabProperties?.tabId === id) return t; const c = findTab(t.childTabs, id); if (c) return c; } return null; };
 const docParts = u => { const m = String(u).match(/docs\.google\.com\/document\/(?:u\/\d+\/)?d\/([\w-]{20,})/), t = String(u).match(/[?&#]tab=(t\.[\w]+)/); return m ? { id: m[1], tab: t ? t[1] : '' } : null; };
 // lo único que se lee de un Doc: pestañas, texto con su posición y el estilo que se copia a los datos
 const DOC_EL = 'paragraph(elements(startIndex,textRun(content,textStyle(italic,smallCaps,weightedFontFamily,fontSize,foregroundColor)))),table(tableRows(tableCells(content(paragraph(elements(startIndex,textRun(content,textStyle(italic,smallCaps,weightedFontFamily,fontSize,foregroundColor))))))))';
-const DOC_TAB = `tabProperties(tabId,index),documentTab(body(content(${DOC_EL})))`;
+const DOC_TAB = `tabProperties(tabId,index),documentTab(documentStyle(pageSize,marginLeft,marginRight),body(content(${DOC_EL})))`;
 const DOC_FIELDS = encodeURIComponent(`tabs(${DOC_TAB},childTabs(${DOC_TAB},childTabs(${DOC_TAB})))`);
 const flatTabs = (tabs, out = []) => { for (const t of tabs || []) { out.push(t.tabProperties || {}); flatTabs(t.childTabs, out); } return out; };
 export async function docFromTemplate(env, docUrl, values, title) {
@@ -91,7 +91,9 @@ export async function docFromTemplate(env, docUrl, values, title) {
   let tabObj = d.tab ? findTab(src.tabs, d.tab) : src.tabs?.[0];
   if (!tabObj) throw new Error('Could not find the template tab.');
   let tab = tabObj.tabProperties.tabId;
-  const { text, idx, sty } = docText(tabObj.documentTab?.body?.content);
+  const { text, idx, sty, tbl } = docText(tabObj.documentTab?.body?.content);
+  // ancho útil de la página (pt): tamaño menos márgenes
+  const ds = tabObj.documentTab?.documentStyle || {}, pageW = (ds.pageSize?.width?.magnitude || 0) - (ds.marginLeft?.magnitude || 0) - (ds.marginRight?.magnitude || 0);
   // ningún dato puede quedarse sin poner: la plantilla puede llevar datos de otro contrato (o rayas «____»).
   // Solo los del sello (representante y firmante de HORIZON RCRDS) se quedan como estén si no se mandan.
   const valueOf = name => values[name] || (name === 'Artists clause name' ? values['Artist name'] : name === 'Artists clause legal' ? values['Legal name'] : '');
@@ -117,6 +119,17 @@ export async function docFromTemplate(env, docUrl, values, title) {
       const ls = sty[k] || {}, style = { underline: false, italic: !!ls.italic, smallCaps: !!ls.smallCaps, strikethrough: false, bold: !/date/i.test(b.name) };
       const fields = ['underline', 'italic', 'smallCaps', 'strikethrough', 'bold', 'weightedFontFamily', 'fontSize', 'foregroundColor'];
       for (const f of ['weightedFontFamily', 'fontSize', 'foregroundColor']) if (ls[f]) style[f] = ls[f];
+      // dato más largo que su raya (p. ej. una dirección larga): se reduce su letra lo justo para que quepa en esa línea
+      // (si saltara a otra línea, movería todo el texto de debajo y los recuadros de firma). Mínimo 6 pt.
+      let ls0 = b.start; while (ls0 > 0 && text[ls0 - 1] !== '\n') ls0--;
+      let le = b.end; while (le < text.length && text[le] !== '\n') le++;
+      const base = ls.fontSize?.magnitude || sty.slice(ls0, le).find(x => x.fontSize?.magnitude)?.fontSize?.magnitude || 11;
+      // sitio (en pt) para el dato: lo que ocupaba la raya («_» ≈ 0,556 em); fuera de tablas, lo que queda hasta el margen
+      // (la etiqueta, p. ej. «Street Address, Zip Code:», ≈ 0,55 em por letra) si es más. El dato en negrita ≈ 0,56 em por letra.
+      const under = (le - b.start) * base * 0.556;
+      const toMargin = !tbl[b.start] && pageW > 100 ? pageW * 0.97 - (b.start - ls0) * base * 0.55 : 0;
+      const room = Math.max(under, toMargin), need = v.length * base * 0.56;
+      if (need > room) style.fontSize = { magnitude: Math.max(6, Math.floor(base * room / need * 10) / 10), unit: 'PT' };
       requests.push({ updateTextStyle: { range: { startIndex: startIndex + pre.length, endIndex: startIndex + pre.length + v.length, tabId: tab }, textStyle: style, fields: fields.join(',') } });
     }
   }

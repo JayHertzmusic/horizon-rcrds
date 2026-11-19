@@ -15,6 +15,9 @@ const token = () => { const u = crypto.getRandomValues(new Uint8Array(24)); retu
 const sha256b64u = async s => { const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return btoa(String.fromCharCode(...new Uint8Array(h))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 
 export const CHAIN_SCHEMA = [
+  // fichas de un rato (login de SoundCloud y descargas): en D1 y no en KV (KV gratis = 1000 escrituras al día y
+  // cualquiera puede pulsar «conectar» en bucle)
+  `CREATE TABLE IF NOT EXISTS sc_tokens (k TEXT PRIMARY KEY, v TEXT NOT NULL, exp INTEGER NOT NULL)`,
   // cuentas de SoundCloud conectadas (miembros de la cadena). id = id de usuario de SoundCloud
   `CREATE TABLE IF NOT EXISTS sc_members (id INTEGER PRIMARY KEY, name TEXT, permalink TEXT, avatar TEXT, followers INTEGER, city TEXT,
      access_token TEXT, refresh_token TEXT, token_exp INTEGER, scope TEXT, email TEXT,
@@ -292,6 +295,9 @@ export async function chainApi(req, env, s, url, audit) {
 
 /* ---------------- OAuth y gate (público) ---------------- */
 // el fan pulsa «Connect»: se le manda a SoundCloud. Al volver, se hacen las acciones y se desbloquea la descarga.
+const tokPut = (env, k, v, ttl) => env.DB.prepare('INSERT INTO sc_tokens (k, v, exp) VALUES (?, ?, ?) ON CONFLICT(k) DO UPDATE SET v = excluded.v, exp = excluded.exp').bind(k, JSON.stringify(v), now() + ttl * 1000).run();
+const tokGet = async (env, k) => { const r = await env.DB.prepare('SELECT v FROM sc_tokens WHERE k = ? AND exp > ?').bind(k, now()).first(); return r ? parse(r.v) : null; };
+const tokDel = (env, k) => env.DB.prepare('DELETE FROM sc_tokens WHERE k = ? OR exp < ?').bind(k, now()).run();
 export async function scOauth(req, env, url) {
   const DB = env.DB, p = url.pathname;
   const origin = (env.SITE_URL && /^https?:\/\//.test(env.SITE_URL)) ? env.SITE_URL.replace(/\/+$/, '') : url.origin;
@@ -302,7 +308,7 @@ export async function scOauth(req, env, url) {
     const gate = rid ? await DB.prepare('SELECT active FROM sc_gates WHERE release_id = ?').bind(rid).first() : null;
     if (!gate?.active) throw new ChainError(404, 'This download is not available.');
     const state = token(), verifier = token() + token();
-    await env.FILES.put(`scstate/${state}`, JSON.stringify({ verifier, rid, at: now() }), { expirationTtl: 600 });
+    await tokPut(env, `scstate/${state}`, { verifier, rid, at: now() }, 600);
     const auth = new URL(`${SC_AUTH}/authorize`);
     auth.search = new URLSearchParams({ client_id: env.SC_CLIENT_ID, redirect_uri: REDIRECT(env), response_type: 'code', state,
       code_challenge: await sha256b64u(verifier), code_challenge_method: 'S256' }).toString();
@@ -314,9 +320,9 @@ export async function scOauth(req, env, url) {
     // ok = token de descarga (solo se da al conectar de verdad); si no, mensaje de error. Nunca se puede descargar con ?done=1 a mano.
     const back = (msg, ok, rid) => Response.redirect(`${origin}/download${rid ? '/' + encodeURIComponent(rid) : ''}?${ok ? 'dl=' + ok : 'error=' + encodeURIComponent(msg)}`, 302);
     if (url.searchParams.get('error')) return back('You cancelled the SoundCloud connection.', false, '');
-    const st = state ? parse(await env.FILES.get(`scstate/${state}`)) : null;
+    const st = state && /^[\w-]{10,100}$/.test(state) ? await tokGet(env, `scstate/${state}`) : null;
     if (!code || !st) return back('The link expired. Please try again.', false, '');
-    await env.FILES.delete(`scstate/${state}`).catch(() => {});
+    await tokDel(env, `scstate/${state}`).catch(() => {});
     try {
       const t = await tokenExchange(env, { grant_type: 'authorization_code', redirect_uri: REDIRECT(env), code, code_verifier: st.verifier });
       if (!t.ok) { console.error('sc token', t.log); throw new ChainError(502, `SoundCloud sign-in failed (${t.log}).`); }
@@ -346,7 +352,7 @@ export async function scOauth(req, env, url) {
       if (errs.length) console.error('chain actions', member.id, errs.join(' | '));
       // token de descarga (vale 1 hora, solo para este release): sin él, el archivo no se sirve
       const dl = token();
-      await env.FILES.put(`dl/${dl}`, JSON.stringify({ rid: st.rid, member: member.id, at: now() }), { expirationTtl: 3600 });
+      await tokPut(env, `dl/${dl}`, { rid: st.rid, member: member.id, at: now() }, 3600);
       return back('', dl, st.rid);
     } catch (e) {
       console.error('sc callback', e.message);
@@ -370,7 +376,7 @@ export async function chainPublic(req, env, url) {
   // descargar el archivo: solo con el token que da el servidor al conectar de verdad (bloquea el ?done=1 a mano)
   if (url.pathname === `/api/public/download/${encodeURIComponent(rid)}/file` && req.method === 'GET') {
     const dl = String(url.searchParams.get('t') || '');
-    const pass = dl ? parse(await env.FILES.get(`dl/${dl}`)) : null;
+    const pass = dl && /^[\w-]{10,100}$/.test(dl) ? await tokGet(env, `dl/${dl}`) : null;
     if (!pass || pass.rid !== rid) throw new ChainError(403, 'Connect your SoundCloud to unlock this download.');
     // de un solo uso: se quema al descargar, así compartir el link no sirve (hay 3 usos de margen por si el navegador reintenta)
     const uses = (pass.uses || 0) + 1;
@@ -378,14 +384,14 @@ export async function chainPublic(req, env, url) {
       DB.prepare('UPDATE sc_gates SET downloads = COALESCE(downloads, 0) + 1 WHERE release_id = ?').bind(rid),
       DB.prepare('INSERT INTO sc_downloads (release_id, member_id, at) VALUES (?, ?, ?)').bind(rid, pass.member || null, now()),
     ]).catch(() => {});
-    if (uses >= 3) await env.FILES.delete(`dl/${dl}`).catch(() => {});
-    else await env.FILES.put(`dl/${dl}`, JSON.stringify({ ...pass, uses }), { expirationTtl: 1800 }).catch(() => {});
+    if (uses >= 3) await tokDel(env, `dl/${dl}`).catch(() => {});
+    else await tokPut(env, `dl/${dl}`, { ...pass, uses }, 1800).catch(() => {});
     const gate = await DB.prepare('SELECT file, file_name FROM sc_gates WHERE release_id = ? AND active = 1').bind(rid).first();
     if (!gate?.file) throw new ChainError(404, 'Not available.');
     const f = await env.FILES.get(gate.file, { type: 'arrayBuffer' });
     if (!f) throw new ChainError(404, 'File not found.');
     const name = (gate.file_name || `${rid}.mp3`).replace(/[\\/:*?"<>|]+/g, '');
-    return new Response(f, { headers: { 'Content-Type': 'audio/mpeg', 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store' } });
+    return new Response(f, { headers: { 'Content-Type': 'audio/mpeg', 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
   }
   throw new ChainError(404, 'Not found.');
 }

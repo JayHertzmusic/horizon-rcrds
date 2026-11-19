@@ -90,7 +90,7 @@ async function pdfBody(req) {
   if (new TextDecoder().decode(buf.slice(0, 5)) !== '%PDF-') throw new ContractError(400, 'Upload a PDF file.');
   return buf;
 }
-const pdfResponse = (buf, name) => new Response(buf, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${name}"`, 'Cache-Control': 'no-store' } });
+const pdfResponse = (buf, name) => new Response(buf, { headers: { 'Content-Type': 'application/pdf', 'Content-Disposition': `inline; filename="${name}"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 const sha256 = async buf => [...new Uint8Array(await crypto.subtle.digest('SHA-256', buf))].map(b => b.toString(16).padStart(2, '0')).join('');
 export const signedName = c => `${String(c.title || 'Contract').replace(/[\\/:*?"<>|]+/g, '').trim() || 'Contract'} (signed).pdf`;
 // los enlaces de los correos siempre con la web oficial (aunque se envíe desde www. o desde workers.dev)
@@ -634,7 +634,8 @@ export async function signApi(req, env, url, mail, ctx) {
     title: mailName(c), status: c.status, draft, pdf_hash: c.pdf_hash, email: me.email || '', signed_pdf: !!c.signed_pdf,
     me: { index: sg.findIndex(x => x.id === me.id), label: me.label || 'Artist', name: legalName(c, me, sg), box: box(me.box), signed: !!me.signed_at },
     // firmas de todos (las que ya existen), para verlas en su sitio y crear el PDF firmado
-    signers: sg.map(r => ({ label: r.label || '', box: box(r.box), signed: r.signed_at ? { at: r.signed_at, name: r.name, email: r.signer_email, signature: r.signature, ip: r.ip, ua: r.ua } : null })),
+    // (email, IP y dispositivo de los demás solo cuando han firmado todos: van en el certificado del PDF firmado)
+    signers: sg.map(r => ({ label: r.label || '', box: box(r.box), signed: r.signed_at ? { at: r.signed_at, name: r.name, signature: r.signature, ...(r.id === me.id || sg.every(x => x.signed_at) ? { email: r.signer_email, ip: r.ip, ua: r.ua } : {}) } : null })),
   });
   if (req.method === 'GET') return view();
   if (req.method !== 'POST') throw new ContractError(405, 'Not allowed.');

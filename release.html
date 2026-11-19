@@ -4,10 +4,27 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script>
+    /* Seguridad: los datos (también los que llegan de SoundCloud) se limpian antes de pintarlos:
+       enlaces solo http(s), imágenes solo archivos o https, colores #hex, textos sin < > " (nada de HTML). */
+    window.hzSafe = function (list) {
+      function val(k, v) {
+        if (typeof v === 'string') {
+          var t = v.trim();
+          if (/(^|_)(link|url|href)$/i.test(k)) return /^https?:\/\/[^\s"'<>]+$/i.test(t) ? t : '';
+          if (/^(image|preview|cover|audio)$/i.test(k)) return /^(https:\/\/[^\s"'<>]+|(\.?\/)?(?!.*\.\.)[\w\/.-]{1,200})$/i.test(t) ? t : '';
+          if (k === 'color') return /^#[0-9a-f]{3,8}$/i.test(t) ? t : '';
+          return v.replace(/</g, '‹').replace(/>/g, '›').replace(/"/g, '”');
+        }
+        if (Array.isArray(v)) return v.map(function (x) { return val(k, x); });
+        if (v && typeof v === 'object') { var o = {}; for (var kk in v) if (Object.prototype.hasOwnProperty.call(v, kk)) o[kk] = val(kk, v[kk]); return o; }
+        return v;
+      }
+      return Array.isArray(list) ? list.map(function (r) { return val('', r); }) : list;
+    };
     /* start downloading the release data straight away, in parallel with the styles */
     window.HZ_RELEASES = fetch('./releases.json', { cache: 'no-cache' }).then(function (r) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
-      return r.json();
+      return r.json().then(hzSafe);
     });
     window.HZ_RELEASES.catch(function () {});
   </script>
@@ -606,7 +623,7 @@ new IntersectionObserver(([e]) => e.target.classList.toggle('is-off', !e.isInter
 (async () => {
   let releases;
   try {
-    releases = await (window.HZ_RELEASES || fetch('./releases.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }));
+    releases = hzSafe(await (window.HZ_RELEASES || fetch('./releases.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })));
     if (!Array.isArray(releases) || !releases.length) throw new Error('empty');
   } catch (err) {
     document.getElementById('head').innerHTML = '<p style="color:#ef4444;font-size:0.75rem;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;">Could not load this release.</p>';

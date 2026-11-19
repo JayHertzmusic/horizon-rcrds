@@ -19,11 +19,28 @@
     }
     /* Start downloading the data straight away, in parallel with the styles and fonts
        (loadReleases / loadRadio / loadPlaylists use these instead of waiting for the end of the page). */
+    /* Seguridad: los datos (también los que llegan de SoundCloud) se limpian antes de pintarlos:
+       enlaces solo http(s), imágenes solo archivos o https, colores #hex, textos sin < > " (nada de HTML). */
+    window.hzSafe = function (list) {
+      function val(k, v) {
+        if (typeof v === 'string') {
+          var t = v.trim();
+          if (/(^|_)(link|url|href)$/i.test(k)) return /^https?:\/\/[^\s"'<>]+$/i.test(t) ? t : '';
+          if (/^(image|preview|cover|audio)$/i.test(k)) return /^(https:\/\/[^\s"'<>]+|(\.?\/)?(?!.*\.\.)[\w\/.-]{1,200})$/i.test(t) ? t : '';
+          if (k === 'color') return /^#[0-9a-f]{3,8}$/i.test(t) ? t : '';
+          return v.replace(/</g, '‹').replace(/>/g, '›').replace(/"/g, '”');
+        }
+        if (Array.isArray(v)) return v.map(function (x) { return val(k, x); });
+        if (v && typeof v === 'object') { var o = {}; for (var kk in v) if (Object.prototype.hasOwnProperty.call(v, kk)) o[kk] = val(kk, v[kk]); return o; }
+        return v;
+      }
+      return Array.isArray(list) ? list.map(function (r) { return val('', r); }) : list;
+    };
     window.HZ_DATA = {};
     ['releases', 'mixtapes', 'playlists'].forEach(function (n) {
       HZ_DATA[n] = fetch('./' + n + '.json', { cache: 'no-cache' }).then(function (r) {
         if (!r.ok) throw new Error('HTTP ' + r.status + ' — ' + r.statusText);
-        return r.json();
+        return r.json().then(hzSafe);
       });
       HZ_DATA[n].catch(function () {});
     });
@@ -1904,7 +1921,7 @@ function populateGrid(releases) {
 async function loadReleases() {
   try {
     /* already requested at the top of the page (window.HZ_DATA) */
-    const data = await (window.HZ_DATA && HZ_DATA.releases || fetch('./releases.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }));
+    const data = hzSafe(await (window.HZ_DATA && HZ_DATA.releases || fetch('./releases.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })));
 
     if (!Array.isArray(data) || data.length === 0) {
       throw new Error('releases.json must be a non-empty array');
@@ -2004,7 +2021,7 @@ async function loadPlaylists() {
   const grid = document.getElementById('playlists-grid');
   try {
     /* already requested at the top of the page (window.HZ_DATA) */
-    const data = await (window.HZ_DATA && HZ_DATA.playlists || fetch('./playlists.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }));
+    const data = hzSafe(await (window.HZ_DATA && HZ_DATA.playlists || fetch('./playlists.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })));
 
     if (!Array.isArray(data) || data.length === 0) {
       throw new Error('playlists.json must be a non-empty array');
@@ -2203,7 +2220,7 @@ async function loadRadio() {
   const heroCard = document.getElementById('hero-radio');
   try {
     /* already requested at the top of the page (window.HZ_DATA) */
-    const data = await (window.HZ_DATA && HZ_DATA.mixtapes || fetch('./mixtapes.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }));
+    const data = hzSafe(await (window.HZ_DATA && HZ_DATA.mixtapes || fetch('./mixtapes.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })));
     if (!Array.isArray(data) || !data.length) throw new Error('no mixtapes yet');
 
     populateRadioHero(data[0]);

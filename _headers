@@ -1,0 +1,20 @@
+# Cabeceras de seguridad de la web (Cloudflare las añade a cada página y archivo; este archivo no se publica)
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+  Strict-Transport-Security: max-age=31536000
+  X-Frame-Options: SAMEORIGIN
+
+# el panel y la firma de contratos no se pueden meter dentro de otra web (clickjacking)
+/admin/*
+  ! X-Frame-Options
+  X-Frame-Options: DENY
+  Cache-Control: no-cache
+/team/*
+  ! X-Frame-Options
+  X-Frame-Options: DENY
+  Cache-Control: no-cache
+/sign*
+  ! X-Frame-Options
+  X-Frame-Options: DENY

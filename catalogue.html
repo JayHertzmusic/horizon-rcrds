@@ -373,6 +373,23 @@ function applyAccent(color) {
 }
 
 /* ── Image path helper ───────────────────────── */
+    /* Seguridad: los datos (también los que llegan de SoundCloud) se limpian antes de pintarlos:
+   enlaces solo http(s), imágenes solo archivos o https, colores #hex, textos sin < > " (nada de HTML). */
+window.hzSafe = function (list) {
+  function val(k, v) {
+    if (typeof v === 'string') {
+      var t = v.trim();
+      if (/(^|_)(link|url|href)$/i.test(k)) return /^https?:\/\/[^\s"'<>]+$/i.test(t) ? t : '';
+      if (/^(image|preview|cover|audio)$/i.test(k)) return /^(https:\/\/[^\s"'<>]+|(\.?\/)?(?!.*\.\.)[\w\/.-]{1,200})$/i.test(t) ? t : '';
+      if (k === 'color') return /^#[0-9a-f]{3,8}$/i.test(t) ? t : '';
+      return v.replace(/</g, '‹').replace(/>/g, '›').replace(/"/g, '”');
+    }
+    if (Array.isArray(v)) return v.map(function (x) { return val(k, x); });
+    if (v && typeof v === 'object') { var o = {}; for (var kk in v) if (Object.prototype.hasOwnProperty.call(v, kk)) o[kk] = val(kk, v[kk]); return o; }
+    return v;
+  }
+  return Array.isArray(list) ? list.map(function (r) { return val('', r); }) : list;
+};
 function imgPath(f) {
   if (!f) return '';
   if (f.startsWith('http') || f.startsWith('./') || f.startsWith('/')) return f;
@@ -528,7 +545,7 @@ async function loadCatalogue() {
   try {
     const res  = await fetch('./releases.json', { cache: 'no-cache' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    const data = hzSafe(await res.json());
 
     if (!Array.isArray(data) || !data.length) throw new Error('Empty');
 
@@ -540,7 +557,7 @@ async function loadCatalogue() {
     /* Radio mixtapes (optional: without mixtapes.json there are no tabs) */
     try {
       const mres = await fetch('./mixtapes.json', { cache: 'no-cache' });
-      const mix = mres.ok ? await mres.json() : [];
+      const mix = mres.ok ? hzSafe(await mres.json()) : [];
       if (Array.isArray(mix) && mix.length) {
         allMixtapes = mix.map(m => ({
           title: m.number ? `Horizon Mixtape ${m.number}` : (m.title || 'Horizon Mixtape'),

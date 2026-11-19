@@ -3784,6 +3784,8 @@
     $$('[data-mframe]').forEach(fr => {
       const m = visMsgs(t)[+fr.dataset.mframe], b = m.parsed || (m.parsed = walkParts(m.payload));
       let html = b.html || textHtml(b.text || '');
+      // (seguridad) un correo no puede redirigir su recuadro a otra web ni cambiar adónde abren los enlaces
+      html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']?refresh[^>]*>/gi, '').replace(/<base[^>]*>/gi, '');
       html = html.replace(/cid:([^"' )>]+)/g, (x, id) => b.cids[id]?.url || (b.cids[id]?.data ? `data:${b.cids[id].type};base64,${b.cids[id].data.replace(/-/g, '+').replace(/_/g, '/')}` : x));
       fr.srcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data: blob:; style-src 'unsafe-inline' https:; font-src https: data:"><base target="_blank"><style>html,body{margin:0;background:#fff;color:#111}body{padding:16px;font:14px/1.5 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}blockquote{margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex;color:#555}</style>${html}`;
       fr.onload = () => { try {

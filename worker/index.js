@@ -65,7 +65,7 @@ const EMAIL = /^[^\s@<>"',;]+@[^\s@<>"',;]+\.[a-z]{2,}$/i;
 const FILE_NAME = /^[\w-][\w.-]{0,80}$/;
 const clean = (v, max) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, max);
 const owners = env => String(env.OWNER_EMAILS || '').toLowerCase().split(/[\s,;]+/).filter(Boolean);
-const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
+const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
 const fail = (status, message) => json({ message, panel: true }, status);
 const isDevOrigin = o => /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(o || '');
 
@@ -96,7 +96,11 @@ const BASE_SCHEMA = [
 const ALTERS = [
   ['ALTER TABLE panel_members ADD COLUMN label TEXT'],   // nombre que le pone el owner a cada persona
   ['ALTER TABLE panel_members ADD COLUMN color TEXT'],
-  ['ALTER TABLE panel_members ADD COLUMN mail INTEGER NOT NULL DEFAULT 0'],   // acceso a Mail (el Gmail de Horizon): solo quien elija un owner
+  ['ALTER TABLE panel_members ADD COLUMN mail INTEGER NOT NULL DEFAULT 0'],
+  // entrar con código: bloqueo tras 5 fallos y máximo de códigos al día (que nadie pueda ir probando códigos sin fin)
+  ['ALTER TABLE panel_email_codes ADD COLUMN lock_until INTEGER NOT NULL DEFAULT 0'],
+  ['ALTER TABLE panel_email_codes ADD COLUMN day_at INTEGER NOT NULL DEFAULT 0'],
+  ['ALTER TABLE panel_email_codes ADD COLUMN day_n INTEGER NOT NULL DEFAULT 0'],   // acceso a Mail (el Gmail de Horizon): solo quien elija un owner
   ['ALTER TABLE panel_profiles ADD COLUMN color TEXT'],
   ['ALTER TABLE panel_profiles ADD COLUMN soundcloud TEXT'],   // perfil de SoundCloud (la foto se toma de ahí) y la última foto copiada
   ['ALTER TABLE panel_profiles ADD COLUMN sc_pic TEXT'],
@@ -338,7 +342,7 @@ async function serveFile(name, req, env) {
   const headers = new Headers({
     'Content-Type': meta.type || TYPES[name.split('.').pop().toLowerCase()] || 'application/octet-stream',
     'Cache-Control': PROTECTED[name] ? 'public, max-age=60' : 'public, max-age=31536000, immutable',
-    'Accept-Ranges': 'bytes',
+    'Accept-Ranges': 'bytes', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox",
     ETag: `"${meta.at || size}"`,
   });
   if (req.headers.get('If-None-Match') === headers.get('ETag')) return new Response(null, { status: 304, headers });
@@ -396,6 +400,21 @@ function checkChange(s, old, next, uploads, removes) {
   }
 }
 
+/* Seguridad: lo que se publica en la web (panel o sincronización con SoundCloud) se limpia: enlaces solo http(s),
+   imágenes solo nombres de archivo o https, colores #hex y textos sin < > " (no se puede colar HTML en la web). */
+function cleanSite(k, v) {
+  if (typeof v === 'string') {
+    const t = v.trim();
+    if (/(^|_)(link|url|href)$/i.test(k)) return /^https?:\/\/[^\s"'<>]+$/i.test(t) ? t : '';
+    if (/^(image|preview|cover|audio)$/i.test(k)) return /^(https:\/\/[^\s"'<>]+|(\.?\/)?(?!.*\.\.)[\w\/.-]{1,200})$/i.test(t) ? t : '';
+    if (k === 'color') return /^#[0-9a-f]{3,8}$/i.test(t) ? t : '';
+    return v.replace(/</g, '\u2039').replace(/>/g, '\u203a').replace(/"/g, '\u201d').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '');
+  }
+  if (Array.isArray(v)) return v.map(x => cleanSite(k, x));
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([kk, vv]) => [kk, cleanSite(kk, vv)]));
+  return v;
+}
+
 /* Publicar: un cambio = listas nuevas + archivos subidos + archivos que ya no se usan. */
 async function publish(req, env, s) {
   if (!s.sync && !anyCan(s, 'edit') && !anyCan(s, 'delete')) throw new HttpError(403, 'Your role can only view.');
@@ -407,8 +426,9 @@ async function publish(req, env, s) {
   const next = { ...old }, changed = [];
   for (const k of Object.keys(DATA)) {
     if (!(meta.lists && k in meta.lists)) continue;
-    const v = meta.lists[k];
+    let v = meta.lists[k];
     if (!Array.isArray(v) || v.some(x => !x || typeof x !== 'object' || Array.isArray(x))) throw new HttpError(400, `${DATA[k].file} is not a valid list.`);
+    v = v.map(x => cleanSite('', x));
     if (JSON.stringify(v).length > 1_000_000) throw new HttpError(400, `${DATA[k].file} is too big.`);
     if (JSON.stringify(v) !== JSON.stringify(old[k])) { next[k] = v; changed.push(k); }
   }
@@ -628,11 +648,13 @@ async function api(req, env, p, ctx) {
     const who = await resolve(env, email);
     // misma respuesta tenga acceso o no (no se revela quién está en el equipo)
     if (who && !(ar === 'admin' && !who.owner)) {
-      const old = await env.DB.prepare('SELECT sent_at FROM panel_email_codes WHERE email = ?').bind(email).first();
-      if (!old || now() - old.sent_at > 60e3) {
+      const old = await env.DB.prepare('SELECT sent_at, lock_until, day_at, day_n FROM panel_email_codes WHERE email = ?').bind(email).first();
+      // como mucho un código por minuto, 8 al día, y nada mientras está bloqueado (5 fallos = 30 min)
+      const newDay = !old || now() - (old.day_at || 0) > 864e5, dayN = newDay ? 0 : old.day_n || 0;
+      if ((!old || now() - old.sent_at > 60e3) && !(old?.lock_until > now()) && dayN < 8) {
         const code = String(crypto.getRandomValues(new Uint32Array(1))[0] % 1e6).padStart(6, '0');
-        await env.DB.prepare('INSERT INTO panel_email_codes (email, hash, area, expires_at, tries, sent_at) VALUES (?, ?, ?, ?, 0, ?) ON CONFLICT(email) DO UPDATE SET hash = excluded.hash, area = excluded.area, expires_at = excluded.expires_at, tries = 0, sent_at = excluded.sent_at')
-          .bind(email, await sha256(email + ':' + code), ar, now() + 10 * 60e3, now()).run();
+        await env.DB.prepare('INSERT INTO panel_email_codes (email, hash, area, expires_at, tries, sent_at, lock_until, day_at, day_n) VALUES (?, ?, ?, ?, 0, ?, 0, ?, ?) ON CONFLICT(email) DO UPDATE SET hash = excluded.hash, area = excluded.area, expires_at = excluded.expires_at, tries = 0, sent_at = excluded.sent_at, day_at = excluded.day_at, day_n = excluded.day_n')
+          .bind(email, await sha256(email + ':' + code), ar, now() + 10 * 60e3, now(), newDay ? now() : old.day_at, dayN + 1).run();
         try { await loginCodeMail(env, email, code, ar); }
         catch (e) { console.error('login code', e); throw new HttpError(502, 'The code could not be sent. Try again in a minute.'); }
       }
@@ -643,15 +665,17 @@ async function api(req, env, p, ctx) {
     const b = parse(await req.text()) || {};
     const email = String(b.email || '').trim().toLowerCase(), code = String(b.code || '').replace(/\D/g, ''), ar = area(b.area);
     const row = await env.DB.prepare('SELECT * FROM panel_email_codes WHERE email = ?').bind(email).first();
-    if (!row || row.expires_at < now() || row.tries >= 5) {
-      if (row) await env.DB.prepare('DELETE FROM panel_email_codes WHERE email = ?').bind(email).run();
-      throw new HttpError(400, 'That code has expired. Ask for a new one.');
+    if (!row || !row.hash || row.expires_at < now() || row.tries >= 5 || row.lock_until > now()) {
+      // (la fila se queda: guarda el bloqueo y el contador del día)
+      if (row) await env.DB.prepare("UPDATE panel_email_codes SET hash = '', expires_at = 0 WHERE email = ?").bind(email).run();
+      throw new HttpError(400, row?.lock_until > now() ? 'Too many wrong codes. Try again in 30 minutes.' : 'That code has expired. Ask for a new one.');
     }
     if (code.length !== 6 || await sha256(email + ':' + code) !== row.hash) {
-      await env.DB.prepare('UPDATE panel_email_codes SET tries = tries + 1 WHERE email = ?').bind(email).run();
-      throw new HttpError(400, 'That code is not correct.');
+      const lock = row.tries + 1 >= 5 ? now() + 30 * 60e3 : 0;
+      await env.DB.prepare('UPDATE panel_email_codes SET tries = tries + 1, lock_until = MAX(lock_until, ?) WHERE email = ?').bind(lock, email).run();
+      throw new HttpError(400, lock ? 'Too many wrong codes. Try again in 30 minutes.' : 'That code is not correct.');
     }
-    await env.DB.prepare('DELETE FROM panel_email_codes WHERE email = ?').bind(email).run();
+    await env.DB.prepare("UPDATE panel_email_codes SET hash = '', expires_at = 0, tries = 0 WHERE email = ?").bind(email).run();
     const m = await env.DB.prepare('SELECT name, picture FROM panel_members WHERE email = ?').bind(email).first();
     return json(await startSession(env, { email, name: clean(m?.name || email.split('@')[0], 80), picture: m?.picture || '' }, ar));
   }
@@ -668,7 +692,7 @@ async function api(req, env, p, ctx) {
   if (av) {
     const f = await env.FILES.getWithMetadata('avatars/' + av[1], { type: 'arrayBuffer' });
     if (!f.value) throw new HttpError(404, 'Not found.');
-    return new Response(f.value, { headers: { 'Content-Type': f.metadata?.type || 'image/jpeg', 'Cache-Control': 'public, max-age=31536000, immutable' } });
+    return new Response(f.value, { headers: { 'Content-Type': f.metadata?.type || 'image/jpeg', 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox" } });
   }
   if (p === '/api/sc/login' || p === '/api/sc/callback') return await scOauth(req, env, url);   // cadena de SoundCloud (OAuth del artista)
   if (p.startsWith('/api/public/download/')) { const r = await chainPublic(req, env, url); return r instanceof Response ? r : json(r); }   // download gate (sin sesión)

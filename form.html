@@ -35,11 +35,11 @@
   .q > label, .q > .lbl { display: block; margin-bottom: 4px; font-weight: 600; font-size: 17px; color: #fff; }
   .req { color: var(--muted); margin-left: 4px; }
   .help { margin: 0 0 14px; font-size: 14.5px; color: var(--muted); white-space: pre-line; }
-  /* nota importante (marcada en el panel): en rojo, entera y con ⚠, para que nadie se la salte */
-  .help.imp, html.excl .help.imp { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border: 1px solid rgba(255, 77, 77, .55); border-left: 4px solid #ff4d4d; border-radius: 8px;
-    background: rgba(255, 60, 60, .12); color: #ffb3b3; font-weight: 600; -webkit-line-clamp: unset; overflow: visible; }
-  .help.imp a { color: #fff; }
-  .imp-ico { color: #ff4d4d; font-size: 1.15em; line-height: 1.2; flex: none; }
+  /* nota importante (marcada en el panel): un recordatorio discreto, no un error. Sin recuadro, mismo tamaño y espacio
+     que las demás notas; en rojo suave, en negrita, con un ⚠ pequeño, y siempre entera (sin recortar) */
+  .help.imp, html.excl .help.imp { display: block; color: #ff8a8a; font-weight: 600; -webkit-line-clamp: unset; overflow: visible; }
+  .help.imp a { color: #ffc2c2; }
+  .imp-ico { color: #ff6b6b; font-size: .95em; margin-right: 5px; }
   .q > label + input, .q > label + textarea, .q > label + select { margin-top: 10px; }
   .sec { margin: 54px 0 18px; padding-top: 6px; text-align: left; }
   .sec h2 { margin: 0; font: 400 38px/1 'Bebas Neue', sans-serif; letter-spacing: .04em; color: #fff; }

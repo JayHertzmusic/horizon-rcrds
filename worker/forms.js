@@ -88,6 +88,9 @@ async function seenBy(DB, ids) {
 }
 const LINK_DAYS = 30;
 const sha = async v => [...new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(v)))].map(b => b.toString(16).padStart(2, '0')).join('');
+// código de los enlaces personales: corto (10 letras, sin las que se confunden: 0 O 1 l I), unos 3·10¹⁷ posibles
+const SHORT = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789';
+const shortToken = () => [...crypto.getRandomValues(new Uint8Array(10))].map(b => SHORT[b % SHORT.length]).join('');
 const linkToken = () => { const u = crypto.getRandomValues(new Uint8Array(18)); return btoa(String.fromCharCode(...u)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 // estado de un enlace personal para mostrarlo en el panel
 const linkState = l => l.revoked ? 'revoked' : l.used_at ? 'sent' : l.expires_at < now() ? 'expired' : l.opened_at ? 'opened' : 'unused';
@@ -106,12 +109,18 @@ const multiOf = f => {
 async function makeLinks(DB, f, names, by, origin) {
   const t = now(), grp = names.length > 1 ? linkToken().slice(0, 16) : null, made = [], hashes = [];
   for (let i = 0; i < names.length; i++) {
-    const tok = linkToken(), hash = await sha(tok);
+    const tok = shortToken(), hash = await sha(tok);
     await DB.prepare('INSERT INTO form_links (hash, form_id, note, created_by, created_at, expires_at, token, grp, grp_pos, grp_n) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .bind(hash, f.id, names[i], by, t, t + LINK_DAYS * 864e5, tok, grp, grp ? i + 1 : null, grp ? names.length : null).run();
-    made.push({ note: names[i], url: `${origin}/forms/${f.slug}?k=${tok}` }); hashes.push(hash);
+    made.push({ note: names[i], url: `${origin}/r/${tok}` }); hashes.push(hash);   // enlace corto: horizonrcrds.com/r/<código>
   }
   return { links: made, hashes, expires_at: t + LINK_DAYS * 864e5 };
+}
+// enlace corto /r/<código> → a qué formulario va (null si no existe)
+export async function shortLinkForm(env, k) {
+  if (!/^[\w-]{10,64}$/.test(k)) return null;
+  const r = await env.DB.prepare('SELECT f.slug FROM form_links l JOIN forms f ON f.id = l.form_id WHERE l.hash = ?').bind(await sha(k)).first();
+  return r?.slug || null;
 }
 const siteOrigin = url => /(^|\.)horizonrcrds\.com$/.test(url.hostname) ? 'https://horizonrcrds.com' : url.origin;
 
@@ -454,7 +463,7 @@ export async function formsApi(req, env, s, url, audit) {
     return { links: rows.map(l => ({ id: l.hash.slice(0, 16), note: l.note || '', by: l.created_by, by_name: l.by_name || String(l.created_by || '').split('@')[0], created_at: l.created_at, expires_at: l.expires_at, opened_at: l.opened_at, used_at: l.used_at, response_id: l.response_id || null,
       grp: l.grp || null, grp_pos: l.grp_pos || null, grp_n: l.grp_n || null,
       // el enlace (con su clave) solo lo ve quien puede editar: con él se puede enviar el formulario
-      state: linkState(l), url: l.token && canEdit ? `${origin}/forms/${f.slug}?k=${l.token}` : '' })), canEdit };
+      state: linkState(l), url: l.token && canEdit ? `${origin}/r/${l.token}` : '' })), canEdit };
   }
   // plantillas para contestar (aceptar / rechazar). Verlas: quien ve el formulario; cambiarlas y enviar: quien lo puede editar.
   if (mm[2] === 'replies' && m === 'GET') return { templates: await replyTemplates(env, f.id) };
@@ -625,7 +634,7 @@ export async function publicFormsApi(req, env, url) {
   let link = null;
   if (f.invite) {
     const k = String(url.searchParams.get('k') || b.k || ''), dev = String(req.headers.get('X-Form-Device') || '');
-    if (!/^[\w-]{16,64}$/.test(k)) throw new FormError(403, 'This form is private. Ask HORIZON RCRDS for your personal link.');
+    if (!/^[\w-]{10,64}$/.test(k)) throw new FormError(403, 'This form is private. Ask HORIZON RCRDS for your personal link.');
     link = await DB.prepare('SELECT * FROM form_links WHERE hash = ? AND form_id = ?').bind(await sha(k), f.id).first();
     if (!link) throw new FormError(404, 'This link is not valid. Ask HORIZON RCRDS for a new one.');
     if (link.revoked) throw new FormError(410, 'This link has been cancelled. Ask HORIZON RCRDS for a new one.');

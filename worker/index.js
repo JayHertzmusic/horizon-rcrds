@@ -6,7 +6,7 @@
    - La sincronización con SoundCloud (GitHub Actions) se identifica con el token OIDC que GitHub da a ese
      workflow: no hay claves guardadas en ningún sitio. */
 import STATIC_FILES from './static-files.json';
-import { FORM_SCHEMA, FORM_LINK_COLUMNS, FormError, formsApi, publicFormsApi, formsCount, formsUnseen, gformHook } from './forms.js';
+import { FORM_SCHEMA, FORM_LINK_COLUMNS, FormError, formsApi, publicFormsApi, formsCount, formsUnseen, gformHook, shortLinkForm } from './forms.js';
 import { CONTRACT_SCHEMA, CONTRACT_COLUMNS, SIGNER_COLUMNS, ContractError, contractsApi, signApi, checkDriveFiles } from './contracts.js';
 import { EmailMessage } from 'cloudflare:email';
 import { loginCodeMail } from './contract-mail.js';
@@ -772,6 +772,9 @@ export default {
     const url = new URL(req.url), p = url.pathname;
     try {
       if (p.startsWith('/api/')) return await api(req, env, p, ctx);
+      // enlace personal corto: /r/<código> → su formulario (/forms/<form>?k=<código>)
+      const sl = p.match(/^\/r\/([\w-]{10,64})\/?$/);
+      if (sl) { await ensureSchema(env); const slug = await shortLinkForm(env, sl[1]); return Response.redirect(`${url.origin}/forms/${slug || 'release-form'}?k=${sl[1]}`, 302); }
       // página pública de cada formulario: /forms/<enlace>
       if (/^\/forms\/[a-z0-9-]+\/?$/.test(p)) return env.ASSETS.fetch(new Request(new URL('/form', url), req));
       // página de firma de cada contrato: /sign/<token>

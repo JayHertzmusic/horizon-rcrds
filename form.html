@@ -516,6 +516,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     return v;
   })();
   const linkHeaders = KEY ? { 'X-Form-Device': device } : {};
+  let sendTried = false;   // este dispositivo ya intentó enviar (para reconocer su propio envío si se cortó la conexión)
   const apiUrl = () => '/api/public/forms/' + encodeURIComponent(slug) + (KEY ? '?k=' + encodeURIComponent(KEY) : '');
   // borrador en este dispositivo: si se recarga la página (o se cierra) a medias, las respuestas siguen ahí. Se borra al enviar.
   const DRAFT = !PREVIEW && !EMBED && (KEY || slug) ? 'hz_draft_' + (KEY ? 'k_' + KEY.slice(0, 24) : 's_' + slug) : '';
@@ -798,9 +799,12 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     }
     btn.disabled = true; btn.textContent = 'Sending…'; err.hidden = true;
     try {
+      if (sendTried === false) sendTried = null;
       const r = await fetch(apiUrl(), { method: 'POST', headers: { 'Content-Type': 'application/json', ...linkHeaders }, body: JSON.stringify({ answers: a, _hp: f.elements._hp.value, k: KEY }) });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j.message || 'Something went wrong. Please try again.');
+      // (si la conexión se cortó justo después de guardarse, al reintentar el enlace ya está «usado»: fue este envío)
+      const mine = r.status === 410 && /already been used/i.test(j.message || '') && sendTried;
+      if (!r.ok && !mine) throw new Error(j.message || 'Something went wrong. Please try again.');
       document.getElementById('bar').style.width = '100%';
       dropDraft();
       if (EMBED) parent.postMessage({ type: 'hz-form-sent' }, location.origin);
@@ -810,7 +814,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
       document.documentElement.classList.add('sent');   // el «Thank you» va centrado en la pantalla
       const mz = document.querySelector('main'); if (mz) mz.style.zoom = '';
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (x) { err.textContent = x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Send'; }
+    } catch (x) { if (sendTried === null || /fetch|network|load failed/i.test(x.message)) sendTried = true; err.textContent = /fetch|network|load failed/i.test(x.message) ? 'No connection. Check your internet and press Send again.' : x.message; err.hidden = false; btn.disabled = false; btn.textContent = 'Send'; }
   });
   document.addEventListener('input', saveDraft);
   document.addEventListener('change', saveDraft);

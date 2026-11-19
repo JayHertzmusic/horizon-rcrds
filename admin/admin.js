@@ -352,7 +352,8 @@
   // secciones en el orden que eligen los owners
   const ORDER = () => (auth?.sections || []).map(x => x.id).concat(['releases', 'radio', 'playlists', 'player', 'forms', 'contracts', 'calendar']).filter((v, i, a) => a.indexOf(v) === i);
   const canTab = v => v === 'forms' ? showForms() : can(v);
-  const firstView = () => ORDER().find(canTab) || (showForms() ? 'forms' : MODE === 'admin' && auth?.user?.owner && !preview ? 'team' : 'none');
+  // (alguien con solo Mail entra directo a Mail)
+  const firstView = () => ORDER().find(canTab) || (showForms() ? 'forms' : MODE === 'admin' && auth?.user?.owner && !preview ? 'team' : canMail() ? 'mail' : 'none');
   const emptyRepo = () => ({ head: '', treeSha: '', files: new Map(), truncated: false, releases: [], mixtapes: [], playlists: [], ignore: [] });
   function useSession(res) {
     auth = { token: res.token || auth?.token, user: res.user, sections: res.sections };
@@ -366,7 +367,7 @@
       const res = cred.code ? await api('POST', '/api/auth/email/verify', { email: cred.mail, code: cred.code, area: MODE })
         : await api('POST', cred.email ? '/api/auth/dev' : '/api/auth/login', cred.email ? { email: cred.email, area: MODE } : { credential: cred.credential, area: MODE });
       useSession(res);
-      repo = firstView() === 'none' ? emptyRepo() : await loadRepo();
+      repo = ['none', 'mail'].includes(firstView()) ? emptyRepo() : await loadRepo();
       saveAuth(auth, remember);
       go(firstView());
     } catch (e) {
@@ -4632,7 +4633,7 @@
       useSession(await api('GET', '/api/auth/me'));   // el rol puede haber cambiado desde la última vez
       const remembered = (() => { try { return !!localStorage.getItem(AUTH_KEY); } catch { return false; } })();
       saveAuth(auth, remembered);
-      repo = firstView() === 'none' ? emptyRepo() : await loadRepo();
+      repo = ['none', 'mail'].includes(firstView()) ? emptyRepo() : await loadRepo();
       const place = readPlace();
       go(lastView());   // al refrescar, sigues en la misma sección…
       restorePlace(place);   // …y en el mismo sitio dentro de ella

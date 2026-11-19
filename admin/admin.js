@@ -3658,7 +3658,7 @@
       if (e.status === 429 || e.status >= 500 || e.status === 0) { clearTimeout(mail.retryT); mail.retryT = setTimeout(() => { mail.err = ''; if (view === 'mail' && !mail.loading) loadMail(more); }, 6000); }
     }
     mail.loading = false; mail.more = false;
-    if (view === 'mail') { render(); if (mail.open && !mail.thread) openThread(mail.open); }
+    if (view === 'mail') { mailRender(); if (mail.open && !mail.thread) openThread(mail.open); }
   }
   // contadores de las carpetas al día después de una acción (sin esperar)
   let infoT = 0, infoAt = 0;
@@ -3714,7 +3714,7 @@
     const cats = mailCats() ? `<div class="m-cats" role="tablist">${MAIL_CATS.map(([id, l]) => `<button type="button" role="tab" class="${mail.cat === id ? 'on' : ''}" data-mcat="${id}" aria-selected="${mail.cat === id}">${mico(id)}<span>${l}</span></button>`).join('')}</div>` : '';
     const inner = mail.open ? `
         <div class="m-tool"><span class="m-tl"><button type="button" class="ic m-act" data-mail="close" title="Back to ${esc(boxLabel(mail.box))}" aria-label="Back">←</button>${mail.thread ? mailBulkBtns(' one') : ''}</span>${mailActions()}</div>
-        <section class="m-read" id="m-read" aria-live="polite">${mailReader()}</section>` : `
+        <section class="m-read" id="m-read" aria-live="polite" data-tid="${esc(mail.thread?.id || '')}">${mailReader()}</section>` : `
         <div class="m-tool"><span class="m-tl"><label class="m-ck all" title="Select all"><input type="checkbox" data-mselall aria-label="Select all"><span></span></label>
           ${nSel ? `<span class="m-nsel">${nSel} selected</span>${mailBulkBtns()}` : `<button type="button" class="ic m-act" data-mail="refresh" title="Refresh" aria-label="Refresh">${mico('refresh')}</button>`}</span>
           <span class="m-pager"><span class="muted sm-txt" id="m-range"></span><button type="button" class="ic" data-mail="prev" title="Newer" aria-label="Newer" ${mail.off ? '' : 'disabled'}>‹</button><button type="button" class="ic" data-mail="next" title="Older" aria-label="Older" ${mail.more ? 'disabled' : ''}>›</button></span></div>
@@ -3722,9 +3722,23 @@
     return `
       <div class="head m-head"><div><p class="eyebrow">Gmail</p><h1>MAIL${info?.unread ? ` <span class="count">${info.unread}</span>` : ''}</h1></div>
         <div class="head-btns m-hbtns"><form class="m-search" id="m-search" role="search"><input type="search" name="q" placeholder="Search mail" aria-label="Search mail" value="${esc(mail.q)}" autocomplete="off"></form></div></div>
-      ${mail.err ? `<p class="login-error" role="alert">${esc(mail.err)}</p>` : ''}
-      ${info && !info.contact ? `<p class="info m-warn">Replies go out as <b>${esc(info.from)}</b> until contact@horizonrcrds.com is set up in Gmail (“Send mail as”).</p>` : ''}
+      <div class="m-top">${mail.err ? `<p class="login-error" role="alert">${esc(mail.err)}</p>` : ''}${info && !info.contact ? `<p class="info m-warn">Replies go out as <b>${esc(info.from)}</b> until contact@horizonrcrds.com is set up in Gmail (“Send mail as”).</p>` : ''}</div>
       <div class="m-layout">${mailNav()}<div class="m-wrap${mail.open ? ' reading' : ''}" id="m-wrap">${inner}</div></div>`;
+  }
+  function mailRender() {
+    const wrap = $('#m-wrap');
+    if (view !== 'mail' || !wrap) { render(); return; }
+    const tmp = document.createElement('div'); tmp.innerHTML = mailPage();
+    const swap = (sel, all) => { const o = $(sel), n = tmp.querySelector(sel); if (o && n && o.outerHTML !== n.outerHTML) { if (all) o.outerHTML = n.outerHTML; else o.innerHTML = n.innerHTML; } };
+    swap('.m-head h1', true); swap('.m-top'); swap('.m-nav', true);
+    const nw = tmp.querySelector('#m-wrap'), read = $('#m-read');
+    // el mismo correo abierto: solo la barra y la cabecera (los mensajes y sus recuadros no se recargan)
+    if (mail.open && mail.thread && read && read.dataset.tid === mail.thread.id && nw.querySelector('#m-read')) {
+      swap('#m-wrap > .m-tool', true);
+      const oh = read.querySelector('.m-rhead'), nh = nw.querySelector('.m-rhead');
+      if (oh && nh && oh.outerHTML !== nh.outerHTML) oh.outerHTML = nh.outerHTML;
+    } else if (wrap.innerHTML !== nw.innerHTML || wrap.className !== nw.className) { wrap.className = nw.className; wrap.innerHTML = nw.innerHTML; }
+    sizeMail(); fitMail(); fillFrames();
   }
   function mailActions() {
     const t = mail.thread; if (!t) return '<span></span>';
@@ -3785,6 +3799,9 @@
     const t = mail.thread; if (!t || view !== 'mail') return;
     $$('[data-mframe]').forEach(fr => {
       const m = visMsgs(t)[+fr.dataset.mframe], b = m.parsed || (m.parsed = walkParts(m.payload));
+      const key = m.id + ':' + Object.values(b.cids).filter(c => c.url).length;
+      if (fr.dataset.done === key) return;
+      fr.dataset.done = key;
       let html = b.html || textHtml(b.text || '');
       // (seguridad) un correo no puede redirigir su recuadro a otra web ni cambiar adónde abren los enlaces
       html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']?refresh[^>]*>/gi, '').replace(/<base[^>]*>/gi, '');
@@ -3821,7 +3838,7 @@
   async function openThread(id) {
     mail.open = id; mail.thread = null; mail.threadErr = '';
     const row = mail.list?.find(x => x.id === id);
-    if (view === 'mail') render();
+    if (view === 'mail') mailRender();
     try {
       const t = structuredClone(await fetchThread(id));
       if (mail.open !== id) return;
@@ -3835,7 +3852,7 @@
       if (e.status === 429 || e.status >= 500 || e.status === 0) { setTimeout(() => { if (mail.open === id && !mail.thread) openThread(id); }, 4000); return; }
       mail.threadErr = e.message;
     }
-    if (view === 'mail') { render(); }
+    if (view === 'mail') { mailRender(); }
   }
   async function openDraft(id) {
     if (mailTest()) return;
@@ -3876,7 +3893,7 @@
       const word = { archive: 'Archived', trash: 'Moved to trash', restore: 'Restored', spam: 'Reported as spam', notspam: 'Moved to Inbox', read: 'Marked as read', unread: 'Marked as unread', move: 'Moved', label: 'Label added', unlabel: 'Label removed' }[act] || 'Done';
       toast(`${word}${r.done > 1 ? ` (${r.done})` : ''}`);
       const y = $('#m-read')?.scrollTop || 0;
-      busy = false; render(); refreshMailInfo();
+      busy = false; mailRender(); refreshMailInfo();
       if (y && $('#m-read')) $('#m-read').scrollTop = y;
     } catch (e) { busy = false; toast(e.message); }
   }
@@ -4006,7 +4023,7 @@
       const tid = t ? t.id : c.preset?.thread || '';
       await authFetch(`/api/mail/send${tid ? '?thread=' + encodeURIComponent(tid) : ''}`, { method: 'POST', headers: { 'Content-Type': 'message/rfc822' }, body: L.join('\r\n') });
       busyOff(form); closeComposer(); toast('Email sent');
-      if (c.preset?.draft) { await api('POST', '/api/mail/draft-delete', { msg: c.preset.draft }).catch(() => {}); if (mail.box === 'drafts') { if (mail.list) mail.list = mail.list.filter(x => x.id !== c.preset.row); render(); loadMail(); } refreshMailInfo(); }
+      if (c.preset?.draft) { await api('POST', '/api/mail/draft-delete', { msg: c.preset.draft }).catch(() => {}); if (mail.box === 'drafts') { if (mail.list) mail.list = mail.list.filter(x => x.id !== c.preset.row); mailRender(); loadMail(); } refreshMailInfo(); }
       if (t && mail.pre) delete mail.pre[t.id];
       if (t && mail.open === t.id) openThread(t.id);
       if (mail.box === 'sent' || !t) { mail.list = null; loadMail(); }
@@ -4067,9 +4084,9 @@
     if (view !== 'mail') return;
     // casillas
     const ck = e.target.closest('[data-msel]');
-    if (ck) { if (ck.checked) mail.sel.add(ck.dataset.msel); else mail.sel.delete(ck.dataset.msel); render(); return; }
+    if (ck) { if (ck.checked) mail.sel.add(ck.dataset.msel); else mail.sel.delete(ck.dataset.msel); mailRender(); return; }
     const ca = e.target.closest('[data-mselall]');
-    if (ca) { mail.sel = ca.checked ? new Set(mailShown().map(x => x.id)) : new Set(); render(); return; }
+    if (ca) { mail.sel = ca.checked ? new Set(mailShown().map(x => x.id)) : new Set(); mailRender(); return; }
     if (e.target.closest('.m-ck, .m-move')) return;
     const bk = e.target.closest('[data-mbulk]');
     if (bk) {
@@ -4088,21 +4105,21 @@
       st.classList.toggle('on', on); st.textContent = on ? '★' : '☆'; st.title = on ? 'Unstar' : 'Star'; st.setAttribute('aria-label', st.title); st.setAttribute('aria-pressed', String(on));
       try {
         await api('POST', `/api/mail/thread/${row.id}/${on ? 'star' : 'unstar'}`); if (mail.pre) delete mail.pre[row.id];
-        if (!on && mail.box === 'starred') { mail.list = mail.list.filter(x => x.id !== row.id); if (mail.off >= mail.list.length) mail.off = Math.max(0, mail.off - (mail.fit || 25)); render(); }
-      } catch (er) { row.starred = !on; render(); toast(er.message); }
+        if (!on && mail.box === 'starred') { mail.list = mail.list.filter(x => x.id !== row.id); if (mail.off >= mail.list.length) mail.off = Math.max(0, mail.off - (mail.fit || 25)); mailRender(); }
+      } catch (er) { row.starred = !on; mailRender(); toast(er.message); }
       return;
     }
     const cat = e.target.closest('[data-mcat]');
-    if (cat) { mail.cat = cat.dataset.mcat; mail.off = 0; mail.list = null; render(); loadMail(); return; }
+    if (cat) { mail.cat = cat.dataset.mcat; mail.off = 0; mail.list = null; mailRender(); loadMail(); return; }
     const bx = e.target.closest('[data-mbox]');
-    if (bx) { mail.box = bx.dataset.mbox; mail.off = 0; mail.list = null; mail.open = null; mail.thread = null; mail.sel = new Set(); render(); loadMail(); return; }
+    if (bx) { mail.box = bx.dataset.mbox; mail.off = 0; mail.list = null; mail.open = null; mail.thread = null; mail.sel = new Set(); mailRender(); loadMail(); return; }
     const row = e.target.closest('[data-mth]');
     if (row) { if (mail.box === 'drafts') { openDraft(row.dataset.mth); return; } if (mail.open !== row.dataset.mth) openThread(row.dataset.mth); return; }
     const b = e.target.closest('[data-mail]');
     if (!b) return;
     const act = b.dataset.mail, t = mail.thread;
     if (['compose', 'reply', 'replyall', 'forward', 'star', 'important'].includes(act) && mailTest()) return;
-    if (act === 'refresh') { if (mail.loading) return; loadMail(); refreshMailInfo(); render(); return; }
+    if (act === 'refresh') { if (mail.loading) return; loadMail(); refreshMailInfo(); mailRender(); return; }
     if (act === 'cmin' || (act === 'cbar' && $('#m-composer')?.classList.contains('min') && !e.target.closest('button'))) { const d = $('#m-composer'); d?.classList.toggle('min'); d?.classList.remove('max'); return; }
     if (act === 'cmax') { const d = $('#m-composer'); d?.classList.toggle('max'); d?.classList.remove('min'); return; }
     if (act === 'cclose') { askCloseComposer(); return; }
@@ -4110,12 +4127,12 @@
     if ((act === 'compose' || act === 'reply' || act === 'replyall' || act === 'forward') && !mail.info) { try { mail.info = await api('GET', '/api/mail/info' + mq('?')); } catch (er) { toast(er.message); return; } }
     if (act === 'compose') return composeSheet(null);
     if (act === 'reply' || act === 'replyall' || act === 'forward') return t && composeSheet(act);
-    if (act === 'close') { mail.open = null; mail.thread = null; mail.threadErr = ''; render(); return; }
+    if (act === 'close') { mail.open = null; mail.thread = null; mail.threadErr = ''; mailRender(); return; }
     if (act === 'prev' || act === 'next') {
       const fit = mail.fit || 25; mail.sel = new Set();
-      if (act === 'prev') { mail.off = Math.max(0, mail.off - fit); render(); return; }
-      if (mail.off + fit < mail.list.length) { mail.off += fit; render(); return; }
-      if (mail.next && !mail.loading) { mail.off += fit; loadMail(true); render(); }
+      if (act === 'prev') { mail.off = Math.max(0, mail.off - fit); mailRender(); return; }
+      if (mail.off + fit < mail.list.length) { mail.off += fit; mailRender(); return; }
+      if (mail.next && !mail.loading) { mail.off += fit; loadMail(true); mailRender(); }
       return;
     }
     if (act === 'toggle') { const i = +b.closest('[data-mmsg]').dataset.mmsg, ms = visMsgs(t); if (i === ms.length - 1) return; ms[i].openUi = !ms[i].openUi; const y = $('#m-read').scrollTop; $('#m-read').innerHTML = mailReader(); $('#m-read').scrollTop = y; fillFrames(); return; }
@@ -4165,7 +4182,7 @@
     if (id) hoverT = setTimeout(() => fetchThread(id).catch(() => {}), 250);
   });
   document.addEventListener('submit', e => {
-    if (e.target.id === 'm-search') { e.preventDefault(); mail.q = e.target.elements.q.value.trim(); mail.off = 0; mail.list = null; mail.open = null; mail.thread = null; mail.sel = new Set(); render(); loadMail(); return; }
+    if (e.target.id === 'm-search') { e.preventDefault(); mail.q = e.target.elements.q.value.trim(); mail.off = 0; mail.list = null; mail.open = null; mail.thread = null; mail.sel = new Set(); mailRender(); loadMail(); return; }
     if (e.target.id === 'm-compose') { e.preventDefault(); if (!busy && !mailTest()) sendMail(e.target); }
   });
 

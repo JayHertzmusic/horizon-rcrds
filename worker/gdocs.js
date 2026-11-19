@@ -119,18 +119,25 @@ export async function docFromTemplate(env, docUrl, values, title) {
       const ls = sty[k] || {}, style = { underline: false, italic: !!ls.italic, smallCaps: !!ls.smallCaps, strikethrough: false, bold: !/date/i.test(b.name) };
       const fields = ['underline', 'italic', 'smallCaps', 'strikethrough', 'bold', 'weightedFontFamily', 'fontSize', 'foregroundColor'];
       for (const f of ['weightedFontFamily', 'fontSize', 'foregroundColor']) if (ls[f]) style[f] = ls[f];
-      // dato más largo que su raya (p. ej. una dirección larga): se reduce su letra lo justo para que quepa en esa línea
-      // (si saltara a otra línea, movería todo el texto de debajo y los recuadros de firma). Mínimo 6 pt.
+      requests.push({ updateTextStyle: { range: { startIndex: startIndex + pre.length, endIndex: startIndex + pre.length + v.length, tabId: tab }, textStyle: style, fields: fields.join(',') } });
+    }
+    // dato largo (p. ej. una dirección) en una línea que en la plantilla cabía en una: se reduce SOLO la letra de ese dato lo
+    // justo para que siga en una línea (si saltara a otra, bajaría todo el texto y las firmas se irían a otra página). Mínimo 6 pt.
+    // Vale para cualquier hueco (rayas «____», {{dato}} o datos de otro contrato). Medidas aproximadas en pt por letra
+    // (≈ 0,48 em la etiqueta, ≈ 0,5 em el dato en negrita), con los tabuladores de la plantilla (cada 36 pt).
+    {
       let ls0 = b.start; while (ls0 > 0 && text[ls0 - 1] !== '\n') ls0--;
       let le = b.end; while (le < text.length && text[le] !== '\n') le++;
-      const base = ls.fontSize?.magnitude || sty.slice(ls0, le).find(x => x.fontSize?.magnitude)?.fontSize?.magnitude || 11;
-      // sitio (en pt) para el dato: lo que ocupaba la raya («_» ≈ 0,556 em); fuera de tablas, lo que queda hasta el margen
-      // (la etiqueta, p. ej. «Street Address, Zip Code:», ≈ 0,55 em por letra) si es más. El dato en negrita ≈ 0,56 em por letra.
-      const under = (le - b.start) * base * 0.556;
-      const toMargin = !tbl[b.start] && pageW > 100 ? pageW * 0.97 - (b.start - ls0) * base * 0.55 : 0;
-      const room = Math.max(under, toMargin), need = v.length * base * 0.56;
-      if (need > room) style.fontSize = { magnitude: Math.max(6, Math.floor(base * room / need * 10) / 10), unit: 'PT' };
-      requests.push({ updateTextStyle: { range: { startIndex: startIndex + pre.length, endIndex: startIndex + pre.length + v.length, tabId: tab }, textStyle: style, fields: fields.join(',') } });
+      let k = b.start - 1; while (k > ls0 && /\s/.test(text[k])) k--;
+      const base = (sty[b.start]?.fontSize?.magnitude) || (sty[k]?.fontSize?.magnitude) || sty.slice(ls0, le).find(x => x.fontSize?.magnitude)?.fontSize?.magnitude || 11;
+      const width = (str, em, x0 = 0) => { let x = x0; for (const ch of str) x = ch === '\t' ? (Math.floor(x / 36) + 1) * 36 : x + base * em; return x; };
+      const avail = tbl[b.start] || !(pageW > 100) ? width(text.slice(ls0, le), 0.48) : pageW * 0.95;   // (en tablas: lo que ocupaba la línea)
+      const start = width(text.slice(ls0, b.start), 0.48), tail = width(text.slice(b.end, le), 0.48) , orig = width(text.slice(ls0, le), 0.48);
+      const valW = v.length * base * 0.5, room = avail - start - tail;
+      if (orig <= avail && start + valW + tail > avail && room > 0) {
+        const size = Math.max(6, Math.floor(base * room / valW * 10) / 10);
+        requests.push({ updateTextStyle: { range: { startIndex, endIndex: startIndex + v.length, tabId: tab }, textStyle: { fontSize: { magnitude: size, unit: 'PT' } }, fields: 'fontSize' } });
+      }
     }
   }
   if (requests.length) {

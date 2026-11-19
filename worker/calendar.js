@@ -63,7 +63,12 @@ export async function calendarApi(req, env, s, url, can, audit) {
     // contratos firmados que aún no tienen fecha en el calendario
     const signed = (await DB.prepare("SELECT id, title, artist, release_cat, release_name, signed_at FROM contracts WHERE status = 'signed' AND (kind IS NULL OR kind = 'contract') AND id NOT IN (SELECT contract_id FROM calendar WHERE contract_id IS NOT NULL) ORDER BY signed_at DESC LIMIT 50").all()).results;
     const dc = parse((await DB.prepare("SELECT value FROM panel_settings WHERE key = 'calendar_discord'").first())?.value);
-    return { items, unscheduled: signed, discord: dc, canEdit: can('edit') && !s.sync };
+    // un contrato también tiene fecha si en el calendario está su release (las fechas de Discord no van enlazadas al contrato):
+    // mismo número (HRZ#…) o mismo artista principal y título
+    const first = a => norm(String(a || '').split(/\s*(?:,|&|\band\b|\bx\b|\bfeat\b\.?|\bft\b\.?)\s*/i)[0]);
+    const has = c => items.some(i => i.kind === 'release' && ((c.release_cat && i.cat && norm(i.cat) === norm(c.release_cat))
+      || (c.release_name && norm(i.title) === norm(c.release_name) && (!i.artist || !c.artist || first(i.artist) === first(c.artist)))));
+    return { items, unscheduled: signed.filter(c => !has(c)), discord: dc, canEdit: can('edit') && !s.sync };
   }
   if (p === '/api/calendar' && m === 'POST') {
     edit();

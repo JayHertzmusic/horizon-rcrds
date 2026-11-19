@@ -142,7 +142,7 @@ function mergeFields(web, google) {
     // pregunta nueva: un id que no se repite nunca (uno de una pregunta borrada mezclaría sus respuestas antiguas)
     if (!id) { do { id = 'q' + Date.now().toString(36) + (n++).toString(36); } while (used.has(id)); used.add(id); }
     const type = old && ['email', 'url'].includes(old.type) && gq.type === 'text' ? old.type : gq.type;
-    return { ...gq, id, type };
+    return { ...gq, id, type, ...(old?.important ? { important: true } : {}) };   // (la nota en rojo es solo de la web: se conserva)
   });
   return normFields(out);
 }

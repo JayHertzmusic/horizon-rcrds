@@ -1381,3 +1381,8 @@ html, body, * { scrollbar-width: none; }
 }
 .row.lg .nm { justify-self: start; font-size: 13px; }
 .chat-msg .nm { padding: 0 8px; font-size: .92em; }
+
+/* Calendar: varios releases el mismo día en el contador grande (uno por línea, con su número) */
+.cal-hero.is-many .cal-hero-t { margin: 4px 0 2px; display: flex; align-items: center; gap: 8px; }
+.cal-hero.is-many .cal-hero-t .cal-cat { font-family: 'Barlow', sans-serif; letter-spacing: .04em; }
+.cal-hero.is-many .cal-hero-s { margin-top: 8px; }

@@ -3483,13 +3483,14 @@
         </li>`;
     };
     // lo próximo, en grande arriba
-    const nextOf = k => next.find(x => x.kind === k);
-    const hero = x => { if (!x) return ''; const n = calDaysLeft(x.date), b = calBits(x.date); return `
-        <div class="cal-hero${n === 0 ? ' is-today' : ''}">
-          <p class="mini">Next ${x.kind === 'mixtape' ? 'mixtape' : 'release'}</p>
+    // el próximo de cada tipo… y todos los que salen ese mismo día (dos releases el mismo día salen los dos)
+    const nextOf = k => { const f = next.find(x => x.kind === k); return f ? next.filter(x => x.kind === k && x.date === f.date) : []; };
+    const hero = list => { if (!list.length) return ''; const x = list[0], n = calDaysLeft(x.date), b = calBits(x.date), many = list.length > 1; return `
+        <div class="cal-hero${n === 0 ? ' is-today' : ''}${many ? ' is-many' : ''}">
+          <p class="mini">Next ${x.kind === 'mixtape' ? 'mixtape' : 'release'}${many ? `s · ${list.length} the same day` : ''}</p>
           <div class="cal-count"><b>${n <= 0 ? 'TODAY' : n}</b>${n > 0 ? `<small>${n === 1 ? 'day' : 'days'}</small>` : ''}</div>
-          <p class="cal-hero-t">${x.artist ? esc(x.artist) + ' - ' : ''}${esc(x.title)}</p>
-          <p class="cal-hero-s">${x.cat ? `<span class="cal-cat">${esc(x.cat)}</span>` : ''}${b.wd} ${b.day} ${b.mon} ${b.yr}</p>
+          ${list.map(y => `<p class="cal-hero-t">${y.cat && many ? `<span class="cal-cat">${esc(y.cat)}</span> ` : ''}${y.artist ? esc(y.artist) + ' - ' : ''}${esc(y.title)}</p>`).join('')}
+          <p class="cal-hero-s">${x.cat && !many ? `<span class="cal-cat">${esc(x.cat)}</span>` : ''}${b.wd} ${b.day} ${b.mon} ${b.yr}</p>
         </div>`; };
     const months = {};
     for (const x of next) (months[calMonth(x.date)] ||= []).push(x);
@@ -3498,7 +3499,7 @@
       <div class="head"><div><p class="eyebrow">Schedule</p><h1>CALENDAR</h1></div>
         <div class="head-btns">${ed ? '<button type="button" class="btn primary" data-cal-act="new">+ Add date</button>' : ''}</div></div>
       ${calSyncNote()}
-      ${nextOf('release') || nextOf('mixtape') ? `<div class="cal-heros">${hero(nextOf('release'))}${hero(nextOf('mixtape'))}</div>` : ''}
+      ${nextOf('release').length || nextOf('mixtape').length ? `<div class="cal-heros">${hero(nextOf('release'))}${hero(nextOf('mixtape'))}</div>` : ''}
       ${todo.length ? `<h2 class="ct-group-h">Signed contracts without a date <span>${todo.length}</span></h2>
         <ol class="list">${todo.map(c => `
           <li class="row cal-todo" data-ctid="${esc(c.id)}">

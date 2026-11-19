@@ -3516,7 +3516,9 @@
     if (d.noAccess) return '<p class="login-error cal-sync">The Discord bot can’t see #horizon-calendar. In Discord, open the channel settings → Permissions → add the bot and allow <b>View Channel</b> and <b>Read Message History</b>.</p>';
     if (d.noText) return '<p class="login-error cal-sync">The Discord bot can’t read the text of #horizon-calendar. In the Discord Developer Portal → your bot → Bot, turn on <b>Message Content Intent</b>.</p>';
     const mins = Math.max(0, Math.round((Date.now() - d.at) / 60000));
-    return `<p class="info cal-sync">Synced with Discord #horizon-calendar ${mins < 1 ? 'just now' : mins === 1 ? '1 minute ago' : mins + ' minutes ago'} · edit the dates there and they change here.</p>`;
+    // líneas de #horizon-calendar que no se entienden (sin fecha clara): se enseñan para corregirlas en Discord
+    const sk = (d.skipped || []).length ? `<div class="cal-skip" role="alert"><b>Not understood in #horizon-calendar</b> — write them like <code>16.04.27 - Artist - Title</code>:<ul>${d.skipped.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '';
+    return `<p class="info cal-sync">Synced with Discord #horizon-calendar ${mins < 1 ? 'just now' : mins === 1 ? '1 minute ago' : mins + ' minutes ago'} · edit the dates there and they change here.</p>${sk}`;
   }
   function calForm() {
     const x = calOpen.item || { date: '', kind: 'release', artist: '', title: '', cat: '', note: '', programmed: 0 };

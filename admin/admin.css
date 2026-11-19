@@ -1386,3 +1386,8 @@ html, body, * { scrollbar-width: none; }
 .cal-hero.is-many .cal-hero-t { margin: 4px 0 2px; display: flex; align-items: center; gap: 8px; }
 .cal-hero.is-many .cal-hero-t .cal-cat { font-family: 'Barlow', sans-serif; letter-spacing: .04em; }
 .cal-hero.is-many .cal-hero-s { margin-top: 8px; }
+
+/* Calendar: líneas de Discord que no se entienden */
+.cal-skip { margin: -8px 0 18px; padding: 10px 14px; border-left: 3px solid #e9c46a; border-radius: 6px; background: rgba(233, 196, 106, .08); color: #e9c46a; font-size: 13px; }
+.cal-skip code { color: #fff; }
+.cal-skip ul { margin: 6px 0 0; padding-left: 18px; color: var(--text); }

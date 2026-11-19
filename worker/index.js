@@ -112,7 +112,8 @@ const ALTERS = [
   ['ALTER TABLE forms ADD COLUMN invite INTEGER NOT NULL DEFAULT 0', "UPDATE forms SET invite = 1 WHERE slug = 'release-form'"],
   ...CONTRACT_COLUMNS.map(c => [`ALTER TABLE contracts ADD COLUMN ${c}`]),
   ...SIGNER_COLUMNS.map(c => [`ALTER TABLE contract_signers ADD COLUMN ${c}`]),
-  ['ALTER TABLE sc_gates ADD COLUMN downloads INTEGER NOT NULL DEFAULT 0'],   // conteo de descargas reales por release
+  ['ALTER TABLE sc_gates ADD COLUMN downloads INTEGER NOT NULL DEFAULT 0'],
+  ['ALTER TABLE gform_del ADD COLUMN tries INTEGER NOT NULL DEFAULT 0'],   // veces que se pidió al script borrar esa respuesta en Google   // conteo de descargas reales por release
 ];
 const ALL_SCHEMA = BASE_SCHEMA;   // (ya lleva las tablas de formularios, contratos y calendario)
 const SCHEMA_SIG = (() => { let h = 5381; for (const ch of JSON.stringify([ALL_SCHEMA, ALTERS])) h = (h * 33 + ch.charCodeAt(0)) >>> 0; return 'v' + h.toString(36); })();
@@ -697,7 +698,15 @@ async function api(req, env, p, ctx) {
   if (p === '/api/sc/login' || p === '/api/sc/callback') return await scOauth(req, env, url);   // cadena de SoundCloud (OAuth del artista)
   if (p.startsWith('/api/public/download/')) { const r = await chainPublic(req, env, url); return r instanceof Response ? r : json(r); }   // download gate (sin sesión)
   if (p.startsWith('/api/hooks/gform/') && req.method === 'POST') return json(await gformHook(req, env, url));   // Google Forms ↔ web
-  if (p === '/api/hooks/discord-calendar' && req.method === 'POST') return json(await discordCalendarHook(req, env));   // #horizon-calendar (bot de Discord) → Calendar
+  if (p === '/api/hooks/discord-calendar' && req.method === 'POST') {   // #horizon-calendar (bot de Discord) → Calendar
+    // se contesta al bot al momento y el calendario se pone al día por detrás: si el bot termina su turno antes,
+    // Cloudflare cancelaba la petición a medias (salía «canceled») y la fecha podía no llegar
+    if ((req.headers.get('cf-connecting-ip') && env.DEV_LOGIN !== '1') || req.headers.get('x-horizon-bot') !== '1') throw new HttpError(404, 'Not found.');
+    const body = await req.text(), copy = new Request(req.url, { method: 'POST', headers: req.headers, body });
+    const job = discordCalendarHook(copy, env).catch(e => console.error('discord calendar', e));
+    if (ctx?.waitUntil) { ctx.waitUntil(job); return json({ ok: true, queued: true }); }
+    return json(await job);
+  }
   if (p.startsWith('/api/public/')) return json(await publicFormsApi(req, env, url));   // formularios públicos (sin sesión)
   const s = await session(req, env);
   if (p === '/api/auth/me' && req.method === 'GET') return json({ user: { ...userOut(s), formsCount: await formsCount(env, s) }, sections: await sections(env) });

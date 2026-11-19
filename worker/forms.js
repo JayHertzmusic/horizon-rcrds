@@ -209,8 +209,15 @@ export async function gformHook(req, env, url) {
     // formularios borrados en la web → a la papelera de Google
     for (const t of (await DB.prepare('SELECT google_id FROM gform_trash').all()).results) ops.push({ op: 'trash', googleId: t.google_id });
     // respuestas borradas en la web → el script busca la misma en el Google Form (por lo que contesta) y la borra
-    const deletes = (await DB.prepare('SELECT id, google_id, at, answers FROM gform_del ORDER BY id LIMIT 20').all()).results
-      .map(x => ({ id: x.id, googleId: x.google_id, at: x.at, answers: parse(x.answers) || {} }));
+    // las que el script no consigue borrar tras ~1 hora (12 vueltas) dejan de pedirse y se apuntan en History para hacerlo a mano;
+    // las que menos se han intentado van primero (antes, 20 atascadas bloqueaban para siempre las nuevas)
+    for (const x of (await DB.prepare('SELECT id, name, title FROM gform_del WHERE tries >= 12').all().catch(() => ({ results: [] }))).results) {
+      await DB.prepare('DELETE FROM gform_del WHERE id = ?').bind(x.id).run();
+      await DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)').bind(now(), 'google', 'Google Forms', `Could not delete the response ${x.name || ''} in the Google Form “${x.title || ''}” automatically: delete it there by hand`, '').run();
+    }
+    const delRows = (await DB.prepare('SELECT id, google_id, at, answers FROM gform_del ORDER BY tries, id LIMIT 10').all()).results;
+    if (delRows.length) await DB.prepare(`UPDATE gform_del SET tries = tries + 1 WHERE id IN (${delRows.map(() => '?').join(',')})`).bind(...delRows.map(x => x.id)).run();
+    const deletes = delRows.map(x => ({ id: x.id, googleId: x.google_id, at: x.at, answers: parse(x.answers) || {} }));
     return { ok: true, ops, log, deletes };
   }
   if (url.pathname === '/api/hooks/gform/ack') {
@@ -260,7 +267,7 @@ export async function gformHook(req, env, url) {
 // copia de una respuesta de la web en su Google Form
 async function toGoogle(env, f, data) {
   const g = parse(f.google);
-  if (!g?.url || !g.map) return;
+  if (!g?.url || !g.map || !/^https:\/\/docs\.google\.com\/forms\//.test(g.url)) return;   // (solo a Google Forms)
   const body = new URLSearchParams(), defs = new Map((parse(f.fields) || []).map(x => [x.id, x]));
   for (const [fid, entry] of Object.entries(g.map)) {
     const v = data[fid], x = defs.get(fid), opts = x?.options || [];

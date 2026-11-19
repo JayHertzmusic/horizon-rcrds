@@ -361,10 +361,11 @@ export async function contractsApi(req, env, s, url, can, audit, ctx) {
     // el PDF exacto exportado de Google Docs. La huella SHA-256 la calcula el navegador del owner al subirlo.
     edit();
     if (signed || anySigned) throw new ContractError(409, 'Someone already signed this contract: the PDF can’t be changed.');
-    const hash = String(url.searchParams.get('hash') || '');
     const pages = Math.max(1, Math.min(500, Number(url.searchParams.get('pages')) || 1));
-    if (!HASH.test(hash)) throw new ContractError(400, 'PDF fingerprint missing.');
     const buf = await pdfBody(req);
+    // la huella la calcula el servidor (antes se aceptaba la que mandaba el navegador sin comprobarla)
+    const hash = await sha256(buf), sent = String(url.searchParams.get('hash') || '');
+    if (sent && HASH.test(sent) && sent !== hash) throw new ContractError(400, 'The PDF changed while uploading. Try again.');
     const key = `contracts/${c.id}-${hash.slice(0, 12)}.pdf`;
     await env.FILES.put(key, buf, { metadata: { type: 'application/pdf', at: now() } });
     if (c.pdf && c.pdf !== key) await env.FILES.delete(c.pdf);
@@ -482,8 +483,11 @@ export async function contractsApi(req, env, s, url, can, audit, ctx) {
     return { ok: true };
   }
   if (mm[2] === 'file' && m === 'POST') {
-    // archivo: PDF de un contrato que se firmó fuera de la web (antiguos)
+    // archivo: PDF de un contrato que se firmó fuera de la web (antiguos). Lo marca como firmado: solo owners, y nunca
+    // en un contrato que alguien ya está firmando por la web
     edit();
+    if (!s.owner) throw new ContractError(403, 'Only owners can upload a contract signed outside the web.');
+    if (anySigned && !signed) throw new ContractError(409, 'Someone is signing this contract online: it can’t be replaced by an uploaded PDF.');
     const buf = await pdfBody(req);
     const key = `contracts/${c.id}-firmado.pdf`;
     await env.FILES.put(key, buf, { metadata: { type: 'application/pdf', at: now() } });

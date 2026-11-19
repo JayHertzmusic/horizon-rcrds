@@ -1914,13 +1914,6 @@
   const respEmail = (f, r) => { const x = f.fields.find(q => q.type === 'email' && /@/.test(String(r.data[q.id] || ''))); return x ? String(r.data[x.id]).trim() : ''; };
   const coArtists = r => Array.isArray(r.data?._artists) ? r.data._artists.filter(x => x && x.name) : [];
   const respEmails = (f, r) => [respEmail(f, r), ...coArtists(r).map(x => x.email)].filter(Boolean);
-  // artistas para los enlaces del Release Form, separados por comas: el principal (su nombre sin los demás) y los de la colaboración
-  const linksFor = (f, r) => {
-    const who = respWho(f, r).who, co = coArtists(r).map(x => x.name);
-    if (!co.length) return who;
-    const tail = ' & ' + co.join(' & '), main = who.endsWith(tail) ? who.slice(0, -tail.length) : who;
-    return [main, ...co].join(', ');
-  };
   const fillTpl = (txt, f, r) => { const w = respWho(f, r); return String(txt || '').replace(/\{artist\}/gi, w.who || 'there').replace(/\{track\}/gi, w.what || 'your track'); };
   const replyLabel = rp => rp ? `${rp.kind === 'accept' ? 'Accepted' : 'Rejected'}` : '';
   async function replyTemplatesFor(f) {
@@ -2289,10 +2282,10 @@
         closeSheet(); toast('Templates saved');
       } else {
         const rid = Number(fm.dataset.rid), kind = fm.dataset.kind;
-        const r = await api('POST', `/api/forms/${encodeURIComponent(fid)}/reply/${rid}`, { kind, subject: d.subject, body: d.body, links: !!d.links, links_for: d.links_for || '' });
+        const r = await api('POST', `/api/forms/${encodeURIComponent(fid)}/reply/${rid}`, { kind, subject: d.subject, body: d.body });
         const x = formOpen?.id === fid && formOpen.responses.find(y => y.id === rid);
         if (x) x.reply = r.reply;
-        closeSheet(); toast(kind === 'accept' ? `Acceptance email sent${r.links?.length ? ` with ${r.links.length} Release Form link${r.links.length > 1 ? 's' : ''}` : ''}` : 'Rejection email sent');
+        closeSheet(); toast(kind === 'accept' ? 'Acceptance email sent' : 'Rejection email sent');
         if (formOpen?.id === fid) {
           const c = formOpen.counts || (formOpen.counts = {});
           c.pending = Math.max(0, (c.pending || 0) - 1); c[kind] = (c[kind] || 0) + 1;
@@ -2377,11 +2370,6 @@
         <div class="field"><label>To</label><input value="${esc(respEmails(f, r).join(', '))}" readonly></div>
         <div class="field"><label for="rp-subj">Subject</label><input id="rp-subj" name="subject" maxlength="200" value="${esc(fillTpl(tpl.subject, f, r))}"></div>
         <div class="field"><label for="rp-body">Message</label><textarea id="rp-body" name="body" rows="11" maxlength="5000">${esc(fillTpl(tpl.body, f, r))}</textarea></div>
-        ${kind === 'accept' ? `<div class="field rp-links">
-          <label class="check"><input type="checkbox" name="links" checked> <span>Add the Release Form links to the email (one per artist)</span></label>
-          <input name="links_for" maxlength="300" value="${esc(linksFor(f, r))}" placeholder="Artist names, separated by commas" aria-label="Artists for the Release Form links">
-          <p class="muted sm-txt">One link per artist — separate the artists with commas (a duo like “Chase &amp; Status” stays one artist).</p>
-        </div>` : ''}
         <div class="confirm-actions"><button type="submit" class="btn ${kind === 'accept' ? 'primary' : 'danger'}">Send email</button></div>
       </form>`);
     } else if (act === 'reply-tpl') {

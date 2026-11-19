@@ -1391,3 +1391,22 @@ html, body, * { scrollbar-width: none; }
 .cal-skip { margin: -8px 0 18px; padding: 10px 14px; border-left: 3px solid #e9c46a; border-radius: 6px; background: rgba(233, 196, 106, .08); color: #e9c46a; font-size: 13px; }
 .cal-skip code { color: #fff; }
 .cal-skip ul { margin: 6px 0 0; padding-left: 18px; color: var(--text); }
+
+/* Enlaces personales en lista (como las respuestas): casilla · artista · estado · fecha; se abren para ver los detalles */
+.lk-list .lk-row header { gap: 12px; }
+.lk-row .resp-who span::before { content: ''; }
+.lk-row .tag { margin-left: auto; }
+.lk-row.is-sel { background: rgba(var(--accent-rgb), .08); }
+.lk-row.is-revoked, .lk-row.is-expired { opacity: .7; }
+.lk-row dl { margin-bottom: 12px; }
+.lk-url { font-family: ui-monospace, monospace; font-size: 13px; color: #fff; }
+.lk-acts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.lk-bulk { display: flex; align-items: center; gap: 10px; min-height: 40px; margin: 0 0 10px; padding: 0 8px 0 18px; }
+.lk-nsel { font-size: 14px; color: #fff; margin-right: 4px; }
+.lk-ck { position: relative; display: grid; place-items: center; width: 22px; height: 22px; cursor: pointer; flex: none; }
+.lk-ck input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.lk-ck span { width: 16px; height: 16px; border: 2px solid #6f737b; border-radius: 3px; position: relative; transition: background .15s, border-color .15s; }
+.lk-ck input:checked + span, .lk-ck span.part { background: #fff; border-color: #fff; }
+.lk-ck input:checked + span::after { content: ''; position: absolute; left: 3.5px; top: 0; width: 4px; height: 8px; border: solid #000; border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.lk-ck span.part::after { content: ''; position: absolute; left: 2px; top: 5px; width: 8px; height: 2px; background: #000; }
+.lk-ck input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }

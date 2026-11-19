@@ -432,6 +432,17 @@ export async function formsApi(req, env, s, url, audit) {
       // crear, alargar, anular o borrar enlaces: solo quien puede editar este formulario (con «View» solo se miran)
       if (!canEdit) throw new FormError(403, 'Your role can only view this form’s links.');
       const b = parse(await req.text()) || {};
+      // varios a la vez: anular o borrar (hasta 200)
+      if (Array.isArray(b.ids) && (b.action === 'delete' || b.action === 'revoke')) {
+        const ids = b.ids.map(String).filter(x => /^[a-f0-9]{16}$/.test(x)).slice(0, 200);
+        if (!ids.length) throw new FormError(400, 'Choose at least one link.');
+        const q = ids.map(() => '?').join(','), where = `form_id = ? AND substr(hash, 1, 16) IN (${q})`;
+        const r = b.action === 'delete' ? await DB.prepare(`DELETE FROM form_links WHERE ${where}`).bind(f.id, ...ids).run()
+          : await DB.prepare(`UPDATE form_links SET revoked = 1 WHERE ${where} AND used_at IS NULL`).bind(f.id, ...ids).run();
+        const n = r.meta.changes || 0;
+        await audit(`${b.action === 'delete' ? 'Deleted' : 'Cancelled'} ${n} personal link${n === 1 ? '' : 's'} of “${f.title}”`);
+        return { ok: true, done: n };
+      }
       if (b.action) {
         // un enlace concreto: alargar 30 días, dejar que se abra en otro dispositivo, anular o borrar
         const id = String(b.id || '');

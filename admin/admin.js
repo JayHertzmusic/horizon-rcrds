@@ -2142,29 +2142,45 @@
     const count = k => (all || []).filter(l => k === 'all' || l.state === k).length;
     const q = o.q.trim().toLowerCase();
     const list = (all || []).filter(l => (o.filter === 'all' || l.state === o.filter) && (!q || `${l.note} ${l.by} ${l.by_name || ''}`.toLowerCase().includes(q)));
+    // cada enlace es una fila como las respuestas: cerrada (casilla · artista · estado · fecha); al abrirla, los detalles
+    const opened = o.openLinks || (o.openLinks = new Set()), sel = o.sel || (o.sel = new Set());
     const card = l => {
-      const st = LINK_STATE[l.state] || [l.state, ''], d = daysTo(l.expires_at), live = l.state === 'unused' || l.state === 'opened';
+      const st = LINK_STATE[l.state] || [l.state, ''], d = daysTo(l.expires_at), live = l.state === 'unused' || l.state === 'opened', open = opened.has(l.id);
+      const mates = l.grp ? (all || []).filter(x => x.grp === l.grp && x.id !== l.id).sort((a, b) => a.grp_pos - b.grp_pos).map(x => x.note).join(' & ') : '';
       return `
-        <article class="lk-card is-${l.state}" data-link="${esc(l.id)}">
-          <header><b title="${esc(l.note)}">${esc(l.note || 'Untitled link')}</b><span class="tag ${st[1]}">${st[0]}</span></header>
-          <dl>
-            <dt>Created</dt><dd>${esc(fmtDate(l.created_at))}</dd>
+        <article class="resp lk-row is-${l.state}${open ? ' is-open' : ''}${sel.has(l.id) ? ' is-sel' : ''}" data-link="${esc(l.id)}">
+          <header data-lk="toggle" title="Show / hide the details">
+            ${ed ? `<label class="lk-ck" title="Select"><input type="checkbox" data-lk-sel="${esc(l.id)}" ${sel.has(l.id) ? 'checked' : ''} aria-label="Select"><span></span></label>` : ''}
+            <span class="resp-who"><b>${esc(l.note || 'Untitled link')}</b>${mates ? `<span>with ${esc(mates)}</span>` : ''}</span>
+            <span class="tag ${st[1]}">${st[0]}</span>
+            <span class="resp-date">${esc(fmtDate(l.created_at))}</span>
+          </header>
+          ${open ? `<dl>
+            <dt>Link</dt><dd>${l.url ? `<span class="lk-url">${esc(String(l.url).replace(/^https?:\/\//, ''))}</span>` : '—'}</dd>
             <dt>Created by</dt><dd>${esc(l.by_name || (l.by || '').split('@')[0] || '—')}</dd>
             <dt>${l.state === 'expired' ? 'Expired' : 'Expires'}</dt><dd>${live ? (d <= 1 ? 'Today' : `In ${d} days`) : esc(new Date(l.expires_at).toLocaleDateString('en-GB'))}</dd>
             <dt>Opened</dt><dd>${l.opened_at ? esc(fmtDate(l.opened_at)) : '—'}</dd>
             <dt>Sent</dt><dd>${l.used_at ? esc(fmtDate(l.used_at)) : '—'}</dd>
-            ${l.grp ? `<dt>With</dt><dd>${esc((all || []).filter(x => x.grp === l.grp && x.id !== l.id).sort((a, b) => a.grp_pos - b.grp_pos).map(x => x.note).join(' & ') || '—')}</dd>` : ''}
           </dl>
-          <footer>
+          <div class="lk-acts">
             ${l.url && live ? '<button type="button" class="btn ghost sm" data-lk="copy">Copy link</button>' : ''}
             ${l.used_at && l.response_id ? '<button type="button" class="btn ghost sm" data-lk="resp">See answers</button>' : ''}
             ${ed && !l.used_at ? `<button type="button" class="btn ghost sm" data-lk="extend" title="30 more days">+30 days</button>` : ''}
             ${ed && l.state === 'opened' ? '<button type="button" class="btn ghost sm" data-lk="reset" title="If the artist changed phone or browser: the link can be opened again on a new device">New device</button>' : ''}
             ${ed && live ? '<button type="button" class="btn ghost sm" data-lk="revoke">Cancel</button>' : ''}
-            ${ed ? '<button type="button" class="ic danger" data-lk="delete" aria-label="Delete link" title="Delete">✕</button>' : ''}
-          </footer>
+            ${ed ? '<button type="button" class="btn ghost sm danger-txt" data-lk="delete">Delete</button>' : ''}
+          </div>` : ''}
         </article>`;
     };
+    const shown = (all ? list.slice(0, o.show) : []), nSel = [...sel].filter(id => (all || []).some(x => x.id === id)).length;
+    const allSel = shown.length && shown.every(l => sel.has(l.id));
+    const bulk = ed && shown.length ? `<div class="lk-bulk">
+        <label class="lk-ck all" title="Select all"><input type="checkbox" data-lk-selall ${allSel ? 'checked' : ''} aria-label="Select all"><span${nSel && !allSel ? ' class="part"' : ''}></span></label>
+        ${nSel ? `<span class="lk-nsel">${nSel} selected</span>
+          <button type="button" class="btn ghost sm" data-lk="bulk-revoke">Cancel links</button>
+          <button type="button" class="btn ghost sm danger-txt" data-lk="bulk-delete">Delete</button>
+          <button type="button" class="btn ghost sm" data-lk="bulk-none">Clear</button>` : '<span class="muted sm-txt">Select links to cancel or delete several at once</span>'}
+      </div>` : '';
     const chips = [['all', 'All'], ['unused', 'Not opened'], ['opened', 'Opened'], ['sent', 'Sent'], ['expired', 'Expired'], ['revoked', 'Cancelled']];
     return `
       <button type="button" class="back" data-act="form-resp-back">← ${esc(f.title)}</button>
@@ -2193,7 +2209,7 @@
         <input class="lk-search" type="search" placeholder="Search by artist…" value="${esc(o.q)}" aria-label="Search links">
         <div class="ct-tabs lk-tabs" role="tablist">${chips.map(([k, t]) => `<button type="button" role="tab" class="${o.filter === k ? 'on' : ''}" data-lk-filter="${k}">${t}<span>${count(k)}</span></button>`).join('')}</div>
       </div>
-      ${!all ? '<p class="info">Loading…</p>' : list.length ? `<div class="lk-grid">${list.slice(0, o.show).map(card).join('')}</div>
+      ${!all ? '<p class="info">Loading…</p>' : list.length ? `${bulk}<div class="resps lk-list">${shown.map(card).join('')}</div>
         ${list.length > o.show ? `<div class="lk-more"><button type="button" class="btn ghost" data-lk="more">Show more (${list.length - o.show})</button></div>` : ''}` : '<p class="info lk-empty">No links here.</p>'}`;
   }
   document.addEventListener('input', e => { if (e.target.closest?.('#lk-new')) e.target.removeAttribute('aria-invalid'); });
@@ -2224,9 +2240,37 @@
     if (view !== 'forms' || formOpen?.mode !== 'links') return;
     const fl = e.target.closest('[data-lk-filter]');
     if (fl) { formOpen.filter = fl.dataset.lkFilter; formOpen.show = 12; render(); return; }
+    // casillas (seleccionar uno / todos los que se ven)
+    const ck = e.target.closest('[data-lk-sel]'), ca = e.target.closest('[data-lk-selall]');
+    if (ck || ca) {
+      const sel = formOpen.sel || (formOpen.sel = new Set());
+      if (ck) { if (ck.checked) sel.add(ck.dataset.lkSel); else sel.delete(ck.dataset.lkSel); }
+      else { const ids = [...document.querySelectorAll('[data-lk-sel]')].map(x => x.dataset.lkSel); if (ca.checked) ids.forEach(x => sel.add(x)); else ids.forEach(x => sel.delete(x)); }
+      render(); return;
+    }
+    if (e.target.closest('.lk-ck')) return;
     const b = e.target.closest('[data-lk]');
     if (!b) return;
     const a = b.dataset.lk, id = b.closest('[data-link]')?.dataset.link, l = formOpen.links?.find(x => x.id === id);
+    if (a === 'toggle') {
+      if (e.target.closest('button, a, input')) return;
+      const op = formOpen.openLinks || (formOpen.openLinks = new Set());
+      if (op.has(id)) op.delete(id); else op.add(id);
+      render(); return;
+    }
+    if (a === 'bulk-none') { formOpen.sel = new Set(); render(); return; }
+    if (a === 'bulk-delete' || a === 'bulk-revoke') {
+      const ids = [...(formOpen.sel || [])].filter(x => formOpen.links?.some(y => y.id === x)), del = a === 'bulk-delete';
+      if (!ids.length) return;
+      if (!await confirmBox(del ? `Delete ${ids.length} link${ids.length > 1 ? 's' : ''}? They stop working.` : `Cancel ${ids.length} link${ids.length > 1 ? 's' : ''}? They stop working (you can give them 30 more days later).`, del ? 'Delete' : 'Cancel links')) return;
+      try {
+        const r = await api('POST', `/api/forms/${encodeURIComponent(formOpen.id)}/links`, { action: del ? 'delete' : 'revoke', ids });
+        toast(`${r.done} link${r.done === 1 ? '' : 's'} ${del ? 'deleted' : 'cancelled'}`);
+        formOpen.sel = new Set();
+        openLinks(formOpen.id, { filter: formOpen.filter, q: formOpen.q, show: formOpen.show, made: formOpen.made, madeHidden: formOpen.madeHidden, links: formOpen.links, openLinks: formOpen.openLinks });
+      } catch (x) { toast(x.message); }
+      return;
+    }
     if (a === 'more') { formOpen.show += 12; render(); return; }
     if (a === 'co-add' || a === 'co-del') {
       // artistas del collab (hasta 3 en total): sin redibujar, para no perder lo escrito
@@ -2265,7 +2309,8 @@
     try {
       await api('POST', `/api/forms/${encodeURIComponent(formOpen.id)}/links`, { action: a, id });
       toast({ extend: '30 more days', reset: 'It can be opened on a new device now', revoke: 'Link cancelled', delete: 'Link deleted' }[a]);
-      openLinks(formOpen.id, { filter: formOpen.filter, q: formOpen.q, show: formOpen.show, made: formOpen.made, madeHidden: formOpen.madeHidden, links: formOpen.links });
+      formOpen.sel?.delete(id);
+      openLinks(formOpen.id, { filter: formOpen.filter, q: formOpen.q, show: formOpen.show, made: formOpen.made, madeHidden: formOpen.madeHidden, links: formOpen.links, openLinks: formOpen.openLinks, sel: formOpen.sel });
     } catch (x) { toast(x.message); }
   });
   document.addEventListener('submit', async e => {

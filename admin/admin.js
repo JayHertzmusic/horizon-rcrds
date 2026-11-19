@@ -2033,7 +2033,7 @@
     d.access = { roles: [], emails: $$('input[name="acc-email"]:checked', f).map(i => i.value) };
     d.fields = $$('.qe', f).map(q => {
       const type = q.querySelector('[name=type]').value;
-      const x = { id: q.dataset.id, type, label: q.querySelector('[name=label]').value, help: q.querySelector('[name=help]').value };
+      const x = { id: q.dataset.id, type, label: q.querySelector('[name=label]').value, help: q.querySelector('[name=help]').value, important: !!q.querySelector('[name=important]')?.checked };
       if (type !== 'section') x.required = q.querySelector('[name=required]')?.checked ?? false;
       if (['radio', 'checkbox', 'select'].includes(type)) {
         x.options = (q.querySelector('[name=options]')?.value || '').split('\n').map(s => s.trim()).filter(Boolean);
@@ -2053,6 +2053,7 @@
         </div>
         <input name="label" value="${esc(x.label)}" placeholder="${x.type === 'section' ? 'Section title' : 'Question'}" maxlength="300" aria-label="Question text">
         <input name="help" value="${esc(x.help || '')}" placeholder="Help text (optional)" maxlength="600" aria-label="Help text">
+        ${x.type === 'section' ? '' : `<label class="check sm qe-imp"><input type="checkbox" name="important" ${x.important ? 'checked' : ''}><span>Highlight the help text (red, so nobody misses it)</span></label>`}
         ${choice ? `<textarea name="options" rows="${Math.max(2, (x.options || []).length)}" placeholder="One option per line" aria-label="Options">${esc((x.options || []).join('\n'))}</textarea>
           ${x.type !== 'select' ? `<label class="check sm"><input type="checkbox" name="other" ${x.other ? 'checked' : ''}><span>Add an “Other” option with free text</span></label>` : ''}` : ''}
       </div>`;

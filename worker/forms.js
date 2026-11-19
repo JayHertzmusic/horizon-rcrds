@@ -297,6 +297,7 @@ function normFields(list) {
     ids.add(id);
     const out = { id, type, label: clean(f?.label, 300) || (type === 'section' ? 'Section' : 'Question'), help: clean(f?.help, 600) };
     if (type !== 'section') out.required = !!f?.required;
+    if (type !== 'section' && out.help && f?.important) out.important = true;   // nota en rojo en el formulario
     if (['radio', 'checkbox', 'select'].includes(type)) {
       out.options = (Array.isArray(f?.options) ? f.options : []).map(o => clean(o, 200)).filter(Boolean).slice(0, 40);
       out.other = !!f?.other && type !== 'select';

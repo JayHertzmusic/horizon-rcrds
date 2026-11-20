@@ -268,3 +268,25 @@ export async function saveToDrive(env, root, c, bytes, cal = {}) {
   if (!r.ok) throw new Error(`Google Drive: ${j.error?.message || 'error ' + r.status}`);
   return { id: j.id, path };
 }
+
+/* Un dato que en el PDF real pasa a otra línea (lo ve el panel en el PDF que hace Google): se le baja la letra en el Doc.
+   fixes = [{ text, factor }]: el texto exacto del dato y cuánto hay que reducirlo. Solo donde el dato va tras una
+   etiqueta («Street Address, Zip Code:»), nunca dentro de una frase. Mínimo 5 pt. Devuelve cuántos cambió. */
+export async function shrinkValues(env, docUrl, fixes) {
+  const tok = await horizonToken(env), d = docParts(docUrl);
+  if (!d) throw new Error('This contract is not linked to a Google Doc tab.');
+  const src = await gapi(tok, `https://docs.googleapis.com/v1/documents/${d.id}?includeTabsContent=true&fields=${DOC_FIELDS}`);
+  const tabObj = d.tab ? findTab(src.tabs, d.tab) : src.tabs?.[0];
+  if (!tabObj) throw new Error('Could not find the contract tab.');
+  const tab = tabObj.tabProperties.tabId, { text, idx, sty } = docText(tabObj.documentTab?.body?.content), requests = [];
+  for (const { text: v, factor } of fixes) {
+    for (let p = text.indexOf(v); p >= 0 && v; p = text.indexOf(v, p + v.length)) {
+      let k = p - 1; while (k >= 0 && /[ \t\u00a0]/.test(text[k])) k--;
+      if (text[k] !== ':') continue;
+      const cur = sty[p]?.fontSize?.magnitude || 11, size = Math.max(5, Math.floor(cur * factor * 10) / 10);
+      if (size < cur) requests.push({ updateTextStyle: { range: { startIndex: idx[p], endIndex: idx[p + v.length - 1] + 1, tabId: tab }, textStyle: { fontSize: { magnitude: size, unit: 'PT' } }, fields: 'fontSize' } });
+    }
+  }
+  if (requests.length) await gapi(tok, `https://docs.googleapis.com/v1/documents/${d.id}:batchUpdate`, { requests });
+  return requests.length;
+}

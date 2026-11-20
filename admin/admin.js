@@ -3135,9 +3135,62 @@
       const ed = ctCanEdit() && c.status !== 'signed' && !isDraft(c);
       ctOpen.view = await HZPDF.render(box, ctOpen.bytes, { marks: ctMarks(), maxWidth: 820, onPage: ed ? (page, x, y) => placeBox(page, x, y) : null });
       if (ctCanEdit() && c.status === 'signed' && !c.signed_pdf) ensureSigned(c, ctOpen.bytes).catch(() => { /* se reintenta la próxima vez */ });
+      // un dato largo (p. ej. una dirección) que en el PDF real pasa a otra línea: se le baja la letra y se rehace el PDF
+      if (ed && !c.signers.some(x => x.signed) && c.doc_url && !isTpl(c) && await ctFit(c, ctOpen.bytes)) return;
       if (ed && !c.signers.some(x => x.signed)) { autoPlaceFor = null; autoPlace(c).catch(() => { /* se colocan a mano */ }); }
       if (isTpl(c) && !ctOpen.fields) { ctOpen.fields = await pdfFields(ctOpen.bytes); const el = $('.tpl-fields'); if (el) el.innerHTML = tplFieldsHtml(ctOpen.fields); }
     } catch (e) { box.innerHTML = `<p class="login-error">${esc(e.message)}</p>`; }
+  }
+  /* Datos que en el PDF que hace Google no caben en su línea (p. ej. una dirección larga tras «Street Address, Zip Code:»):
+     se miden en el propio PDF (posición y ancho reales) y el servidor les baja la letra en el Doc y rehace el PDF.
+     Como mucho 3 veces por contrato y una por cada PDF distinto. */
+  const fitSeen = new Set(), fitRounds = {};
+  function pageWraps(items, values) {
+    const its = items.map(it => ({ s: it.str, x: it.transform[4], y: it.transform[5], w: it.width, fs: Math.hypot(it.transform[2], it.transform[3]) })).filter(it => it.s);
+    const ink = its.filter(it => it.s.trim() && it.w > 0);
+    if (!ink.length) return [];
+    const right = Math.max(...ink.map(it => it.x + it.w)), out = [];
+    for (const v of values) {
+      const norm = v.replace(/\s+/g, '');
+      for (let i = 0; i < its.length; i++) {
+        const s0 = its[i].s.replace(/\s+/g, '');
+        if (!s0 || !norm.startsWith(s0) || s0.length < Math.min(6, norm.length)) continue;
+        // tras una etiqueta («…:») en la misma línea
+        let k = i - 1; while (k >= 0 && !its[k].s.trim()) k--;
+        if (k < 0 || Math.abs(its[k].y - its[i].y) > 1 || !/:\s*$/.test(its[k].s)) continue;
+        let acc = '', j = i; const got = [];
+        for (; j < its.length && acc.length < norm.length; j++) { const t = its[j].s.replace(/\s+/g, ''); if (!norm.startsWith(acc + t)) break; acc += t; got.push(its[j]); }
+        if (acc !== norm) continue;
+        const lines = new Set(got.filter(g => g.s.trim()).map(g => Math.round(g.y)));
+        if (lines.size < 2) continue;
+        // ancho del dato entero: lo que ocupa en cada línea + un espacio por cada salto
+        const byLine = {}; for (const g of got.filter(g => g.s.trim())) { const l = byLine[Math.round(g.y)] ||= [Infinity, 0]; l[0] = Math.min(l[0], g.x); l[1] = Math.max(l[1], g.x + g.w); }
+        const total = Object.values(byLine).reduce((a, [x0, x1]) => a + x1 - x0, 0) + (lines.size - 1) * got[0].fs * 0.32;
+        const room = right - got[0].x;
+        out.push({ text: v, factor: Math.floor(room / total * 0.97 * 1000) / 1000 });
+        break;
+      }
+    }
+    return out;
+  }
+  async function ctFit(c, bytes) {
+    const key = c.id + ':' + c.pdf_hash;
+    if (fitSeen.has(key) || (fitRounds[c.id] || 0) >= 3) return false;
+    fitSeen.add(key);
+    const values = [...new Set(Object.values(c.vars || {}).map(v => String(v || '').trim()).filter(v => v.length >= 8))];
+    if (!values.length) return false;
+    const pdf = await HZPDF.load(bytes), fixes = [];
+    for (let i = 1; i <= pdf.numPages; i++) for (const f of pageWraps((await (await pdf.getPage(i)).getTextContent()).items, values)) if (!fixes.some(x => x.text === f.text)) fixes.push(f);
+    if (!fixes.length) return false;
+    fitRounds[c.id] = (fitRounds[c.id] || 0) + 1;
+    const box = $('#pdf-viewer');
+    if (box) box.insertAdjacentHTML('afterbegin', '<p class="info">A long detail didn’t fit on its line: making its letters smaller and updating the PDF…</p>');
+    try {
+      const r = await api('POST', `/api/contracts/${encodeURIComponent(c.id)}/fit`, { fixes });
+      if (!r.changed) return false;
+      if (ctOpen?.mode === 'contract' && ctOpen.id === c.id) { ctOpen.bytes = null; ctOpen.fields = null; autoPlaceFor = c.id; await ctRefresh(); }
+      return true;
+    } catch (e) { toast(e.message); return false; }
   }
   /* Dónde firma cada artista: encima de la línea «______» que tiene debajo «Signed By Artist» (o «Artist 1», «Artist 2»…) */
   let autoPlaceFor = null;

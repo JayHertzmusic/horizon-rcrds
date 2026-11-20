@@ -11,7 +11,7 @@
    Permiso: sección «contracts» de los roles (ver / editar). Los owners siempre. */
 
 import { inviteMail, doneMail, mailName } from './contract-mail.js';
-import { horizonToken, docFromTemplate, saveToDrive, docValues } from './gdocs.js';
+import { horizonToken, docFromTemplate, saveToDrive, docValues, shrinkValues } from './gdocs.js';
 
 export class ContractError extends Error { constructor(status, message) { super(message); this.status = status; } }
 const parse = s => { try { return JSON.parse(s); } catch { return null; } };
@@ -335,7 +335,7 @@ export async function contractsApi(req, env, s, url, can, audit, ctx) {
     await audit(kind ? `Created the template “${title}”` : `Created the contract “${title}”${tpl ? ` from the template “${tpl.title}”` : ''}`);
     return { ok: true, id };
   }
-  const mm = p.match(/^\/api\/contracts\/([\w-]+)(?:\/(pdf|box|signers|send|void|unvoid|file|doc|from-doc|signed|finish|drive|drive-save))?$/);
+  const mm = p.match(/^\/api\/contracts\/([\w-]+)(?:\/(pdf|box|signers|send|void|unvoid|file|doc|from-doc|fit|signed|finish|drive|drive-save))?$/);
   if (!mm) throw new ContractError(404, 'Not found.');
   const c = await DB.prepare('SELECT * FROM contracts WHERE id = ?').bind(mm[1]).first();
   if (!c) throw new ContractError(404, 'That contract no longer exists.');
@@ -406,6 +406,30 @@ export async function contractsApi(req, env, s, url, can, audit, ctx) {
     } catch (e) { console.error('doc values', e.message); }
     await audit(`Generated the PDF of “${c.title}” from the Google Doc (${pages} pages)`);
     return { ok: true, pages, changedPages: !(c.pdf_pages && c.pdf_pages === pages) };
+  }
+  // un dato pasa a otra línea en el PDF (lo ve el panel): se le baja la letra en el Doc y se rehace el PDF de todos los
+  // contratos de ese Doc que nadie ha firmado (los «copies» comparten Doc). Los recuadros de firma se quedan si no cambian las páginas.
+  if (mm[2] === 'fit' && m === 'POST') {
+    edit();
+    if (signed || anySigned || !c.doc_url || c.kind === 'template') throw new ContractError(409, 'This PDF can’t be changed.');
+    const b = parse(await req.text()) || {};
+    const fixes = (Array.isArray(b.fixes) ? b.fixes : []).slice(0, 12).map(x => ({ text: clean(x?.text, 500), factor: Math.min(0.99, Math.max(0.3, Number(x?.factor) || 0)) })).filter(x => x.text.length >= 4 && x.factor);
+    if (!fixes.length) return { ok: true, changed: 0 };
+    let changed;
+    try { changed = await shrinkValues(env, c.doc_url, fixes); } catch (e) { throw new ContractError(502, e.message); }
+    if (!changed) return { ok: true, changed: 0 };
+    const buf = await exportDocPdf(env, c.doc_url), hash = await sha256(buf), pages = pdfPages(buf);
+    const rows = (await DB.prepare('SELECT * FROM contracts WHERE doc_url = ? AND status != ?').bind(c.doc_url, 'signed').all()).results;
+    for (const x of rows) {
+      if ((await signersOf(env, x)).some(r => r.signed_at)) continue;
+      const key = `contracts/${x.id}-${hash.slice(0, 12)}.pdf`;
+      await env.FILES.put(key, buf, { metadata: { type: 'application/pdf', at: now() } });
+      if (x.pdf && x.pdf !== key) await env.FILES.delete(x.pdf);
+      await DB.prepare('UPDATE contracts SET pdf = ?, pdf_hash = ?, pdf_pages = ?, pdf_size = ?, pdf_state = NULL, updated_at = ? WHERE id = ?').bind(key, hash, pages, buf.byteLength, now(), x.id).run();
+      if (!(x.pdf_pages && x.pdf_pages === pages)) await DB.prepare('UPDATE contract_signers SET box = NULL WHERE contract_id = ?').bind(x.id).run();
+    }
+    await audit(`Made a long detail smaller so it stays on one line in “${c.title}”`);
+    return { ok: true, changed, pages };
   }
   if (mm[2] === 'pdf' && m === 'GET') {
     if (!c.pdf) throw new ContractError(404, 'This contract has no PDF yet.');

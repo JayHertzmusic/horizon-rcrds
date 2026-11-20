@@ -119,7 +119,7 @@
     root.innerHTML = `
       <section class="ds-done">
         <img src="/assets/favicon_icon.png" alt="" class="ds-done-logo">
-        <h1>Welcome to the <span class="nw">HORIZON RCRDS family</span></h1>
+        <h1>${data.me.label && !/^Artist\s*\d*$/i.test(data.me.label) ? `${esc(data.me.label)}<br>` : ''}Welcome to the <span class="nw">HORIZON RCRDS FAMILY</span></h1>
         <p class="lead">Thank you for choosing us. Your contract is signed.</p>
         <p class="msg">${esc(data.title)}</p>
         <p class="msg">${all ? 'Everyone has signed. You can download your copy below, and we have also emailed it to you.' : 'The other artists still have to sign. As soon as everyone has signed, you will get an email to download the signed contract.'}</p>

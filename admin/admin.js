@@ -1862,10 +1862,10 @@
       <ol class="list forms-list">${list.length ? list.map((f, i) => `
         <li class="row fm" data-form="${esc(f.id)}" title="See responses">
           ${isOwnerNow() ? `<button type="button" class="grip" aria-label="Drag to reorder ${esc(f.title)}" title="Drag to reorder">${GRIP_SVG}</button>` : '<span></span>'}
-          <span class="meta"><b>${esc(f.title)}</b><span>${f.public ? `<a href="${esc(publicUrl(f))}" target="_blank" rel="noopener">/forms/${esc(f.slug)}</a>` : `/forms/${esc(f.slug)}`}</span></span>
+          <span class="meta"><b>${esc(f.title)}</b></span>
           <span class="resp-n"><b>${f.total}</b> ${f.total === 1 ? 'response' : 'responses'}</span>
           ${f.unseen ? `<span class="new-pill">${f.unseen} new</span>` : '<span></span>'}
-          <span class="fm-site">${f.on_site ? '<span class="tag">On the site</span>' : ''}</span>
+          <span class="fm-site"></span>
           <span class="fm-state">${isOwnerNow() ? `<button type="button" class="pub-sw${f.public ? ' on' : ''}" data-act="form-public" aria-pressed="${f.public}" title="${f.public ? 'Open: anyone with the link can send it. Click to close it.' : 'Closed: nobody can send it. Click to open it.'}"><span class="pub-knob" aria-hidden="true"></span>${f.public ? 'Open' : 'Closed'}</button>` : f.public ? '<span class="tag">Open</span>' : '<span class="tag off">Closed</span>'}</span>
           <span class="fm-btns"><a class="btn ghost sm${f.public ? '' : ' is-off'}" href="${esc(publicUrl(f))}" target="_blank" rel="noopener" ${f.public ? '' : 'tabindex="-1" aria-hidden="true"'}>View ↗</a><button type="button" class="btn ghost sm" data-act="form-resp">Responses</button>${canEditForm(f) ? '<button type="button" class="btn primary sm" data-act="form-edit">Edit</button>' : ''}</span>
         </li>`).join('') : '<li class="empty">No forms.</li>'}
@@ -2660,7 +2660,8 @@
         <p class="eyebrow">Contract draft</p>
         <h1>SEND A DRAFT</h1>
         <p class="info lead">The artist gets an email with a private link to read the draft online. They can’t sign it or download it.</p>
-        <div class="field"><label for="u-em0">Send it to (email)</label><input id="u-em0" name="em0" type="email" maxlength="160" autocomplete="off" placeholder="artist@email.com"></div>
+        <div class="row2 wide"><div class="field"><label for="u-cn0">Artist name</label><input id="u-cn0" name="cn0" maxlength="60" autocomplete="off"></div>
+          <div class="field"><label for="u-em0">Send it to (email)</label><input id="u-em0" name="em0" type="email" maxlength="160" autocomplete="off" placeholder="artist@email.com"></div></div>
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
         <div class="ed-actions"><button type="submit" class="btn primary">Send draft</button><button type="button" class="btn ghost" data-ct="back">Cancel</button></div>
       </form>`;
@@ -2699,7 +2700,6 @@
         ${labelF.length ? `<h2 class="ct-sub">Label</h2>${grid(labelF.map(([f, i]) => fieldHtml(f, i)))}` : ''}
         <h2 class="ct-sub">Artist</h2>
         ${who(1)}${grid(mine(1).map(([f, i]) => fieldHtml(f, i, 1)))}
-        ${t.signers.length === 1 ? '<div class="copy-btns"><button type="button" class="btn ghost sm" data-ct="copy-add">+ Add artist (own copy)</button></div>' : ''}
         ${fields ? '<p class="info">Everything goes into the contract in every place it appears. Every detail is needed.</p>' : ''}${end}
       </form>`;
     // varios artistas: un recuadro por artista con su Release Form, su nombre, su email y sus datos
@@ -2714,7 +2714,7 @@
           <legend>Artist ${x + 1}</legend>
           ${picker(x + 1)}${who(x + 1)}${grid(mine(x + 1).map(([f, i]) => fieldHtml(f, i, x + 1)))}
         </fieldset>`).join('')}
-        ${t.signers.length === 1 ? '<div class="copy-btns"><button type="button" class="btn ghost sm" data-ct="copy-add">+ Add artist (own copy)</button><button type="button" class="btn ghost sm" data-ct="copy-del">Remove last</button></div>' : ''}
+        ${t.signers.length === 1 ? '<div class="copy-btns"><button type="button" class="btn ghost sm" data-ct="copy-del">Remove last</button></div>' : ''}
         ${fields ? '<p class="info">Everything goes into the contract in every place it appears. Every detail is needed.</p>' : ''}${end}
       </form>`;
   }
@@ -2790,7 +2790,7 @@
       }
     }
     const set = (name, v, force) => { const el = f.elements[name]; if (el && v && (force || !el.value.trim() || /—\s*$/.test(el.value))) el.value = v; };
-    set('cn' + (k - 1), o.artist, true); set('em' + (k - 1), o.email, true); set('release_name', o.track);
+    set('cn' + (k - 1), o.artist, true); set('em' + (k - 1), o.email, true); set('release_name', o.track, k === 1);
     (ctOpen.fields || []).forEach((x, i) => {
       const nm = x.name.toLowerCase(), who = fieldArtist(x.name, n, copies), el = f.elements[fieldInput(i, who, k)];
       if (!el) return;
@@ -2798,7 +2798,7 @@
         const v = /legal/.test(nm) ? o.legal : /e-?mail/.test(nm) ? o.email : /\bage\b/.test(nm) ? o.age : /address/.test(nm) ? o.address
           : /city/.test(nm) ? [o.city, o.country].filter(Boolean).join(', ') : /country/.test(nm) ? o.country : /name/.test(nm) ? o.artist : undefined;
         if (v !== undefined) el.value = needsCaps(x.name) ? titleCase(v || '') : v || '';
-      } else if (!who && /^track$/.test(nm) && !el.value.trim()) el.value = o.track || '';
+      } else if (!who && /^track$/.test(nm) && ((k === 1 && o.track) || !el.value.trim())) el.value = o.track || '';
     });
     const names = Array.from({ length: n }, (_, i) => (f.elements['cn' + i]?.value || '').trim()).filter(Boolean);
     const track = f.elements.release_name.value.trim();
@@ -2810,6 +2810,8 @@
     if (!c) return '<p class="info">Loading…</p>';
     const ed = ctCanEdit(), signed = c.status === 'signed', st = CT_STATUS[c.status] || [c.status, ''], tpl = isTpl(c);
     const vars = Object.entries(c.vars || {});
+    const catF = `<div class="field"><label for="c-cat">Release number</label><input id="c-cat" name="release_cat" value="${esc(c.release_cat)}" maxlength="40" autocomplete="off"></div>`;
+    const artistF = `<div class="field"><label for="c-artist">Artist</label><input id="c-artist" name="artist" value="${esc(c.artist)}" maxlength="160" autocomplete="off"></div>`;
     return `
       <form id="ct-ed" class="editor ct-ed" novalidate>
         <button type="button" class="back" data-ct="back">← ${tpl ? 'Templates' : 'Contracts'}</button>
@@ -2817,16 +2819,16 @@
         ${tpl || isDraft(c) ? '' : ctSteps(c)}
         ${!signed && ed ? `
           <div class="row2 wide"><div class="field"><label for="c-title">${tpl ? 'Template name' : 'Title'}</label><input id="c-title" name="title" value="${esc(c.title)}" maxlength="160" autocomplete="off"></div>
-            ${tpl ? '' : `<div class="field"><label for="c-artist">Artist</label><input id="c-artist" name="artist" value="${esc(c.artist)}" maxlength="160" autocomplete="off"></div>`}</div>
+            ${tpl ? '' : catF}</div>
           ` : ''}
-        ${!tpl && ed ? `<div class="row2 wide"><div class="field"><label for="c-cat">Release number</label><input id="c-cat" name="release_cat" value="${esc(c.release_cat)}" maxlength="40" autocomplete="off"></div>
+        ${!tpl && ed ? `<div class="row2 wide">${signed ? catF : artistF}
             <div class="field"><label for="c-rel">Release name</label><input id="c-rel" name="release_name" value="${esc(c.release_name)}" maxlength="160" autocomplete="off"></div></div>
           <p class="info sm-txt ct-help">Release number and name are only used to file the signed contract in Drive: Year → Release number - Name.</p>` : ''}
         ${signed && !tpl ? ctDoneBlock(c, ed) : ''}
         ${!tpl && vars.length ? ctDataBlock(vars) : ''}
         ${docBlock(c, ed && !signed)}
         ${c.pdf ? signersBlock(c, ed && !signed) : ''}
-        ${tpl ? '' : ctActivity(ctOpen.events)}
+        ${tpl ? '' : ctActivity(ctOpen.events, c)}
         ${c.pdf ? `
           <div class="pdf-viewer" id="pdf-viewer"><p class="info">Loading PDF…</p></div>` : c.pdf_state === 'making' ? '<div class="pdf-viewer" id="pdf-viewer"><p class="info">Making the PDF… (a few seconds)</p></div>'
           : /^error/.test(c.pdf_state || '') ? `<p class="login-error" role="alert">The PDF could not be made (${esc(c.pdf_state.replace(/^error:\s*/, ''))}).${ed && c.doc_url ? ' <button type="button" class="btn ghost sm" data-ct="doc-pdf">Try again</button>' : ''}</p>`
@@ -2866,10 +2868,14 @@
     return `<div class="ct-log ct-log-all"><ol>${ctAct.map(e => `<li><time>${esc(fmtDate(e.at))}</time><b>${esc(e.label || e.email || 'Artist')}</b><span>${esc(evWhat(e.event))} · ${e.title ? `<button type="button" class="link" data-ct="act-open" data-id="${esc(e.contract_id)}">${esc(ctName(e))}</button>` : '<span class="muted">Deleted contract</span>'}</span></li>`).join('')}</ol></div>`;
   }
   // lo que hace cada artista con su enlace (abrir, leer, firmar, descargar)
-  function ctActivity(evs) {
+  function ctActivity(evs, c) {
     if (!evs) return '';
+    // en orden, como pasó: cuándo se envió a cada artista, lo que hizo cada uno con su enlace y cuándo se mandó la copia firmada
+    evs = [...evs, ...(c?.signers || []).filter(x => x.emailed_at).map(x => ({ at: x.emailed_at, label: x.label, email: x.email, event: 'link emailed' })),
+      ...(c?.done_mail_at ? [{ at: c.done_mail_at, label: 'HORIZON RCRDS', event: 'signed copy emailed' }] : [])].sort((a, b) => a.at - b.at);
     const what = e => e.replace(/^opened$/, 'Opened the contract').replace(/^code sent$/, 'Asked for the access code').replace(/^read to the end$/, 'Read it to the end')
-      .replace(/^signed as (.+)$/, 'Signed as $1').replace(/^signed$/, 'Signed').replace(/^downloaded the PDF$/, 'Downloaded the PDF').replace(/^downloaded the signed PDF$/, 'Downloaded the signed PDF');
+      .replace(/^signed as (.+)$/, 'Signed as $1').replace(/^signed$/, 'Signed').replace(/^downloaded the PDF$/, 'Downloaded the PDF').replace(/^downloaded the signed PDF$/, 'Downloaded the signed PDF')
+      .replace(/^link emailed$/, 'Got the link by email').replace(/^signed copy emailed$/, 'Emailed the signed copy to everyone');
     const dev = ua => /iphone|ipad/i.test(ua) ? 'iPhone/iPad' : /android/i.test(ua) ? 'Android' : /windows/i.test(ua) ? 'Windows' : /mac os/i.test(ua) ? 'Mac' : /linux/i.test(ua) ? 'Linux' : '';
     return `<div class="ct-log"><div class="signers-head"><b>Activity</b><span class="muted">What each artist does with their link.</span></div>
       ${evs.length ? `<ol>${evs.map(e => `<li><time>${esc(fmtDate(e.at))}</time><b>${esc(e.label || e.email || 'Artist')}</b><span>${esc(what(e.event))}</span><span class="muted">${esc([dev(e.ua || ''), e.ip].filter(Boolean).join(' · '))}</span></li>`).join('')}</ol>`
@@ -3091,9 +3097,14 @@
   // datos del contrato, ordenados en grupos
   function ctDataBlock(vars) {
     const groups = { Artist: [], Release: [], Label: [] };
-    for (const [k, v] of vars) (/label|signatory|representative/i.test(k) ? groups.Label : /track|date|title|remix/i.test(k) ? groups.Release : groups.Artist).push([k, v]);
-    return `<div class="ct-data">${Object.entries(groups).filter(([, l]) => l.length).map(([g, l]) => `
-      <div class="ct-group"><p class="mini">${g}</p><dl>${l.map(([k, v]) => `<dt>${esc(k.replace(/^Artist (\d) /, 'A$1 · '))}</dt><dd>${esc(v) || '<span class="muted">—</span>'}</dd>`).join('')}</dl></div>`).join('')}</div>`;
+    for (const [k, v] of vars) {
+      const a = (String(k).match(/^artist (\d)\b/i) || [])[1];
+      if (a) (groups['Artist ' + a] ||= []).push([k, v]);
+      else (/label|signatory|representative/i.test(k) ? groups.Label : /track|date|title|remix/i.test(k) ? groups.Release : groups.Artist).push([k, v]);
+    }
+    const order = Object.keys(groups).sort((a, b) => (/^Artist \d/.test(a) ? +a.slice(7) : /^Artist$/.test(a) ? 0 : 99) - (/^Artist \d/.test(b) ? +b.slice(7) : /^Artist$/.test(b) ? 0 : 99));
+    return `<div class="ct-data">${order.map(g => [g, groups[g]]).filter(([, l]) => l.length).map(([g, l]) => `
+      <div class="ct-group"><p class="mini">${g}</p><dl>${l.map(([k, v]) => `<dt>${esc(k.replace(/^Artist \d /, '').replace(/^./, x => x.toUpperCase()))}</dt><dd>${esc(v) || '<span class="muted">—</span>'}</dd>`).join('')}</dl></div>`).join('')}</div>`;
   }
   function contractsPage() {
     if (!ctData) {
@@ -3477,12 +3488,13 @@
         const tpl = ctOpen.tpl, fields = ctOpen.fields || [], btn = $('button[type=submit]', f);
         const stage = t => { btn.textContent = t; };   // en qué va
         if (isDraftTpl(tpl)) {
-          const em = f.elements.em0.value.trim();
+          const em = f.elements.em0.value.trim(), who = f.elements.cn0.value.trim();
+          if (!who) return fail('Write the artist name.');
           if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(em)) return fail('Write the email the draft is sent to.');
           btn.disabled = true; stage('Sending…');
           try {
-            const r = await ctAction(() => api('POST', '/api/contracts/make', { template: tpl.id, copies: [{ title: 'Contract Draft', artist: '', signers: [{ email: em }] }], send: true }));
-            toast(r.ok ? `Draft sent to ${em}` : r.error || 'The email could not be sent');
+            const r = await ctAction(() => api('POST', '/api/contracts/make', { template: tpl.id, copies: [{ title: 'Contract Draft', artist: who, signers: [{ email: em }] }], send: true }));
+            toast(r.ok ? `Draft sent to ${who} (${em})` : r.error || 'The email could not be sent');
             ctTab = 'contracts'; ctData = null; ctOpen = null; render(); loadContracts();
           } catch (err) { if (!$('#ed-error:not([hidden])')) fail(err.message); btn.disabled = false; stage('Send draft'); }
           return;
@@ -3938,7 +3950,7 @@
       fr.dataset.done = key;
       let html = b.html || textHtml(b.text || '');
       // (seguridad) un correo no puede redirigir su recuadro a otra web ni cambiar adónde abren los enlaces
-      html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']?refresh[^>]*>/gi, '').replace(/<base[^>]*>/gi, '');
+      html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']?refresh[^>]*>/gi, '').replace(/<base\b[^>]*>/gi, '');
       html = html.replace(/cid:([^"' )>]+)/g, (x, id) => b.cids[id]?.url || (b.cids[id]?.data ? `data:${b.cids[id].type};base64,${b.cids[id].data.replace(/-/g, '+').replace(/_/g, '/')}` : x));
       fr.srcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data: blob:; style-src 'unsafe-inline' https:; font-src https: data:"><base target="_blank"><style>html,body{margin:0;background:#fff;color:#111}body{padding:16px;font:14px/1.5 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}blockquote{margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex;color:#555}</style>${html}`;
       fr.onload = () => { try {

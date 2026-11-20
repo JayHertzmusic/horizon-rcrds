@@ -227,6 +227,11 @@ export async function gformHook(req, env, url) {
     const delRows = (await DB.prepare('SELECT id, google_id, at, answers FROM gform_del ORDER BY tries, id LIMIT 10').all()).results;
     if (delRows.length) await DB.prepare(`UPDATE gform_del SET tries = tries + 1 WHERE id IN (${delRows.map(() => '?').join(',')})`).bind(...delRows.map(x => x.id)).run();
     const deletes = delRows.map(x => ({ id: x.id, googleId: x.google_id, at: x.at, answers: parse(x.answers) || {} }));
+    // demos borradas en su Google Form → también fuera de la web
+    let pr;
+    try { pr = await pruneDeletedDemos(env); } catch (e) { pr = ['prune: ' + e.message]; }
+    log.push(...pr);
+    await DB.prepare("INSERT INTO panel_settings (key, value) VALUES ('gform_prune', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(JSON.stringify({ at: now(), log: pr })).run();
     return { ok: true, ops, log, deletes };
   }
   if (url.pathname === '/api/hooks/gform/ack') {
@@ -272,6 +277,56 @@ export async function gformHook(req, env, url) {
     return { ok: true };
   }
   throw new FormError(404, 'Not found.');
+}
+/* Demos borradas en su Google Form → se borran también de la web (cada sincronización, ~5 min).
+   Se leen las respuestas del Google Form (con el script de Horizon) y se emparejan por lo que contestan.
+   Seguro: solo se borra una respuesta que ya se vio en Google (o anterior a esto), con más de 1 h, y nunca muchas a la vez. */
+const PRUNE_DRY = true;
+const PRUNE_FROM = Date.UTC(2026, 10, 20, 12);   // las de antes ya estaban en Google (no hay registro de cuándo se vieron)
+const pv = v => (Array.isArray(v) ? v.map(String).sort().join(' | ') : String(v ?? '')).replace(/\s+/g, ' ').trim().toLowerCase();
+function looksSame(got, mine) {   // como el script: al menos 2 respuestas iguales y la mayoría de las que se pueden comparar
+  let eq = 0, cmp = 0;
+  for (const k in mine) { const a = got[k], b = mine[k]; if (!a || !b) continue; cmp++; if (a === b) eq++; }
+  return cmp >= 2 && eq >= Math.max(2, Math.ceil(cmp * 0.6));
+}
+async function pruneDeletedDemos(env) {
+  const DB = env.DB, out = [];
+  const forms = (await DB.prepare('SELECT id, slug, title, fields, google FROM forms WHERE google IS NOT NULL').all()).results.filter(f => /demo/i.test(f.slug) && parse(f.google)?.id);
+  if (!forms.length) return out;
+  // el script de Google (cuenta de Horizon) lista las respuestas del Google Form: «orphans» sin filas = todas, con sus 4 primeras respuestas
+  if (!env.GSCRIPT_URL || !env.GFORM_SECRET) return out;
+  for (const f of forms) {
+    const gid = parse(f.google).id, fields = (parse(f.fields) || []).filter(x => x.type !== 'section');
+    const r = await fetch(env.GSCRIPT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ secret: env.GFORM_SECRET, action: 'orphans', googleId: gid, rows: [] }), redirect: 'follow' });
+    const j = await r.json().catch(() => null);
+    if (!r.ok || !Array.isArray(j?.orphans)) throw new Error(`Google script ${r.status} ${j?.error || ''}`.trim());
+    const got = j.orphans.map(x => {
+      const o = {};
+      for (const part of String(x.sample || '').split(' | ')) { const i = part.indexOf(': '); if (i > 0) o[normQ(part.slice(0, i))] = pv(part.slice(i + 2)); }
+      return o;
+    });
+    const rows = (await DB.prepare('SELECT id, at, data, gseen FROM form_responses WHERE form_id = ?').bind(f.id).all()).results;
+    if (!rows.length) continue;
+    const seen = [], gone = [];
+    for (const r of rows) {
+      const d = parse(r.data) || {}, mine = {};
+      for (const x of fields) if (d[x.id] != null) mine[normQ(x.label)] = pv(String(d[x.id]).slice(0, 60));
+      if (got.some(g => looksSame(g, mine))) seen.push(r.id);
+      else if ((r.gseen || r.at < PRUNE_FROM) && now() - r.at > 3600e3) gone.push(r);
+    }
+    if (seen.length) await DB.prepare(`UPDATE form_responses SET gseen = ? WHERE id IN (${seen.map(() => '?').join(',')})`).bind(now(), ...seen).run();
+    // si casi nada coincide, algo no cuadra (Google no respondió bien, preguntas cambiadas…): no se borra nada
+    if (!gone.length) { out.push(`prune ${f.slug}: ok (${seen.length}/${rows.length} found, ${got.length} in Google)`); continue; }
+    if (!got.length || gone.length > 3 || seen.length < rows.length * 0.5) { out.push(`prune ${f.slug}: skipped (${gone.length} missing, ${seen.length}/${rows.length} found)`); continue; }
+    if (PRUNE_DRY) { out.push(`prune ${f.slug}: would delete ${gone.map(r => r.id).join(', ')} (${seen.length}/${rows.length} found, ${got.length} in Google)`); continue; }
+    for (const r of gone) {
+      const name = await respName(DB, f, r.id);
+      await DB.batch([DB.prepare('DELETE FROM form_responses WHERE id = ? AND form_id = ?').bind(r.id, f.id), DB.prepare('DELETE FROM form_seen WHERE response_id = ?').bind(r.id), DB.prepare('DELETE FROM form_replies WHERE response_id = ?').bind(r.id)]);
+      await DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)').bind(now(), 'google', 'Google Forms', `Deleted the response ${name} from the form “${f.title}”: it was deleted in the Google Form`, '').run();
+      out.push(`prune ${f.slug}: deleted ${r.id}`);
+    }
+  }
+  return out;
 }
 // copia de una respuesta de la web en su Google Form
 async function toGoogle(env, f, data) {

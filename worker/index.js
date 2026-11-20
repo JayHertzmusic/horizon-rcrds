@@ -113,6 +113,7 @@ const ALTERS = [
   ...CONTRACT_COLUMNS.map(c => [`ALTER TABLE contracts ADD COLUMN ${c}`]),
   ...SIGNER_COLUMNS.map(c => [`ALTER TABLE contract_signers ADD COLUMN ${c}`]),
   ['ALTER TABLE sc_gates ADD COLUMN downloads INTEGER NOT NULL DEFAULT 0'],
+  ['ALTER TABLE form_responses ADD COLUMN gseen INTEGER'],   // última vez que la respuesta se vio en su Google Form (si luego falta allí, es que se borró)
   ['ALTER TABLE gform_del ADD COLUMN tries INTEGER NOT NULL DEFAULT 0'],   // veces que se pidió al script borrar esa respuesta en Google   // conteo de descargas reales por release
 ];
 const ALL_SCHEMA = BASE_SCHEMA;   // (ya lleva las tablas de formularios, contratos y calendario)

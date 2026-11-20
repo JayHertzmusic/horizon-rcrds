@@ -3133,10 +3133,14 @@
     try {
       if (!ctOpen.bytes) ctOpen.bytes = new Uint8Array(await (await authFetch(`/api/contracts/${encodeURIComponent(c.id)}/pdf`)).arrayBuffer());
       const ed = ctCanEdit() && c.status !== 'signed' && !isDraft(c);
+      // antes de enseñarlo: un dato largo que en el PDF real pasa a otra línea se arregla primero (se ve ya bien)
+      if (ed && !c.signers.some(x => x.signed) && c.doc_url && !isTpl(c) && !fitSeen.has(c.id + ':' + c.pdf_hash)) {
+        box.innerHTML = '<p class="info">Making the PDF… (a few seconds)</p>';
+        if (await ctFit(c, ctOpen.bytes)) return;
+        if (ctOpen?.contract !== c || !box.isConnected) return;
+      }
       ctOpen.view = await HZPDF.render(box, ctOpen.bytes, { marks: ctMarks(), maxWidth: 820, onPage: ed ? (page, x, y) => placeBox(page, x, y) : null });
       if (ctCanEdit() && c.status === 'signed' && !c.signed_pdf) ensureSigned(c, ctOpen.bytes).catch(() => { /* se reintenta la próxima vez */ });
-      // un dato largo (p. ej. una dirección) que en el PDF real pasa a otra línea: se le baja la letra y se rehace el PDF
-      if (ed && !c.signers.some(x => x.signed) && c.doc_url && !isTpl(c) && await ctFit(c, ctOpen.bytes)) return;
       if (ed && !c.signers.some(x => x.signed)) { autoPlaceFor = null; autoPlace(c).catch(() => { /* se colocan a mano */ }); }
       if (isTpl(c) && !ctOpen.fields) { ctOpen.fields = await pdfFields(ctOpen.bytes); const el = $('.tpl-fields'); if (el) el.innerHTML = tplFieldsHtml(ctOpen.fields); }
     } catch (e) { box.innerHTML = `<p class="login-error">${esc(e.message)}</p>`; }
@@ -3183,8 +3187,6 @@
     for (let i = 1; i <= pdf.numPages; i++) for (const f of pageWraps((await (await pdf.getPage(i)).getTextContent()).items, values)) if (!fixes.some(x => x.text === f.text)) fixes.push(f);
     if (!fixes.length) return false;
     fitRounds[c.id] = (fitRounds[c.id] || 0) + 1;
-    const box = $('#pdf-viewer');
-    if (box) box.insertAdjacentHTML('afterbegin', '<p class="info">A long detail didn’t fit on its line: making its letters smaller and updating the PDF…</p>');
     try {
       const r = await api('POST', `/api/contracts/${encodeURIComponent(c.id)}/fit`, { fixes });
       if (!r.changed) return false;

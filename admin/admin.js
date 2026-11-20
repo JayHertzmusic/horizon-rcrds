@@ -3891,7 +3891,12 @@
     else if (type === 'text/plain' && !out.text) out.text = b64uText(p.body?.data || '');
     return out;
   }
-  const textHtml = t => `<div style="white-space:pre-wrap;font:14px/1.55 Arial,sans-serif">${esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>')}</div>`;
+  const textHtml = t => {
+    const fmt = x => esc(x).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>');
+    const m = String(t).match(/\n[^\n]*(?:\bOn\b[^\n]{4,200}\bwrote:|\bEl\b[^\n]{4,200}\bescribió:|-----Original Message-----)[^\n]*\n|\n>[^\n]*\n/);
+    const head = m ? t.slice(0, m.index) : t, quote = m ? t.slice(m.index) : '';
+    return `<div style="white-space:pre-wrap;font:14px/1.55 Arial,sans-serif">${fmt(head)}${quote ? `<div class="hz-q">${fmt(quote)}</div>` : ''}</div>`;
+  };
   const fmtSize = n => n > 1048576 ? (n / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB';
   // HTML de fuera (firma, plantillas, borradores): sin scripts ni eventos antes de meterlo en el editor
   function cleanHtml(html) {
@@ -3938,7 +3943,10 @@
       fr.srcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data: blob:; style-src 'unsafe-inline' https:; font-src https: data:"><base target="_blank"><style>html,body{margin:0;background:#fff;color:#111}body{padding:16px;font:14px/1.5 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}blockquote{margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex;color:#555}</style>${html}`;
       fr.onload = () => { try {
         const doc = fr.contentDocument, fit = () => { fr.style.height = Math.min(doc.documentElement.scrollHeight + 4, 30000) + 'px'; };
+        hideQuotes(doc, fit);
         fit(); new ResizeObserver(fit).observe(doc.body);
+        // el último mensaje, arriba del todo al abrir el hilo
+        if (t.scrollTo && +fr.dataset.mframe === visMsgs(t).length - 1) { t.scrollTo = false; const box = $('#m-read'), art = fr.closest('.m-msg'); if (box && art && visMsgs(t).length > 1) { box.style.scrollBehavior = 'auto'; box.scrollTop = art.offsetTop - 8; box.style.scrollBehavior = ''; } }
         doc.querySelectorAll('img').forEach(im => im.complete || im.addEventListener('load', fit, { once: true }));
       } catch { /* nada */ } };
       // imágenes incrustadas (cid) que vienen aparte
@@ -3948,7 +3956,34 @@
         try { const r = await api('GET', `/api/mail/attachment/${t.id}/${m.id}/${c.id}`); c.url = URL.createObjectURL(new Blob([b64uBytes(r.data)], { type: c.type })); if (view === 'mail' && mail.thread === t) fillFrames(); } catch { /* sin imagen */ }
       });
     });
-    const box = $('#m-read'); if (box && t.scrollLast) { t.scrollLast = false; const art = box.querySelector('.m-msg.open:last-of-type'); if (art && t.messages.length > 1) box.scrollTop = art.offsetTop - 8; }
+    const box = $('#m-read'); if (box && t.scrollLast) { t.scrollLast = false; t.scrollTo = true; const art = box.querySelector('.m-msg.open:last-of-type'); if (art && t.messages.length > 1) { box.style.scrollBehavior = 'auto'; box.scrollTop = art.offsetTop - 8; box.style.scrollBehavior = ''; } }
+  }
+  /* Lo citado de mensajes anteriores (Gmail, Outlook, Apple Mail, Yahoo, texto «On … wrote:») se oculta tras un botón «•••»
+     que lo enseña. No se oculta si el correo no tiene nada más, ni un reenvío (Forwarded message). */
+  function hideQuotes(doc, fit) {
+    if (doc.body.dataset.hzq) return;
+    doc.body.dataset.hzq = '1';
+    let qs = [...doc.querySelectorAll('.gmail_quote, blockquote[type="cite"], .yahoo_quoted, .moz-cite-prefix, .hz-q, #divRplyFwdMsg, #appendonsend')];
+    qs = qs.filter(q => !qs.some(o => o !== q && o.contains(q)));
+    // Outlook: lo de debajo de «From: … Sent: …» también es citado
+    const hidden = [];
+    for (const q of qs) {
+      if (/Forwarded message|Mensaje reenviado|Begin forwarded message/i.test(q.textContent.slice(0, 300))) continue;
+      hidden.push(q);
+      if (q.id === 'divRplyFwdMsg' || q.id === 'appendonsend') for (let n = q.nextElementSibling; n; n = n.nextElementSibling) hidden.push(n);
+    }
+    if (!hidden.length) return;
+    // (la línea «On … wrote:» de Apple Mail va justo antes de su blockquote)
+    for (const q of [...hidden]) { const pv = q.previousElementSibling; if (q.matches('blockquote[type="cite"]') && pv && /wrote:\s*$|escribió:\s*$/i.test(pv.textContent) && pv.textContent.length < 300) hidden.push(pv); }
+    hidden.forEach(q => { q.dataset.hzHid = q.style.display || ''; q.style.display = 'none'; });
+    if (!doc.body.innerText.trim()) { hidden.forEach(q => { q.style.display = q.dataset.hzHid; }); return; }
+    const st = doc.createElement('style');
+    st.textContent = '.hz-more{display:inline-block;margin:8px 0;padding:0 8px;height:14px;line-height:6px;border:0;border-radius:7px;background:#e8eaed;color:#5f6368;font:bold 14px Arial,sans-serif;letter-spacing:1px;cursor:pointer}.hz-more:hover{background:#dadce0}';
+    doc.head.appendChild(st);
+    const btn = doc.createElement('button');
+    btn.type = 'button'; btn.className = 'hz-more'; btn.textContent = '•••'; btn.title = 'Show quoted text'; btn.setAttribute('aria-label', 'Show quoted text');
+    btn.addEventListener('click', () => { const show = hidden[0].style.display === 'none'; hidden.forEach(q => { q.style.display = show ? q.dataset.hzHid : 'none'; }); btn.title = show ? 'Hide quoted text' : 'Show quoted text'; fit(); });
+    hidden[0].before(btn);
   }
   const visMsgs = t => { const v = mail.box === 'trash' ? t.messages : t.messages.filter(m => !m.labels.includes('TRASH')); return v.length ? v : t.messages; };
   const lastReal = t => [...t.messages].reverse().find(m => !m.labels.includes('DRAFT') && !m.labels.includes('TRASH')) || t.messages[t.messages.length - 1];

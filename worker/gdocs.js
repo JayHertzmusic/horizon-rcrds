@@ -65,7 +65,7 @@ function findBlanks(text) {
 function docText(content) {
   let text = ''; const idx = [], sty = [], tbl = [], ind = [];
   const walk = (els, inT) => { for (const el of els || []) {
-    if (el.paragraph) { const ps = el.paragraph.paragraphStyle || {}, pi = Math.max(ps.indentStart?.magnitude || 0, ps.indentFirstLine?.magnitude || 0) + (ps.indentEnd?.magnitude || 0);
+    if (el.paragraph) { const ps = el.paragraph.paragraphStyle || {}, pi = { x0: Math.max(ps.indentStart?.magnitude || 0, ps.indentFirstLine?.magnitude || 0), end: ps.indentEnd?.magnitude || 0 };
       for (const pe of el.paragraph.elements || []) { const t = pe.textRun?.content; if (t) for (let k = 0; k < t.length; k++) { text += t[k]; idx.push(pe.startIndex + k); sty.push(pe.textRun.textStyle || {}); tbl.push(inT); ind.push(pi); } } }
     if (el.table) for (const row of el.table.tableRows || []) for (const cell of row.tableCells || []) walk(cell.content, true);
   } };
@@ -75,10 +75,21 @@ function docText(content) {
 const findTab = (tabs, id) => { for (const t of tabs || []) { if (t.tabProperties?.tabId === id) return t; const c = findTab(t.childTabs, id); if (c) return c; } return null; };
 const docParts = u => { const m = String(u).match(/docs\.google\.com\/document\/(?:u\/\d+\/)?d\/([\w-]{20,})/), t = String(u).match(/[?&#]tab=(t\.[\w]+)/); return m ? { id: m[1], tab: t ? t[1] : '' } : null; };
 // lo único que se lee de un Doc: pestañas, texto con su posición y el estilo que se copia a los datos
-const DOC_EL = 'paragraph(paragraphStyle(indentStart,indentFirstLine,indentEnd),elements(startIndex,textRun(content,textStyle(italic,smallCaps,weightedFontFamily,fontSize,foregroundColor)))),table(tableRows(tableCells(content(paragraph(elements(startIndex,textRun(content,textStyle(italic,smallCaps,weightedFontFamily,fontSize,foregroundColor))))))))';
+const DOC_EL = 'paragraph(paragraphStyle(indentStart,indentFirstLine,indentEnd),elements(startIndex,textRun(content,textStyle(bold,italic,smallCaps,weightedFontFamily,fontSize,foregroundColor)))),table(tableRows(tableCells(content(paragraph(elements(startIndex,textRun(content,textStyle(bold,italic,smallCaps,weightedFontFamily,fontSize,foregroundColor))))))))';
 const DOC_TAB = `tabProperties(tabId,index),documentTab(documentStyle(pageSize,marginLeft,marginRight),body(content(${DOC_EL})))`;
 const DOC_FIELDS = encodeURIComponent(`tabs(${DOC_TAB},childTabs(${DOC_TAB},childTabs(${DOC_TAB})))`);
 const flatTabs = (tabs, out = []) => { for (const t of tabs || []) { out.push(t.tabProperties || {}); flatTabs(t.childTabs, out); } return out; };
+// anchos reales (en em) de Lexend, la letra de las plantillas, sacados del PDF que exporta Google: Regular (etiquetas) y Bold (datos)
+const LX = {
+  r: { ' ': .28, '0': .607, '1': .5, '2': .548, '3': .529, '4': .62, '5': .568, '6': .557, '7': .542, '8': .579, '9': .551, '(': .366, ')': .366, ',': .267, '-': .394, '.': .228, ':': .228, '/': .56, "'": .199, '"': .396, '@': .9,
+    A: .7, B: .681, C: .679, D: .748, E: .614, F: .593, G: .764, H: .761, I: .478, J: .632, K: .68, L: .599, M: .864, N: .793, O: .782, P: .622, Q: .782, R: .695, S: .624, T: .576, U: .747, V: .68, W: .996, X: .652, Y: .645, Z: .659,
+    a: .633, b: .634, c: .535, d: .634, e: .586, f: .378, g: .649, h: .595, i: .278, j: .25, k: .56, l: .251, m: .921, n: .595, o: .615, p: .631, q: .634, r: .403, s: .479, t: .384, u: .605, v: .55, w: .771, x: .55, y: .581, z: .5 },
+  b: { ' ': .32, '0': .675, '1': .561, '2': .548, '3': .591, '4': .662, '5': .596, '6': .579, '7': .553, '8': .599, '9': .577, '$': .634, '%': .968, "'": .252, '"': .45, '(': .39, ')': .39, ',': .287, '-': .448, '.': .257, '/': .595, ':': .257, '@': .965, '#': .7, '&': .75,
+    A: .694, B: .701, C: .694, D: .772, E: .645, F: .618, G: .782, H: .779, I: .555, J: .665, K: .739, L: .609, M: .878, N: .807, O: .812, P: .662, Q: .812, R: .702, S: .634, T: .655, U: .765, V: .712, W: .993, X: .7, Y: .689, Z: .683,
+    a: .659, b: .658, c: .545, d: .654, e: .586, f: .393, g: .669, h: .642, i: .319, j: .316, k: .626, l: .304, m: .962, n: .642, o: .641, p: .659, q: .654, r: .455, s: .495, t: .398, u: .642, v: .605, w: .834, x: .606, y: .62, z: .55 },
+};
+// letra sin tabla (acentos, otros alfabetos…): la de su letra base, o una ancha
+const glyphW = (ch, bold) => { const t = bold ? LX.b : LX.r; return t[ch] ?? t[ch.normalize('NFD')[0]] ?? (/\p{Lu}/u.test(ch) ? .8 : .7); };
 export async function docFromTemplate(env, docUrl, values, title) {
   const tok = await horizonToken(env);
   const d = docParts(docUrl);
@@ -124,20 +135,23 @@ export async function docFromTemplate(env, docUrl, values, title) {
     }
     // dato largo (p. ej. una dirección): se reduce SOLO la letra de ese dato lo justo para que su línea siga siendo una
     // (si saltara a otra, bajaría todo el texto y las firmas se irían a otra página). Mínimo 5 pt. Vale para cualquier hueco
-    // (rayas «____», {{dato}} o datos de otro contrato). Medidas por letra con margen (la letra de las plantillas es ancha):
-    // ≈ 0,45 em la etiqueta, ≈ 0,53 em el dato en negrita (mayúsculas y cifras más, i/l/puntos menos); tabuladores cada 36 pt;
-    // sitio = ancho de la página menos la sangría del párrafo. La raya «____» de la plantilla no cuenta (se quita).
+    // (rayas «____», {{dato}} o datos de otro contrato). Se mide con los anchos reales de la letra de las plantillas (Lexend,
+    // sacados del PDF que hace Google), el tamaño de cada letra, la sangría del párrafo y los tabuladores (cada 36 pt desde el
+    // margen), con un 4 % de margen. La raya «____» de la plantilla no cuenta (se quita).
     {
       let ls0 = b.start; while (ls0 > 0 && text[ls0 - 1] !== '\n') ls0--;
       let le = b.end; while (le < text.length && text[le] !== '\n') le++;
       let k = b.start - 1; while (k > ls0 && /\s/.test(text[k])) k--;
-      const base = (sty[b.start]?.fontSize?.magnitude) || (sty[k]?.fontSize?.magnitude) || sty.slice(ls0, le).find(x => x.fontSize?.magnitude)?.fontSize?.magnitude || 11;
-      const width = (str, em, x0 = 0) => { let x = x0; for (const ch of str) x = ch === '\t' ? (Math.floor(x / 36 + 1e-6) + 1) * 36 : x + base * em * (/[A-Z0-9@]/.test(ch) ? 1.2 : /[iljt.,:;'!|]/.test(ch) ? 0.6 : 1); return x; };
-      const avail = tbl[b.start] || !(pageW > 100) ? width(text.slice(ls0, le), 0.45) : (pageW - (ind[b.start] || 0)) * 0.98;   // (en tablas: lo que ocupaba la línea)
-      const start = width(text.slice(ls0, b.start), 0.45), tail = width(text.slice(b.end, le), 0.45);
-      const valW = width(v, 0.53), room = avail - start - tail;
-      if (start + valW + tail > avail && room > base * 2) {
-        const size = Math.max(5, Math.floor(base * room / valW * 10) / 10);
+      const pb = sty.slice(ls0, le).find(x => x.fontSize?.magnitude)?.fontSize?.magnitude || 11;
+      const vSize = (line && (sty[k] || {}).fontSize?.magnitude) || sty[b.start]?.fontSize?.magnitude || pb, vBold = line ? !/date/i.test(b.name) : !!sty[b.start]?.bold;
+      const run = (x, str, sz, bold) => { for (const ch of str) x = ch === '\t' ? (Math.floor(x / 36 + 1e-6) + 1) * 36 : x + sz * glyphW(ch, bold); return x; };
+      const tmpl = (x, a, z) => { for (let i = a; i < z; i++) x = run(x, text[i], sty[i]?.fontSize?.magnitude || pb, !!sty[i]?.bold); return x; };
+      const pi = ind[b.start] || { x0: 0, end: 0 };
+      const x0 = tbl[b.start] ? 0 : pi.x0, right = tbl[b.start] || !(pageW > 100) ? tmpl(0, ls0, le) : pageW - pi.end;   // (en tablas: lo que ocupaba la línea)
+      const start = tmpl(x0, ls0, b.start), valW = run(0, v, vSize, vBold), tail = tmpl(0, b.end, le);
+      const room = (right - start - tail) * 0.96;
+      if (valW > room && room > vSize * 2) {
+        const size = Math.max(5, Math.floor(vSize * room / valW * 10) / 10);
         requests.push({ updateTextStyle: { range: { startIndex, endIndex: startIndex + v.length, tabId: tab }, textStyle: { fontSize: { magnitude: size, unit: 'PT' } }, fields: 'fontSize' } });
       }
     }

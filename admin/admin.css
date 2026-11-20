@@ -1410,3 +1410,6 @@ html, body, * { scrollbar-width: none; }
 .lk-ck input:checked + span::after { content: ''; position: absolute; left: 3.5px; top: 0; width: 4px; height: 8px; border: solid #000; border-width: 0 2px 2px 0; transform: rotate(45deg); }
 .lk-ck span.part::after { content: ''; position: absolute; left: 2px; top: 5px; width: 8px; height: 2px; background: #000; }
 .lk-ck input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Forms: «Send your demo» de la web abierto / cerrado */
+.demos-sw { display: inline-flex; align-items: center; gap: 10px; color: var(--faint); font: 700 10px/1.2 'Barlow', sans-serif; letter-spacing: .2em; text-transform: uppercase; white-space: nowrap; }

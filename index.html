@@ -471,7 +471,7 @@
     .demo-title .highlight { color: var(--accent-color); transition: color 0.6s; }
 
     /* ── DEMO SECTION: wall of Horizon covers + the next catalogue number waiting for a track ── */
-    .dx { min-height: 100vh; min-height: 100svh; display: flex; align-items: center; padding: 120px 0 90px; background: #0a0a0a; border-top: 1px solid #1f1f1f; border-bottom: 1px solid #1f1f1f; isolation: isolate; }
+    .dx { min-height: 100vh; min-height: 100svh; display: flex; align-items: center; padding: 100px 0 56px; background: #0a0a0a; border-top: 1px solid #1f1f1f; border-bottom: 1px solid #1f1f1f; isolation: isolate; }
     .dx-wall { position: absolute; inset: -25% -15%; z-index: -2; perspective: 1400px; pointer-events: none; }
     .dx-plane { position: absolute; inset: 0; display: flex; justify-content: center; align-items: flex-start; gap: 18px; transform: rotateX(32deg) rotateZ(-14deg) scale(1.1); transform-origin: 50% 40%; }
     /* Each column holds its covers twice. The spacing is a margin under every cover (not a flex gap), so the
@@ -484,25 +484,27 @@
     .dx-shade {
       position: absolute; inset: 0; z-index: -1; pointer-events: none;
       background:
-        linear-gradient(90deg, rgba(10,10,10,0.96) 0%, rgba(10,10,10,0.86) 38%, rgba(10,10,10,0.55) 70%, rgba(10,10,10,0.7) 100%),
-        radial-gradient(ellipse 60% 70% at 78% 50%, rgba(var(--accent-color-rgb), 0.22), transparent 70%),
-        linear-gradient(180deg, #0a0a0a 0%, transparent 16%, transparent 84%, #0a0a0a 100%);
+        radial-gradient(ellipse 46% 58% at 50% 46%, rgba(10,10,10,0.94) 0%, rgba(10,10,10,0.82) 55%, rgba(10,10,10,0.55) 100%),
+        radial-gradient(ellipse 60% 45% at 50% 100%, rgba(var(--accent-color-rgb), 0.24), transparent 70%),
+        linear-gradient(180deg, #0a0a0a 0%, rgba(10,10,10,0.35) 18%, rgba(10,10,10,0.35) 82%, #0a0a0a 100%);
     }
 
-    .dx-grid { display: grid; grid-template-columns: minmax(0, 1fr); max-width: 640px; }
+    .dx-grid { display: grid; grid-template-columns: minmax(0, 1fr); max-width: 920px; margin: 0 auto; text-align: center; justify-items: center; }
+    .dx-grid > div { display: flex; flex-direction: column; align-items: center; }
     .dx-title { font-family: 'Bebas Neue', sans-serif; font-size: clamp(3.5rem, 8.8vw, 8.4rem); line-height: 0.84; letter-spacing: 0.005em; color: #fff; margin: 0; }
     .dx-outline { color: transparent; -webkit-text-stroke: 2px rgba(255,255,255,0.85); }
     .dx-accent { color: var(--accent-color); text-shadow: 0 0 60px rgba(var(--accent-color-rgb), 0.45); }
-    .dx-lead { color: #9ca3af; font-weight: 300; line-height: 1.8; font-size: 1.02rem; max-width: 540px; margin: 28px 0 34px; }
+    .dx-lead { color: #9ca3af; font-weight: 300; line-height: 1.8; font-size: 1.02rem; max-width: 580px; margin: 28px auto 34px; }
+    /* demos cerradas (desde el panel) */
+    .dx-tag-off .pulse-dot { background: #6b7280; box-shadow: none; animation: none; }
+    .dx-tag-off { color: #9ca3af; }
     .dx-ghost { background: rgba(10,10,10,0.5); }
 
 
     .dx-facts {
-      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: clamp(56px, 7vw, 90px);
-      background: rgba(10,10,10,0.65); border: 1px solid #1f1f1f; border-radius: 12px; overflow: hidden;
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; max-width: 980px; margin: clamp(32px, 4vw, 52px) auto 0; text-align: center;
     }
-    .dx-facts > div { padding: 20px 22px; }
-    .dx-facts > div + div { border-left: 1px solid #1f1f1f; }
+    .dx-facts > div { padding: 20px 22px; background: rgba(10,10,10,0.7); border: 1px solid #1f1f1f; border-radius: 12px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
     .dx-facts span { font-family: 'Bebas Neue', sans-serif; font-size: 1.05rem; letter-spacing: 0.04em; color: var(--accent-color); }
     .dx-facts p { font-size: 0.78rem; color: #6b7280; line-height: 1.6; margin: 4px 0 0; }
 
@@ -513,7 +515,7 @@
     }
     @media (max-width: 700px) {
       .dx-facts { grid-template-columns: minmax(0, 1fr); }
-      .dx-facts > div + div { border-left: 0; border-top: 1px solid #1f1f1f; }
+      .dx-facts { gap: 10px; }
     }
     @media (prefers-reduced-motion: reduce) { .dx-col { animation: none !important; } }
 
@@ -1220,12 +1222,12 @@
     <div class="dx-grid">
 
       <div class="reveal">
-        <div class="label-tag mb-6 flex items-center gap-3"><span class="pulse-dot"></span>Open submissions</div>
-        <h2 class="dx-title">SEND <span class="dx-outline">YOUR</span><br /><span class="dx-accent">DEMO.</span></h2>
-        <p class="dx-lead">
+        <div id="dx-tag" class="label-tag mb-6 flex items-center justify-center gap-3"><span class="pulse-dot"></span><span id="dx-tag-t">Open submissions</span></div>
+        <h2 id="dx-title" class="dx-title">SEND <span class="dx-outline">YOUR</span><br /><span class="dx-accent">DEMO.</span></h2>
+        <p id="dx-lead" class="dx-lead">
           We're looking for powerful club records with strong identity, clean production and real energy. If your track is built for festivals, clubs or emotional moments — send it.
         </p>
-        <div class="flex flex-wrap items-center gap-4 mb-9">
+        <div id="dx-actions" class="flex flex-wrap items-center justify-center gap-4 mb-9">
           <a href="https://www.labelradar.com/labels/horizonrcrds/portal" target="_blank" rel="noopener noreferrer" class="btn-primary" style="font-size:0.75rem;padding:17px 38px;">
             <i class="fa-solid fa-paper-plane"></i> Submit via LabelRadar
           </a>
@@ -1233,7 +1235,7 @@
             <i class="fa-solid fa-file-lines"></i> Submit via Form
           </a>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap justify-center gap-2">
           <span class="genre-tag">Future House</span>
           <span class="genre-tag">Future Bounce</span>
           <span class="genre-tag">Progressive House</span>
@@ -1245,7 +1247,7 @@
 
     </div>
 
-    <div class="dx-facts reveal">
+    <div id="dx-facts" class="dx-facts reveal">
       <div><span>Format</span><p>MP3 / WAV · 320 kbps or lossless preferred. Include a short artist bio.</p></div>
       <div><span>How to send</span><p>Submit through LabelRadar or our submission form. Direct emails will not be reviewed.</p></div>
       <div><span>Policy</span><p>Unreleased material only. We sign worldwide licensing deals.</p></div>
@@ -2296,11 +2298,23 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 <script>
+/* Demos cerradas desde el panel (Forms → Send your demo on the site): la sección lo dice y no deja enviar */
+function demosClosed() {
+  var tag = document.getElementById('dx-tag'), set = function (id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; };
+  if (tag) tag.classList.add('dx-tag-off');
+  set('dx-tag-t', 'Submissions closed');
+  set('dx-title', 'DEMOS <span class="dx-outline">ARE</span><br /><span class="dx-accent">CLOSED.</span>');
+  set('dx-lead', 'We are not taking new demos right now: our team is focused on the releases already on the way. Submissions will open again soon. Follow us to be the first to know when they do.');
+  set('dx-actions', '<a href="https://soundcloud.com/horizonirecords/" target="_blank" rel="noopener noreferrer" class="btn-primary" style="font-size:0.75rem;padding:17px 38px;"><i class="fa-brands fa-soundcloud"></i> Follow on SoundCloud</a>'
+    + '<a href="https://www.instagram.com/horizon_rcrds/" target="_blank" rel="noopener noreferrer" class="btn-outline dx-ghost" style="font-size:0.75rem;padding:16px 30px;"><i class="fa-brands fa-instagram"></i> Follow on Instagram</a>');
+  var facts = document.getElementById('dx-facts'); if (facts) facts.hidden = true;
+}
 /* Forms the owners mark as "En la web" in the panel replace the Google Form button in Send your demo */
 (function () {
   var btn = document.getElementById('dx-form-btn');
   if (!btn || !window.fetch) return;
   fetch('/api/public/site-forms', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+    if (j && j.demos_open === false) { demosClosed(); return; }
     if (!j || !j.forms || !j.forms.length) return;
     var html = j.forms.map(function (f) {
       var t = String(f.button || f.title).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });

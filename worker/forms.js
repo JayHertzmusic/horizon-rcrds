@@ -328,6 +328,8 @@ async function pruneDeletedDemos(env) {
   }
   return out;
 }
+// «Send your demo» abierto (por defecto) o cerrado desde el panel
+const demosOpen = async DB => (await DB.prepare("SELECT value FROM panel_settings WHERE key = 'demos_open'").first().catch(() => null))?.value !== '0';
 // copia de una respuesta de la web en su Google Form
 async function toGoogle(env, f, data) {
   const g = parse(f.google);
@@ -421,12 +423,20 @@ export async function formsApi(req, env, s, url, audit) {
 
   // respuestas sin ver (para el aviso del panel), solo de los formularios que esta persona puede ver
   if (p === '/api/forms/unseen' && m === 'GET') return formsUnseen(env, s);
+  if (p === '/api/forms/demos' && m === 'POST') {
+    // «Send your demo» de la web abierto o cerrado (solo owners)
+    if (s.sync || !s.owner) throw new FormError(403, 'Only owners can open or close demo submissions.');
+    const open = !!(parse(await req.text()) || {}).open;
+    await DB.prepare("INSERT INTO panel_settings (key, value) VALUES ('demos_open', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(open ? '1' : '0').run();
+    await audit(open ? 'Opened demo submissions on the site' : 'Closed demo submissions on the site');
+    return { ok: true, demos_open: open };
+  }
   if (p === '/api/forms' && m === 'GET') {
     const forms = (await DB.prepare('SELECT * FROM forms ORDER BY position, created_at').all()).results.filter(f => canSeeForm(s, f));
     // un rol limitado a algunos formularios no crea nuevos (no los vería)
     const counts = (await DB.prepare(`SELECT r.form_id, COUNT(*) AS total, SUM(CASE WHEN ${SEEN_SQL} THEN 0 ELSE 1 END) AS unseen FROM form_responses r GROUP BY r.form_id`).bind(s.email || '').all()).results;
     return {
-      owner: !!s.owner,
+      owner: !!s.owner, demos_open: await demosOpen(DB),
       forms: forms.map(f => {
         const c = counts.find(x => x.form_id === f.id) || {};
         return { id: f.id, level: formLevel(s, f) || 'view', slug: f.slug, title: f.title, description: f.description || '', fields: parse(f.fields) || [], public: !!f.public, on_site: !!f.on_site, button: f.button || '', invite: !!f.invite,
@@ -686,14 +696,17 @@ export async function formsApi(req, env, s, url, audit) {
 export async function publicFormsApi(req, env, url) {
   const DB = env.DB, p = url.pathname;
   if (p === '/api/public/site-forms' && req.method === 'GET') {
+    if (!await demosOpen(DB)) return { demos_open: false, forms: [] };
     const rows = (await DB.prepare('SELECT slug, title, button FROM forms WHERE public = 1 AND on_site = 1 ORDER BY position').all()).results;
-    return { forms: rows.map(r => ({ slug: r.slug, title: r.title, button: r.button || r.title })) };
+    return { demos_open: true, forms: rows.map(r => ({ slug: r.slug, title: r.title, button: r.button || r.title })) };
   }
   const mm = p.match(/^\/api\/public\/forms\/([a-z0-9-]+)$/);
   if (!mm) throw new FormError(404, 'Not found.');
   const f = await DB.prepare('SELECT * FROM forms WHERE slug = ?').bind(mm[1]).first();
   // «Closed» en el panel: nadie lo puede enviar, tampoco con enlace personal (antes los enlaces seguían funcionando)
   if (!f || !f.public) throw new FormError(404, 'This form is not available right now.');
+  // demos cerradas en el panel: los formularios de «Send your demo» tampoco se pueden enviar
+  if (f.on_site && !await demosOpen(DB)) throw new FormError(404, 'Demo submissions are closed right now. Follow HORIZON RCRDS to know when they reopen.');
   const fields = parse(f.fields) || [];
   const b = req.method === 'POST' ? parse(await req.text()) || {} : {};
   // formulario privado: solo con un enlace personal, en el primer dispositivo que lo abre, una vez y durante 30 días

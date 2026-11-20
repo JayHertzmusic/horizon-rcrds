@@ -1857,7 +1857,7 @@
     const list = visibleForms(), own = isOwnerNow();
     return `
       <div class="head"><div><p class="eyebrow">Responses and links</p><h1>FORMS <span class="count">${list.length}</span></h1></div>
-        ${own ? '<button type="button" class="btn primary" data-act="form-new">+ New form</button>' : ''}</div>
+        ${own ? `<div class="head-btns"><span class="demos-sw">Send your demo on the site <button type="button" class="pub-sw${formsData.demos_open ? ' on' : ''}" data-act="demos-open" aria-pressed="${!!formsData.demos_open}" title="${formsData.demos_open ? 'Open: artists can send demos from the site. Click to close.' : 'Closed: the site says demos are closed. Click to open.'}"><span class="pub-knob" aria-hidden="true"></span>${formsData.demos_open ? 'Open' : 'Closed'}</button></span><button type="button" class="btn primary" data-act="form-new">+ New form</button></div>` : ''}</div>
       <p class="info lead">${own ? 'Click a form to see its responses; “Edit” changes it with a live preview of how it looks on the site. Owners drag ⋮⋮ to set the order everyone sees. Each form has its own public link (when open) and can appear as a button in “Send your demo” on the site.' : 'The forms you have access to.'}</p>
       <ol class="list forms-list">${list.length ? list.map((f, i) => `
         <li class="row fm" data-form="${esc(f.id)}" title="See responses">
@@ -2357,6 +2357,15 @@
     if (act === 'form-new') openEditor(null);
     else if (act === 'form-edit') openEditor(formsData.forms.find(f => f.id === id));
     else if (act === 'form-resp') openResponses(id);
+    else if (act === 'demos-open') {
+      // «Send your demo» de la web: abierto / cerrado
+      const open = !formsData.demos_open;
+      if (!open && !await confirmBox('Close demo submissions? The site will say demos are closed and the demo forms stop accepting entries.', 'Close')) return;
+      busy = true;
+      try { await api('POST', '/api/forms/demos', { open }); formsData.demos_open = open; render(); toast(open ? 'Demo submissions are open on the site' : 'Demo submissions are closed on the site'); }
+      catch (err) { toast(err.message); }
+      finally { busy = false; }
+    }
     else if (act === 'form-public') {
       // abrir / cerrar el formulario desde la lista (no cambia nada más)
       const f = formsData.forms.find(x => x.id === id), open = !f.public;

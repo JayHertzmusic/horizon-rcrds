@@ -281,7 +281,7 @@ export async function gformHook(req, env, url) {
 /* Demos borradas en su Google Form → se borran también de la web (cada sincronización, ~5 min).
    Se leen las respuestas del Google Form (con el script de Horizon) y se emparejan por lo que contestan.
    Seguro: solo se borra una respuesta que ya se vio en Google (o anterior a esto), con más de 1 h, y nunca muchas a la vez. */
-const PRUNE_DRY = true;
+const PRUNE_DRY = false;
 const PRUNE_FROM = Date.UTC(2026, 10, 20, 12);   // las de antes ya estaban en Google (no hay registro de cuándo se vieron)
 const pv = v => (Array.isArray(v) ? v.map(String).sort().join(' | ') : String(v ?? '')).replace(/\s+/g, ' ').trim().toLowerCase();
 function looksSame(got, mine) {   // como el script: al menos 2 respuestas iguales y la mayoría de las que se pueden comparar

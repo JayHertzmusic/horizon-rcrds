@@ -139,8 +139,11 @@ export async function docFromTemplate(env, docUrl, values, title) {
     // sacados del PDF que hace Google), el tamaño de cada letra, la sangría del párrafo y los tabuladores (cada 36 pt desde el
     // margen), con un 4 % de margen. La raya «____» de la plantilla no cuenta (se quita).
     {
-      let ls0 = b.start; while (ls0 > 0 && text[ls0 - 1] !== '\n') ls0--;
-      let le = b.end; while (le < text.length && text[le] !== '\n') le++;
+      // (una línea acaba en Enter o en salto de línea suave, Mayús+Enter = \u000b en Google Docs)
+      const brk = c => c === '\n' || c === '\u000b' || c === '\u2028';
+      let ls0 = b.start; while (ls0 > 0 && !brk(text[ls0 - 1])) ls0--;
+      let le = b.end; while (le < text.length && !brk(text[le])) le++;
+      while (le > b.end && /\s/.test(text[le - 1])) le--;   // espacios y tabuladores al final de la línea no ocupan sitio
       let k = b.start - 1; while (k > ls0 && /\s/.test(text[k])) k--;
       const pb = sty.slice(ls0, le).find(x => x.fontSize?.magnitude)?.fontSize?.magnitude || 11;
       const vSize = (line && (sty[k] || {}).fontSize?.magnitude) || sty[b.start]?.fontSize?.magnitude || pb, vBold = line ? !/date/i.test(b.name) : !!sty[b.start]?.bold;

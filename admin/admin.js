@@ -2670,7 +2670,7 @@
     const all = (fields || []).map((f, i) => [f, i, fieldArtist(f.name, n, copies)]);
     const isLabel = f => /^label /i.test(f.name);
     const general = all.filter(([f, , w]) => w === 0 && !isLabel(f)), labelF = all.filter(([f, , w]) => w === 0 && isLabel(f)), mine = k => all.filter(([f, , w]) => (w === k || w === 'each') && !isDupField(f.name));
-    const picker = k => rf?.list?.length ? `<div class="field"><label for="u-from${k}">${n > 1 ? 'Fill from this artist’s Release Form' : 'Fill from a Release Form response'}</label><select id="u-from${k}" class="u-from" data-k="${k}"><option value="">Choose a response…</option>${rf.list.map(r => `<option value="${r.id}">${esc(rfLabel(r))}</option>`).join('')}</select></div>` : '';
+    const picker = k => rf?.list?.length ? `<div class="field"><label for="u-from${k}">${n > 1 ? 'Fill from this artist’s Release Form' : 'Fill from a Release Form response'}</label><select id="u-from${k}" class="u-from" data-k="${k}"><option value="">Choose a response…</option>${rfOptions(n).map(([v, t]) => `<option value="${esc(v)}">${esc(t)}</option>`).join('')}</select></div>` : '';
     const who = k => `<div class="row2 wide"><div class="field"><label for="u-cn${k - 1}">Artist name</label><input id="u-cn${k - 1}" name="cn${k - 1}" maxlength="60" autocomplete="off"></div>
           <div class="field"><label for="u-em${k - 1}">Email (the signing link goes here)</label><input id="u-em${k - 1}" name="em${k - 1}" type="email" maxlength="160" autocomplete="off"></div></div>`;
     const grid = l => l.length ? `<div class="ct-fields">${l.join('')}</div>` : '';
@@ -2678,9 +2678,13 @@
         <button type="button" class="back" data-ct="back">← Contracts</button>
         <p class="eyebrow">New contract · template “${esc(t.title)}”</p>
         <h1>CONTRACT DETAILS</h1>`;
+    // la fecha va al lado del número de release y el nombre del release en su sitio (junto a Track)
+    const relName = '<div class="field"><label for="u-rel">Release name</label><input id="u-rel" name="release_name" maxlength="160" autocomplete="off" placeholder="Track title"></div>';
+    const dateF = general.find(([f]) => /^date$/i.test(f.name));
+    const generalHtml = general.map(([f, i]) => dateF && f === dateF[0] ? relName : fieldHtml(f, i));
     const release = `
         <div class="row2 wide"><div class="field"><label for="u-cat">Release number</label><input id="u-cat" name="release_cat" maxlength="40" value="${esc(ctOpen.cat || '')}" autocomplete="off"></div>
-          <div class="field"><label for="u-rel">Release name</label><input id="u-rel" name="release_name" maxlength="160" autocomplete="off" placeholder="Track title"></div></div>
+          ${dateF ? fieldHtml(dateF[0], dateF[1]) : relName}</div>
         <div class="field"><label for="u-title">Contract title</label><input id="u-title" name="title" maxlength="160" value="${esc(t.title)} — " autocomplete="off"></div>`;
     const end = `
         <p class="ed-error" id="ed-error" role="alert" hidden></p>
@@ -2691,7 +2695,7 @@
       <form id="ct-use" class="editor ct-ed" novalidate>${head}
         ${picker(1)}
         <h2 class="ct-sub">Release</h2>
-        ${release}${reading}${grid(general.map(([f, i]) => fieldHtml(f, i)))}
+        ${release}${reading}${grid(generalHtml)}
         ${labelF.length ? `<h2 class="ct-sub">Label</h2>${grid(labelF.map(([f, i]) => fieldHtml(f, i)))}` : ''}
         <h2 class="ct-sub">Artist</h2>
         ${who(1)}${grid(mine(1).map(([f, i]) => fieldHtml(f, i, 1)))}
@@ -2702,7 +2706,7 @@
     return `
       <form id="ct-use" class="editor ct-ed" novalidate>${head}
         <h2 class="ct-sub">Release</h2>
-        ${release}${reading}${grid(general.map(([f, i]) => fieldHtml(f, i)))}
+        ${release}${reading}${grid(generalHtml)}
         ${labelF.length ? `<h2 class="ct-sub">Label</h2>${grid(labelF.map(([f, i]) => fieldHtml(f, i)))}` : ''}
         <h2 class="ct-sub">Artists · ${copies ? 'each one gets their own copy, with their own details, and signs it' : 'all of them sign this contract'}</h2>
         ${Array.from({ length: n }, (_, x) => `
@@ -2723,6 +2727,35 @@
     const o = {};
     for (const f of ctOpen.rf.fields) for (const [k, re] of Object.entries(RF_KEYS)) if (re.test(f.label || '') && !o[k]) o[k] = String(r.data?.[f.id] ?? '').trim();
     return o;
+  }
+  // collab (1/2, 2/2…) con más de un artista: una sola opción «Collab · A & B — Track»; al elegirla, cada uno va a su bloque
+  const rfGroup = grp => ctOpen.rf.list.filter(x => x.collab?.grp === grp).sort((a, b) => a.collab.pos - b.collab.pos || b.at - a.at)
+    .filter((x, i, a) => a.findIndex(y => y.collab.pos === x.collab.pos) === i);
+  function rfOptions(n) {
+    const out = [], seen = new Set();
+    for (const r of ctOpen.rf.list) {
+      const grp = r.collab?.grp;
+      if (n > 1 && grp) {
+        if (seen.has(grp)) continue;
+        const g = rfGroup(grp);
+        if (g.length > 1) {
+          seen.add(grp);
+          const os = g.map(rfRead), main = g.find(x => x.collab.pos === 1) || g[0];
+          out.push([`g:${grp}`, `Collab · ${os.map(o => o.artist || '—').join(' & ')} — ${rfRead(main).track || '—'} · ${new Date(Math.max(...g.map(x => x.at))).toLocaleDateString('en-GB')}${g.length < (r.collab.n || 0) ? ` (${g.length} of ${r.collab.n} filled in)` : ''}`]);
+          continue;
+        }
+      }
+      out.push([String(r.id), rfLabel(r)]);
+    }
+    return out;
+  }
+  function rfFillGroup(grp) {
+    const f = $('#ct-use'), n = artistsOf(ctOpen.tpl), g = rfGroup(grp).filter(x => x.collab.pos <= n);
+    if (!f || !g.length) return;
+    f.querySelectorAll('.u-from').forEach(s => { if (s.value === `g:${grp}`) s.value = ''; });
+    for (const m of g) { rfFill(m.collab.pos, m.id, true); const sel = f.querySelector(`.u-from[data-k="${m.collab.pos}"]`); if (sel) sel.value = `g:${grp}`; }
+    const total = rfGroup(grp).length;
+    toast(`Collab: ${g.map(m => `Artist ${m.collab.pos}`).join(' & ')} filled from their Release Forms${total > g.length ? ` (this contract has room for ${n})` : ''} — check them`);
   }
   const rfLabel = r => { const o = rfRead(r); return `#${r.n} · ${o.artist || '—'} — ${o.track || '—'}${r.collab ? ` (with ${(r.collab.with || []).join(' & ')})` : ''} · ${new Date(r.at).toLocaleDateString('en-GB')}`; };
   const splitNames = v => String(v || '').split(/\s*(?:,|&|\/|\band\b)\s*/i).map(x => x.trim()).filter(Boolean);
@@ -3339,7 +3372,7 @@
   });
   document.addEventListener('change', async e => {
     if (view !== 'contracts' || busy) return;
-    if (e.target.classList?.contains('u-from')) { rfFill(Number(e.target.dataset.k), e.target.value); return; }
+    if (e.target.classList?.contains('u-from')) { if (e.target.value.startsWith('g:')) rfFillGroup(e.target.value.slice(2)); else rfFill(Number(e.target.dataset.k), e.target.value); return; }
     if (e.target.classList?.contains('drive-url')) {
       const v = e.target.value.trim(), id = driveId(v);
       if (v && !id) { toast('Paste the link of a Drive folder (drive.google.com/drive/folders/…).'); return; }

@@ -331,6 +331,44 @@
   html.sent:not(.embed):not(.excl) main { flex: 1; display: flex; align-items: center; padding-top: 32px; padding-bottom: 32px; }
   html.sent:not(.embed):not(.excl) #root { width: 100%; }
 </style>
+<style>
+  /* llegando desde «Send your demo»: se enseña con un fundido cuando el formulario ya está montado */
+  html.hz-in body { opacity: 0; }
+  html.hz-on body { transition: opacity .45s ease; }
+  html.hz-out body { opacity: 0; transition: opacity .3s ease; }
+  /* el brillo de fondo con el color de la web */
+  html.hz-acc body::before { background: radial-gradient(900px 480px at 50% -12%, rgba(var(--glow), .12), transparent 70%), radial-gradient(ellipse 60% 40% at 50% 100%, rgba(var(--glow), .10), transparent 70%); }
+</style>
+<script>
+(function () {
+  var h = document.documentElement;
+  try {
+    var acc = sessionStorage.getItem('hz-acc');
+    if (acc && /^\d{1,3},\s*\d{1,3},\s*\d{1,3}$/.test(acc) && acc.replace(/\s/g, '') !== '255,255,255') { h.style.setProperty('--glow', acc); h.classList.add('hz-acc'); }
+    if (sessionStorage.getItem('hz-tr')) {
+      sessionStorage.removeItem('hz-tr');
+      h.classList.add('hz-in');
+      var show = function () { if (!h.classList.contains('hz-in')) return; h.classList.add('hz-on'); setTimeout(function () { h.classList.remove('hz-in'); }, 20); setTimeout(function () { h.classList.remove('hz-on'); }, 900); };
+      // cuando ya no pone «Loading…» (o como mucho 1,5 s)
+      document.addEventListener('DOMContentLoaded', function () {
+        var root = document.getElementById('root');
+        var ready = function () { return root && !root.querySelector('.msg') || (root && !/Loading/.test(root.textContent)); };
+        if (ready()) return setTimeout(show, 20);
+        new MutationObserver(function (m, o) { if (ready()) { o.disconnect(); setTimeout(show, 40); } }).observe(root, { childList: true, subtree: true });
+      });
+      setTimeout(show, 1500);
+    }
+  } catch (x) {}
+  // la X para volver a la portada: también con fundido
+  document.addEventListener('click', function (e) {
+    var a = e.target.closest && e.target.closest('a.x-close');
+    if (!a || e.button || e.metaKey || e.ctrlKey) return;
+    e.preventDefault(); h.classList.add('hz-out');
+    setTimeout(function () { location.href = a.href; }, 300);
+  });
+  addEventListener('pageshow', function () { h.classList.remove('hz-out'); });
+})();
+</script>
 <script>/* incrustado en la portada: modo compacto desde el primer instante (sin enseñar la página completa) */
 if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.documentElement.classList.add('embed');</script>
 </head>

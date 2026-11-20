@@ -8,6 +8,8 @@
     html.hz-hash body { opacity: 0; }
     html.hz-hash, html.hz-hash-in { scroll-behavior: auto !important; }
     html.hz-hash-in body { transition: opacity .35s ease; }
+    /* de «Send your demo» al formulario: la página se funde a negro antes de cambiar */
+    html.hz-leave body { opacity: 0; transition: opacity .32s ease; }
   </style>
   <script>
     // el navegador no hace su propio desplazamiento (animado, desde arriba) a la sección: se quita el #… de la
@@ -2298,6 +2300,21 @@ document.addEventListener('DOMContentLoaded', () => {
 </script>
 
 <script>
+/* Botones de formulario en «Send your demo»: fundido a negro y luego el formulario (que entra con otro fundido) */
+document.addEventListener('click', function (e) {
+  var a = e.target.closest && e.target.closest('#demos a[href^="/forms/"]');
+  if (!a || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  try {
+    sessionStorage.setItem('hz-tr', '1');
+    var acc = getComputedStyle(document.documentElement).getPropertyValue('--accent-color-rgb').trim();
+    if (acc) sessionStorage.setItem('hz-acc', acc);
+  } catch (x) {}
+  document.documentElement.classList.add('hz-leave');
+  setTimeout(function () { location.href = a.href; }, 320);
+});
+/* volver atrás (caché del navegador): la página no se queda en negro */
+addEventListener('pageshow', function () { document.documentElement.classList.remove('hz-leave'); });
 /* Demos cerradas desde el panel (Forms → Send your demo on the site): la sección lo dice y no deja enviar */
 function demosClosed() {
   var tag = document.getElementById('dx-tag'), set = function (id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; };

@@ -2745,6 +2745,17 @@
     const r = ctOpen.rf?.list.find(x => String(x.id) === String(id)), f = $('#ct-use');
     if (!r || !f) return;
     const o = rfRead(r), n = artistsOf(ctOpen.tpl), copies = isCopies(ctOpen.tpl);
+    // collab (1/2, 2/2…): elijas la respuesta que elijas, cada artista del grupo va a su bloque (1/2 → Artist 1, 2/2 → Artist 2)
+    if (!quiet && r.collab?.grp && n > 1) {
+      const group = ctOpen.rf.list.filter(x => x.collab?.grp === r.collab.grp && x.collab.pos >= 1 && x.collab.pos <= n)
+        .sort((a, b) => a.collab.pos - b.collab.pos).filter((x, i, a) => a.findIndex(y => y.collab.pos === x.collab.pos) === i);
+      if (group.length > 1 || r.collab.pos !== k) {
+        for (const m of group) { rfFill(m.collab.pos, m.id, true); const sel = f.querySelector(`.u-from[data-k="${m.collab.pos}"]`); if (sel) sel.value = String(m.id); }
+        if (r.collab.pos !== k && !group.some(m => m.collab.pos === k)) { const sel = f.querySelector(`.u-from[data-k="${k}"]`); if (sel) sel.value = ''; }
+        toast(group.length > 1 ? `Artists ${group.map(m => m.collab.pos).join(' & ')} filled from their Release Forms — check them` : `Artist ${r.collab.pos}: details filled from the Release Form — check them`);
+        return;
+      }
+    }
     const set = (name, v, force) => { const el = f.elements[name]; if (el && v && (force || !el.value.trim() || /—\s*$/.test(el.value))) el.value = v; };
     set('cn' + (k - 1), o.artist, true); set('em' + (k - 1), o.email, true); set('release_name', o.track);
     (ctOpen.fields || []).forEach((x, i) => {
@@ -2759,12 +2770,6 @@
     const names = Array.from({ length: n }, (_, i) => (f.elements['cn' + i]?.value || '').trim()).filter(Boolean);
     const track = f.elements.release_name.value.trim();
     if (names.length && track) f.elements.title.value = `${ctOpen.tpl.title} — ${names.join(' & ')} — ${track}`;
-    // collab: con el artista principal se rellenan también los demás (cada uno en su bloque), si el contrato tiene sitio
-    if (!quiet && r.collab?.pos === 1) {
-      const mates = ctOpen.rf.list.filter(x => x.collab?.grp === r.collab.grp && x.collab.pos > 1 && x.collab.pos <= n);
-      for (const m of mates) { rfFill(m.collab.pos, m.id, true); const sel = f.querySelector(`.u-from[data-k="${m.collab.pos}"]`); if (sel) sel.value = String(m.id); }
-      if (mates.length) { toast(`Artists 1–${1 + mates.length} filled from their Release Forms — check them`); return; }
-    }
     if (!quiet) toast(`Artist ${k}: details filled from the Release Form — check them`);
   }
   function ctDetail() {

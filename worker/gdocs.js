@@ -63,18 +63,19 @@ function findBlanks(text) {
 }
 // texto de una pestaña del Doc con el índice de Google de cada carácter
 function docText(content) {
-  let text = ''; const idx = [], sty = [], tbl = [];
+  let text = ''; const idx = [], sty = [], tbl = [], ind = [];
   const walk = (els, inT) => { for (const el of els || []) {
-    if (el.paragraph) for (const pe of el.paragraph.elements || []) { const t = pe.textRun?.content; if (t) for (let k = 0; k < t.length; k++) { text += t[k]; idx.push(pe.startIndex + k); sty.push(pe.textRun.textStyle || {}); tbl.push(inT); } }
+    if (el.paragraph) { const ps = el.paragraph.paragraphStyle || {}, pi = Math.max(ps.indentStart?.magnitude || 0, ps.indentFirstLine?.magnitude || 0) + (ps.indentEnd?.magnitude || 0);
+      for (const pe of el.paragraph.elements || []) { const t = pe.textRun?.content; if (t) for (let k = 0; k < t.length; k++) { text += t[k]; idx.push(pe.startIndex + k); sty.push(pe.textRun.textStyle || {}); tbl.push(inT); ind.push(pi); } } }
     if (el.table) for (const row of el.table.tableRows || []) for (const cell of row.tableCells || []) walk(cell.content, true);
   } };
   walk(content, false);
-  return { text, idx, sty, tbl };
+  return { text, idx, sty, tbl, ind };
 }
 const findTab = (tabs, id) => { for (const t of tabs || []) { if (t.tabProperties?.tabId === id) return t; const c = findTab(t.childTabs, id); if (c) return c; } return null; };
 const docParts = u => { const m = String(u).match(/docs\.google\.com\/document\/(?:u\/\d+\/)?d\/([\w-]{20,})/), t = String(u).match(/[?&#]tab=(t\.[\w]+)/); return m ? { id: m[1], tab: t ? t[1] : '' } : null; };
 // lo único que se lee de un Doc: pestañas, texto con su posición y el estilo que se copia a los datos
-const DOC_EL = 'paragraph(elements(startIndex,textRun(content,textStyle(italic,smallCaps,weightedFontFamily,fontSize,foregroundColor)))),table(tableRows(tableCells(content(paragraph(elements(startIndex,textRun(content,textStyle(italic,smallCaps,weightedFontFamily,fontSize,foregroundColor))))))))';
+const DOC_EL = 'paragraph(paragraphStyle(indentStart,indentFirstLine,indentEnd),elements(startIndex,textRun(content,textStyle(italic,smallCaps,weightedFontFamily,fontSize,foregroundColor)))),table(tableRows(tableCells(content(paragraph(elements(startIndex,textRun(content,textStyle(italic,smallCaps,weightedFontFamily,fontSize,foregroundColor))))))))';
 const DOC_TAB = `tabProperties(tabId,index),documentTab(documentStyle(pageSize,marginLeft,marginRight),body(content(${DOC_EL})))`;
 const DOC_FIELDS = encodeURIComponent(`tabs(${DOC_TAB},childTabs(${DOC_TAB},childTabs(${DOC_TAB})))`);
 const flatTabs = (tabs, out = []) => { for (const t of tabs || []) { out.push(t.tabProperties || {}); flatTabs(t.childTabs, out); } return out; };
@@ -91,7 +92,7 @@ export async function docFromTemplate(env, docUrl, values, title) {
   let tabObj = d.tab ? findTab(src.tabs, d.tab) : src.tabs?.[0];
   if (!tabObj) throw new Error('Could not find the template tab.');
   let tab = tabObj.tabProperties.tabId;
-  const { text, idx, sty, tbl } = docText(tabObj.documentTab?.body?.content);
+  const { text, idx, sty, tbl, ind } = docText(tabObj.documentTab?.body?.content);
   // ancho útil de la página (pt): tamaño menos márgenes
   const ds = tabObj.documentTab?.documentStyle || {}, pageW = (ds.pageSize?.width?.magnitude || 0) - (ds.marginLeft?.magnitude || 0) - (ds.marginRight?.magnitude || 0);
   // ningún dato puede quedarse sin poner: la plantilla puede llevar datos de otro contrato (o rayas «____»).
@@ -121,21 +122,22 @@ export async function docFromTemplate(env, docUrl, values, title) {
       for (const f of ['weightedFontFamily', 'fontSize', 'foregroundColor']) if (ls[f]) style[f] = ls[f];
       requests.push({ updateTextStyle: { range: { startIndex: startIndex + pre.length, endIndex: startIndex + pre.length + v.length, tabId: tab }, textStyle: style, fields: fields.join(',') } });
     }
-    // dato largo (p. ej. una dirección) en una línea que en la plantilla cabía en una: se reduce SOLO la letra de ese dato lo
-    // justo para que siga en una línea (si saltara a otra, bajaría todo el texto y las firmas se irían a otra página). Mínimo 6 pt.
-    // Vale para cualquier hueco (rayas «____», {{dato}} o datos de otro contrato). Medidas aproximadas en pt por letra
-    // (≈ 0,48 em la etiqueta, ≈ 0,5 em el dato en negrita), con los tabuladores de la plantilla (cada 36 pt).
+    // dato largo (p. ej. una dirección): se reduce SOLO la letra de ese dato lo justo para que su línea siga siendo una
+    // (si saltara a otra, bajaría todo el texto y las firmas se irían a otra página). Mínimo 5 pt. Vale para cualquier hueco
+    // (rayas «____», {{dato}} o datos de otro contrato). Medidas por letra con margen (la letra de las plantillas es ancha):
+    // ≈ 0,45 em la etiqueta, ≈ 0,53 em el dato en negrita (mayúsculas y cifras más, i/l/puntos menos); tabuladores cada 36 pt;
+    // sitio = ancho de la página menos la sangría del párrafo. La raya «____» de la plantilla no cuenta (se quita).
     {
       let ls0 = b.start; while (ls0 > 0 && text[ls0 - 1] !== '\n') ls0--;
       let le = b.end; while (le < text.length && text[le] !== '\n') le++;
       let k = b.start - 1; while (k > ls0 && /\s/.test(text[k])) k--;
       const base = (sty[b.start]?.fontSize?.magnitude) || (sty[k]?.fontSize?.magnitude) || sty.slice(ls0, le).find(x => x.fontSize?.magnitude)?.fontSize?.magnitude || 11;
-      const width = (str, em, x0 = 0) => { let x = x0; for (const ch of str) x = ch === '\t' ? (Math.floor(x / 36) + 1) * 36 : x + base * em; return x; };
-      const avail = tbl[b.start] || !(pageW > 100) ? width(text.slice(ls0, le), 0.48) : pageW * 0.95;   // (en tablas: lo que ocupaba la línea)
-      const start = width(text.slice(ls0, b.start), 0.48), tail = width(text.slice(b.end, le), 0.48) , orig = width(text.slice(ls0, le), 0.48);
-      const valW = v.length * base * 0.5, room = avail - start - tail;
-      if (orig <= avail && start + valW + tail > avail && room > 0) {
-        const size = Math.max(6, Math.floor(base * room / valW * 10) / 10);
+      const width = (str, em, x0 = 0) => { let x = x0; for (const ch of str) x = ch === '\t' ? (Math.floor(x / 36 + 1e-6) + 1) * 36 : x + base * em * (/[A-Z0-9@]/.test(ch) ? 1.2 : /[iljt.,:;'!|]/.test(ch) ? 0.6 : 1); return x; };
+      const avail = tbl[b.start] || !(pageW > 100) ? width(text.slice(ls0, le), 0.45) : (pageW - (ind[b.start] || 0)) * 0.98;   // (en tablas: lo que ocupaba la línea)
+      const start = width(text.slice(ls0, b.start), 0.45), tail = width(text.slice(b.end, le), 0.45);
+      const valW = width(v, 0.53), room = avail - start - tail;
+      if (start + valW + tail > avail && room > base * 2) {
+        const size = Math.max(5, Math.floor(base * room / valW * 10) / 10);
         requests.push({ updateTextStyle: { range: { startIndex, endIndex: startIndex + v.length, tabId: tab }, textStyle: { fontSize: { magnitude: size, unit: 'PT' } }, fields: 'fontSize' } });
       }
     }

@@ -2567,7 +2567,7 @@
       : c.sent_at ? `Signed ${c.signers.filter(x => x.signed).length} of ${c.signers.length}` : 'Ready to send';
     const row = c => `
         <li class="row ct${fresh.has(c.id) ? ' is-new' : ''}" data-ctid="${esc(c.id)}">
-          <span class="meta"><b>${esc(c.title)}</b><span>${isTpl(c) ? `${c.signers.length} signer${c.signers.length > 1 ? 's' : ''}` : (c.release_cat ? esc(c.release_cat) + ' · ' : '') + esc(c.artist || '') + (c.email ? ' · ' + esc(c.email) : '')}</span></span>
+          <span class="meta"><b>${esc(c.title)}</b><span>${isTpl(c) ? `${c.signers.length} signer${c.signers.length > 1 ? 's' : ''}` : [c.release_cat, c.artist].filter(Boolean).map(esc).join(' · ')}</span></span>
           ${isTpl(c) ? '<span class="tag off">Template</span>' : isDraft(c) ? '<span class="tag off">Draft</span>' : `<span class="tag ${CT_STATUS[c.status]?.[1] || ''}">${CT_STATUS[c.status]?.[0] || c.status}</span>`}
           <span class="muted sm-txt">${fresh.has(c.id) ? '<b class="ct-new">New signature</b> · ' : ''}${state(c)}</span>
           <span class="row-btns">${isTpl(c) && ed && c.pdf && (c.doc_url || isDraftTpl(c)) ? '<button type="button" class="btn primary sm" data-ct="use">Use</button>' : ''}${c.drive_url ? `<a class="btn ghost sm" href="${esc(c.drive_url)}" target="_blank" rel="noopener">Drive ↗</a>` : ''}<button type="button" class="btn ghost sm" data-ct="open">Open</button></span>

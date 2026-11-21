@@ -753,7 +753,11 @@ export async function publicFormsApi(req, env, url) {
       v = clean(v, x.type === 'textarea' ? 8000 : 1000);
       if (v && ['radio', 'select'].includes(x.type) && !(x.options || []).includes(v) && !x.other) v = '';
       if (v && x.type === 'email' && !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v)) throw new FormError(400, `“${x.label.trim()}”: please enter a valid email.`);
-      if (v && x.type === 'url' && !/^https?:\/\/\S+$/i.test(v)) throw new FormError(400, `“${x.label.trim()}”: please paste a link starting with https://`);
+      // link: «soundcloud.com/…» vale (se le pone https://); un texto que no es un link de verdad, no
+      if (v && x.type === 'url') {
+        if (!/^https?:\/\//i.test(v) && /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(v)) v = 'https://' + v;
+        if (!/^https?:\/\/([\w-]+\.)+[a-z]{2,}(:\d+)?([\/?#]\S*)?$/i.test(v)) throw new FormError(400, 'Please paste a real link to your track (SoundCloud, Google Drive, Dropbox…).');
+      }
     }
     if (x.required && (!v || (Array.isArray(v) && !v.length))) throw new FormError(400, `Please answer “${x.label.trim()}”.`);
     data[x.id] = v;

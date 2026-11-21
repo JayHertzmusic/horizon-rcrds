@@ -646,6 +646,8 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
         const c = f.querySelector(`input[name="${CSS.escape(x.id)}"]:checked`);
         out[x.id] = !c ? '' : c.value === '__other' ? f.querySelector(`[data-other="${CSS.escape(x.id)}"]`).value.trim() : c.value;
       } else out[x.id] = (f.elements[x.id]?.value || '').trim();
+      // link sin https:// («soundcloud.com/…»): se le pone
+      if (x.type === 'url' && out[x.id] && !/^https?:\/\//i.test(out[x.id]) && /^[\w-]+(\.[\w-]+)+(\/\S*)?$/.test(out[x.id])) out[x.id] = 'https://' + out[x.id];
     }
     if (form.multi && coMode === 'collab') {
       const co = coValues(f).slice(0, coN - 1);
@@ -827,6 +829,15 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
       q.classList.add('bad'); q.scrollIntoView({ block: 'center', behavior: 'smooth' }); coMiss.focus();
       const who = k === '2' ? 'second' : 'third';
       err.textContent = coMiss.dataset.coField === 'name' ? `Please enter the ${who} artist’s name.` : coMiss.value.trim() ? `Please enter a valid email for the ${who} artist.` : `Please enter the ${who} artist’s email.`; err.hidden = false;
+      return;
+    }
+    // el link tiene que ser un link de verdad (no un texto cualquiera)
+    const badLink = !missing && form.fields.find(x => x.type === 'url' && a[x.id] && !/^https?:\/\/([\w-]+\.)+[a-z]{2,}(:\d+)?([\/?#]\S*)?$/i.test(a[x.id]));
+    if (badLink) {
+      const q = f.querySelector(`[data-q="${CSS.escape(badLink.id)}"]`);
+      if (EXCL()) { const k = steps.findIndex(st => st.fields.includes(badLink)); if (k >= 0 && k !== cur) goStep(k, false); }
+      q?.classList.add('bad'); q?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      err.textContent = 'Please paste a real link to your track (SoundCloud, Google Drive, Dropbox…).'; err.hidden = false;
       return;
     }
     if (missing) {

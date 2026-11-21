@@ -525,6 +525,7 @@
     }
     .dx-btn::after { content: ''; position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 140% at 50% 120%, rgba(var(--bc), 0.28), transparent 60%); }
     .dx-btn:hover { transform: translateY(-3px); box-shadow: 0 0 0 1px rgba(255,255,255,0.12) inset, 0 28px 70px -18px rgba(var(--bc), 1); }
+    .dx-btn .dxb-t { position: relative; top: var(--dxb-nudge, 0.08em); }
     .dx-btn .dxb-ar { font-size: 1rem; opacity: 0.6; transition: transform 0.3s, opacity 0.3s; }
     .dx-btn:hover .dxb-ar { transform: translateX(4px); opacity: 1; }
     /* LabelRadar: su azul noche y su verde, su icono con un barrido de radar */
@@ -1278,8 +1279,8 @@
           We're looking for powerful club records with strong identity, clean production and real energy. If your track is built for festivals, clubs or emotional moments — send it.
         </p>
         <div id="dx-actions" class="dx-btns">
-          <a class="dx-btn lr" href="https://www.labelradar.com/labels/horizonrcrds/portal" target="_blank" rel="noopener noreferrer"><span class="lr-ico"><svg class="lr-logo" viewBox="0 0 40 40" aria-hidden="true"><circle cx="6" cy="6" r="2" fill="#fff"/><circle cx="34" cy="6" r="2" fill="#fff"/><circle cx="6" cy="34" r="2" fill="#fff"/><circle cx="34" cy="34" r="2" fill="#fff"/><path d="M29.5 26.5A12 12 0 1 1 32 20" fill="none" stroke="#5fd08f" stroke-width="2.4" stroke-linecap="round"/><path d="M26 24.5A8 8 0 1 1 28 20" fill="none" stroke="#5fd08f" stroke-width="2.2" stroke-linecap="round"/><path d="M21.5 21.5L29.5 29.5H24" fill="none" stroke="#5fd08f" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="19.5" cy="19.5" r="4.2" fill="#fff"/></svg></span>LabelRadar <i class="fa-solid fa-arrow-right dxb-ar" aria-hidden="true"></i></a>
-          <a id="dx-form-btn" class="dx-btn" href="/forms/demo-submission"><span class="hz-ico"><img class="hz-logo" src="/assets/favicon_icon.png" alt="" aria-hidden="true"></span>Demo Form <i class="fa-solid fa-arrow-right dxb-ar" aria-hidden="true"></i></a>
+          <a class="dx-btn lr" href="https://www.labelradar.com/labels/horizonrcrds/portal" target="_blank" rel="noopener noreferrer"><span class="lr-ico"><svg class="lr-logo" viewBox="0 0 40 40" aria-hidden="true"><circle cx="6" cy="6" r="2" fill="#fff"/><circle cx="34" cy="6" r="2" fill="#fff"/><circle cx="6" cy="34" r="2" fill="#fff"/><circle cx="34" cy="34" r="2" fill="#fff"/><path d="M29.5 26.5A12 12 0 1 1 32 20" fill="none" stroke="#5fd08f" stroke-width="2.4" stroke-linecap="round"/><path d="M26 24.5A8 8 0 1 1 28 20" fill="none" stroke="#5fd08f" stroke-width="2.2" stroke-linecap="round"/><path d="M21.5 21.5L29.5 29.5H24" fill="none" stroke="#5fd08f" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="19.5" cy="19.5" r="4.2" fill="#fff"/></svg></span><span class="dxb-t">LabelRadar</span> <i class="fa-solid fa-arrow-right dxb-ar" aria-hidden="true"></i></a>
+          <a id="dx-form-btn" class="dx-btn" href="/forms/demo-submission"><span class="hz-ico"><img class="hz-logo" src="/assets/favicon_icon.png" alt="" aria-hidden="true"></span><span class="dxb-t">Demo Form</span> <i class="fa-solid fa-arrow-right dxb-ar" aria-hidden="true"></i></a>
         </div>
         <div class="flex flex-wrap justify-center gap-2">
           <span class="genre-tag">Future House</span>
@@ -2383,7 +2384,7 @@ function demosClosed() {
       var t = String(f.button || f.title).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
       // (el texto del botón del panel, sin «Submit via»: «Form» → «Demo Form»)
       var name = t.replace(/^submit (via|through)\s+/i, ''); if (/^form$/i.test(name)) name = 'Demo Form';
-      return '<a href="/forms/' + encodeURIComponent(f.slug) + '" class="dx-btn"><span class="hz-ico"><img class="hz-logo" src="/assets/favicon_icon.png" alt="" aria-hidden="true"></span>' + name + ' <i class="fa-solid fa-arrow-right dxb-ar" aria-hidden="true"></i></a>';
+      return '<a href="/forms/' + encodeURIComponent(f.slug) + '" class="dx-btn"><span class="hz-ico"><img class="hz-logo" src="/assets/favicon_icon.png" alt="" aria-hidden="true"></span><span class="dxb-t">' + name + '</span> <i class="fa-solid fa-arrow-right dxb-ar" aria-hidden="true"></i></a>';
     }).join('');
     btn.insertAdjacentHTML('afterend', html);
     btn.remove();

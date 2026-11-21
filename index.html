@@ -504,6 +504,41 @@
 
 
     /* las dos formas de enviar: tarjetas como las de plataformas del reproductor de arriba */
+    /* los dos botones de enviar: mismo tamaño y peso, cada uno con su borde de luz que gira */
+    @property --dxa { syntax: '<angle>'; inherits: false; initial-value: 0deg; }
+    @keyframes dx-spin { to { --dxa: 360deg; } }
+    @keyframes dx-sweep { to { transform: rotate(360deg); } }
+    .dx-btns { display: flex; gap: 22px; justify-content: center; width: 100%; margin: 0 auto 32px; }
+    .dx-btn {
+      --bc: var(--accent-color-rgb);
+      position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; gap: 16px;
+      width: 330px; height: 82px; border-radius: 12px; overflow: hidden; text-decoration: none;
+      font-family: 'Bebas Neue', sans-serif; font-size: 2.1rem; letter-spacing: 0.06em; line-height: 1; color: #fff;
+      background: #0b0b0b; box-shadow: 0 0 0 1px rgba(255,255,255,0.08) inset, 0 22px 60px -22px rgba(var(--bc), 0.75);
+      transition: transform 0.35s cubic-bezier(.16,1,.3,1), box-shadow 0.35s;
+    }
+    .dx-btn::before {
+      content: ''; position: absolute; inset: 0; z-index: -1; padding: 2px; border-radius: 12px;
+      background: conic-gradient(from var(--dxa), transparent 0 52%, rgba(var(--bc), 1) 74%, #fff 81%, transparent 90%);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+      animation: dx-spin 3.2s linear infinite;
+    }
+    .dx-btn::after { content: ''; position: absolute; inset: 0; z-index: -2; background: radial-gradient(120% 140% at 50% 120%, rgba(var(--bc), 0.28), transparent 60%); }
+    .dx-btn:hover { transform: translateY(-3px); box-shadow: 0 0 0 1px rgba(255,255,255,0.12) inset, 0 28px 70px -18px rgba(var(--bc), 1); }
+    .dx-btn .dxb-ar { font-size: 1rem; opacity: 0.6; transition: transform 0.3s, opacity 0.3s; }
+    .dx-btn:hover .dxb-ar { transform: translateX(4px); opacity: 1; }
+    /* LabelRadar: su azul noche y su verde, su icono con un barrido de radar */
+    .dx-btn.lr { --bc: 95, 208, 143; background: #131a24; }
+    .dx-btn.lr::after { background: radial-gradient(120% 140% at 50% 120%, rgba(95,208,143,0.22), transparent 60%); }
+    .dx-btn .lr-ico { position: relative; width: 44px; height: 44px; flex: none; border-radius: 10px; background: #0e141c; overflow: hidden; display: grid; place-items: center; box-shadow: 0 0 0 1px rgba(95,208,143,0.3) inset; }
+    .dx-btn .lr-ico::before { content: ''; position: absolute; inset: -30%; background: conic-gradient(from 0deg, rgba(95,208,143,0.55), transparent 22%); animation: dx-sweep 2.6s linear infinite; }
+    .dx-btn .lr-logo { position: relative; width: 36px; height: 36px; }
+    .dx-btn .hz-ico { width: 44px; height: 44px; flex: none; border-radius: 10px; display: grid; place-items: center; background: rgba(var(--accent-color-rgb), 0.16); box-shadow: 0 0 0 1px rgba(var(--accent-color-rgb), 0.4) inset, 0 0 22px rgba(var(--accent-color-rgb), 0.35); }
+    .dx-btn .hz-logo { width: 26px; height: 26px; object-fit: contain; }
+    @media (max-width: 760px) { .dx-btns { flex-direction: column; align-items: center; gap: 14px; } .dx-btn { width: 100%; max-width: 360px; height: 72px; font-size: 1.85rem; } }
+    @media (prefers-reduced-motion: reduce) { .dx-btn::before, .dx-btn .lr-ico::before { animation: none; } }
+    .dx-title.one { white-space: nowrap; font-size: clamp(3rem, 8.6vw, 8.6rem); }
+    @media (max-width: 640px) { .dx-title.one { white-space: normal; } }
     .dx-send { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: 100%; max-width: 760px; margin: 0 auto 30px; text-align: left; }
     .dx-send .platform { padding: 12px 12px 12px 12px; background: rgba(17,17,17,0.82); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
     .dx-send .platform.main { background: rgba(var(--accent-color-rgb), 0.12); }
@@ -1238,21 +1273,13 @@
 
       <div class="reveal">
         <div id="dx-tag" class="label-tag mb-6 flex items-center justify-center gap-3"><span class="pulse-dot"></span><span id="dx-tag-t">Open submissions</span></div>
-        <h2 id="dx-title" class="dx-title">SEND <span class="dx-outline">YOUR</span><br /><span class="dx-accent">DEMO.</span></h2>
+        <h2 id="dx-title" class="dx-title one">SEND YOUR <span class="dx-accent">DEMO.</span></h2>
         <p id="dx-lead" class="dx-lead">
           We're looking for powerful club records with strong identity, clean production and real energy. If your track is built for festivals, clubs or emotional moments — send it.
         </p>
-        <div id="dx-actions" class="dx-send">
-          <a class="platform main" href="https://www.labelradar.com/labels/horizonrcrds/portal" target="_blank" rel="noopener noreferrer">
-            <span class="ico"><i class="fa-solid fa-paper-plane"></i></span>
-            <span><span class="name">LabelRadar</span><span class="sub">Track your demo's status</span></span>
-            <span class="go">Submit <i class="fa-solid fa-arrow-right" style="font-size:0.6rem"></i></span>
-          </a>
-          <a id="dx-form-btn" class="platform" href="/forms/demo-submission">
-            <span class="ico"><i class="fa-solid fa-file-lines"></i></span>
-            <span><span class="name">Demo Form</span><span class="sub">Straight to our A&amp;R team</span></span>
-            <span class="go">Submit <i class="fa-solid fa-arrow-right" style="font-size:0.6rem"></i></span>
-          </a>
+        <div id="dx-actions" class="dx-btns">
+          <a class="dx-btn lr" href="https://www.labelradar.com/labels/horizonrcrds/portal" target="_blank" rel="noopener noreferrer"><span class="lr-ico"><svg class="lr-logo" viewBox="0 0 40 40" aria-hidden="true"><circle cx="6" cy="6" r="2" fill="#fff"/><circle cx="34" cy="6" r="2" fill="#fff"/><circle cx="6" cy="34" r="2" fill="#fff"/><circle cx="34" cy="34" r="2" fill="#fff"/><path d="M29.5 26.5A12 12 0 1 1 32 20" fill="none" stroke="#5fd08f" stroke-width="2.4" stroke-linecap="round"/><path d="M26 24.5A8 8 0 1 1 28 20" fill="none" stroke="#5fd08f" stroke-width="2.2" stroke-linecap="round"/><path d="M21.5 21.5L29.5 29.5H24" fill="none" stroke="#5fd08f" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/><circle cx="19.5" cy="19.5" r="4.2" fill="#fff"/></svg></span>LabelRadar <i class="fa-solid fa-arrow-right dxb-ar" aria-hidden="true"></i></a>
+          <a id="dx-form-btn" class="dx-btn" href="/forms/demo-submission"><span class="hz-ico"><img class="hz-logo" src="/assets/favicon_icon.png" alt="" aria-hidden="true"></span>Demo Form <i class="fa-solid fa-arrow-right dxb-ar" aria-hidden="true"></i></a>
         </div>
         <div class="flex flex-wrap justify-center gap-2">
           <span class="genre-tag">Future House</span>
@@ -2337,7 +2364,8 @@ function demosClosed() {
   var tag = document.getElementById('dx-tag'), set = function (id, html) { var el = document.getElementById(id); if (el) el.innerHTML = html; };
   if (tag) tag.classList.add('dx-tag-off');
   set('dx-tag-t', 'Submissions closed');
-  set('dx-title', 'DEMOS <span class="dx-outline">ARE</span><br /><span class="dx-accent">CLOSED.</span>');
+  set('dx-title', 'DEMOS ARE <span class="dx-accent">CLOSED.</span>');
+  var acts = document.getElementById('dx-actions'); if (acts) acts.className = 'dx-send';
   set('dx-lead', 'We are not taking new demos right now: our team is focused on the releases already on the way. Submissions will open again soon. Follow us to be the first to know when they do.');
   var follow = function (href, icon, name, sub, c, rgb) { return '<a class="platform" href="' + href + '" target="_blank" rel="noopener noreferrer" style="--pc:' + c + ';--pc-rgb:' + rgb + ';--card-ink-p:#fff"><span class="ico"><i class="' + icon + '"></i></span><span><span class="name">' + name + '</span><span class="sub">' + sub + '</span></span><span class="go">Follow <i class="fa-solid fa-arrow-right" style="font-size:0.6rem"></i></span></a>'; };
   set('dx-actions', follow('https://soundcloud.com/horizonirecords/', 'fa-brands fa-soundcloud', 'SoundCloud', 'New music first', '#ff5500', '255, 85, 0')
@@ -2355,7 +2383,7 @@ function demosClosed() {
       var t = String(f.button || f.title).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
       // (el texto del botón del panel, sin «Submit via»: «Form» → «Demo Form»)
       var name = t.replace(/^submit (via|through)\s+/i, ''); if (/^form$/i.test(name)) name = 'Demo Form';
-      return '<a href="/forms/' + encodeURIComponent(f.slug) + '" class="platform"><span class="ico"><i class="fa-solid fa-file-lines"></i></span><span><span class="name">' + name + '</span><span class="sub">Straight to our A&amp;R team</span></span><span class="go">Submit <i class="fa-solid fa-arrow-right" style="font-size:0.6rem"></i></span></a>';
+      return '<a href="/forms/' + encodeURIComponent(f.slug) + '" class="dx-btn"><span class="hz-ico"><img class="hz-logo" src="/assets/favicon_icon.png" alt="" aria-hidden="true"></span>' + name + ' <i class="fa-solid fa-arrow-right dxb-ar" aria-hidden="true"></i></a>';
     }).join('');
     btn.insertAdjacentHTML('afterend', html);
     btn.remove();

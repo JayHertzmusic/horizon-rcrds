@@ -503,12 +503,25 @@
     .dx-ghost { background: rgba(10,10,10,0.5); }
 
 
+    /* las dos formas de enviar: tarjetas como las de plataformas del reproductor de arriba */
+    .dx-send { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; width: 100%; max-width: 760px; margin: 0 auto 30px; text-align: left; }
+    .dx-send .platform { padding: 12px 12px 12px 12px; background: rgba(17,17,17,0.82); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+    .dx-send .platform.main { background: rgba(var(--accent-color-rgb), 0.12); }
+    .dx-send .platform:hover { transform: translateY(-3px); }
+    .dx-send .platform .name { font-size: 1.5rem; }
+    /* géneros: discretos, el color solo al pasar por encima */
+    #demos .genre-tag { color: #9ca3af; background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.09); }
+    #demos .genre-tag:hover { color: var(--accent-color); background: rgba(var(--accent-color-rgb), 0.1); border-color: rgba(var(--accent-color-rgb), 0.35); }
+    /* lo básico: una fila limpia con icono, sin cajas */
     .dx-facts {
-      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; max-width: 980px; margin: clamp(32px, 4vw, 52px) auto 0; text-align: center;
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); max-width: 960px; margin: clamp(34px, 4.4vw, 56px) auto 0; padding-top: 26px;
+      border-top: 1px solid rgba(255,255,255,0.08); text-align: center;
     }
-    .dx-facts > div { padding: 20px 22px; background: rgba(10,10,10,0.7); border: 1px solid #1f1f1f; border-radius: 12px; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-    .dx-facts span { font-family: 'Bebas Neue', sans-serif; font-size: 1.05rem; letter-spacing: 0.04em; color: var(--accent-color); }
-    .dx-facts p { font-size: 0.78rem; color: #6b7280; line-height: 1.6; margin: 4px 0 0; }
+    .dx-facts > div { padding: 0 26px; display: flex; flex-direction: column; align-items: center; }
+    .dx-facts > div + div { border-left: 1px solid rgba(255,255,255,0.08); }
+    .dx-facts i { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; font-size: 0.9rem; color: var(--accent-color); background: rgba(var(--accent-color-rgb), 0.1); border: 1px solid rgba(var(--accent-color-rgb), 0.28); margin-bottom: 12px; }
+    .dx-facts span { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; letter-spacing: 0.05em; color: #fff; line-height: 1; }
+    .dx-facts p { font-size: 0.8rem; color: #8b8f98; line-height: 1.6; margin: 6px 0 0; max-width: 260px; }
 
     @media (max-width: 1023px) {
       .dx-grid { grid-template-columns: minmax(0, 1fr); }
@@ -516,8 +529,9 @@
       .dx-shade { background: linear-gradient(180deg, #0a0a0a 0%, rgba(10,10,10,0.82) 12%, rgba(10,10,10,0.88) 60%, rgba(10,10,10,0.7) 85%, #0a0a0a 100%), radial-gradient(ellipse 80% 40% at 50% 80%, rgba(var(--accent-color-rgb), 0.2), transparent 70%); }
     }
     @media (max-width: 700px) {
-      .dx-facts { grid-template-columns: minmax(0, 1fr); }
-      .dx-facts { gap: 10px; }
+      .dx-send { grid-template-columns: minmax(0, 1fr); }
+      .dx-facts { grid-template-columns: minmax(0, 1fr); gap: 22px; }
+      .dx-facts > div + div { border-left: 0; }
     }
     @media (prefers-reduced-motion: reduce) { .dx-col { animation: none !important; } }
 
@@ -975,7 +989,6 @@
 
       /* send your demo */
       .dx { padding: 84px 0 64px; min-height: 0; }
-      #demos .btn-primary, #demos .btn-outline { width: 100%; justify-content: center; }
       .dx-facts { margin-top: 44px; }
 
       /* footer: e-mail on its own row, no overflow */
@@ -1229,12 +1242,16 @@
         <p id="dx-lead" class="dx-lead">
           We're looking for powerful club records with strong identity, clean production and real energy. If your track is built for festivals, clubs or emotional moments — send it.
         </p>
-        <div id="dx-actions" class="flex flex-wrap items-center justify-center gap-4 mb-9">
-          <a href="https://www.labelradar.com/labels/horizonrcrds/portal" target="_blank" rel="noopener noreferrer" class="btn-primary" style="font-size:0.75rem;padding:17px 38px;">
-            <i class="fa-solid fa-paper-plane"></i> Submit via LabelRadar
+        <div id="dx-actions" class="dx-send">
+          <a class="platform main" href="https://www.labelradar.com/labels/horizonrcrds/portal" target="_blank" rel="noopener noreferrer">
+            <span class="ico"><i class="fa-solid fa-paper-plane"></i></span>
+            <span><span class="name">LabelRadar</span><span class="sub">Track your demo's status</span></span>
+            <span class="go">Submit <i class="fa-solid fa-arrow-right" style="font-size:0.6rem"></i></span>
           </a>
-          <a id="dx-form-btn" href="/forms/demo-submission" class="btn-outline dx-ghost" style="font-size:0.75rem;padding:16px 30px;">
-            <i class="fa-solid fa-file-lines"></i> Submit via Form
+          <a id="dx-form-btn" class="platform" href="/forms/demo-submission">
+            <span class="ico"><i class="fa-solid fa-file-lines"></i></span>
+            <span><span class="name">Demo Form</span><span class="sub">Straight to our A&amp;R team</span></span>
+            <span class="go">Submit <i class="fa-solid fa-arrow-right" style="font-size:0.6rem"></i></span>
           </a>
         </div>
         <div class="flex flex-wrap justify-center gap-2">
@@ -1243,16 +1260,16 @@
           <span class="genre-tag">Progressive House</span>
           <span class="genre-tag">Bass House</span>
           <span class="genre-tag">Melodic Club</span>
-          <span class="genre-tag">Dance / EDM Crossovers</span>
+          <span class="genre-tag">Dance / EDM</span>
         </div>
       </div>
 
     </div>
 
     <div id="dx-facts" class="dx-facts reveal">
-      <div><span>Format</span><p>MP3 / WAV · 320 kbps or lossless preferred. Include a short artist bio.</p></div>
-      <div><span>How to send</span><p>Submit through LabelRadar or our submission form. Direct emails will not be reviewed.</p></div>
-      <div><span>Policy</span><p>Unreleased material only. We sign worldwide licensing deals.</p></div>
+      <div><i class="fa-solid fa-wave-square" aria-hidden="true"></i><span>Format</span><p>MP3 / WAV · 320 kbps or lossless preferred. Include a short artist bio.</p></div>
+      <div><i class="fa-solid fa-paper-plane" aria-hidden="true"></i><span>How to send</span><p>Through LabelRadar or our demo form. Direct emails will not be reviewed.</p></div>
+      <div><i class="fa-solid fa-shield-halved" aria-hidden="true"></i><span>Policy</span><p>Unreleased material only. We sign worldwide licensing deals.</p></div>
     </div>
   </div>
 </section>
@@ -2322,8 +2339,9 @@ function demosClosed() {
   set('dx-tag-t', 'Submissions closed');
   set('dx-title', 'DEMOS <span class="dx-outline">ARE</span><br /><span class="dx-accent">CLOSED.</span>');
   set('dx-lead', 'We are not taking new demos right now: our team is focused on the releases already on the way. Submissions will open again soon. Follow us to be the first to know when they do.');
-  set('dx-actions', '<a href="https://soundcloud.com/horizonirecords/" target="_blank" rel="noopener noreferrer" class="btn-primary" style="font-size:0.75rem;padding:17px 38px;"><i class="fa-brands fa-soundcloud"></i> Follow on SoundCloud</a>'
-    + '<a href="https://www.instagram.com/horizon_rcrds/" target="_blank" rel="noopener noreferrer" class="btn-outline dx-ghost" style="font-size:0.75rem;padding:16px 30px;"><i class="fa-brands fa-instagram"></i> Follow on Instagram</a>');
+  var follow = function (href, icon, name, sub, c, rgb) { return '<a class="platform" href="' + href + '" target="_blank" rel="noopener noreferrer" style="--pc:' + c + ';--pc-rgb:' + rgb + ';--card-ink-p:#fff"><span class="ico"><i class="' + icon + '"></i></span><span><span class="name">' + name + '</span><span class="sub">' + sub + '</span></span><span class="go">Follow <i class="fa-solid fa-arrow-right" style="font-size:0.6rem"></i></span></a>'; };
+  set('dx-actions', follow('https://soundcloud.com/horizonirecords/', 'fa-brands fa-soundcloud', 'SoundCloud', 'New music first', '#ff5500', '255, 85, 0')
+    + follow('https://www.instagram.com/horizon_rcrds/', 'fa-brands fa-instagram', 'Instagram', 'When demos reopen', '#e1306c', '225, 48, 108'));
   var facts = document.getElementById('dx-facts'); if (facts) facts.hidden = true;
 }
 /* Forms the owners mark as "En la web" in the panel replace the Google Form button in Send your demo */
@@ -2335,7 +2353,9 @@ function demosClosed() {
     if (!j || !j.forms || !j.forms.length) return;
     var html = j.forms.map(function (f) {
       var t = String(f.button || f.title).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
-      return '<a href="/forms/' + encodeURIComponent(f.slug) + '" class="btn-outline dx-ghost" style="font-size:0.75rem;padding:16px 30px;"><i class="fa-solid fa-file-lines"></i> ' + t + '</a>';
+      // (el texto del botón del panel, sin «Submit via»: «Form» → «Demo Form»)
+      var name = t.replace(/^submit (via|through)\s+/i, ''); if (/^form$/i.test(name)) name = 'Demo Form';
+      return '<a href="/forms/' + encodeURIComponent(f.slug) + '" class="platform"><span class="ico"><i class="fa-solid fa-file-lines"></i></span><span><span class="name">' + name + '</span><span class="sub">Straight to our A&amp;R team</span></span><span class="go">Submit <i class="fa-solid fa-arrow-right" style="font-size:0.6rem"></i></span></a>';
     }).join('');
     btn.insertAdjacentHTML('afterend', html);
     btn.remove();

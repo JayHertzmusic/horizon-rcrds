@@ -183,6 +183,16 @@ export async function chainApi(req, env, s, url, audit) {
     await audit(`${body.active ? 'Turned on' : 'Turned off'} the download gate for ${rid}`);
     return { ok: true, track_id: trackId };
   }
+  // borrar el MP3 subido de un release
+  if (p.startsWith('/api/chain/file/') && m === 'DELETE') {
+    const rid = clean(decodeURIComponent(p.slice('/api/chain/file/'.length)), 80);
+    const g = await DB.prepare('SELECT file, file_name FROM sc_gates WHERE release_id = ?').bind(rid).first();
+    if (!g?.file) throw new ChainError(404, 'This release has no MP3.');
+    await env.FILES.delete(g.file).catch(() => {});
+    await DB.prepare('UPDATE sc_gates SET file = NULL, file_name = NULL, file_size = NULL, active = 0, updated_at = ? WHERE release_id = ?').bind(now(), rid).run();
+    await audit(`Deleted the download file of ${rid}${g.file_name ? ` (${g.file_name})` : ''}`);
+    return { ok: true };
+  }
   // subir el archivo del extended (MP3) al KV
   if (p.startsWith('/api/chain/file/') && m === 'POST') {
     const rid = clean(decodeURIComponent(p.slice('/api/chain/file/'.length)), 80);
@@ -191,8 +201,10 @@ export async function chainApi(req, env, s, url, audit) {
     const buf = await req.arrayBuffer();
     if (!buf.byteLength || buf.byteLength > 25 * 1024 * 1024) throw new ChainError(400, 'The MP3 must be under 25 MB (use a 320 kbps MP3, not WAV).');
     const name = clean(url.searchParams.get('name'), 160) || `${rid}.mp3`;
-    const key = `chain/${rid}.mp3`;
+    const key = `chain/${rid.replace(/[^\w-]/g, '')}-${now().toString(36)}.mp3`;
+    const prev = (await DB.prepare('SELECT file FROM sc_gates WHERE release_id = ?').bind(rid).first())?.file;
     await env.FILES.put(key, buf, { metadata: { type: 'audio/mpeg', at: now() } });
+    if (prev && prev !== key) await env.FILES.delete(prev).catch(() => {});
     await DB.prepare(`INSERT INTO sc_gates (release_id, file, file_name, file_size, updated_at, created_by) VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(release_id) DO UPDATE SET file = excluded.file, file_name = excluded.file_name, file_size = excluded.file_size, updated_at = excluded.updated_at`)
       .bind(rid, key, name, buf.byteLength, now(), s.email).run();
@@ -218,14 +230,16 @@ export async function chainApi(req, env, s, url, audit) {
     const t = now(), ins = [];
     const order = members.flatMap(mem => acts.map(type => ({ mem, type }))).sort(() => Math.random() - 0.5);
     for (const { mem, type } of order) {
-      const at = spreadMs ? t + Math.floor(Math.random() * spreadMs) : t + Math.floor(Math.random() * 90e3);   // aun «right away» lleva unos segundos de margen
+      const at = spreadMs ? t + Math.floor(Math.random() * spreadMs) : t;
       ins.push(DB.prepare(`INSERT INTO sc_actions (member_id, type, target, release_id, scheduled_at, status, created_at)
         SELECT ?, ?, ?, NULL, ?, 'queued', ? WHERE NOT EXISTS (SELECT 1 FROM sc_actions a WHERE a.member_id = ? AND a.type = ? AND a.target = ? AND a.status IN ('queued', 'done'))`)
         .bind(mem.id, type, trackId, at, t, mem.id, type, trackId));
     }
     for (let i = 0; i < ins.length; i += 50) await DB.batch(ins.slice(i, i + 50));
     await audit(`Queued ${acts.join(' + ')} on ${trackUrl} for ${members.length} chain account(s)${spreadH ? ` over ~${spreadH}h` : ''}`);
-    return { ok: true, members: members.length, actions: acts.length * members.length, spread_hours: spreadH };
+    // «Right away»: se hacen ahora mismo (el resto, si hubiera muchas, las sigue la tarea de cada 30 min)
+    const processed = spreadH ? 0 : await runChainActions(env, 30);
+    return { ok: true, members: members.length, actions: acts.length * members.length, spread_hours: spreadH, processed };
   }
   // estado de la cola de acciones y procesar un lote ahora
   if (p === '/api/chain/queue' && m === 'GET') {

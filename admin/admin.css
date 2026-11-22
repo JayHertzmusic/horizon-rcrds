@@ -1418,3 +1418,13 @@ html, body, * { scrollbar-width: none; }
 .slug-row { display: flex; align-items: center; border-bottom: 1px solid var(--line-2); }
 .slug-row .slug-pre { color: var(--faint); font-size: 13px; white-space: nowrap; }
 .slug-row input { border: 0 !important; padding-left: 2px !important; }
+
+/* Gates: link de descarga */
+.row.ch-gate .ch-dl { flex: 1 1 100%; display: flex; align-items: center; gap: 10px; margin: 0 0 2px 62px; font-size: 12px; }
+@media (max-width: 620px) { .row.ch-gate .ch-dl { margin-left: 0; } }
+.row.ch-gate .ch-link { flex-wrap: wrap; align-items: center; }
+.ch-gate .ch-link input { flex: 1; min-width: 140px; }
+.ch-gate .ch-link p { flex-basis: 100%; margin: 4px 0 0; }
+.ch-acts-list { margin-top: 14px; }
+.ch-acts-list .row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 14px; }
+.ch-acts-list .row .meta { flex: 1; min-width: 0; }

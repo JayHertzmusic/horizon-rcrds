@@ -716,8 +716,6 @@
             <div class="field"><label for="f-spotify">Spotify</label><input id="f-spotify" name="spotify_link" type="url" value="${esc(r.spotify_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://open.spotify.com/…"></div>
             <div class="field"><label for="f-soundcloud">SoundCloud</label><input id="f-soundcloud" name="soundcloud_link" type="url" value="${esc(r.soundcloud_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://soundcloud.com/…"></div>
             <div class="field"><label for="f-youtube">YouTube</label><input id="f-youtube" name="youtube_link" type="url" value="${esc(r.youtube_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…"></div>
-            ${isNew ? '' : `<div class="field"><label for="f-slug">Page link</label><div class="slug-row"><span class="slug-pre">${esc(location.host)}/release?id=</span><input id="f-slug" name="slug" value="${esc(r.id || '')}" maxlength="40" autocomplete="off" spellcheck="false"></div>
-              <p class="info sm-txt">Letters, numbers and “-”. The old link keeps working.</p></div>`}
             <div class="field"><label for="f-desc">Description</label><textarea id="f-desc" name="description" rows="3" maxlength="400">${esc(r.description || '')}</textarea></div>
           </div>
         </div>
@@ -765,9 +763,6 @@
     if (!v.stream_link && !v.spotify_link && !v.soundcloud_link) throw new FieldError('stream_link', 'Add at least one link.');
     if (isNew && !editing.cover) throw new Error('Cover missing.');
     const pos = position(form, isNew ? repo.releases.length + 1 : repo.releases.length);
-    // link de la página del release (solo al editar uno que ya existe)
-    const slug = isNew || !form.elements.slug ? '' : form.elements.slug.value.trim().toLowerCase();
-    if (!isNew && form.elements.slug && !/^[a-z0-9][a-z0-9-]{1,40}$/.test(slug)) throw new FieldError('slug', 'Page link: only letters, numbers and “-” (at least 2).');
 
     const baseId = isNew ? (normCat(v.catalog) || v.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'release') : null;
     let image = orig.image;
@@ -776,9 +771,7 @@
       image = uniqueName(isNew ? baseId : (orig.id || normCat(catOf(orig)) || baseId || 'release'), 'jpg');
       uploads.push({ path: P('assets/' + image), blob: editing.cover.blob });
     }
-    let renames = [];
     const build = fresh => {
-      renames = [];
       const list = fresh.releases.slice();
       const idx = isNew ? -1 : list.findIndex(r => keyOf(r) === editing.key);
       if (!isNew && idx < 0) throw new Error('This release is no longer on the site (deleted elsewhere). Go back to the list.');
@@ -791,14 +784,6 @@
       } else {
         entry = { ...list[idx], artist: v.artist, title: v.title, image, color };
         if ('catalog_number' in entry && !('catalog' in entry)) entry.catalog_number = v.catalog; else entry.catalog = v.catalog;
-        // link nuevo: el viejo queda como alias (sigue funcionando y lleva al nuevo)
-        if (slug && slug !== entry.id) {
-          if (list.some((r, i) => i !== idx && r.id === slug)) throw new FieldError('slug', `The link ${slug} is already used by another release.`);
-          const from = entry.id;
-          entry.aliases = [...new Set([...(entry.aliases || []), from])].filter(a => a && a !== slug);
-          entry.id = slug;
-          renames.push({ from, to: slug });
-        }
       }
       for (const k of ['stream_link', 'spotify_link', 'soundcloud_link', 'youtube_link', 'description']) {
         if (v[k]) entry[k] = v[k]; else delete entry[k];
@@ -807,7 +792,7 @@
       list.splice(Math.min(pos - 1, list.length), 0, entry);
       const old = idx >= 0 ? fresh.releases[idx].image : null;
       const remove = old && old !== image && safeFile(old) && !list.some(r => r.image === old) ? [P('assets/' + old)] : [];
-      return { releases: list, remove, renames };
+      return { releases: list, remove };
     };
     const res = await publish(`${isNew ? 'Add' : 'Update'} release ${v.catalog} — ${v.title}`, uploads, build);
     afterPublish(res, isNew ? 'Release published' : 'Changes saved', [jsonProbe('releases.json', res.out.releases), ...uploads.map(u => fileProbe(image, u.blob))]);
@@ -4449,8 +4434,12 @@
             <label class="pub-sw${g.active ? ' on' : ''}" title="${g.active ? 'Gate on' : 'Gate off'}"><input type="checkbox" data-ch="toggle" ${g.active ? 'checked' : ''} hidden><span class="pub-knob"></span>${g.active ? 'On' : 'Off'}</label>
             <span class="row-btns">
               <button type="button" class="btn ghost sm" data-ch="file">${g.file ? 'Replace MP3' : 'Upload MP3'}</button>
+              ${g.file ? '<button type="button" class="btn ghost sm danger-txt" data-ch="file-del">Delete MP3</button>' : ''}
               ${g.active ? `<a class="btn ghost sm" href="${SITE}download/${encodeURIComponent(r.id)}" target="_blank" rel="noopener">Open ↗</a>` : ''}
             </span>
+            ${chainEditLink === r.id ? `<div class="ch-track ch-link"><span class="slug-pre">${esc(location.host)}/download/</span><input data-ch="link" value="${esc(r.id)}" maxlength="40" autocomplete="off" spellcheck="false"><button type="button" class="btn primary sm" data-ch="link-save">Save link</button><button type="button" class="btn ghost sm" data-ch="link-cancel">Cancel</button>
+              <p class="muted sm-txt">Letters, numbers and “-”. It also changes the release page link. Old links keep working and open the new one.</p></div>`
+              : `<div class="ch-dl"><span class="muted">${esc(location.host)}/download/<b>${esc(r.id)}</b></span>${can('releases', 'edit') ? '<button type="button" class="link" data-ch="link-edit">Edit link</button>' : ''}</div>`}
             ${g.active && noLink ? `<div class="ch-track"><input data-ch="track" value="${esc(g.track_url || '')}" placeholder="This release has no SoundCloud link — paste the track link for like + repost" autocomplete="off" spellcheck="false"><button type="button" class="btn ghost sm" data-ch="track-save">Save link</button></div>` : ''}
           </li>`; }).join('') || `<li class="empty">${q ? 'No releases match.' : 'No releases.'}</li>`}
       </ol>`;
@@ -4464,7 +4453,7 @@
   }
   function chainSupportHtml() {
     const memN = chainData.members.filter(m => !m.revoked).length;
-    const qc = chainData.queue?.counts || {}, pend = qc.queued || 0, done = qc.done || 0, fail = qc.failed || 0;
+    const qc = chainData.queue?.counts || {}, pend = qc.queued || 0, done = qc.done || 0, fail = qc.failed || 0, acts = (chainData.queue?.actions || []).slice(0, 30);
     return `
       <p class="info sm-txt">Repost and/or like any SoundCloud track — a Horizon release or anyone in the chain — from every connected account. They agreed to this when they joined.</p>
       <form id="ch-promote" class="editor ch-set">
@@ -4479,7 +4468,12 @@
         <div class="ed-actions"><button type="submit" class="btn primary" ${memN ? '' : 'disabled'}>Queue support</button></div>
       </form>
       ${(pend + done + fail) ? `<div class="ch-queue"><span>${pend} queued · ${done} done${fail ? ' · ' + fail + ' failed' : ''}</span>
-        <span class="row-btns">${pend ? '<button type="button" class="btn ghost sm" data-ch="run">Run due now</button><button type="button" class="btn ghost sm danger-txt" data-ch="clear">Clear queued</button>' : ''}</span></div>` : ''}`;
+        <span class="row-btns">${pend ? '<button type="button" class="btn ghost sm" data-ch="run">Run due now</button><button type="button" class="btn ghost sm danger-txt" data-ch="clear">Clear queued</button>' : ''}</span></div>` : ''}
+      ${acts.length ? `<ol class="list ch-acts-list">${acts.map(x => `<li class="row">
+          <span class="meta"><b>${esc(x.type === 'repost' ? 'Repost' : x.type === 'like' ? 'Like' : x.type)} · ${esc(x.name || 'account')}</b>
+            <span>${x.status === 'queued' ? `Scheduled · ${esc(fmtDate(x.scheduled_at))}` : `${esc(fmtDate(x.done_at || x.scheduled_at))}${x.error ? ` · ${esc(x.error)}` : ''}`}</span></span>
+          <span class="tag ${x.status === 'done' ? 'ok' : x.status === 'queued' ? '' : 'off'}">${x.status === 'done' ? 'Done' : x.status === 'queued' ? 'Queued' : x.status === 'failed' ? 'Failed' : 'Skipped'}</span>
+        </li>`).join('')}</ol>` : ''}`;
   }
   // Stats: descargas por día (en la hora local del navegador) + ranking de tracks
   let chainStats = null, chainStatsDays = 30, chainStatsLoading = false;
@@ -4616,7 +4610,7 @@
       busy = true; btn.disabled = true; btn.textContent = 'Queueing…';
       try {
         const r = await api('POST', '/api/chain/promote', { track_url: f.elements.track_url.value.trim(), repost: f.elements.repost.checked, like: f.elements.like.checked, spread_hours: Number(f.elements.spread.value) });
-        toast(r.actions ? `Queued ${r.actions} action(s) across ${r.members} account(s)${r.spread_hours ? `, spread over ~${r.spread_hours}h` : ''}` : 'Nothing new to queue');
+        toast(r.spread_hours ? `Queued ${r.actions} action(s) across ${r.members} account(s), spread over ~${r.spread_hours}h` : r.processed ? `Done: ${r.processed} action(s) — see the list below` : 'Nothing new: those accounts already did it');
         chainData = null; await loadChain();
       } catch (err) { toast(err.message); btn.disabled = false; btn.textContent = 'Queue support'; } finally { busy = false; }
       return;
@@ -4677,6 +4671,22 @@
       catch (err) { toast(err.message); } finally { busy = false; t.disabled = false; }
     } else if (a === 'file') {
       chainFileFor = rid; $('#ch-file').click();
+    } else if (a === 'file-del') {
+      const g = chainData.gates.find(x => x.release_id === rid);
+      if (!await confirmBox(`Delete the MP3${g?.file_name ? ` “${g.file_name}”` : ''}? The download is turned off until you upload another one.`, 'Delete')) return;
+      busy = true;
+      try { await api('DELETE', `/api/chain/file/${encodeURIComponent(rid)}`); toast('MP3 deleted'); chainData = null; await loadChain(); }
+      catch (err) { toast(err.message); } finally { busy = false; }
+    } else if (a === 'link-edit') {
+      chainEditLink = rid; renderGatesList(); document.querySelector(`.ch-gate[data-rid="${CSS.escape(rid)}"] [data-ch=link]`)?.focus();
+    } else if (a === 'link-cancel') {
+      chainEditLink = null; renderGatesList();
+    } else if (a === 'link-save') {
+      const to = li.querySelector('[data-ch=link]').value.trim().toLowerCase();
+      if (to === rid) { chainEditLink = null; renderGatesList(); return; }
+      busy = true; t.disabled = true; t.textContent = 'Saving…';
+      try { await relinkRelease(rid, to); chainEditLink = null; chainData = null; await loadChain(); }
+      catch (err) { toast(err.message); t.disabled = false; t.textContent = 'Save link'; } finally { busy = false; }
     } else if (a === 'unlocks') {
       chainUnlocks(rid);
     } else if (a === 'sheet-close') {
@@ -4692,7 +4702,23 @@
       catch (err) { toast(err.message); } finally { busy = false; }
     }
   });
-  let chainFileFor = null;
+  let chainFileFor = null, chainEditLink = null;
+  // cambiar el link de descarga (= el id del release): el viejo queda como alias y lo del gate pasa al nuevo
+  async function relinkRelease(from, to) {
+    if (!/^[a-z0-9][a-z0-9-]{1,40}$/.test(to)) throw new Error('Link: only letters, numbers and “-” (at least 2).');
+    const build = fresh => {
+      const list = fresh.releases.slice(), idx = list.findIndex(r => r.id === from);
+      if (idx < 0) throw new Error('This release is no longer on the site.');
+      if (list.some((r, i) => i !== idx && r.id === to)) throw new Error(`The link ${to} is already used by another release.`);
+      const entry = { ...list[idx] };
+      entry.aliases = [...new Set([...(entry.aliases || []), from])].filter(a => a && a !== to);
+      entry.id = to;
+      list[idx] = entry;
+      return { releases: list, renames: [{ from, to }] };
+    };
+    const res = await publish(`Change the link of ${catOf(repo.releases.find(r => r.id === from)) || from}: ${from} → ${to}`, [], build);
+    afterPublish(res, 'Link changed', [jsonProbe('releases.json', res.out.releases)]);
+  }
   document.addEventListener('change', async e => {
     if (e.target.id !== 'ch-file') return;
     const file = e.target.files?.[0]; e.target.value = '';

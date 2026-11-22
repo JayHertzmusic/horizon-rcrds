@@ -368,6 +368,11 @@ export async function chainPublic(req, env, url) {
   const DB = env.DB;
   if (url.pathname === `/api/public/download/${encodeURIComponent(rid)}` && req.method === 'GET') {
     const gate = await DB.prepare('SELECT active, file, file_name, notice FROM sc_gates WHERE release_id = ?').bind(rid).first();
+    // link antiguo (el link del release se cambió en el panel): la página va al nuevo
+    if (!gate) {
+      const moved = (parse((await DB.prepare("SELECT json FROM site_data WHERE name = 'releases'").first())?.json) || []).find(r => r.id !== rid && Array.isArray(r.aliases) && r.aliases.includes(rid));
+      if (moved) return { moved: moved.id };
+    }
     if (!gate?.active || !gate.file) throw new ChainError(404, 'This download is not available.');
     const rel = (parse((await DB.prepare("SELECT json FROM site_data WHERE name = 'releases'").first())?.json) || []).find(r => r.id === rid) || {};
     const st = await chainSettings(env);

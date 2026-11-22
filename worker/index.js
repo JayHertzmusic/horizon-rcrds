@@ -417,6 +417,7 @@ function cleanSite(k, v) {
   return v;
 }
 
+const RELEASE_ID = /^[a-z0-9][a-z0-9-]{1,40}$/;
 /* Publicar: un cambio = listas nuevas + archivos subidos + archivos que ya no se usan. */
 async function publish(req, env, s) {
   if (!s.sync && !anyCan(s, 'edit') && !anyCan(s, 'delete')) throw new HttpError(403, 'Your role can only view.');
@@ -458,6 +459,14 @@ async function publish(req, env, s) {
   }
   for (const u of uploads) q.push(env.DB.prepare('INSERT INTO site_files (name, type, size, updated_at, deleted) VALUES (?, ?, ?, ?, 0) ON CONFLICT(name) DO UPDATE SET type = excluded.type, size = excluded.size, updated_at = excluded.updated_at, deleted = 0').bind(u.name, u.type, u.data.byteLength, t));
   for (const n of removes) q.push(env.DB.prepare('INSERT INTO site_files (name, updated_at, deleted) VALUES (?, ?, 1) ON CONFLICT(name) DO UPDATE SET deleted = 1, updated_at = excluded.updated_at').bind(n, t));
+  // link del release cambiado en el panel (id → otro id): lo que cuelga del id viejo pasa al nuevo
+  for (const rn of (Array.isArray(meta.renames) ? meta.renames : []).slice(0, 20)) {
+    const from = String(rn?.from || ''), to = String(rn?.to || '');
+    if (!RELEASE_ID.test(from) || !RELEASE_ID.test(to) || from === to) continue;
+    if (!old.releases.some(r => r.id === from) || !next.releases.some(r => r.id === to && (r.aliases || []).includes(from))) continue;
+    if (await env.DB.prepare('SELECT 1 FROM sc_gates WHERE release_id = ?').bind(to).first()) throw new HttpError(409, `The link ${to} already has download data. Choose another link.`);
+    for (const tb of ['sc_gates', 'sc_unlocks', 'sc_actions', 'sc_downloads']) q.push(env.DB.prepare(`UPDATE ${tb} SET release_id = ? WHERE release_id = ?`).bind(to, from));
+  }
   q.push(env.DB.prepare('INSERT INTO panel_audit (at, email, name, action, detail) VALUES (?, ?, ?, ?, ?)').bind(t, s.email, s.name || '', message, `v${version}`));
   await env.DB.batch(q);
   for (const n of removes) await env.FILES.delete('f/' + n);

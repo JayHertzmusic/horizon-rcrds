@@ -78,7 +78,7 @@
       for (const k of ['releases', 'mixtapes', 'playlists', 'ignore']) if (out[k]) lists[k] = out[k];
       const remove = [...new Set(out.remove || [])].filter(p => fresh.files.has(p) && !uploads.some(u => u.path === p)).map(p => p.replace(/^assets\//, ''));
       const form = new FormData();
-      form.append('meta', JSON.stringify({ base: fresh.head, message, lists, remove }));
+      form.append('meta', JSON.stringify({ base: fresh.head, message, lists, remove, ...(out.renames?.length ? { renames: out.renames } : {}) }));
       for (const u of uploads) form.append('file:' + u.path.replace(/^assets\//, ''), u.blob, u.path.split('/').pop());
       let res;
       try { res = await api('POST', '/api/publish', form); }
@@ -716,6 +716,8 @@
             <div class="field"><label for="f-spotify">Spotify</label><input id="f-spotify" name="spotify_link" type="url" value="${esc(r.spotify_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://open.spotify.com/…"></div>
             <div class="field"><label for="f-soundcloud">SoundCloud</label><input id="f-soundcloud" name="soundcloud_link" type="url" value="${esc(r.soundcloud_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://soundcloud.com/…"></div>
             <div class="field"><label for="f-youtube">YouTube</label><input id="f-youtube" name="youtube_link" type="url" value="${esc(r.youtube_link || '')}" autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…"></div>
+            ${isNew ? '' : `<div class="field"><label for="f-slug">Page link</label><div class="slug-row"><span class="slug-pre">${esc(location.host)}/release?id=</span><input id="f-slug" name="slug" value="${esc(r.id || '')}" maxlength="40" autocomplete="off" spellcheck="false"></div>
+              <p class="info sm-txt">Letters, numbers and “-”. The old link keeps working.</p></div>`}
             <div class="field"><label for="f-desc">Description</label><textarea id="f-desc" name="description" rows="3" maxlength="400">${esc(r.description || '')}</textarea></div>
           </div>
         </div>
@@ -763,6 +765,9 @@
     if (!v.stream_link && !v.spotify_link && !v.soundcloud_link) throw new FieldError('stream_link', 'Add at least one link.');
     if (isNew && !editing.cover) throw new Error('Cover missing.');
     const pos = position(form, isNew ? repo.releases.length + 1 : repo.releases.length);
+    // link de la página del release (solo al editar uno que ya existe)
+    const slug = isNew || !form.elements.slug ? '' : form.elements.slug.value.trim().toLowerCase();
+    if (!isNew && form.elements.slug && !/^[a-z0-9][a-z0-9-]{1,40}$/.test(slug)) throw new FieldError('slug', 'Page link: only letters, numbers and “-” (at least 2).');
 
     const baseId = isNew ? (normCat(v.catalog) || v.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'release') : null;
     let image = orig.image;
@@ -771,7 +776,9 @@
       image = uniqueName(isNew ? baseId : (orig.id || normCat(catOf(orig)) || baseId || 'release'), 'jpg');
       uploads.push({ path: P('assets/' + image), blob: editing.cover.blob });
     }
+    let renames = [];
     const build = fresh => {
+      renames = [];
       const list = fresh.releases.slice();
       const idx = isNew ? -1 : list.findIndex(r => keyOf(r) === editing.key);
       if (!isNew && idx < 0) throw new Error('This release is no longer on the site (deleted elsewhere). Go back to the list.');
@@ -784,6 +791,14 @@
       } else {
         entry = { ...list[idx], artist: v.artist, title: v.title, image, color };
         if ('catalog_number' in entry && !('catalog' in entry)) entry.catalog_number = v.catalog; else entry.catalog = v.catalog;
+        // link nuevo: el viejo queda como alias (sigue funcionando y lleva al nuevo)
+        if (slug && slug !== entry.id) {
+          if (list.some((r, i) => i !== idx && r.id === slug)) throw new FieldError('slug', `The link ${slug} is already used by another release.`);
+          const from = entry.id;
+          entry.aliases = [...new Set([...(entry.aliases || []), from])].filter(a => a && a !== slug);
+          entry.id = slug;
+          renames.push({ from, to: slug });
+        }
       }
       for (const k of ['stream_link', 'spotify_link', 'soundcloud_link', 'youtube_link', 'description']) {
         if (v[k]) entry[k] = v[k]; else delete entry[k];
@@ -792,7 +807,7 @@
       list.splice(Math.min(pos - 1, list.length), 0, entry);
       const old = idx >= 0 ? fresh.releases[idx].image : null;
       const remove = old && old !== image && safeFile(old) && !list.some(r => r.image === old) ? [P('assets/' + old)] : [];
-      return { releases: list, remove };
+      return { releases: list, remove, renames };
     };
     const res = await publish(`${isNew ? 'Add' : 'Update'} release ${v.catalog} — ${v.title}`, uploads, build);
     afterPublish(res, isNew ? 'Release published' : 'Changes saved', [jsonProbe('releases.json', res.out.releases), ...uploads.map(u => fileProbe(image, u.blob))]);

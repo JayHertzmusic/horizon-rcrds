@@ -74,6 +74,7 @@
       const r = await fetch('/api/public/download/' + encodeURIComponent(id), { cache: 'no-store' });
       d = await r.json();
       if (!r.ok) throw new Error(d.message || 'This download is not available.');
+      if (d.moved && /^[\w-]+$/.test(d.moved)) { location.replace('/download/' + d.moved + location.search); return; }
     } catch (e) { root.innerHTML = brand + '<p class="msg">' + esc(e.message) + '</p>'; return; }
 
     if (d.color && /^#[0-9a-f]{3,6}$/i.test(d.color)) document.documentElement.style.setProperty('--acc', d.color);

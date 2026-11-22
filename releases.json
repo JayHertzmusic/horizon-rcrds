@@ -1,6 +1,6 @@
 [
   {
-    "id": "hrz091-2",
+    "id": "hrz091",
     "catalog": "HRZ#091",
     "artist": "VENTA",
     "title": "BACK",
@@ -9,10 +9,13 @@
     "stream_link": "https://too.fm/prx52xx",
     "spotify_link": "https://open.spotify.com/album/0TFhX0yF2D6pXQqPK2b1FQ",
     "soundcloud_link": "https://soundcloud.com/horizonirecords/venta_back",
-    "youtube_link": "https://www.youtube.com/watch?v=_Ed1owNRbQE"
+    "youtube_link": "https://www.youtube.com/watch?v=_Ed1owNRbQE",
+    "aliases": [
+      "hrz091-2"
+    ]
   },
   {
-    "id": "hrz091",
+    "id": "hrz090",
     "catalog": "HRZ#090",
     "artist": "Titus1, Synthtonix",
     "title": "Pain",
@@ -21,10 +24,13 @@
     "stream_link": "https://too.fm/gzjarer",
     "spotify_link": "https://open.spotify.com/album/0PcoE0c7H7ANLkaiB3PX6Q",
     "soundcloud_link": "https://soundcloud.com/horizonirecords/titus1-synthtonix-pain",
-    "youtube_link": "https://www.youtube.com/watch?v=gYOLfr3drEs"
+    "youtube_link": "https://www.youtube.com/watch?v=gYOLfr3drEs",
+    "aliases": [
+      "hrz091"
+    ]
   },
   {
-    "id": "hrz090",
+    "id": "hrz089",
     "catalog": "HRZ#089",
     "artist": "N1LL",
     "title": "All I Need",
@@ -33,10 +39,13 @@
     "stream_link": "https://too.fm/vpqypxj",
     "spotify_link": "https://open.spotify.com/album/5BKpz6tGbcx0Rw92jYgDY5",
     "soundcloud_link": "https://soundcloud.com/horizonirecords/n1ll-all-i-need",
-    "youtube_link": "https://www.youtube.com/watch?v=qKf-lZSfPUQ"
+    "youtube_link": "https://www.youtube.com/watch?v=qKf-lZSfPUQ",
+    "aliases": [
+      "hrz090"
+    ]
   },
   {
-    "id": "hrz089",
+    "id": "hrz088",
     "catalog": "HRZ#088",
     "artist": "Medys Delva",
     "title": "In The Middle",
@@ -45,7 +54,10 @@
     "stream_link": "https://too.fm/jj795y8",
     "spotify_link": "https://open.spotify.com/album/3DsyWoUGIosf2EXY6oFd5T",
     "soundcloud_link": "https://soundcloud.com/horizonirecords/medys-delva-in-the-middle",
-    "youtube_link": "https://www.youtube.com/watch?v=DDLs_0pZA1M"
+    "youtube_link": "https://www.youtube.com/watch?v=DDLs_0pZA1M",
+    "aliases": [
+      "hrz089"
+    ]
   },
   {
     "id": "hrz087",
@@ -108,7 +120,7 @@
     "youtube_link": "https://www.youtube.com/watch?v=Q8unueuKkWo"
   },
   {
-    "id": "hrz088",
+    "id": "hrz082",
     "catalog": "HRZ#082",
     "artist": "Stefi",
     "title": "You And I",
@@ -117,7 +129,10 @@
     "stream_link": "https://too.fm/vvz0re5",
     "spotify_link": "https://open.spotify.com/track/0MhK4Cff3cSTB8FkXjJF5m?si=e367dbcc85544b79",
     "soundcloud_link": "https://soundcloud.com/horizonirecords/stefi-you-and-i",
-    "youtube_link": "https://www.youtube.com/watch?v=SD1RYXSsZmQ"
+    "youtube_link": "https://www.youtube.com/watch?v=SD1RYXSsZmQ",
+    "aliases": [
+      "hrz088"
+    ]
   },
   {
     "id": "hrz081",

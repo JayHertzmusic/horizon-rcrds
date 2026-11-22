@@ -630,8 +630,13 @@ new IntersectionObserver(([e]) => e.target.classList.toggle('is-off', !e.isInter
     return;
   }
 
-  const id = new URLSearchParams(location.search).get('id');
+  let id = new URLSearchParams(location.search).get('id');
   let i = releases.findIndex(r => r.id === id);
+  // link antiguo (el link del release se cambió en el panel): abre el release y deja la dirección buena
+  if (i < 0 && id) {
+    i = releases.findIndex(r => Array.isArray(r.aliases) && r.aliases.includes(id));
+    if (i >= 0) { id = releases[i].id; const u = new URL(location.href); u.searchParams.set('id', id); history.replaceState(null, '', u); }
+  }
   if (i < 0 && id) {
     /* a link to a release that does not exist (typo, or removed): say so instead of showing another release */
     document.title = 'Release not found | HORIZON RCRDS';

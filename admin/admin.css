@@ -1413,3 +1413,8 @@ html, body, * { scrollbar-width: none; }
 
 /* Forms: «Send your demo» de la web abierto / cerrado */
 .demos-sw { display: inline-flex; align-items: center; gap: 10px; color: var(--faint); font: 700 10px/1.2 'Barlow', sans-serif; letter-spacing: .2em; text-transform: uppercase; white-space: nowrap; }
+
+/* Releases: link de la página del release */
+.slug-row { display: flex; align-items: center; border-bottom: 1px solid var(--line-2); }
+.slug-row .slug-pre { color: var(--faint); font-size: 13px; white-space: nowrap; }
+.slug-row input { border: 0 !important; padding-left: 2px !important; }

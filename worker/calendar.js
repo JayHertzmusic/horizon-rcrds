@@ -57,9 +57,12 @@ export async function calendarApi(req, env, s, url, can, audit) {
   const DB = env.DB, m = req.method, p = url.pathname;
   if (!can('view')) throw new CalendarError(403, 'Your role has no Calendar access.');
   const edit = () => { if (!can('edit') || s.sync) throw new CalendarError(403, 'Your role can only view the calendar.'); };
+  // rol con «Mixtapes only»: solo ve y cambia las fechas de mixtapes (ni releases, ni contratos)
+  const mixOnly = !s.owner && !!s.perms?.calendar?.mixtapes;
   if (p === '/api/calendar' && m === 'GET') {
     await seed(DB);
-    const items = (await DB.prepare('SELECT * FROM calendar ORDER BY date, created_at').all()).results;
+    const items = (await DB.prepare(`SELECT * FROM calendar ${mixOnly ? "WHERE kind = 'mixtape' " : ''}ORDER BY date, created_at`).all()).results;
+    if (mixOnly) return { items, unscheduled: [], discord: parse((await DB.prepare("SELECT value FROM panel_settings WHERE key = 'calendar_discord'").first())?.value), canEdit: can('edit') && !s.sync, mixOnly: true };
     // contratos firmados que aún no tienen fecha en el calendario
     const signed = (await DB.prepare("SELECT id, title, artist, release_cat, release_name, signed_at FROM contracts WHERE status = 'signed' AND (kind IS NULL OR kind = 'contract') AND id NOT IN (SELECT contract_id FROM calendar WHERE contract_id IS NOT NULL) ORDER BY signed_at DESC LIMIT 50").all()).results;
     const dc = parse((await DB.prepare("SELECT value FROM panel_settings WHERE key = 'calendar_discord'").first())?.value);
@@ -76,7 +79,8 @@ export async function calendarApi(req, env, s, url, can, audit) {
     const date = clean(b.date, 10), title = clean(b.title, 160);
     if (!DATE.test(date)) throw new CalendarError(400, 'Choose a date.');
     if (!title) throw new CalendarError(400, 'Write the title.');
-    const kind = KINDS.includes(b.kind) ? b.kind : 'release';
+    const kind = mixOnly ? 'mixtape' : KINDS.includes(b.kind) ? b.kind : 'release';
+    if (mixOnly && b.id && (await DB.prepare('SELECT kind FROM calendar WHERE id = ?').bind(String(b.id)).first())?.kind !== 'mixtape') throw new CalendarError(403, 'Your role can only change mixtape dates.');
     const row = [date, kind, clean(b.artist, 160), title, clean(b.cat, 40) || null, clean(b.note, 500) || null, b.programmed ? 1 : 0, clean(b.contract_id, 40) || null];
     const t = Date.now();
     if (b.id) {
@@ -95,6 +99,7 @@ export async function calendarApi(req, env, s, url, can, audit) {
     edit();
     const r = await DB.prepare('SELECT * FROM calendar WHERE id = ?').bind(mm[1]).first();
     if (!r) throw new CalendarError(404, 'That date no longer exists.');
+    if (mixOnly && r.kind !== 'mixtape') throw new CalendarError(403, 'Your role can only change mixtape dates.');
     await DB.prepare('DELETE FROM calendar WHERE id = ?').bind(r.id).run();
     await audit(`Removed from the calendar: ${r.date} · ${r.artist ? r.artist + ' - ' : ''}${r.title}`);
     return { ok: true };

@@ -1428,3 +1428,7 @@ html, body, * { scrollbar-width: none; }
 .ch-acts-list { margin-top: 14px; }
 .ch-acts-list .row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 14px; }
 .ch-acts-list .row .meta { flex: 1; min-width: 0; }
+
+/* Roles: Calendar «Mixtapes only» */
+.role-form .perm-sub { display: flex; margin: -2px 0 8px 34px; font-size: 13px; }
+.role-form .perm-sub[hidden] { display: none; }

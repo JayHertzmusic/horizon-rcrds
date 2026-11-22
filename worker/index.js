@@ -146,6 +146,8 @@ function normPerms(p) {
     if (v.edit || v.delete) v.view = true;
     out[s.id] = v;
   }
+  // Calendar: el rol solo ve (y cambia) los mixtapes
+  if (out.calendar?.view && p?.calendar?.mixtapes) out.calendar.mixtapes = true;
   return out;
 }
 const fullPerms = () => Object.fromEntries(SECTIONS.map(s => [s.id, Object.fromEntries(s.actions.map(a => [a, true]))]));

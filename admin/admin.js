@@ -483,7 +483,7 @@
         <div class="perm-list">${teamData.sections.map(sec => { const lv = levelOf(r, sec); return `
           ${sec.id === 'forms' ? `<div class="perm-row pf-head" data-sec="forms"><span class="perm-name"><button type="button" class="grip" aria-label="Drag to reorder ${esc(sec.label)}" title="Drag to reorder">${GRIP_SVG}</button>${esc(sec.label)}<button type="button" class="pf-arrow" data-act="pf-toggle" aria-expanded="false" aria-label="Choose which forms" title="Choose which forms"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5"/></svg></button><span class="pf-count muted sm-txt">${roleFormsSummary(r)}</span></span><span class="seg" role="radiogroup" aria-label="${esc(sec.label)}">${LEVELS.map(([v, l]) => `
             <label><input type="radio" name="forms" value="${v}" ${v === lv ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>${roleFormsPick(r)}` : `<div class="perm-row" data-sec="${esc(sec.id)}"><span class="perm-name"><button type="button" class="grip" aria-label="Drag to reorder ${esc(sec.label)}" title="Drag to reorder">${GRIP_SVG}</button>${esc(sec.label)}</span><span class="seg" role="radiogroup" aria-label="${esc(sec.label)}">${LEVELS.filter(([v]) => !v || sec.actions.includes(v)).map(([v, l]) => `
-            <label><input type="radio" name="${esc(sec.id)}" value="${v}" ${v === lv ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>`}`; }).join('')}
+            <label><input type="radio" name="${esc(sec.id)}" value="${v}" ${v === lv ? 'checked' : ''}><span>${l}</span></label>`).join('')}</span></div>${sec.id === 'calendar' ? `<label class="check perm-sub"${lv ? '' : ' hidden'}><input type="checkbox" name="cal_mix" ${r.perms?.calendar?.mixtapes ? 'checked' : ''}> <span>Mixtapes only <span class="muted">(they don’t see releases or contracts)</span></span></label>` : ''}`}`; }).join('')}
         </div>
         <p class="info sm-txt"><b>View</b>: only look. <b>Edit</b>: create, change and delete. For Forms, use the arrow to choose which forms and what they can do in each. Drag ⋮⋮ to change the order of the sections. Owners always have everything.</p>
         <p class="ed-error" role="alert" hidden></p>
@@ -617,6 +617,7 @@
       perms[sec.id] = {};
       for (const a of sec.actions) perms[sec.id][a] = lv >= rank[a];
     }
+    if (perms.calendar?.view && form.querySelector('input[name="cal_mix"]')?.checked) perms.calendar.mixtapes = true;
     return perms;
   }
   // tu foto de perfil: se recorta cuadrada (256 px) en el navegador y se sube
@@ -1700,6 +1701,7 @@
       const f = t.closest('.role-form'), arrow = f.querySelector('.pf-arrow'), box = f.querySelector('.perm-forms');
       if (t.value) { box.hidden = false; arrow.classList.add('open'); arrow.setAttribute('aria-expanded', 'true'); }
     }
+    if (t.name === 'calendar' && t.closest?.('.role-form')) { const sub = t.closest('.role-form').querySelector('.perm-sub'); if (sub) sub.hidden = !t.value; }
     if (t.closest?.('.pf-row')) {
       const f = t.closest('.role-form'), sum = f?.querySelector('.pf-count'), rows = [...f.querySelectorAll('.pf-row')];
       if (sum) { const n = rows.filter(r => r.querySelector('input:checked')?.value).length; sum.textContent = n ? `${n} of ${rows.length} forms` : 'No forms'; }
@@ -3580,6 +3582,7 @@
   /* ---------------- Calendar: releases y mixtapes con su fecha ---------------- */
   let calData = null, calErr = '', calLoading = false, calOpen = null;
   const calCanEdit = () => !!calData?.canEdit && can('calendar', 'edit');
+  const calMixOnly = () => preview ? !!preview.perms?.calendar?.mixtapes : !!calData?.mixOnly;
   async function loadCalendar() {
     if (calLoading) return;
     calLoading = true;
@@ -3616,8 +3619,9 @@
       return `<div class="head"><div><p class="eyebrow">Schedule</p><h1>CALENDAR</h1></div></div>${calErr ? `<p class="login-error" role="alert">${esc(calErr)}</p>` : '<p class="info">Loading…</p>'}`;
     }
     if (calOpen) return calForm();
-    const ed = calCanEdit(), today = todayIso();
-    const next = calData.items.filter(x => x.date >= today), past = calData.items.filter(x => x.date < today).reverse();
+    const ed = calCanEdit(), today = todayIso(), mixOnly = calMixOnly();
+    const items = mixOnly ? calData.items.filter(x => x.kind === 'mixtape') : calData.items;
+    const next = items.filter(x => x.date >= today), past = items.filter(x => x.date < today).reverse();
     const row = x => {
       const b = calBits(x.date), n = calDaysLeft(x.date);
       return `
@@ -3641,7 +3645,7 @@
         </div>`; };
     const months = {};
     for (const x of next) (months[calMonth(x.date)] ||= []).push(x);
-    const todo = ed ? calData.unscheduled : [];
+    const todo = ed && !mixOnly ? calData.unscheduled : [];
     return `
       <div class="head"><div><p class="eyebrow">Schedule</p><h1>CALENDAR</h1></div>
         <div class="head-btns">${ed ? '<button type="button" class="btn primary" data-cal-act="new">+ Add date</button>' : ''}</div></div>
@@ -3668,13 +3672,14 @@
     return `<p class="info cal-sync">Synced with Discord #horizon-calendar ${mins < 1 ? 'just now' : mins === 1 ? '1 minute ago' : mins + ' minutes ago'} · edit the dates there and they change here.</p>${sk}`;
   }
   function calForm() {
-    const x = calOpen.item || { date: '', kind: 'release', artist: '', title: '', cat: '', note: '', programmed: 0 };
+    const mixOnly = calMixOnly();
+    const x = calOpen.item || { date: '', kind: mixOnly ? 'mixtape' : 'release', artist: '', title: '', cat: '', note: '', programmed: 0 };
     return `
       <form id="cal-ed" class="editor ct-ed cal-ed" novalidate>
         <button type="button" class="back" data-cal-act="back">← Calendar</button>
         <h1>${calOpen.item ? 'EDIT DATE' : 'NEW DATE'}</h1>
         <div class="row2 wide"><div class="field"><label for="cl-date">Date</label><input id="cl-date" name="date" type="date" value="${esc(x.date)}"></div>
-          <div class="field"><label for="cl-kind">Type</label><select id="cl-kind" name="kind">${Object.entries(CAL_KIND).map(([k, v]) => `<option value="${k}"${x.kind === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div></div>
+          <div class="field"><label for="cl-kind">Type</label><select id="cl-kind" name="kind">${Object.entries(mixOnly ? { mixtape: 'Mixtape' } : CAL_KIND).map(([k, v]) => `<option value="${k}"${x.kind === k ? ' selected' : ''}>${v}</option>`).join('')}</select></div></div>
         <div class="row2 wide"><div class="field"><label for="cl-artist">Artist</label><input id="cl-artist" name="artist" maxlength="160" value="${esc(x.artist || '')}" autocomplete="off"></div>
           <div class="field"><label for="cl-title">Title</label><input id="cl-title" name="title" maxlength="160" value="${esc(x.title)}" autocomplete="off"></div></div>
         <div class="row2 wide"><div class="field"><label for="cl-cat">Release number</label><input id="cl-cat" name="cat" maxlength="40" value="${esc(x.cat || '')}" autocomplete="off" placeholder="HRZ#092"></div>

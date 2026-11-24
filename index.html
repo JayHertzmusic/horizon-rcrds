@@ -107,6 +107,9 @@
       overflow-x: hidden;
     }
 
+    /* Fondo de líneas topográficas (bg-topo.js): las secciones dejan ver el fondo (la portada y Demos tienen el suyo) */
+    html.has-topo #releases, html.has-topo #radio, html.has-topo #playlists, html.has-topo #contact { background: transparent !important; }
+
     /* Grain overlay */
     body::before {
       content: '';
@@ -1051,6 +1054,7 @@
   <link rel="stylesheet" href="./assets/smooth-scroll.css?v=1"/>
   <script src="./assets/vendor/lenis.min.js?v=1.3.26" defer></script>
   <script src="./assets/smooth-scroll.js?v=2" defer></script>
+  <script src="./bg-topo.js?v=3" defer></script>
   <link rel="stylesheet" href="./assets/tailwind.css?v=1"/>
 </head>
 <body>

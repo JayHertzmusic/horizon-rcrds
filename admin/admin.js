@@ -3905,12 +3905,16 @@
   function b64uText(s) { try { const bin = atob(String(s).replace(/-/g, '+').replace(/_/g, '/')); return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0))); } catch { return ''; } }
   function walkParts(p, out = { html: '', text: '', files: [], cids: {} }) {
     if (!p) return out;
-    const type = (p.mimeType || '').toLowerCase(), h = n => (p.headers || []).find(x => x.name.toLowerCase() === n)?.value || '';
+    // QQ Mail y otros mandan las fotos como application/octet-stream: el tipo sale del nombre del archivo
+    const ext = (p.filename || '').toLowerCase().match(/\.(png|jpe?g|gif|webp|bmp)$/)?.[1];
+    let type = (p.mimeType || '').toLowerCase();
+    if (ext && !/^image\//.test(type) && /octet-stream|^$/.test(type)) type = 'image/' + (ext === 'jpg' ? 'jpeg' : ext);
+    const h = n => (p.headers || []).find(x => x.name.toLowerCase() === n)?.value || '';
     if (p.parts?.length) { p.parts.forEach(x => walkParts(x, out)); return out; }
     const cid = h('content-id').replace(/[<>]/g, '');
     if (p.filename || p.body?.attachmentId) {
-      if (cid && /^image\//.test(type)) out.cids[cid] = { id: p.body?.attachmentId, data: p.body?.data, type };
-      if (p.filename && !(cid && /inline/i.test(h('content-disposition')))) out.files.push({ name: p.filename, size: p.body?.size || 0, id: p.body?.attachmentId, data: p.body?.data, type });
+      if (cid && /^image\//.test(type)) out.cids[cid] = { id: p.body?.attachmentId, data: p.body?.data, type, name: p.filename || '' };
+      if (p.filename && !(cid && /inline/i.test(h('content-disposition')))) out.files.push({ name: p.filename, size: p.body?.size || 0, id: p.body?.attachmentId, data: p.body?.data, type, cid });
       return out;
     }
     if (type === 'text/html' && !out.html) out.html = b64uText(p.body?.data || '');
@@ -3949,24 +3953,32 @@
           <header data-mail="toggle"><b>${m.labels.includes('DRAFT') ? '<em>Draft</em> ' : ''}${esc(mailWho(hd(m, 'from')))}</b> <span class="muted">&lt;${esc(mailAddr(hd(m, 'from')))}&gt;</span><time>${esc(mailDate(m.at, true))}</time>
             ${open ? `<small class="muted">to ${esc(hd(m, 'to'))}${hd(m, 'cc') ? ' · cc ' + esc(hd(m, 'cc')) : ''}</small>` : `<small class="muted m-snip">${esc((b.text || b.html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').slice(0, 140))}</small>`}</header>
           ${open ? `<iframe class="m-body" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" title="Email" data-mframe="${i}"></iframe>
-          ${b.files.length ? `<div class="m-files">${b.files.map((f, j) => `<button type="button" class="m-file" data-mail="file" data-mfile="${i}:${j}">⎘ ${esc(f.name)} <span class="muted">${fmtSize(f.size)}</span></button>`).join('')}</div>` : ''}` : ''}
+          ${b.files.some(f => !mailInline(b, f)) ? `<div class="m-files">${b.files.map((f, j) => mailInline(b, f) ? '' : `<button type="button" class="m-file" data-mail="file" data-mfile="${i}:${j}">⎘ ${esc(f.name)} <span class="muted">${fmtSize(f.size)}</span></button>`).join('')}</div>` : ''}` : ''}
         </article>`;
       }).join('')}</div>
       <div class="m-reply"><button type="button" class="m-rbtn" data-mail="reply">↩ Reply</button><button type="button" class="m-rbtn" data-mail="replyall">↩↩ Reply all</button><button type="button" class="m-rbtn" data-mail="forward">↪ Forward</button></div>`;
   }
+  // una foto que ya se ve dentro del correo no se repite en la lista de adjuntos
+  const mailInline = (b, f) => !!f.cid && /^image\//.test(f.type) && b.html.includes('cid:' + f.cid);
   // el cuerpo va en un iframe aislado (sin scripts): el correo no puede tocar el panel
   function fillFrames() {
     const t = mail.thread; if (!t || view !== 'mail') return;
+    // fotos de todo el hilo: una respuesta (p. ej. de QQ Mail) cita fotos que solo vienen en un mensaje anterior;
+    // se reconocen por el nombre del archivo (lo de antes de la @ es igual en todas las copias)
+    const all = t.messages.flatMap(x => { const bx = x.parsed || (x.parsed = walkParts(x.payload)); return Object.values(bx.cids).map(c => (c.mid = x.id, c)); });
+    const stem = v => (String(v).match(/^([^@]{4,})@/) || [])[1] || '';
+    const pick = (b, id) => { try { id = decodeURIComponent(id); } catch { /* tal cual */ } const k = stem(id); return b.cids[id] || (k ? all.find(c => stem(c.name) === k && (c.url || c.data || c.id)) : null); };
     $$('[data-mframe]').forEach(fr => {
       const m = visMsgs(t)[+fr.dataset.mframe], b = m.parsed || (m.parsed = walkParts(m.payload));
-      const key = m.id + ':' + Object.values(b.cids).filter(c => c.url).length;
+      let html = b.html || textHtml(b.text || '');
+      const used = [...new Set([...html.matchAll(/cid:([^"' )>]+)/g)].map(x => pick(b, x[1])).filter(Boolean))];
+      const key = m.id + ':' + used.filter(c => c.url).length;
       if (fr.dataset.done === key) return;
       fr.dataset.done = key;
-      let html = b.html || textHtml(b.text || '');
       // (seguridad) un correo no puede redirigir su recuadro a otra web ni cambiar adónde abren los enlaces
       html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']?refresh[^>]*>/gi, '').replace(/<base\b[^>]*>/gi, '');
-      html = html.replace(/cid:([^"' )>]+)/g, (x, id) => b.cids[id]?.url || (b.cids[id]?.data ? `data:${b.cids[id].type};base64,${b.cids[id].data.replace(/-/g, '+').replace(/_/g, '/')}` : x));
-      fr.srcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data: blob:; style-src 'unsafe-inline' https:; font-src https: data:"><base target="_blank"><style>html,body{margin:0;background:#fafafa;color:#111}html{filter:invert(1) hue-rotate(180deg)}img,video,picture,svg,[background],[style*="background-image"],[style*="background:url"],[style*="background: url"]{filter:invert(1) hue-rotate(180deg)}body{padding:16px;font:14px/1.5 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto}blockquote{margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex;color:#555}</style>${html}`;
+      html = html.replace(/cid:([^"' )>]+)/g, (x, id) => { const c = pick(b, id); return c?.url || (c?.data ? `data:${c.type};base64,${c.data.replace(/-/g, '+').replace(/_/g, '/')}` : x); });
+      fr.srcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data: blob:; style-src 'unsafe-inline' https:; font-src https: data:"><base target="_blank"><style>html,body{margin:0;background:#fafafa;color:#111}html{filter:invert(1) hue-rotate(180deg)}img,video,picture,svg,[background],[style*="background-image"],[style*="background:url"],[style*="background: url"]{filter:invert(1) hue-rotate(180deg)}body{padding:16px;font:14px/1.5 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto!important}blockquote{margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex;color:#555}</style>${html}`;
       fr.onload = () => { try {
         const doc = fr.contentDocument, fit = () => { fr.style.height = Math.min(doc.documentElement.scrollHeight + 4, 30000) + 'px'; };
         hideQuotes(doc, fit);
@@ -3976,10 +3988,10 @@
         doc.querySelectorAll('img').forEach(im => im.complete || im.addEventListener('load', fit, { once: true }));
       } catch { /* nada */ } };
       // imágenes incrustadas (cid) que vienen aparte
-      Object.entries(b.cids).forEach(async ([id, c]) => {
+      used.forEach(async c => {
         if (c.url || c.data || !c.id || c.loading) return;
         c.loading = true;
-        try { const r = await api('GET', `/api/mail/attachment/${t.id}/${m.id}/${c.id}`); c.url = URL.createObjectURL(new Blob([b64uBytes(r.data)], { type: c.type })); if (view === 'mail' && mail.thread === t) fillFrames(); } catch { /* sin imagen */ }
+        try { const r = await api('GET', `/api/mail/attachment/${t.id}/${c.mid || m.id}/${c.id}`); c.url = URL.createObjectURL(new Blob([b64uBytes(r.data)], { type: c.type })); if (view === 'mail' && mail.thread === t) fillFrames(); } catch { /* sin imagen */ }
       });
     });
     const box = $('#m-read'); if (box && t.scrollLast) { t.scrollLast = false; t.scrollTo = true; const art = box.querySelector('.m-msg.open:last-of-type'); if (art && t.messages.length > 1) { box.style.scrollBehavior = 'auto'; box.scrollTop = art.offsetTop - 8; box.style.scrollBehavior = ''; } }

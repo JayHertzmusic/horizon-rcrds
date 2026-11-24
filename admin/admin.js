@@ -3913,7 +3913,7 @@
     if (p.parts?.length) { p.parts.forEach(x => walkParts(x, out)); return out; }
     const cid = h('content-id').replace(/[<>]/g, '');
     if (p.filename || p.body?.attachmentId) {
-      if (cid && /^image\//.test(type)) out.cids[cid] = { id: p.body?.attachmentId, data: p.body?.data, type, name: p.filename || '' };
+      if (cid && /^image\//.test(type)) out.cids[cid] = { id: p.body?.attachmentId, data: p.body?.data, type, name: p.filename || '', size: p.body?.size || 0 };
       if (p.filename && !(cid && /inline/i.test(h('content-disposition')))) out.files.push({ name: p.filename, size: p.body?.size || 0, id: p.body?.attachmentId, data: p.body?.data, type, cid });
       return out;
     }
@@ -3946,75 +3946,177 @@
     const sys = [...new Set(t.messages.flatMap(m => m.labels))].filter(x => ['INBOX', 'SPAM', 'TRASH'].includes(x)).map(x => ({ INBOX: 'Inbox', SPAM: 'Spam', TRASH: 'Trash' })[x]);
     return `
       <div class="m-rhead"><h2>${esc(hd(first, 'subject') || '(no subject)')}</h2>${sys.map(x => `<span class="m-ltag sys">${x}</span>`).join('')}${labs.map(l => `<span class="m-ltag" style="--c:${esc(l.color || '#8b8f98')}">${esc(l.name)}<button type="button" data-munlabel="${esc(l.id)}" aria-label="Remove label">✕</button></span>`).join('')}</div>
-      <div class="m-msgs">${t.messages.map((m, i) => {
-        const b = m.parsed || (m.parsed = walkParts(m.payload));
-        const open = i === last || m.openUi;
-        return `<article class="m-msg${open ? ' open' : ''}${m.labels.includes('DRAFT') ? ' draft' : ''}" data-mmsg="${i}">
-          <header data-mail="toggle"><b>${m.labels.includes('DRAFT') ? '<em>Draft</em> ' : ''}${esc(mailWho(hd(m, 'from')))}</b> <span class="muted">&lt;${esc(mailAddr(hd(m, 'from')))}&gt;</span><time>${esc(mailDate(m.at, true))}</time>
-            ${open ? `<small class="muted">to ${esc(hd(m, 'to'))}${hd(m, 'cc') ? ' · cc ' + esc(hd(m, 'cc')) : ''}</small>` : `<small class="muted m-snip">${esc((b.text || b.html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').slice(0, 140))}</small>`}</header>
-          ${open ? `<iframe class="m-body" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" title="Email" data-mframe="${i}"></iframe>
-          ${b.files.some(f => !mailInline(b, f)) ? `<div class="m-files">${b.files.map((f, j) => mailInline(b, f) ? '' : `<button type="button" class="m-file" data-mail="file" data-mfile="${i}:${j}">⎘ ${esc(f.name)} <span class="muted">${fmtSize(f.size)}</span></button>`).join('')}</div>` : ''}` : ''}
+      <div class="m-msgs${t0.ready ? ' ready' : ''}">${t.messages.map((m, i) => {
+        const b = mailParsed(m), mine = m.labels.includes('SENT') || m.labels.includes('DRAFT');
+        // todos abiertos (se pueden plegar con un clic en la cabecera, sin recargar nada)
+        const open = !m.closedUi;
+        const files = b.files.map((f, j) => mailInline(b, f) ? '' : `<button type="button" class="m-file" data-mail="file" data-mfile="${i}:${j}">⤓ ${esc(f.name)} <span class="muted">${fmtSize(f.size)}</span></button>`).join('')
+          + b.links.map(l => `<a class="m-file" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" title="Opens the QQ Mail download page${l.exp ? ' (available until ' + esc(l.exp) + ')' : ''}">⤓ ${esc(l.name)} <span class="muted">${esc(l.size)}</span> ↗</a>`).join('');
+        return `<article class="m-msg${open ? ' open' : ''}${mine ? ' mine' : ''}${m.labels.includes('DRAFT') ? ' draft' : ''}" data-mmsg="${i}">
+          <header data-mail="toggle"><span class="m-who"><b>${m.labels.includes('DRAFT') ? '<em>Draft</em> ' : ''}${esc(mailWho(hd(m, 'from')))}</b>${mine ? '<span class="m-me">You</span>' : ''} <span class="muted">&lt;${esc(mailAddr(hd(m, 'from')))}&gt;</span></span><time>${esc(mailDate(m.at, true))}</time>
+            <small class="muted m-to">to ${esc(hd(m, 'to'))}${hd(m, 'cc') ? ' · cc ' + esc(hd(m, 'cc')) : ''}</small><small class="muted m-snip">${esc((b.text || b.html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').slice(0, 140))}</small></header>
+          <iframe class="m-body" sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox" referrerpolicy="no-referrer" title="Email" data-mframe="${i}"></iframe>
+          <div class="m-files" data-mfiles="${i}">${files}</div>
         </article>`;
       }).join('')}</div>
       <div class="m-reply"><button type="button" class="m-rbtn" data-mail="reply">↩ Reply</button><button type="button" class="m-rbtn" data-mail="replyall">↩↩ Reply all</button><button type="button" class="m-rbtn" data-mail="forward">↪ Forward</button></div>`;
   }
-  // una foto que ya se ve dentro del correo no se repite en la lista de adjuntos
+  // una foto que ya se ve dentro del correo no va en la lista de adjuntos (va en «N images»)
   const mailInline = (b, f) => !!f.cid && /^image\//.test(f.type) && b.html.includes('cid:' + f.cid);
-  // el cuerpo va en un iframe aislado (sin scripts): el correo no puede tocar el panel
+  // el correo ya leído + los adjuntos grandes de QQ Mail («超大附件»: enlaces a su web, no van dentro del correo)
+  function mailParsed(m) {
+    if (m.parsed) return m.parsed;
+    const b = walkParts(m.payload);
+    b.links = [];
+    if (/bigatt_bt/.test(b.html)) {
+      const d = new DOMParser().parseFromString(b.html, 'text/html');
+      d.querySelectorAll('#QQMailBigAttach .bigatt_bt, .bigatt_bt').forEach(x => {
+        const [name, size, exp] = (x.getAttribute('title') || '').split(/[\r\n]+/).map(s => s.trim());
+        const url = [...x.querySelectorAll('a[href]')].map(a => a.getAttribute('href')).find(u => /^https:\/\/([\w-]+\.)*qq\.com\//i.test(u));
+        const dt = (exp || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+        if (name && url && !b.links.some(l => l.url === url)) b.links.push({ name, url, size: (size || '').split(/[：:]/).pop().trim(), exp: dt ? new Date(+dt[1], dt[2] - 1, +dt[3]).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '' });
+      });
+    }
+    return (m.parsed = b);
+  }
+  // fotos del hilo: cada una se pide una sola vez aunque venga copiada en varios mensajes
+  // (una respuesta, p. ej. de QQ Mail, cita fotos que solo vienen en un mensaje anterior;
+  //  se reconocen por el nombre del archivo: lo de antes de la @ es igual en todas las copias)
+  const cidStem = v => (String(v).match(/^([^@]{4,})@/) || [])[1] || '';
+  function threadImg(t, b, id) {
+    try { id = decodeURIComponent(id); } catch { /* tal cual */ }
+    const own = b.cids[id], k = cidStem(own?.name || id);
+    const c = own || (k ? t.messages.flatMap(x => Object.values(mailParsed(x).cids)).find(x => cidStem(x.name) === k) : null);
+    if (!c) return null;
+    const key = k || `${c.mid}:${id}`;
+    t.img = t.img || {};
+    if (!t.img[key]) t.img[key] = { c, name: c.name, p: (async () => {
+      const bytes = c.data ? b64uBytes(c.data) : c.id ? b64uBytes((await api('GET', `/api/mail/attachment/${t.id}/${c.mid}/${c.id}`)).data) : null;
+      return bytes ? { bytes, url: URL.createObjectURL(new Blob([bytes], { type: c.type })) } : null;
+    })().catch(() => null) };
+    return t.img[key];
+  }
+  const PIX = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+  // el cuerpo va en un iframe aislado (sin scripts): el correo no puede tocar el panel.
+  // Se pinta UNA vez; las fotos se ponen después en su sitio (sin recargar el recuadro: no parpadea)
   function fillFrames() {
     const t = mail.thread; if (!t || view !== 'mail') return;
-    // fotos de todo el hilo: una respuesta (p. ej. de QQ Mail) cita fotos que solo vienen en un mensaje anterior;
-    // se reconocen por el nombre del archivo (lo de antes de la @ es igual en todas las copias)
-    const all = t.messages.flatMap(x => { const bx = x.parsed || (x.parsed = walkParts(x.payload)); return Object.values(bx.cids).map(c => (c.mid = x.id, c)); });
-    const stem = v => (String(v).match(/^([^@]{4,})@/) || [])[1] || '';
-    const pick = (b, id) => { try { id = decodeURIComponent(id); } catch { /* tal cual */ } const k = stem(id); return b.cids[id] || (k ? all.find(c => stem(c.name) === k && (c.url || c.data || c.id)) : null); };
-    $$('[data-mframe]').forEach(fr => {
-      const m = visMsgs(t)[+fr.dataset.mframe], b = m.parsed || (m.parsed = walkParts(m.payload));
+    t.messages.forEach(x => Object.values(mailParsed(x).cids).forEach(c => { c.mid = x.id; }));
+    const frames = $$('[data-mframe]'), wrap = $('.m-msgs');
+    let pending = frames.filter(fr => fr.dataset.done !== visMsgs(t)[+fr.dataset.mframe]?.id).length;
+    const ready = () => {
+      if (--pending > 0 || !wrap || wrap.classList.contains('ready')) return;
+      // el último mensaje arriba del todo, y luego se enseña todo de golpe (sin saltos)
+      const box = $('#m-read'), arts = box ? box.querySelectorAll('.m-msg') : [];
+      if (box && t.scrollLast && arts.length > 1) { box.style.scrollBehavior = 'auto'; box.scrollTop = arts[arts.length - 1].offsetTop - 8; box.style.scrollBehavior = ''; }
+      t.scrollLast = false; t.ready = true; wrap.classList.add('ready');
+    };
+    if (!pending) { if (wrap) wrap.classList.add('ready'); return; }
+    setTimeout(() => { pending = 1; ready(); }, 2500);   // por si un recuadro tarda: no se queda en blanco
+    frames.forEach(fr => {
+      const m = visMsgs(t)[+fr.dataset.mframe], b = mailParsed(m);
+      if (fr.dataset.done === m.id) return;
+      fr.dataset.done = m.id;
       let html = b.html || textHtml(b.text || '');
-      const used = [...new Set([...html.matchAll(/cid:([^"' )>]+)/g)].map(x => pick(b, x[1])).filter(Boolean))];
-      const key = m.id + ':' + used.filter(c => c.url).length;
-      if (fr.dataset.done === key) return;
-      fr.dataset.done = key;
       // (seguridad) un correo no puede redirigir su recuadro a otra web ni cambiar adónde abren los enlaces
       html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']?refresh[^>]*>/gi, '').replace(/<base\b[^>]*>/gi, '');
-      html = html.replace(/cid:([^"' )>]+)/g, (x, id) => { const c = pick(b, id); return c?.url || (c?.data ? `data:${c.type};base64,${c.data.replace(/-/g, '+').replace(/_/g, '/')}` : x); });
-      fr.srcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data: blob:; style-src 'unsafe-inline' https:; font-src https: data:"><base target="_blank"><style>html,body{margin:0;background:#fafafa;color:#111}html{filter:invert(1) hue-rotate(180deg)}img,video,picture,svg,[background],[style*="background-image"],[style*="background:url"],[style*="background: url"]{filter:invert(1) hue-rotate(180deg)}body{padding:16px;font:14px/1.5 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto!important}blockquote{margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex;color:#555}</style>${html}`;
+      const imgs = [];
+      html = html.replace(/cid:([^"' )>]+)/g, (x, id) => { const r = threadImg(t, b, id); if (!r) return x; imgs.push(r); return PIX.replace(';base64', `;hz=${imgs.length - 1};base64`); });
+      fr.srcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data: blob:; style-src 'unsafe-inline' https:; font-src https: data:"><base target="_blank"><style>html,body{margin:0;background:#fafafa;color:#111}html{filter:invert(1) hue-rotate(180deg)}img,video,picture,svg,[background],[style*="background-image"],[style*="background:url"],[style*="background: url"]{filter:invert(1) hue-rotate(180deg)}body{padding:16px;font:14px/1.5 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto!important}blockquote{margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex;color:#555}#QQMailBigAttach{display:none!important}</style>${html}`;
       fr.onload = () => { try {
-        const doc = fr.contentDocument, fit = () => { fr.style.height = Math.min(doc.documentElement.scrollHeight + 4, 30000) + 'px'; };
-        hideQuotes(doc, fit);
-        fit(); new ResizeObserver(fit).observe(doc.body);
-        // el último mensaje, arriba del todo al abrir el hilo
-        if (t.scrollTo && +fr.dataset.mframe === visMsgs(t).length - 1) { t.scrollTo = false; const box = $('#m-read'), art = fr.closest('.m-msg'); if (box && art && visMsgs(t).length > 1) { box.style.scrollBehavior = 'auto'; box.scrollTop = art.offsetTop - 8; box.style.scrollBehavior = ''; } }
-        doc.querySelectorAll('img').forEach(im => im.complete || im.addEventListener('load', fit, { once: true }));
-      } catch { /* nada */ } };
-      // imágenes incrustadas (cid) que vienen aparte
-      used.forEach(async c => {
-        if (c.url || c.data || !c.id || c.loading) return;
-        c.loading = true;
-        try { const r = await api('GET', `/api/mail/attachment/${t.id}/${c.mid || m.id}/${c.id}`); c.url = URL.createObjectURL(new Blob([b64uBytes(r.data)], { type: c.type })); if (view === 'mail' && mail.thread === t) fillFrames(); } catch { /* sin imagen */ }
-      });
+        const doc = fr.contentDocument, fit = () => { fr.style.height = Math.min(Math.max(doc.body.scrollHeight, doc.body.offsetHeight) + 4, 30000) + 'px'; };
+        // hueco de cada foto con su forma desde el principio (no salta al llegar)
+        const ph = [...doc.querySelectorAll('img')].filter(im => /;hz=\d+;/.test(im.getAttribute('src') || ''));
+        ph.forEach(im => { const w = +im.getAttribute('width'), h = +im.getAttribute('height'); if (w && h) im.style.aspectRatio = `${w} / ${h}`; im.style.width = w ? `${w}px` : ''; });
+        hideQuotes(doc, fit, b.files.length + b.links.length > 0);
+        // líneas vacías al principio y al final (QQ Mail pone varias): fuera, sin huecos
+        const shownEl = el => el.ownerDocument.defaultView.getComputedStyle(el).display !== 'none';
+        const blank = el => shownEl(el) && !el.matches('.hz-more') && !el.textContent.trim() && !el.querySelector('img, video, table, hr, iframe, svg, button');
+        for (const dir of ['firstElementChild', 'lastElementChild']) {
+          const kids = [...doc.body.children].filter(el => shownEl(el) && el.tagName !== 'STYLE');
+          if (dir === 'lastElementChild') kids.reverse();
+          for (const el of kids) { if (!blank(el)) break; el.style.display = 'none'; }
+        }
+        // solo las fotos que se ven (lo citado y oculto se carga al abrirlo con «•••»)
+        const shown = new Set();
+        const load = () => ph.forEach(im => {
+          if (im.dataset.hzOn || !im.getClientRects().length) return;
+          im.dataset.hzOn = '1';
+          const r = imgs[+im.getAttribute('src').match(/;hz=(\d+);/)[1]]; shown.add(r);
+          r.p.then(x => { if (x) { im.src = x.url; im.addEventListener('load', fit, { once: true }); } });
+        });
+        load(); fit(); new ResizeObserver(() => { fit(); load(); }).observe(doc.body);
+        mailImgBar(t, fr.closest('.m-msg'), [...shown], m);
+      } catch { /* nada */ } ready(); };
     });
-    const box = $('#m-read'); if (box && t.scrollLast) { t.scrollLast = false; t.scrollTo = true; const art = box.querySelector('.m-msg.open:last-of-type'); if (art && t.messages.length > 1) { box.style.scrollBehavior = 'auto'; box.scrollTop = art.offsetTop - 8; box.style.scrollBehavior = ''; } }
+  }
+  // barra de adjuntos: «N images» (las fotos de dentro del correo, en un .zip) y «Download all»
+  function mailImgBar(t, art, imgs, m) {
+    const bar = art?.querySelector('.m-files'); if (!bar) return;
+    bar.querySelectorAll('[data-mzip]').forEach(x => x.remove());
+    const b = mailParsed(m), files = b.files.filter(f => !mailInline(b, f));
+    m.zipImgs = imgs;
+    const n = imgs.length, size = imgs.reduce((s, r) => s + (r.c.size || 0), 0);
+    if (n) bar.insertAdjacentHTML('afterbegin', `<button type="button" class="m-file" data-mail="zip" data-mzip="img" title="Download the ${n === 1 ? 'image' : n + ' images'} in this email">⤓ ${n === 1 ? '1 image' : n + ' images'}${size ? ` <span class="muted">${fmtSize(size)}</span>` : ''}</button>`);
+    if ((n ? 1 : 0) + files.length > 1) bar.insertAdjacentHTML('beforeend', `<button type="button" class="m-file m-all" data-mail="zip" data-mzip="all">⤓ Download all</button>`);
+  }
+  // .zip sin comprimir (las fotos y audios ya van comprimidos): un solo archivo con todo
+  const CRC = (() => { const T = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; T[n] = c >>> 0; } return T; })();
+  function makeZip(files) {
+    const enc = new TextEncoder(), out = [], dir = [], d = new Date();
+    const time = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1), date = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate();
+    let off = 0;
+    for (const f of files) {
+      const name = enc.encode(f.name), by = f.bytes;
+      let crc = -1; for (let i = 0; i < by.length; i++) crc = CRC[(crc ^ by[i]) & 255] ^ (crc >>> 8); crc = (crc ^ -1) >>> 0;
+      const h = new DataView(new ArrayBuffer(30));
+      [[0, 0x04034b50, 4], [4, 20], [6, 0x0800], [10, time], [12, date], [14, crc, 4], [18, by.length, 4], [22, by.length, 4], [26, name.length]].forEach(([o, v, s]) => s === 4 ? h.setUint32(o, v, true) : h.setUint16(o, v, true));
+      const c = new DataView(new ArrayBuffer(46));
+      [[0, 0x02014b50, 4], [4, 20], [6, 20], [8, 0x0800], [12, time], [14, date], [16, crc, 4], [20, by.length, 4], [24, by.length, 4], [28, name.length], [42, off, 4]].forEach(([o, v, s]) => s === 4 ? c.setUint32(o, v, true) : c.setUint16(o, v, true));
+      out.push(h.buffer, name, by); dir.push(c.buffer, name);
+      off += 30 + name.length + by.length;
+    }
+    const size = dir.reduce((s, x) => s + x.byteLength, 0), e = new DataView(new ArrayBuffer(22));
+    [[0, 0x06054b50, 4], [8, files.length], [10, files.length], [12, size, 4], [16, off, 4]].forEach(([o, v, s]) => s === 4 ? e.setUint32(o, v, true) : e.setUint16(o, v, true));
+    return new Blob([...out, ...dir, e.buffer], { type: 'application/zip' });
+  }
+  function saveBlob(blob, name) { const url = URL.createObjectURL(blob), a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 60e3); }
+  async function mailZip(t, m, all) {
+    const b = mailParsed(m), names = new Set(), uniq = n => { let x = n, k = 2; while (names.has(x.toLowerCase())) x = n.replace(/(\.[^.]*)?$/, ` (${k++})$1`); names.add(x.toLowerCase()); return x; };
+    const list = [];
+    (m.zipImgs || []).forEach((r, i) => list.push({ name: /^[0-9a-f]{6,}@|^ii_|^image\d*\./i.test(r.name || '') || !r.name ? `Image ${String(i + 1).padStart(2, '0')}.${(r.c.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}` : r.name, get: async () => (await r.p)?.bytes }));
+    if (all) b.files.filter(f => !mailInline(b, f)).forEach(f => list.push({ name: f.name, get: async () => b64uBytes(f.data || (await api('GET', `/api/mail/attachment/${t.id}/${m.id}/${f.id}`)).data) }));
+    const files = [];
+    for (const x of list) { const bytes = await x.get(); if (bytes) files.push({ name: uniq(x.name.replace(/[\\/:*?"<>|]/g, '_')), bytes }); }
+    if (!files.length) throw new Error('Nothing to download.');
+    const subj = ((m.payload?.headers || []).find(x => x.name.toLowerCase() === 'subject')?.value || 'Email').replace(/^(re|fwd?|回复|答复)\s*[:：]\s*/i, '').replace(/[\\/:*?"<>|]/g, '').trim().slice(0, 60);
+    if (files.length === 1 && !all) saveBlob(new Blob([files[0].bytes]), files[0].name);
+    else saveBlob(makeZip(files), `${subj} - ${all ? 'attachments' : 'images'}.zip`);
   }
   /* Lo citado de mensajes anteriores (Gmail, Outlook, Apple Mail, Yahoo, texto «On … wrote:») se oculta tras un botón «•••»
      que lo enseña. No se oculta si el correo no tiene nada más, ni un reenvío (Forwarded message). */
-  function hideQuotes(doc, fit) {
+  function hideQuotes(doc, fit, hasAtt) {
     if (doc.body.dataset.hzq) return;
     doc.body.dataset.hzq = '1';
     let qs = [...doc.querySelectorAll('.gmail_quote, blockquote[type="cite"], .yahoo_quoted, .moz-cite-prefix, .hz-q, #divRplyFwdMsg, #appendonsend')];
+    // QQ Mail: <article> que empieza por «原始邮件», o una línea «------ Original ------» y todo lo de debajo
+    const qqLine = /^\s*-{4,}\s*(原始邮件|Original)\s*-{4,}\s*$/i;
+    doc.querySelectorAll('article').forEach(a => { if (/^\s*(原始邮件|Original)/i.test(a.textContent)) qs.push(a); });
+    const qqTail = [...doc.querySelectorAll('div, p')].find(d => qqLine.test(d.textContent.replace(/\u00a0/g, ' ')) && d.textContent.length < 80);
+    if (qqTail) qs.push(qqTail);
     qs = qs.filter(q => !qs.some(o => o !== q && o.contains(q)));
     // Outlook: lo de debajo de «From: … Sent: …» también es citado
     const hidden = [];
     for (const q of qs) {
       if (/Forwarded message|Mensaje reenviado|Begin forwarded message/i.test(q.textContent.slice(0, 300))) continue;
       hidden.push(q);
-      if (q.id === 'divRplyFwdMsg' || q.id === 'appendonsend') for (let n = q.nextElementSibling; n; n = n.nextElementSibling) hidden.push(n);
+      if (q.id === 'divRplyFwdMsg' || q.id === 'appendonsend' || q === qqTail) for (let n = q.nextElementSibling; n; n = n.nextElementSibling) hidden.push(n);
     }
     if (!hidden.length) return;
     // (la línea «On … wrote:» de Apple Mail va justo antes de su blockquote)
     for (const q of [...hidden]) { const pv = q.previousElementSibling; if (q.matches('blockquote[type="cite"]') && pv && /wrote:\s*$|escribió:\s*$/i.test(pv.textContent) && pv.textContent.length < 300) hidden.push(pv); }
     hidden.forEach(q => { q.dataset.hzHid = q.style.display || ''; q.style.display = 'none'; });
-    if (!doc.body.innerText.trim()) { hidden.forEach(q => { q.style.display = q.dataset.hzHid; }); return; }
+    if (!doc.body.innerText.trim() && !hasAtt) { hidden.forEach(q => { q.style.display = q.dataset.hzHid; }); return; }
     const st = doc.createElement('style');
     st.textContent = '.hz-more{display:inline-block;margin:8px 0;padding:0 8px;height:14px;line-height:6px;border:0;border-radius:7px;background:#e8eaed;color:#5f6368;font:bold 14px Arial,sans-serif;letter-spacing:1px;cursor:pointer}.hz-more:hover{background:#dadce0}';
     doc.head.appendChild(st);
@@ -4337,7 +4439,8 @@
       if (mail.next && !mail.loading) { mail.off += fit; loadMail(true); mailRender(); }
       return;
     }
-    if (act === 'toggle') { const i = +b.closest('[data-mmsg]').dataset.mmsg, ms = visMsgs(t); if (i === ms.length - 1) return; ms[i].openUi = !ms[i].openUi; const y = $('#m-read').scrollTop; $('#m-read').innerHTML = mailReader(); $('#m-read').scrollTop = y; fillFrames(); return; }
+    if (act === 'toggle') { if (e.target.closest('a, button')) return; const art = b.closest('[data-mmsg]'), m = visMsgs(t)[+art.dataset.mmsg]; m.closedUi = !m.closedUi; art.classList.toggle('open', !m.closedUi); return; }
+    if (act === 'zip') { const m = visMsgs(t)[+b.closest('[data-mmsg]').dataset.mmsg], old = b.innerHTML; b.disabled = true; b.textContent = 'Preparing…'; try { await mailZip(t, m, b.dataset.mzip === 'all'); } catch (er) { toast(er.message); } b.disabled = false; b.innerHTML = old; return; }
     if (act === 'unattach') { mail.compose.files.splice(+b.dataset.i, 1); $('#mc-files').innerHTML = composeFiles(); return; }
     if (act === 'file') {
       const [i, j] = b.dataset.mfile.split(':').map(Number), m = visMsgs(t)[i], f = m.parsed.files[j];

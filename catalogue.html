@@ -462,8 +462,8 @@ function buildCatCard(r, idx) {
     img.onerror = () => { img.style.display = 'none'; if (fb) fb.style.display = 'flex'; };
   }
 
-  /* Click card → the release page (mixtapes: SoundCloud) */
-  const page = r.id && !r.open_link ? `./release?id=${encodeURIComponent(r.id)}&from=catalogue` : '';
+  /* Click card → the release page (mixtapes: the mixtape page) */
+  const page = r.mix ? `./release?mix=${encodeURIComponent(r.mix)}&from=catalogue` : r.id && !r.open_link ? `./release?id=${encodeURIComponent(r.id)}&from=catalogue` : '';
   const openUrl = r.stream_link || r.open_link;
   if (page || openUrl) {
     card.addEventListener('click', (e) => {
@@ -568,6 +568,7 @@ async function loadCatalogue() {
           soundcloud_link: m.soundcloud_link,
           youtube_link: m.youtube_link,
           open_link: m.soundcloud_link,
+          mix: m.id,
         }));
         document.getElementById('cat-tabs').hidden = false;
       }

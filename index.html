@@ -2235,7 +2235,7 @@ function buildRadioCard(m, delay) {
       <div class="cover-fallback">${escHtml(m.artist || name)}</div>
       ${m.image ? `<img src="${escHtml(imgPath(m.image))}" alt="${escHtml(name)} cover" loading="lazy" decoding="async" fetchpriority="low" />` : ''}
       <div class="card-play-overlay">
-        <i class="fa-brands fa-soundcloud" style="color:#fff;font-size:1.8rem;opacity:0.95;filter:drop-shadow(0 0 8px rgba(${rgbStr(color)},0.7));pointer-events:none;"></i>
+        <i class="fa-solid fa-play" style="color:#fff;font-size:1.6rem;opacity:0.95;filter:drop-shadow(0 0 8px rgba(${rgbStr(color)},0.7));pointer-events:none;"></i>
       </div>
     </div>
     <div class="card-body">
@@ -2255,11 +2255,13 @@ function buildRadioCard(m, delay) {
     imgEl.onload  = () => { imgEl.style.opacity = '1'; if (fb) fb.style.display = 'none'; };
     imgEl.onerror = () => { imgEl.style.display = 'none'; if (fb) fb.style.display = 'flex'; };
   }
-  if (m.soundcloud_link) {
+  /* Click card → the mixtape page (same page as a release); the icon <a>s keep opening their platform */
+  if (m.id || m.soundcloud_link) {
     card.style.cursor = 'pointer';
     card.addEventListener('click', e => {
       if (e.target.closest('a')) return;
-      window.open(m.soundcloud_link, '_blank', 'noopener,noreferrer');
+      if (m.id) location.href = `./release?mix=${encodeURIComponent(m.id)}&from=home`;
+      else window.open(m.soundcloud_link, '_blank', 'noopener,noreferrer');
     });
   }
   return card;

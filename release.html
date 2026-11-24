@@ -427,6 +427,8 @@ function imgPath(f) { if (!f) return ''; if (/^(https?:|\.\/|\/)/.test(f)) retur
 function fmtTime(sec) { if (!isFinite(sec) || sec < 0) return '0:00'; return `${Math.floor(sec / 60)}:${String(Math.floor(sec % 60)).padStart(2, '0')}`; }
 /* Where the visitor came from (set by the links on the home page and the catalogue): home | catalogue */
 const FROM = (p => p === 'home' || p === 'catalogue' ? p : '')(new URLSearchParams(location.search).get('from'));
+/* ?mix=<id>: the same page for a mixtape (mixtapes.json) */
+const MIX = new URLSearchParams(location.search).get('mix');
 /* links to other releases keep that origin, so "back" still leads to the same place */
 const releaseHref = r => r.id ? `./release?id=${encodeURIComponent(r.id)}${FROM ? '&from=' + FROM : ''}` : (r.stream_link || '#');
 
@@ -434,8 +436,8 @@ const releaseHref = r => r.id ? `./release?id=${encodeURIComponent(r.id)}${FROM 
    (e.g. a shared link). Coming straight from that page, it goes back in history so the page opens where it was left. */
 (() => {
   const back = document.getElementById('back');
-  const target = FROM === 'catalogue' ? { href: './catalogue', label: 'Back to catalogue', page: /catalogue(\.html)?$/ }
-               : FROM === 'home' ? { href: './#releases', label: 'Back to home', page: /(^|\/)(index\.html)?$/ }
+  const target = FROM === 'catalogue' ? { href: MIX ? './catalogue#radio' : './catalogue', label: 'Back to catalogue', page: /catalogue(\.html)?$/ }
+               : FROM === 'home' ? { href: MIX ? './#radio' : './#releases', label: 'Back to home', page: /(^|\/)(index\.html)?$/ }
                : { href: './', label: 'Home', page: null };
   back.href = target.href;
   back.querySelector('span').textContent = target.label;
@@ -623,31 +625,36 @@ new IntersectionObserver(([e]) => e.target.classList.toggle('is-off', !e.isInter
 (async () => {
   let releases;
   try {
-    releases = hzSafe(await (window.HZ_RELEASES || fetch('./releases.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })));
+    releases = MIX
+      /* a mixtape, in the same shape as a release */
+      ? hzSafe(await fetch('./mixtapes.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }))
+          .map(m => ({ id: m.id, title: m.number ? `Horizon Mixtape ${m.number}` : (m.title || 'Horizon Mixtape'), artist: m.artist ? `with ${m.artist}` : '', catalog: 'Mixtape',
+                       image: m.image, color: m.color, soundcloud_link: m.soundcloud_link, youtube_link: m.youtube_link }))
+      : hzSafe(await (window.HZ_RELEASES || fetch('./releases.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })));
     if (!Array.isArray(releases) || !releases.length) throw new Error('empty');
   } catch (err) {
-    document.getElementById('head').innerHTML = '<p style="color:#ef4444;font-size:0.75rem;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;">Could not load this release.</p>';
+    document.getElementById('head').innerHTML = `<p style="color:#ef4444;font-size:0.75rem;font-weight:600;letter-spacing:0.15em;text-transform:uppercase;">Could not load this ${MIX ? 'mixtape' : 'release'}.</p>`;
     return;
   }
 
-  let id = new URLSearchParams(location.search).get('id');
+  let id = MIX || new URLSearchParams(location.search).get('id');
   let i = releases.findIndex(r => r.id === id);
   // link antiguo (el link del release se cambió en el panel): abre el release y deja la dirección buena
-  if (i < 0 && id) {
+  if (i < 0 && id && !MIX) {
     i = releases.findIndex(r => Array.isArray(r.aliases) && r.aliases.includes(id));
     if (i >= 0) { id = releases[i].id; const u = new URL(location.href); u.searchParams.set('id', id); history.replaceState(null, '', u); }
   }
   if (i < 0 && id) {
     /* a link to a release that does not exist (typo, or removed): say so instead of showing another release */
-    document.title = 'Release not found | HORIZON RCRDS';
+    document.title = `${MIX ? 'Mixtape' : 'Release'} not found | HORIZON RCRDS`;
     applyAccentColor(safeColor(releases[0].color));
     document.getElementById('rel').innerHTML = `
       <div class="intro" style="grid-column:1/-1;text-align:center;padding:40px 0;">
         <div class="label-tag flex items-center justify-center gap-3 mb-5"><span class="pulse-dot"></span><span>${escHtml(id)}</span></div>
-        <h1 class="hero-title">RELEASE NOT FOUND</h1>
-        <p class="hr-artist" style="justify-content:center;margin-top:18px;">This release doesn't exist or is no longer available.</p>
+        <h1 class="hero-title">${MIX ? 'MIXTAPE' : 'RELEASE'} NOT FOUND</h1>
+        <p class="hr-artist" style="justify-content:center;margin-top:18px;">This ${MIX ? 'mixtape' : 'release'} doesn't exist or is no longer available.</p>
         <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:30px;">
-          <a class="btn-outline" href="./catalogue"><i class="fa-solid fa-arrow-right"></i> Full catalogue</a>
+          <a class="btn-outline" href="./catalogue${MIX ? '#radio' : ''}"><i class="fa-solid fa-arrow-right"></i> Full catalogue</a>
           <a class="btn-outline" href="./"><i class="fa-solid fa-arrow-left"></i> Home</a>
         </div>
       </div>`;
@@ -659,8 +666,8 @@ new IntersectionObserver(([e]) => e.target.classList.toggle('is-off', !e.isInter
   const cat = r.catalog_number || r.catalog || '';
   applyAccentColor(color);
 
-  document.title = `${r.artist ? r.artist + ' — ' : ''}${r.title} | HORIZON RCRDS`;
-  document.querySelector('meta[name="description"]').content = `${r.title} by ${r.artist}. Listen on Spotify, SoundCloud and every platform. ${cat} — HORIZON RCRDS.`;
+  document.title = MIX ? `${r.title} ${r.artist} | HORIZON RCRDS` : `${r.artist ? r.artist + ' — ' : ''}${r.title} | HORIZON RCRDS`;
+  document.querySelector('meta[name="description"]').content = MIX ? `${r.title} ${r.artist}. Listen on SoundCloud and YouTube — HORIZON RCRDS.` : `${r.title} by ${r.artist}. Listen on Spotify, SoundCloud and every platform. ${cat} — HORIZON RCRDS.`;
 
   /* cover + animated background */
   const cover = document.getElementById('cover');
@@ -674,7 +681,7 @@ new IntersectionObserver(([e]) => e.target.classList.toggle('is-off', !e.isInter
   if (dots) dots.color(rgbStr(color));
 
   /* title block */
-  document.querySelector('#tag span:last-child').textContent = i === 0 ? 'Latest release · Out now' : 'Out now';
+  document.querySelector('#tag span:last-child').textContent = MIX ? (i === 0 ? 'Latest mixtape · Out now' : 'Mixtape') : i === 0 ? 'Latest release · Out now' : 'Out now';
   document.getElementById('head').innerHTML = `
     <h1 class="hero-title">${escHtml(r.title || 'Untitled')}</h1>
     <p class="hr-artist">${r.artist ? `<span>${escHtml(r.artist)}</span>` : ''}${cat ? `<span class="num-badge">${escHtml(cat)}</span>` : ''}</p>`;
@@ -710,8 +717,8 @@ new IntersectionObserver(([e]) => e.target.classList.toggle('is-off', !e.isInter
   /* share */
   document.getElementById('share').addEventListener('click', async () => {
     /* the shared link is the clean one, without "&from=…" */
-    const url = `${location.origin}${location.pathname}?id=${encodeURIComponent(r.id)}`;
-    const data = { title: `${r.artist} — ${r.title}`, text: `${r.title} by ${r.artist} on HORIZON RCRDS`, url };
+    const url = `${location.origin}${location.pathname}?${MIX ? 'mix' : 'id'}=${encodeURIComponent(r.id)}`;
+    const data = MIX ? { title: `${r.title} ${r.artist}`, text: `${r.title} ${r.artist} on HORIZON RCRDS`, url } : { title: `${r.artist} — ${r.title}`, text: `${r.title} by ${r.artist} on HORIZON RCRDS`, url };
     if (navigator.share) { try { await navigator.share(data); } catch (e) {} return; }
     try { await navigator.clipboard.writeText(data.url); } catch (e) {}
     const t = document.getElementById('toast'); t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 1800);

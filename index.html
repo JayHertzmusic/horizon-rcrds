@@ -107,8 +107,11 @@
       overflow-x: hidden;
     }
 
-    /* Fondo de líneas topográficas (bg-topo.js): las secciones dejan ver el fondo (la portada y Demos tienen el suyo) */
-    html.has-topo #releases, html.has-topo #radio, html.has-topo #playlists, html.has-topo #contact { background: transparent !important; }
+    /* Fondo animado (bg-fx.js): las secciones dejan ver el fondo (la portada y Demos tienen el suyo) */
+    html.has-fx #releases, html.has-fx #radio, html.has-fx #playlists, html.has-fx #contact { background: transparent !important; }
+    /* las luces las ponen las portadas (bg-fx.js): fuera las luces fijas de cada sección (queda la rejilla) */
+    html.has-fx .sec-tint::before { background: linear-gradient(rgba(var(--sec-rgb), 0.045) 1px, transparent 1px) 0 0 / 48px 48px, linear-gradient(90deg, rgba(var(--sec-rgb), 0.045) 1px, transparent 1px) 0 0 / 48px 48px; }
+    html.has-fx .sec-tint::after { display: none; }
 
     /* Grain overlay */
     body::before {
@@ -1054,7 +1057,7 @@
   <link rel="stylesheet" href="./assets/smooth-scroll.css?v=1"/>
   <script src="./assets/vendor/lenis.min.js?v=1.3.26" defer></script>
   <script src="./assets/smooth-scroll.js?v=2" defer></script>
-  <script src="./bg-topo.js?v=3" defer></script>
+  <script src="./bg-fx.js?v=3" defer></script>
   <link rel="stylesheet" href="./assets/tailwind.css?v=1"/>
 </head>
 <body>

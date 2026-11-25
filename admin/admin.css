@@ -1714,3 +1714,5 @@ html.light .hm-cover img { filter: none; }
 .who-act svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
 .who-act[data-act="logout"]:hover { color: #ff7b80; background: rgba(255,90,95,.1); }
 @media (min-width: 901px) { .top-end .who { width: 100%; } .who-txt { min-width: 0; } .who-txt b { max-width: 96px; } }
+/* modo claro: al invertir, los títulos gruesos (Bebas) se veían demasiado negros; un trazo fino del color del fondo los aligera */
+html.light :is(h1, h2, h3, .meta b, .hm-n, .hm-sn b, .hm-cat b, .hm-d b, .word, .count) { -webkit-text-stroke: .45px #050505; }

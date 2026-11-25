@@ -186,7 +186,8 @@
     document.documentElement.style.setProperty('--accent', c);
     document.documentElement.style.setProperty('--accent-rgb', `${n >> 16 & 255}, ${n >> 8 & 255}, ${n & 255}`);
     // el menú lleva el color del último release (como la web)
-    const rc = String(repo?.releases?.[0]?.color || '').trim(), m = /^#([0-9a-f]{6})$/i.exec(rc);
+    // (en «Test», el color que eligió esa persona)
+    const rc = String((preview ? preview.who?.color || '#ffffff' : '') || repo?.releases?.[0]?.color || '').trim(), m = /^#([0-9a-f]{6})$/i.exec(rc);
     if (m) { const k = parseInt(m[1], 16); document.documentElement.style.setProperty('--nav', rc); document.documentElement.style.setProperty('--nav-rgb', `${k >> 16 & 255}, ${k >> 8 & 255}, ${k & 255}`); }
   }
 

@@ -704,13 +704,16 @@ export async function publicFormsApi(req, env, url) {
   if (p === '/api/public/site-forms' && req.method === 'GET') {
     if (!await demosOpen(DB)) return { demos_open: false, forms: [] };
     const rows = (await DB.prepare('SELECT slug, title, button FROM forms WHERE public = 1 AND on_site = 1 ORDER BY position').all()).results;
+    const demoForms = (await DB.prepare('SELECT COUNT(*) AS n FROM forms WHERE on_site = 1').first())?.n || 0;
+    if (demoForms && !rows.length) return { demos_open: false, forms: [] };
     return { demos_open: true, forms: rows.map(r => ({ slug: r.slug, title: r.title, button: r.button || r.title })) };
   }
   const mm = p.match(/^\/api\/public\/forms\/([a-z0-9-]+)$/);
   if (!mm) throw new FormError(404, 'Not found.');
   const f = await DB.prepare('SELECT * FROM forms WHERE slug = ?').bind(mm[1]).first();
   // «Closed» en el panel: nadie lo puede enviar, tampoco con enlace personal (antes los enlaces seguían funcionando)
-  if (!f || !f.public) throw new FormError(404, 'This form is not available right now.');
+  if (!f) throw new FormError(404, 'This form does not exist.');
+  if (!f.public) throw new FormError(404, f.on_site ? 'Demo submissions are closed right now. Follow HORIZON RCRDS to know when they reopen.' : 'This form is closed right now.');
   // demos cerradas en el panel: los formularios de «Send your demo» tampoco se pueden enviar
   if (f.on_site && !await demosOpen(DB)) throw new FormError(404, 'Demo submissions are closed right now. Follow HORIZON RCRDS to know when they reopen.');
   const fields = parse(f.fields) || [];

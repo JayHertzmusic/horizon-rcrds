@@ -21,6 +21,26 @@
   .home img { height: 30px; }
   .home span { font: 400 21px/1 'Bebas Neue', sans-serif; letter-spacing: .16em; }
   main { position: relative; width: min(1040px, 100%); margin: 0 auto; padding: 56px 16px 110px; }
+  /* formulario cerrado / demos cerradas */
+  html.is-closed main { min-height: calc(100vh - 150px); display: grid; place-items: center; padding-top: 24px; padding-bottom: 24px; }
+  .cl-page { display: grid; justify-items: center; gap: 18px; max-width: 640px; text-align: center; animation: cl-in .6s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes cl-in { from { opacity: 0; transform: translateY(14px); } }
+  .cl-tag { display: inline-flex; align-items: center; gap: 9px; height: 30px; padding: 0 14px; border-radius: 999px; border: 1px solid rgba(255,90,95,.35); background: rgba(255,90,95,.08); color: #ff8a8e; font: 700 11px/1 'Barlow', sans-serif; letter-spacing: .22em; text-transform: uppercase; }
+  .cl-tag i { width: 7px; height: 7px; border-radius: 50%; background: #ff5a5f; box-shadow: 0 0 10px #ff5a5f; animation: cl-pulse 2s ease-in-out infinite; }
+  @keyframes cl-pulse { 50% { opacity: .35; } }
+  .cl-page h1 { margin: 0; font: 400 clamp(52px, 9vw, 104px)/.9 'Bebas Neue', sans-serif; letter-spacing: .02em; color: #fff; }
+  .cl-page h1 span { color: transparent; -webkit-text-stroke: 1.5px rgba(255,255,255,.85); }
+  .cl-lead { margin: 0; max-width: 520px; color: var(--muted); font-size: 16px; line-height: 1.6; }
+  .cl-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 6px; }
+  .cl-acts:empty { display: none; }
+  .cl-btn { display: flex; align-items: center; gap: 14px; min-width: 230px; padding: 12px 18px 12px 12px; border-radius: 16px; border: 1px solid rgba(255,255,255,.1); background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); color: #fff; text-decoration: none; text-align: left; transition: transform .2s, border-color .2s, box-shadow .2s; }
+  .cl-btn:hover { transform: translateY(-2px); border-color: var(--pc); box-shadow: 0 14px 34px -14px var(--pc); }
+  .cl-ico { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: var(--pc); }
+  .cl-ico svg { width: 22px; height: 22px; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .cl-btn b { display: block; font: 400 22px/1 'Bebas Neue', sans-serif; letter-spacing: .06em; }
+  .cl-btn small { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+  .cl-back { margin-top: 8px; color: var(--muted); font-size: 13px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; text-decoration: none; transition: color .2s; }
+  .cl-back:hover { color: #fff; }
   #f { display: grid; grid-template-columns: 1fr 1fr; column-gap: 14px; }
   #f > * { grid-column: 1 / -1; }
   #f > .q.half { grid-column: auto; }
@@ -593,13 +613,28 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     // vuelve al paso donde se quedó (o al primero que tenga algo obligatorio sin contestar)
     if (EXCL() && d.step > 0) { let k = 0; while (k < Math.min(d.step, steps.length - 1) && !stepMissing(k)) k++; goStep(k, false); }
   }
+  // formulario cerrado: una página como la de la web (demos cerradas) en vez de «Not available»
+  function closedPage(msg) {
+    const demos = /demo submissions are closed/i.test(msg || ''), none = /does not exist/i.test(msg || '');
+    const follow = (href, icon, name, sub, c) => `<a class="cl-btn" href="${href}" target="_blank" rel="noopener noreferrer" style="--pc:${c}"><span class="cl-ico">${icon}</span><span><b>${name}</b><small>${sub}</small></span></a>`;
+    const SC = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 15.5v-3M5 16.5v-6M8 16.5v-8M11 16.5V7.5c4.5-1.8 8 .6 8.6 4.4A2.6 2.6 0 0 1 19.5 17H11"/></svg>';
+    const IG = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.3" cy="6.7" r=".6"/></svg>';
+    document.documentElement.classList.add('is-closed');
+    root.innerHTML = `<section class="cl-page">
+      <span class="cl-tag"><i></i>${demos ? 'Submissions closed' : none ? 'Not found' : 'Form closed'}</span>
+      <h1>${demos ? 'DEMOS ARE <span>CLOSED.</span>' : none ? 'FORM NOT <span>FOUND.</span>' : 'THIS FORM IS <span>CLOSED.</span>'}</h1>
+      <p class="cl-lead">${demos ? 'We are not taking new demos right now: our team is focused on the releases already on the way. Submissions will open again soon. Follow us to be the first to know when they do.' : none ? 'This link does not lead to any form. Check the link or ask HORIZON RCRDS for a new one.' : 'This form is not taking answers right now. Ask HORIZON RCRDS if you think it should be open.'}</p>
+      <div class="cl-acts">${demos ? follow('https://soundcloud.com/horizonirecords/', SC, 'SoundCloud', 'New music first', '#ff5500') + follow('https://www.instagram.com/horizon_rcrds/', IG, 'Instagram', 'When demos reopen', '#e1306c') : ''}</div>
+      <a class="cl-back" href="/">← Back to HORIZON RCRDS</a>
+    </section>`;
+  }
   async function load() {
     try {
       const r = await fetch(apiUrl(), { cache: 'no-store', headers: linkHeaders });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(j.message || 'This form is not available.');
       form = j; draw(false); coBar(); restoreDraft();
-    } catch (e) { root.innerHTML = `<h1>Not available</h1><p class="msg">${esc(e.message)}</p>`; }
+    } catch (e) { closedPage(e.message); }
   }
   // vista previa del panel: el formulario llega del editor (mismo sitio) y se redibuja al momento
   let lastFocus = '';

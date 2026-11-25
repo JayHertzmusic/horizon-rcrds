@@ -421,16 +421,27 @@
   }
 
   // menú: al pasar el ratón, los iconos cercanos crecen y se desplazan un poco (como el Dock del Mac)
+  let magY = null;   // dónde está el ratón sobre el menú (para que al cambiar de sección el menú nuevo salga igual, sin salto)
+  function magApply(y) {
+    for (const t of $$('.top .tabs .tab')) {
+      let k = 1;
+      if (y != null) { const r = t.getBoundingClientRect(), d = Math.abs(y - (r.top + r.height / 2)); k = 1 + .5 * Math.max(0, 1 - d / 95); }
+      t.style.setProperty('--k', k.toFixed(3)); t.classList.toggle('is-mag', k > 1);
+    }
+  }
   document.addEventListener('mousemove', e => {
     if (innerWidth < 901 || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const nav = e.target.closest?.('.top .tabs');
-    if (!nav && !document.querySelector('.top .tab.is-mag')) return;
-    for (const t of $$('.top .tabs .tab')) {
-      let k = 1;
-      if (nav) { const r = t.getBoundingClientRect(), d = Math.abs(e.clientY - (r.top + r.height / 2)); k = 1 + .5 * Math.max(0, 1 - d / 95); }
-      t.style.setProperty('--k', k.toFixed(3)); t.classList.toggle('is-mag', k > 1);
-    }
+    if (!nav && !document.querySelector('.top .tab.is-mag')) { magY = null; return; }
+    magY = nav ? e.clientY : null;
+    magApply(magY);
   });
+  // después de redibujar: el menú nuevo ya sale con el mismo tamaño, sin animación (no da el salto)
+  function magKeep() {
+    if (magY == null) return;
+    const top = $('.top'); if (!top) return;
+    top.classList.add('no-mag-anim'); magApply(magY); void top.offsetWidth; top.classList.remove('no-mag-anim');
+  }
   // tema claro / oscuro (prueba): se guarda en este navegador
   try { if (localStorage.getItem('hz_theme') === 'light') document.documentElement.classList.add('light'); } catch { /* nada */ }
   const themeLabel = () => document.documentElement.classList.contains('light') ? 'Dark mode' : 'Light mode';
@@ -486,9 +497,8 @@
           <span class="who" title="${esc(u.email)}">
             <button type="button" class="who-pic" data-act="me" title="Your profile" aria-label="Your profile" style="--c:${esc(u.color || '#ffffff')}">${u.picture ? `<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="who-ini">${esc(initials)}</span>`}<span class="who-cam" aria-hidden="true">✎</span></button>
             <span class="who-txt"><b>${esc(u.name || u.email.split('@')[0])}</b><small>${esc(preview ? 'Testing: ' + preview.name : u.owner ? 'Owner' : u.role?.name || 'No role')}</small></span>
+            <span class="who-acts"><button type="button" class="theme-tg who-act" data-act="theme" title="Light / dark mode (test)" aria-label="Light / dark mode"><svg viewBox="0 0 24 24" aria-hidden="true"><g class="tg-sun"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></g><path class="tg-moon" d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg></button><button type="button" class="who-act" data-act="logout" title="Sign out" aria-label="Sign out"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 16l-4-4 4-4M6 12h10"/></svg></button></span>
           </span>
-          <button type="button" class="theme-tg" data-act="theme" title="Light / dark mode (test)" aria-label="Light / dark mode"><svg viewBox="0 0 24 24" aria-hidden="true"><g class="tg-sun"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></g><path class="tg-moon" d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span>${themeLabel()}</span></button>
-          <button type="button" class="link" data-act="logout">Sign out</button>
         </div>
       </header>
       <main id="main" class="main" tabindex="-1">${preview ? `<div class="preview-bar" role="status"><span>You are viewing the panel as <b>${esc(preview.name)}</b>. Changes are not saved.</span><button type="button" class="btn primary sm" data-act="preview-off">Leave test</button></div>` : ''}${inner}</main>`;
@@ -1566,7 +1576,10 @@
     else if (view === 'playlists') inner = playlistsView();
     else if (view === 'player') inner = filesView(view);
     else inner = releasesView();
+    const navTop = $('.top .tabs')?.scrollTop || 0;
     app.innerHTML = shell(inner);
+    { const nv = $('.top .tabs'); if (nv && navTop) nv.scrollTop = navTop; }
+    magKeep();
     if (view === 'mail') { sizeMail(); fitMail(); fillFrames(); }
     chatStart();
     const names = { home: 'Home', releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', team: 'Team', log: 'History', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', chain: 'Gates', mail: 'Mail', none: 'Team' };

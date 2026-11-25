@@ -1705,3 +1705,12 @@ html.light .hm-cover img { filter: none; }
 .tag.off::before { box-shadow: none; }
 .tag.bad, .lk-card .tag.bad { color: #ff7b80; border-color: rgba(255,90,95,.4); background: linear-gradient(180deg, rgba(255,90,95,.16), rgba(255,90,95,.06)); }
 .tag.big { height: 32px; padding: 0 16px 0 13px; font-size: 12px; }
+.top.no-mag-anim .tab, .top.no-mag-anim .tab .tab-i { transition: none !important; }
+
+/* tema y salir: dos iconos al lado de tu nombre */
+.who-acts { display: flex; gap: 2px; margin-left: auto; }
+.who-act { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 9px; background: none; color: var(--muted); cursor: pointer; transition: color .2s, background .2s; }
+.who-act:hover { color: #fff; background: rgba(255,255,255,.07); }
+.who-act svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
+.who-act[data-act="logout"]:hover { color: #ff7b80; background: rgba(255,90,95,.1); }
+@media (min-width: 901px) { .top-end .who { width: 100%; } .who-txt { min-width: 0; } .who-txt b { max-width: 96px; } }

@@ -856,7 +856,7 @@
         </section>`;
     }
     // el catálogo
-    const cat = [['releases', 'Releases', Math.max(repo.releases.length, ...repo.releases.map(r => +(String(r.catalog || '').match(/(\d+)\s*$/) || [])[1] || 0))], ['radio', 'Mixtapes', repo.mixtapes.length], ['playlists', 'Playlists', repo.playlists.length]].filter(([v]) => can(v)).concat(isOwnerNow() ? [['player', 'Player', '▶']] : [])
+    const cat = [['releases', 'Releases', Math.max(repo.releases.length, ...repo.releases.map(r => +(String(r.catalog || '').match(/(\d+)\s*$/) || [])[1] || 0))], ['radio', 'Mixtapes', repo.mixtapes.length], ['playlists', 'Playlists', repo.playlists.length]].filter(([v]) => can(v))
       .map(([v, l, n]) => `<button type="button" class="hm-cat" data-view="${v}">${navIcon(v)}<b>${n}</b><small>${l}</small></button>`).join('');
     let feed = '';
     if (demoAccess() && !preview) {
@@ -873,7 +873,8 @@
         <div><p class="eyebrow">${esc(today)}</p><h1 class="hm-hi">${hi}, <span class="hm-me">${esc(who)}</span></h1></div>
       </div>
       <div class="hm">${homeGrid(
-        [hero, `<section class="hm-box hm-social" aria-label="HORIZON RCRDS in numbers">${social || '<p class="hm-empty">Loading numbers…</p>'}</section>`, next],
+        [hero, `<section class="hm-box hm-social" aria-label="HORIZON RCRDS in numbers">${social || '<p class="hm-empty">Loading numbers…</p>'}</section>`, next,
+          isOwnerNow() ? `<button type="button" class="hm-box hm-player" data-view="player">${navIcon('player')}<b>Player</b><small>30-second previews of each release</small><span>Open →</span></button>` : ''],
         [att.length ? `<section class="hm-att n${att.length}">${att.join('')}</section>` : '', cat ? `<section class="hm-box hm-cats">${cat}</section>` : '', feed])}</div>`;
   }
   function releasesView() {

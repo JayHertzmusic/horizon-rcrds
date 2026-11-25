@@ -439,5 +439,5 @@ export async function scLabelStats(env, url) {
     for (const t of j.collection || []) { plays += t.playback_count || 0; likes += t.favoritings_count || t.likes_count || 0; n++; }
     next = j.next_href || '';
   }
-  return { followers: u.followers_count || 0, plays, likes, tracks: u.track_count || n, url: u.permalink_url || url };
+  return { followers: u.followers_count || 0, plays, likes, tracks: u.track_count || n, url: String(u.permalink_url || url).split('?')[0] };
 }

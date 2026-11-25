@@ -722,6 +722,11 @@
   const DEMO_FORMS = ['f_demosubmissi', 'f_releaseform'];
   const demoAccess = () => isOwnerNow() || (preview ? DEMO_FORMS.some(id => roleFormLevel(preview, { id })) : DEMO_FORMS.some(id => (unseen.access || []).includes(id)));
   const agoTxt = t => { const m = Math.max(0, Math.round((Date.now() - t) / 60e3)); return m < 1 ? 'now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd'; };
+  function homeGrid(left, right) {
+    const L = left.filter(Boolean), R = right.filter(Boolean), n = Math.max(L.length, R.length, 1);
+    const cells = (list, col) => list.map((h, i) => `<div class="hm-cell" style="grid-column:${col};grid-row:${i + 1}${i === list.length - 1 && list.length < n ? ' / ' + (n + 1) : ''}">${h}</div>`).join('');
+    return cells(L, 1) + cells(R, 2);
+  }
   function homeView() {
     const u = preview?.who ? { ...auth.user, ...preview.who } : auth.user, h = new Date().getHours();
     const hi = h < 6 ? 'Good night' : h < 13 ? 'Good morning' : h < 20 ? 'Good afternoon' : 'Good evening';
@@ -802,18 +807,9 @@
         <span class="hm-av">${u.picture ? `<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">` : `<b>${esc(who.slice(0, 1).toUpperCase())}</b>`}</span>
         <div><p class="eyebrow">${esc(today)}</p><h1 class="hm-hi">${hi}, <span class="hm-me">${esc(who)}</span></h1></div>
       </div>
-      <div class="hm">
-        <div class="hm-col">
-          ${hero}
-          <section class="hm-box hm-social" aria-label="HORIZON RCRDS in numbers">${social || '<p class="hm-empty">Loading numbers…</p>'}</section>
-          ${next}
-        </div>
-        <div class="hm-col">
-          ${att.length ? `<section class="hm-att">${att.join('')}</section>` : ''}
-          ${cat ? `<section class="hm-box hm-cats">${cat}</section>` : ''}
-          ${feed}
-        </div>
-      </div>`;
+      <div class="hm">${homeGrid(
+        [hero, `<section class="hm-box hm-social" aria-label="HORIZON RCRDS in numbers">${social || '<p class="hm-empty">Loading numbers…</p>'}</section>`, next],
+        [att.length ? `<section class="hm-att n${att.length}">${att.join('')}</section>` : '', cat ? `<section class="hm-box hm-cats">${cat}</section>` : '', feed])}</div>`;
   }
   function releasesView() {
     return `

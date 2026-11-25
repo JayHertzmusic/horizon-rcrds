@@ -97,10 +97,11 @@ async function folders(env, fresh) {
   const list = (await gmail(env, '/labels')).labels || [];
   const user = list.filter(l => l.type === 'user' && l.labelListVisibility !== 'labelHide').sort((a, b) => a.name.localeCompare(b.name)).slice(0, 40);
   const ids = ['INBOX', 'STARRED', 'IMPORTANT', 'DRAFT', 'SPAM', 'TRASH', ...user.map(l => l.id)];
-  const got = await gmailBatch(env, ids.map(id => `/labels/${encodeURIComponent(id)}`));
+  const [got, prim] = await Promise.all([gmailBatch(env, ids.map(id => `/labels/${encodeURIComponent(id)}`)),
+    gmail(env, '/threads?maxResults=100&q=' + encodeURIComponent('in:inbox category:primary is:unread')).catch(() => null)]);
   const n = Object.fromEntries(ids.map((id, i) => [id, got[i] || {}]));
   const v = {
-    counts: { inbox: n.INBOX.threadsUnread || 0, drafts: n.DRAFT.messagesTotal || 0, spam: n.SPAM.threadsUnread || 0, important: n.IMPORTANT.threadsUnread || 0 },
+    counts: { inbox: n.INBOX.threadsUnread || 0, drafts: n.DRAFT.messagesTotal || 0, spam: n.SPAM.threadsUnread || 0, important: n.IMPORTANT.threadsUnread || 0, primary: prim ? (prim.threads || []).length : null },
     labels: user.map(l => ({ id: l.id, name: l.name, unread: n[l.id]?.threadsUnread || 0, color: l.color?.backgroundColor || '' })),
   };
   foldersCache = { at: Date.now(), v };

@@ -410,7 +410,7 @@
   const navIcon = id => `<svg class="tab-i" viewBox="0 0 24 24" aria-hidden="true">${NAV_ICONS[id] || '<circle cx="12" cy="12" r="3"/>'}</svg>`;
   function shell(inner) {
     const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${navIcon(id)}<span class="tab-l">${label}</span>${id === 'forms' ? (() => { const n = badgeCount(); return `<span class="nbadge" id="forms-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}${id === 'contracts' ? (() => { if (!ctPolled) { ctPolled = true; setTimeout(checkContracts, 0); } const n = ctBadgeCount(); return `<span class="nbadge" id="ct-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}</button>`;
-    const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', chain: 'Gates' };
+    const u = preview?.who ? { ...auth.user, ...preview.who } : auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', chain: 'Gates' };
     const initials = (u.name || u.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
     return `
       <header class="top">
@@ -703,7 +703,7 @@
   }
   /* ---------------- Home: lo importante de un vistazo ---------------- */
   function homeView() {
-    const u = auth.user, h = new Date().getHours();
+    const u = preview?.who ? { ...auth.user, ...preview.who } : auth.user, h = new Date().getHours();
     const hi = h < 6 ? 'Good night' : h < 13 ? 'Good morning' : h < 20 ? 'Good afternoon' : 'Good evening';
     const who = (u.name || u.email.split('@')[0]).split(/\s+/)[0];
     const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -735,7 +735,7 @@
       const fresh = ctBadgeCount(), wait = ctData ? ctData.contracts.filter(c => !isTpl(c) && c.status === 'sent').length : null;
       att.push(card('contracts', `${navIcon('contracts')}<span class="hm-n">${fresh || (wait ?? '·')}</span><span class="hm-l">${fresh ? (fresh === 1 ? 'New signature' : 'New signatures') : 'Awaiting signature'}</span>`, fresh ? 'hot' : ''));
     }
-    if (canMail()) { const n = mail.info?.unread; att.push(card('mail', `${navIcon('mail')}<span class="hm-n">${n ?? '·'}</span><span class="hm-l">Unread emails</span>`, n ? 'hot' : '')); }
+    if (canMail()) { const n = mail.info?.counts?.primary ?? mail.info?.unread; att.push(card('mail', `${navIcon('mail')}<span class="hm-n">${n == null ? '·' : n > 99 ? '99+' : n}</span><span class="hm-l">Unread emails</span>`, n ? 'hot' : '')); }
     // próximas fechas
     let next = '';
     if (can('calendar')) {
@@ -753,7 +753,7 @@
     const stats = [['releases', 'Releases', repo.releases.length], ['radio', 'Mixtapes', repo.mixtapes.length], ['playlists', 'Playlists', repo.playlists.length]].filter(([v]) => can(v))
       .map(([v, l, n]) => card(v, `${navIcon(v)}<span class="hm-n">${n}</span><span class="hm-l">${l}</span>`, 'stat')).join('');
     return `
-      <div class="head hm-head"><div><p class="eyebrow">${esc(today)}</p><h1>${hi.toUpperCase()}, ${esc(who.toUpperCase())}</h1></div></div>
+      <div class="head hm-head"><div><p class="eyebrow">${esc(today)}</p><h1>${hi.toUpperCase()}, <span class="hm-me" style="--c:${esc(u.color || '#ffffff')}">${esc(who.toUpperCase())}</span></h1></div></div>
       <div class="hm">
         ${hero}
         ${att.length ? `<section class="hm-att">${att.join('')}</section>` : ''}
@@ -1604,7 +1604,9 @@
       case 'preview-role': {
         const r = teamData?.roles.find(x => x.id === t.closest('[data-role]')?.dataset.role);
         if (!r) return;
-        preview = { id: r.id, name: r.name, perms: r.perms, forms: r.forms, mail: (teamData?.members || []).some(m => m.role_id === r.id && m.mail) };
+        const pm = (teamData?.members || []).find(m => m.role_id === r.id);
+        preview = { id: r.id, name: r.name, perms: r.perms, forms: r.forms, mail: (teamData?.members || []).some(m => m.role_id === r.id && m.mail),
+          who: pm ? { name: pm.label || pm.name || pm.email.split('@')[0], email: pm.email, picture: pm.picture || '', color: pm.color || '' } : null };
         mailReset();
         if (!formsData) loadForms().then(() => render());
         filter = ''; go(firstView());

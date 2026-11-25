@@ -580,16 +580,16 @@
     const roleOf = m => roles.find(r => r.id === m.role_id);
     return `${head}
       <ol class="list team-list">
-        ${owners.map(e => { const me = e === auth.user.email; const nm = me ? auth.user.name || e.split('@')[0] : e.split('@')[0], oc = (teamData.ownerColors || {})[e] || '#ffffff'; return `<li class="row tm">
+        ${owners.map(e => { const me = e === auth.user.email; const nm = me ? auth.user.name || e.split('@')[0] : e.split('@')[0], oc = (teamData.ownerColors || {})[e] || '#ffffff'; return `<li class="row tm" data-email="${esc(e)}">
             ${avatar(me ? auth.user.picture : pics[e], nm, oc)}
             <span class="meta"><b class="nm" style="--c:${esc(oc)}">${esc(nm)}</b><span>${esc(e)}</span></span>
-            <span class="role-tag owner">Owner</span><span></span></li>`; }).join('')}
+            <span class="role-tag owner">Owner</span><span class="role-btns">${me ? '' : '<button type="button" class="btn ghost sm" data-act="preview-person" title="View the panel as this person">Test</button>'}</span></li>`; }).join('')}
         ${members.map(m => { const r = roleOf(m), nm = m.label || m.name || m.email.split('@')[0]; return `
           <li class="row tm" data-email="${esc(m.email)}">
             ${avatar(m.picture, nm, m.color)}
             <span class="meta"><b class="nm" style="--c:${esc(m.color || '#ffffff')}">${esc(nm)}</b><span>${esc(m.email)}${m.last_login ? ' · signed in ' + esc(fmtDate(m.last_login)) : ' · never signed in'}</span></span>
             <span class="role-tag" style="--c:${esc(m.color || '#ffffff')}">${esc(r?.name || 'No role')}${m.mail ? ' · Mail' : ''}</span>
-            <button type="button" class="btn ghost sm" data-act="edit-member">Edit</button>
+            <span class="role-btns"><button type="button" class="btn ghost sm" data-act="preview-person" title="View the panel as this person">Test</button><button type="button" class="btn ghost sm" data-act="edit-member">Edit</button></span>
           </li>`; }).join('')}
       </ol>
 
@@ -800,7 +800,7 @@
     return `
       <div class="head hm-head" style="--c:${esc(u.color || '#ffffff')}">
         <span class="hm-av">${u.picture ? `<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">` : `<b>${esc(who.slice(0, 1).toUpperCase())}</b>`}</span>
-        <div><p class="eyebrow">${esc(today)} · ${hi}</p><h1 class="hm-me">${esc(who)}</h1></div>
+        <div><p class="eyebrow">${esc(today)}</p><h1 class="hm-hi">${hi}, <span class="hm-me">${esc(who)}</span></h1></div>
       </div>
       <div class="hm">
         <div class="hm-col">
@@ -1655,6 +1655,22 @@
     switch (t.dataset.act) {
       case 'team-retry': teamErr = ''; render(); break;
       case 'log-more': loadLog(true); break;
+      case 'preview-person': {
+        const e = t.closest('[data-email]')?.dataset.email, td = teamData;
+        if (!e || !td) return;
+        const m = td.members.find(x => x.email === e), isOwner = td.owners.includes(e);
+        if (!m && !isOwner) return;
+        const nm = m ? m.label || m.name || e.split('@')[0] : e.split('@')[0];
+        const all = Object.fromEntries(['releases', 'radio', 'playlists', 'player', 'forms', 'contracts', 'calendar'].map(k => [k, { view: true, edit: true, delete: true }]));
+        const r = m ? td.roles.find(x => x.id === m.role_id) : null;
+        preview = isOwner
+          ? { id: 'owner', name: nm + ' (Owner)', perms: all, mail: true, who: { name: nm, email: e, picture: (td.ownerPics || {})[e] || '', color: (td.ownerColors || {})[e] || '' } }
+          : { id: r?.id || 'none', name: nm, perms: r?.perms || {}, forms: r?.forms, mail: !!m.mail, who: { name: nm, email: e, picture: m.picture || '', color: m.color || '' } };
+        mailReset();
+        if (!formsData) loadForms().then(() => render());
+        filter = ''; go(firstView());
+        break;
+      }
       case 'preview-role': {
         const r = teamData?.roles.find(x => x.id === t.closest('[data-role]')?.dataset.role);
         if (!r) return;

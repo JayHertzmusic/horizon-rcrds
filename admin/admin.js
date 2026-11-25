@@ -151,6 +151,7 @@
     if (tx) tx.textContent = on ? yes : no;
     return new Promise(r => setTimeout(r, 320));
   }
+  const mailInvert = () => document.documentElement.classList.contains('light') ? '' : 'html{filter:invert(1) hue-rotate(180deg)}img,video,picture,svg,[background],[style*="background-image"],[style*="background:url"],[style*="background: url"]{filter:invert(1) hue-rotate(180deg)}';
   function toast(msg) {
     const el = $('#toast');
     el.textContent = msg; el.hidden = false; el.classList.remove('is-out');
@@ -4254,7 +4255,7 @@
       html = html.replace(/<meta[^>]*http-equiv\s*=\s*["']?refresh[^>]*>/gi, '').replace(/<base\b[^>]*>/gi, '');
       const imgs = [];
       html = html.replace(/cid:([^"' )>]+)/g, (x, id) => { const r = threadImg(t, b, id); if (!r) return x; imgs.push(r); return PIX.replace(';base64', `;hz=${imgs.length - 1};base64`); });
-      fr.srcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data: blob:; style-src 'unsafe-inline' https:; font-src https: data:"><base target="_blank"><style>html,body{margin:0;background:#fafafa;color:#111}html{filter:invert(1) hue-rotate(180deg)}img,video,picture,svg,[background],[style*="background-image"],[style*="background:url"],[style*="background: url"]{filter:invert(1) hue-rotate(180deg)}body{padding:16px;font:14px/1.5 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto!important}blockquote{margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex;color:#555}#QQMailBigAttach{display:none!important}</style>${html}`;
+      fr.srcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data: blob:; style-src 'unsafe-inline' https:; font-src https: data:"><base target="_blank"><style>html,body{margin:0;background:#fafafa;color:#111}${mailInvert()}body{padding:16px;font:14px/1.5 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto!important}blockquote{margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex;color:#555}#QQMailBigAttach{display:none!important}</style>${html}`;
       fr.onload = () => { try {
         const doc = fr.contentDocument, fit = () => { fr.style.height = Math.min(Math.max(doc.body.scrollHeight, doc.body.offsetHeight) + 4, 30000) + 'px'; };
         // hueco de cada foto con su forma desde el principio (no salta al llegar)

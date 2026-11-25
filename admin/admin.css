@@ -1677,10 +1677,6 @@ a.hm-sc:hover { background: rgba(255,255,255,.03); }
 html.light .theme-tg .tg-sun { opacity: 1; transform: none; }
 html.light .theme-tg .tg-moon { opacity: 0; transform: rotate(90deg) scale(.4); }
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
-/* claro: se invierten los colores y las fotos/portadas se dejan como son */
-html.light { filter: invert(1) hue-rotate(180deg); background: #050505; }
-html.light img, html.light video, html.light iframe, html.light .hm-cover, html.light .sw, html.light .swatch, html.light .color-dot, html.light .lv-ico { filter: invert(1) hue-rotate(180deg); }
-html.light .hm-cover img { filter: none; }
 
 /* menú: efecto Dock al pasar el ratón (los de alrededor crecen un poco menos) */
 @media (min-width: 901px) {
@@ -1714,5 +1710,3 @@ html.light .hm-cover img { filter: none; }
 .who-act svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
 .who-act[data-act="logout"]:hover { color: #ff7b80; background: rgba(255,90,95,.1); }
 @media (min-width: 901px) { .top-end .who { width: 100%; } .who-txt { min-width: 0; } .who-txt b { max-width: 96px; } }
-/* modo claro: al invertir, los títulos gruesos (Bebas) se veían demasiado negros; un trazo fino del color del fondo los aligera */
-html.light :is(h1, h2, h3, .meta b, .hm-n, .hm-sn b, .hm-cat b, .hm-d b, .word, .count) { -webkit-text-stroke: .45px #050505; }

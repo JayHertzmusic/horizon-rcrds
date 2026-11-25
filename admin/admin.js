@@ -855,7 +855,7 @@
         </section>`;
     }
     // el catálogo
-    const cat = [['releases', 'Releases', repo.releases.length], ['radio', 'Mixtapes', repo.mixtapes.length], ['playlists', 'Playlists', repo.playlists.length]].filter(([v]) => can(v))
+    const cat = [['releases', 'Releases', Math.max(repo.releases.length, ...repo.releases.map(r => +(String(r.catalog || '').match(/(\d+)\s*$/) || [])[1] || 0))], ['radio', 'Mixtapes', repo.mixtapes.length], ['playlists', 'Playlists', repo.playlists.length]].filter(([v]) => can(v))
       .map(([v, l, n]) => `<button type="button" class="hm-cat" data-view="${v}">${navIcon(v)}<b>${n}</b><small>${l}</small></button>`).join('');
     let feed = '';
     if (demoAccess() && !preview) {

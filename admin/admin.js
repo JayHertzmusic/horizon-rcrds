@@ -718,6 +718,10 @@
     sp: '<circle cx="12" cy="12" r="9.5"/><path d="M7 9.5c3.5-1 7.3-.6 10 1M7.6 12.6c2.9-.8 5.9-.4 8.2.9M8.3 15.5c2.2-.5 4.4-.2 6.2.8"/>',
     all: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   };
+  // «New responses» y los últimos demos: owners y quien tenga el formulario de demos o el release form
+  const DEMO_FORMS = ['f_demosubmissi', 'f_releaseform'];
+  const demoAccess = () => isOwnerNow() || (preview ? DEMO_FORMS.some(id => roleFormLevel(preview, { id })) : DEMO_FORMS.some(id => (unseen.access || []).includes(id)));
+  const agoTxt = t => { const m = Math.max(0, Math.round((Date.now() - t) / 60e3)); return m < 1 ? 'now' : m < 60 ? m + 'm' : m < 1440 ? Math.round(m / 60) + 'h' : Math.round(m / 1440) + 'd'; };
   function homeView() {
     const u = preview?.who ? { ...auth.user, ...preview.who } : auth.user, h = new Date().getHours();
     const hi = h < 6 ? 'Good night' : h < 13 ? 'Good morning' : h < 20 ? 'Good afternoon' : 'Good evening';
@@ -761,12 +765,13 @@
       </section>` : '';
     // lo que pide atención
     const att = [];
-    if (showForms()) { const n = badgeCount(); att.push(card('forms', `${navIcon('forms')}<span class="hm-n">${n}</span><span class="hm-l">${n === 1 ? 'New response' : 'New responses'}</span>`, n ? 'hot' : '')); }
+    if (demoAccess()) { const n = badgeCount(); att.push(card('forms', `${navIcon('forms')}<span class="hm-n">${n}</span><span class="hm-l">${n === 1 ? 'New response' : 'New responses'}</span>`, n ? 'hot' : '')); }
     if (can('contracts') && !preview) {
       const fresh = ctBadgeCount(), wait = ctData ? ctData.contracts.filter(c => !isTpl(c) && c.status === 'sent').length : null;
       att.push(card('contracts', `${navIcon('contracts')}<span class="hm-n">${fresh || (wait ?? '·')}</span><span class="hm-l">${fresh ? (fresh === 1 ? 'New signature' : 'New signatures') : 'Awaiting signature'}</span>`, fresh ? 'hot' : ''));
     }
-    if (canMail()) { const n = mail.info?.counts?.primary ?? mail.info?.unread; att.push(card('mail', `${navIcon('mail')}<span class="hm-n">${n == null ? '·' : n > 99 ? '99+' : n}</span><span class="hm-l">Unread emails</span>`, n ? 'hot' : '')); }
+    if (canMail() && !mail.info && !mail.loading && !mail.err) setTimeout(() => loadMail(), 0);
+    if (canMail()) { const n = mail.info?.counts?.primary ?? mail.info?.unread; att.push(card('mail', `${navIcon('mail')}<span class="hm-n">${n == null ? (mail.err ? '—' : '<i class="hm-spin" aria-label="Loading"></i>') : n > 99 ? '99+' : n}</span><span class="hm-l">Unread emails</span>`, n ? 'hot' : '')); }
     // próximas fechas
     let next = '';
     if (can('calendar')) {
@@ -782,9 +787,21 @@
     }
     // el catálogo
     const cat = [['releases', 'Releases', repo.releases.length], ['radio', 'Mixtapes', repo.mixtapes.length], ['playlists', 'Playlists', repo.playlists.length]].filter(([v]) => can(v))
-      .map(([v, l, n]) => card(v, `${navIcon(v)}<span class="hm-n">${n}</span><span class="hm-l">${l}</span>`, 'stat')).join('');
+      .map(([v, l, n]) => `<button type="button" class="hm-cat" data-view="${v}">${navIcon(v)}<b>${n}</b><small>${l}</small></button>`).join('');
+    let feed = '';
+    if (demoAccess() && !preview) {
+      const ls = unseen.latest || [];
+      feed = `<section class="hm-box hm-feed"><div class="hm-h"><p>Latest demos</p><button type="button" class="hm-go" data-view="forms">Forms →</button></div>
+        ${ls.length ? `<ul>${ls.map(x => `<li class="${x.seen ? '' : 'new'}"><button type="button" data-view="forms"><span class="hm-t"><b>${esc(x.track || '(no title)')}</b><small>${esc(x.artist || '—')}</small></span><span class="hm-left">${agoTxt(x.at)}</span></button></li>`).join('')}</ul>` : '<p class="hm-empty">No demos yet.</p>'}</section>`;
+    } else if (can('releases')) {
+      feed = `<section class="hm-box hm-feed"><div class="hm-h"><p>Recent releases</p><button type="button" class="hm-go" data-view="releases">All →</button></div>
+        <ul>${repo.releases.slice(1, 4).map(x => `<li><button type="button" data-view="releases">${x.image ? `<img src="${esc(assetSrc(x.image))}" alt="">` : ''}<span class="hm-t"><b>${esc(x.title)}</b><small>${esc(x.artist)}</small></span><span class="hm-left">${esc(x.catalog || '')}</span></button></li>`).join('')}</ul></section>`;
+    }
     return `
-      <div class="head hm-head"><div><p class="eyebrow">${esc(today)}</p><h1>${hi.toUpperCase()}, <span class="hm-me" style="--c:${esc(u.color || '#ffffff')}">${esc(who.toUpperCase())}</span></h1></div></div>
+      <div class="head hm-head" style="--c:${esc(u.color || '#ffffff')}">
+        <span class="hm-av">${u.picture ? `<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">` : `<b>${esc(who.slice(0, 1).toUpperCase())}</b>`}</span>
+        <div><p class="eyebrow">${esc(today)} · ${hi}</p><h1 class="hm-me">${esc(who)}</h1></div>
+      </div>
       <div class="hm">
         <div class="hm-col">
           ${hero}
@@ -793,7 +810,8 @@
         </div>
         <div class="hm-col">
           ${att.length ? `<section class="hm-att">${att.join('')}</section>` : ''}
-          ${cat ? `<section class="hm-stats">${cat}</section>` : ''}
+          ${cat ? `<section class="hm-box hm-cats">${cat}</section>` : ''}
+          ${feed}
         </div>
       </div>`;
   }
@@ -3941,6 +3959,7 @@
       if (e.status === 429 || e.status >= 500 || e.status === 0) { clearTimeout(mail.retryT); mail.retryT = setTimeout(() => { mail.err = ''; if (view === 'mail' && !mail.loading) loadMail(more); }, 6000); }
     }
     mail.loading = false; mail.more = false;
+    if (view === 'home' && !editing) render();
     if (view === 'mail') { mailRender(); if (mail.open && !mail.thread) openThread(mail.open); }
   }
   // contadores de las carpetas al día después de una acción (sin esperar)

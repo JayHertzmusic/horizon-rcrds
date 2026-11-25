@@ -144,6 +144,13 @@
     [...box.children].slice(4).forEach(x => { x.classList.add('out'); setTimeout(() => x.remove(), 450); });   // como mucho 4 a la vez
     setTimeout(out, 9000);
   }
+  function swAnim(el, on, yes = 'Open', no = 'Closed') {
+    if (!el) return Promise.resolve();
+    el.classList.toggle('on', on); el.setAttribute('aria-pressed', String(on));
+    const tx = [...el.childNodes].reverse().find(n => n.nodeType === 3 && n.textContent.trim());
+    if (tx) tx.textContent = on ? yes : no;
+    return new Promise(r => setTimeout(r, 320));
+  }
   function toast(msg) {
     const el = $('#toast');
     el.textContent = msg; el.hidden = false; el.classList.remove('is-out');
@@ -2573,19 +2580,21 @@
       const open = !formsData.demos_open;
       if (!open && !await confirmBox('Close demo submissions? The site will say demos are closed and the demo forms stop accepting entries.', 'Close')) return;
       busy = true;
-      try { await api('POST', '/api/forms/demos', { open }); formsData.demos_open = open; render(); toast(open ? 'Demo submissions are open on the site' : 'Demo submissions are closed on the site'); }
-      catch (err) { toast(err.message); }
+      const anim = swAnim(t, open);
+      try { await api('POST', '/api/forms/demos', { open }); await anim; formsData.demos_open = open; render(); toast(open ? 'Demo submissions are open on the site' : 'Demo submissions are closed on the site'); }
+      catch (err) { await anim; swAnim(t, !open); toast(err.message); }
       finally { busy = false; }
     }
     else if (act === 'form-public') {
       // abrir / cerrar el formulario desde la lista (no cambia nada más)
       const f = formsData.forms.find(x => x.id === id), open = !f.public;
       busy = true;
+      const anim = swAnim(t, open);
       try {
         await api('POST', '/api/forms', { id: f.id, title: f.title, slug: f.slug, description: f.description, fields: f.fields, public: open, on_site: f.on_site, button: f.button, access: f.access });
-        f.public = open; render();
+        await anim; f.public = open; render();
         toast(open ? `${f.title} is open: ${publicUrl(f).replace(/^https?:\/\//, '')}` : `${f.title} is closed`);
-      } catch (err) { toast(err.message); }
+      } catch (err) { await anim; swAnim(t, !open); toast(err.message); }
       finally { busy = false; }
     }
     else if (act === 'form-back') { formOpen = null; render(); loadForms(); }
@@ -4986,6 +4995,7 @@
       let g = chainData.gates.find(x => x.release_id === rid);
       if (!g) { g = { release_id: rid, active: 0, file: false, unlocks: 0, track_url: '', track_id: null }; chainData.gates.push(g); }
       g.active = on ? 1 : 0;
+      const lab = t.closest('.pub-sw'); if (lab) await swAnim(lab, on, 'On', 'Off');
       renderGatesList();   // el interruptor cambia al momento
       try {
         // al activar, usa el link de SoundCloud del propio release (no hay que pegarlo)

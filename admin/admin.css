@@ -1690,3 +1690,9 @@ html.light .hm-cover img { filter: none; }
 @media (prefers-reduced-motion: reduce) { .top .tab, .top .tab .tab-i { transform: none !important; } }
 .hm-head h1.hm-hi { font-size: clamp(40px, 5vw, 58px); }
 .hm-hi .hm-me { font-size: 1em; }
+
+/* interruptor Open / Closed: el círculo se desliza con rebote y el color cambia suave */
+.pub-sw, .pub-sw .pub-knob { transition: background .3s ease, border-color .3s ease, color .3s ease, box-shadow .3s ease; }
+.pub-sw .pub-knob::after { transition: transform .32s cubic-bezier(.34, 1.56, .64, 1), background .3s ease, width .2s ease; }
+.pub-sw:active .pub-knob::after { width: 18px; }
+.pub-sw.on:active .pub-knob::after { transform: translateX(8px); }

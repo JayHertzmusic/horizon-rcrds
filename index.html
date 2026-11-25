@@ -129,6 +129,11 @@
       background: rgba(10,10,10,0.96);
       border-bottom: 1px solid #1f1f1f;
     }
+    /* desenfoque progresivo (pblur.js): arriba detrás del menú y abajo del todo; con él, el menú al bajar es más transparente */
+    .pblur { position: fixed; left: 0; right: 0; z-index: 49; pointer-events: none; }
+    .pblur-top { top: 0; background: linear-gradient(rgba(5,5,5,.55), transparent); }
+    .pblur-bottom { bottom: 0; background: linear-gradient(transparent, rgba(5,5,5,.45)); }
+    html.has-pblur #navbar.scrolled { background: transparent; border-bottom-color: transparent; }
     .nav-link {
       position: relative;
       font-family: 'Barlow', sans-serif; font-weight: 600;
@@ -1058,6 +1063,7 @@
   <script src="./assets/vendor/lenis.min.js?v=1.3.26" defer></script>
   <script src="./assets/smooth-scroll.js?v=2" defer></script>
   <script src="./bg-fx.js?v=3" defer></script>
+  <script src="./pblur.js?v=1" defer></script>
   <link rel="stylesheet" href="./assets/tailwind.css?v=1"/>
 </head>
 <body>

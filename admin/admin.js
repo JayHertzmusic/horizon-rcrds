@@ -123,6 +123,27 @@
 
   /* ---------------- Avisos ---------------- */
   let toastTimer = 0;
+  /* Avisos en directo (lista animada): cuando llega un formulario o firman un contrato, entra una tarjeta arriba a la
+     derecha y empuja a las demás hacia abajo; se van solas a los 9 s; al pulsarla te lleva a su sección. */
+  const LIVE_ICO = {
+    forms: '<rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+    demo: '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
+    sign: '<path d="M3 17c2-3 4-3 5 0s3 3 5 0M14.5 5.5l4 4L10 18H6v-4z"/>',
+  };
+  function liveNotify({ kind = 'forms', title, sub = '', color = '#22c55e', go: to = '' }) {
+    let box = $('#hz-live');
+    if (!box) { box = document.createElement('div'); box.id = 'hz-live'; box.setAttribute('role', 'status'); box.setAttribute('aria-live', 'polite'); document.body.append(box); }
+    const el = document.createElement('div');
+    el.className = 'lv'; el.style.setProperty('--lc', color);
+    el.innerHTML = `<button type="button" class="lv-card"><span class="lv-ico"><svg viewBox="0 0 24 24" aria-hidden="true">${LIVE_ICO[kind] || LIVE_ICO.forms}</svg></span>
+      <span class="lv-txt"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="lv-t">now</span></button>`;
+    const out = () => { if (el.classList.contains('out')) return; el.classList.add('out'); setTimeout(() => el.remove(), 450); };
+    el.querySelector('button').addEventListener('click', async () => { out(); if (to && to !== view && await leaveOk()) { filter = ''; go(to); } });
+    box.prepend(el);
+    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
+    [...box.children].slice(4).forEach(x => { x.classList.add('out'); setTimeout(() => x.remove(), 450); });   // como mucho 4 a la vez
+    setTimeout(out, 9000);
+  }
   function toast(msg) {
     const el = $('#toast');
     el.textContent = msg; el.hidden = false; el.classList.remove('is-out');
@@ -392,6 +413,32 @@
     loginView(message);
   }
 
+  document.documentElement.classList.add('dock', 'dock-l');   // menú: Dock a la izquierda
+  // Dock: los iconos crecen al acercar el ratón (como el Dock del Mac)
+  document.addEventListener('mousemove', e => {
+    if (!document.documentElement.classList.contains('dock')) return;
+    const nav = e.target.closest?.('.top .tabs'), tabs = $$('.top .tabs .tab'), vert = document.documentElement.classList.contains('dock-l');
+    for (const t of tabs) {
+      let k = 1;
+      if (nav) { const r = t.getBoundingClientRect(), d = vert ? Math.abs(e.clientY - (r.top + r.height / 2)) : Math.abs(e.clientX - (r.left + r.width / 2)); k = 1 + .55 * Math.max(0, 1 - d / 130); }
+      t.style.setProperty('--k', k.toFixed(3));
+    }
+  });
+  document.addEventListener('mouseleave', () => $$('.top .tabs .tab').forEach(t => t.style.setProperty('--k', 1)));
+  // tema claro / oscuro (prueba): se guarda en este navegador
+  try { if (localStorage.getItem('hz_theme') === 'light') document.documentElement.classList.add('light'); } catch { /* nada */ }
+  const themeLabel = () => document.documentElement.classList.contains('light') ? 'Dark mode' : 'Light mode';
+  function toggleTheme(btn) {
+    const root = document.documentElement, to = !root.classList.contains('light');
+    const apply = () => { root.classList.toggle('light', to); $$('.theme-tg span').forEach(x => { x.textContent = to ? 'Dark mode' : 'Light mode'; }); try { localStorage.setItem('hz_theme', to ? 'light' : 'dark'); } catch { /* nada */ } };
+    if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) { apply(); return; }
+    const r = btn.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const end = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
+    // un círculo crece desde el botón y descubre el tema nuevo
+    document.startViewTransition(apply).ready.then(() => {
+      root.animate({ clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${end}px at ${x}px ${y}px)`] }, { duration: 650, easing: 'cubic-bezier(.4,0,.2,1)', pseudoElement: '::view-transition-new(root)' });
+    });
+  }
   // menú: grupos e iconos
   const NAV_GROUPS = [['Music', ['releases', 'radio', 'playlists', 'player']], ['Artists', ['mail', 'forms', 'contracts']], ['Label', ['calendar', 'chain']], ['Admin', ['team', 'log']]];
   const NAV_ICONS = {
@@ -434,6 +481,7 @@
             <button type="button" class="who-pic" data-act="me" title="Your profile" aria-label="Your profile" style="--c:${esc(u.color || '#ffffff')}">${u.picture ? `<img src="${esc(u.picture)}" alt="" referrerpolicy="no-referrer">` : `<span class="who-ini">${esc(initials)}</span>`}<span class="who-cam" aria-hidden="true">✎</span></button>
             <span class="who-txt"><b>${esc(u.name || u.email.split('@')[0])}</b><small>${esc(preview ? 'Testing: ' + preview.name : u.owner ? 'Owner' : u.role?.name || 'No role')}</small></span>
           </span>
+          <button type="button" class="theme-tg" data-act="theme" title="Light / dark mode (test)" aria-label="Light / dark mode"><svg viewBox="0 0 24 24" aria-hidden="true"><g class="tg-sun"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></g><path class="tg-moon" d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg><span>${themeLabel()}</span></button>
           <a class="link" href="${SITE}" target="_blank" rel="noopener">View site ↗</a>
           <button type="button" class="link" data-act="logout">Sign out</button>
         </div>
@@ -1651,6 +1699,7 @@
     switch (t.dataset.act) {
       case 'team-retry': teamErr = ''; render(); break;
       case 'log-more': loadLog(true); break;
+      case 'theme': toggleTheme(t); break;
       case 'preview-person': {
         const e = t.closest('[data-email]')?.dataset.email, td = teamData;
         if (!e || !td) return;
@@ -1948,7 +1997,11 @@
       if (!grew || first) return;
       // aviso en pantalla, aunque estés en otra sección
       const names = grown.map(id => formsData?.forms.find(f => f.id === id)?.title).filter(Boolean);
-      toast(names.length ? `New response · ${names.join(', ')}` : 'New form response');
+      const demo = grown.includes('f_demosubmissi') && (r.latest || [])[0];
+      if (demo) liveNotify({ kind: 'demo', title: 'New demo', sub: [demo.track, demo.artist].filter(Boolean).join(' — '), color: '#a855f7', go: 'forms' });
+      const rest = grown.filter(id => !(demo && id === 'f_demosubmissi')).map(id => formsData?.forms.find(f => f.id === id)?.title || 'a form');
+      if (rest.length || !demo) liveNotify({ kind: 'forms', title: 'New response', sub: rest.length ? rest.join(', ') : names.join(', '), color: '#3b82f6', go: 'forms' });
+      if (view === 'home') render();
       if (!formsData) return;
       // los datos de los formularios (números) se refrescan por detrás, sin «Loading…» ni redibujar (no parpadea)
       const fresh = await api('GET', '/api/forms').catch(() => null);
@@ -2711,7 +2764,7 @@
       const changed = !ctData || r.contracts.length !== ctData.contracts.length || r.contracts.some(c => !before.get(c.id) || sig(before.get(c.id)) !== sig(c));
       if (ctData) for (const c of r.contracts) {
         const o = before.get(c.id);
-        if (o) for (const x of c.signers) if (x.signed_at && !o.signers.find(y => y.id === x.id)?.signed_at) toast(`${x.name || x.label} signed “${c.title}”`);
+        if (o) for (const x of c.signers) if (x.signed_at && !o.signers.find(y => y.id === x.id)?.signed_at) liveNotify({ kind: 'sign', title: `${x.name || x.label} signed`, sub: c.title, color: '#22c55e', go: 'contracts' });
       }
       if (!changed) { autoDrive(); return; }
       ctData = r; paintBadge(); autoDrive();

@@ -487,6 +487,7 @@
         <nav class="tabs" aria-label="Sections">
           ${(() => {
             const vs = ORDER().filter(canTab); if (canMail()) { const i = vs.indexOf('forms'); vs.splice(i < 0 ? vs.length : i, 0, 'mail'); }
+            if (vs.includes('player')) vs.splice(vs.indexOf('player'), 1);   // Player: desde Home (solo owners)
             if (MODE === 'admin' && u.owner && !preview) vs.push('chain', 'team', 'log');
             const label = v => v === 'mail' ? 'Mail' : v === 'team' ? 'Team' : v === 'log' ? 'History' : names[v];
             const left = [...vs];
@@ -855,7 +856,7 @@
         </section>`;
     }
     // el catálogo
-    const cat = [['releases', 'Releases', Math.max(repo.releases.length, ...repo.releases.map(r => +(String(r.catalog || '').match(/(\d+)\s*$/) || [])[1] || 0))], ['radio', 'Mixtapes', repo.mixtapes.length], ['playlists', 'Playlists', repo.playlists.length]].filter(([v]) => can(v))
+    const cat = [['releases', 'Releases', Math.max(repo.releases.length, ...repo.releases.map(r => +(String(r.catalog || '').match(/(\d+)\s*$/) || [])[1] || 0))], ['radio', 'Mixtapes', repo.mixtapes.length], ['playlists', 'Playlists', repo.playlists.length]].filter(([v]) => can(v)).concat(isOwnerNow() ? [['player', 'Player', '▶']] : [])
       .map(([v, l, n]) => `<button type="button" class="hm-cat" data-view="${v}">${navIcon(v)}<b>${n}</b><small>${l}</small></button>`).join('');
     let feed = '';
     if (demoAccess() && !preview) {
@@ -1554,6 +1555,7 @@
     if (view === 'forms' && !showForms()) view = firstView();
     if (view === 'mail' && !canMail()) view = firstView();
     if (view === 'home' && !hasHome()) view = firstView();
+    if (view === 'player' && !isOwnerNow()) view = firstView();
     if (view !== 'home' && view !== 'mail' && view !== 'team' && view !== 'log' && view !== 'chain' && view !== 'none' && view !== 'forms' && view !== 'contracts' && !can(view)) { view = firstView(); editing = null; }
     if (view === 'contracts' && !can('contracts')) view = firstView();
     if (view === 'calendar' && !can('calendar')) view = firstView();

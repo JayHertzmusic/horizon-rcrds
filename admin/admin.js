@@ -703,14 +703,30 @@
       </li>`).join('');
   }
   /* ---------------- Home: lo importante de un vistazo ---------------- */
+  // plays y seguidores públicos (YouTube, SoundCloud): el servidor los pone al día cada 30 min; aquí se piden cada 5 min mientras miras Home
+  let stats = null, statsAt = 0;
+  async function loadStats() {
+    if (!auth) return;
+    statsAt = Date.now();
+    try { stats = await api('GET', '/api/stats'); if (view === 'home' && !editing) render(); } catch { /* se queda lo último */ }
+  }
+  setInterval(() => { if (auth && view === 'home' && !document.hidden) loadStats(); }, 5 * 60e3);
+  const fmtN = n => n == null ? '—' : Number(n).toLocaleString('en-US');
+  const SOCIAL_ICO = {
+    sc: '<path d="M2 15.5v-3M5 16.5v-6M8 16.5v-8M11 16.5V7.5c4.5-1.8 8 .6 8.6 4.4A2.6 2.6 0 0 1 19.5 17H11"/>',
+    yt: '<rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="m10 9 5 3-5 3z"/>',
+  };
   function homeView() {
     const u = preview?.who ? { ...auth.user, ...preview.who } : auth.user, h = new Date().getHours();
     const hi = h < 6 ? 'Good night' : h < 13 ? 'Good morning' : h < 20 ? 'Good afternoon' : 'Good evening';
     const who = (u.name || u.email.split('@')[0]).split(/\s+/)[0];
     const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    if (Date.now() - statsAt > 5 * 60e3) setTimeout(loadStats, 0);
     if (can('calendar') && !calData && !calLoading && !calErr) setTimeout(loadCalendar, 0);
     if (can('contracts') && !preview && !ctData && !ctLoading && !ctErr) setTimeout(loadContracts, 0);
     const card = (v, html, cls = '') => `<button type="button" class="hm-card ${cls}" data-view="${v}">${html}</button>`;
+    const soc = (k, n, l, url) => `<a class="hm-soc ${k}" href="${esc(url)}" target="_blank" rel="noopener"><svg class="tab-i" viewBox="0 0 24 24" aria-hidden="true">${SOCIAL_ICO[k]}</svg><span class="hm-n">${fmtN(n)}</span><span class="hm-l">${l}</span></a>`;
+    const social = stats ? [stats.sc && soc('sc', stats.sc.plays, 'SoundCloud plays', stats.sc.url), stats.sc && soc('sc', stats.sc.followers, 'SoundCloud followers', stats.sc.url), stats.yt && soc('yt', stats.yt.views, 'YouTube views', stats.yt.url), stats.yt && soc('yt', stats.yt.subs, 'YouTube subscribers', stats.yt.url)].filter(Boolean).join('') : '';
     // el último release, en grande y con su color
     const r = can('releases') ? repo.releases[0] : null;
     const rc = /^#[0-9a-f]{6}$/i.test(r?.color || '') ? r.color : '#ffffff', rk = parseInt(rc.slice(1), 16);
@@ -740,7 +756,7 @@
     // próximas fechas
     let next = '';
     if (can('calendar')) {
-      const t = todayIso(), items = calData ? (calMixOnly() ? calData.items.filter(x => x.kind === 'mixtape') : calData.items).filter(x => x.date >= t).slice(0, 4) : null;
+      const t = todayIso(), items = calData ? (calMixOnly() ? calData.items.filter(x => x.kind === 'mixtape') : calData.items).filter(x => x.date >= t).slice(0, 3) : null;
       next = `
         <section class="hm-box hm-next">
           <div class="hm-h"><p>Coming up</p><button type="button" class="hm-go" data-view="calendar">Calendar →</button></div>
@@ -751,15 +767,20 @@
         </section>`;
     }
     // el catálogo
-    const stats = [['releases', 'Releases', repo.releases.length], ['radio', 'Mixtapes', repo.mixtapes.length], ['playlists', 'Playlists', repo.playlists.length]].filter(([v]) => can(v))
+    const cat = [['releases', 'Releases', repo.releases.length], ['radio', 'Mixtapes', repo.mixtapes.length], ['playlists', 'Playlists', repo.playlists.length]].filter(([v]) => can(v))
       .map(([v, l, n]) => card(v, `${navIcon(v)}<span class="hm-n">${n}</span><span class="hm-l">${l}</span>`, 'stat')).join('');
     return `
       <div class="head hm-head"><div><p class="eyebrow">${esc(today)}</p><h1>${hi.toUpperCase()}, <span class="hm-me" style="--c:${esc(u.color || '#ffffff')}">${esc(who.toUpperCase())}</span></h1></div></div>
       <div class="hm">
-        ${hero}
-        ${att.length ? `<section class="hm-att">${att.join('')}</section>` : ''}
-        ${next}
-        ${stats ? `<section class="hm-stats">${stats}</section>` : ''}
+        <div class="hm-col">
+          ${hero}
+          <section class="hm-social" aria-label="HORIZON RCRDS in numbers">${social || '<p class="hm-empty">Loading numbers…</p>'}</section>
+          ${next}
+        </div>
+        <div class="hm-col">
+          ${att.length ? `<section class="hm-att">${att.join('')}</section>` : ''}
+          ${cat ? `<section class="hm-stats">${cat}</section>` : ''}
+        </div>
       </div>`;
   }
   function releasesView() {

@@ -426,3 +426,18 @@ export async function runChainActions(env, max = 20) {
   }
   return due.length;
 }
+
+// números públicos del perfil de SoundCloud de Horizon (Home del panel): seguidores y reproducciones de sus tracks
+export async function scLabelStats(env, url) {
+  const tok = await appToken(env), h = { headers: { Authorization: `OAuth ${tok}`, Accept: 'application/json' } };
+  const u = await (await fetch(`${SC_API}/resolve?url=${encodeURIComponent(url)}`, h)).json().catch(() => null);
+  if (!u || u.kind !== 'user' || !u.id) throw new Error('SoundCloud: profile not found');
+  let plays = 0, likes = 0, n = 0, next = `${SC_API}/users/${u.id}/tracks?limit=200&linked_partitioning=true`;
+  for (let i = 0; next && i < 10; i++) {
+    const j = await (await fetch(next, h)).json().catch(() => null);
+    if (!j) break;
+    for (const t of j.collection || []) { plays += t.playback_count || 0; likes += t.favoritings_count || t.likes_count || 0; n++; }
+    next = j.next_href || '';
+  }
+  return { followers: u.followers_count || 0, plays, likes, tracks: u.track_count || n, url: u.permalink_url || url };
+}

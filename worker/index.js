@@ -14,6 +14,7 @@ import { CALENDAR_SCHEMA, CalendarError, calendarApi, discordCalendarHook } from
 import { CHAIN_SCHEMA, ChainError, chainApi, scOauth, chainPublic, runChainActions } from './chain.js';
 import { horizonToken } from './gdocs.js';
 import { MailError, mailApi } from './mail.js';
+import { refreshStats, statsApi } from './stats.js';
 
 // Secciones del panel y lo que se puede hacer en cada una. Una sección nueva (p. ej. eventos) se añade aquí.
 const SECTIONS = [
@@ -751,6 +752,7 @@ async function api(req, env, p, ctx) {
   if (p === '/api/chat') return chat(req, env, s, url);
   if (p === '/api/me/avatar') return json(await avatarApi(req, env, s));
   if (p === '/api/me/color') return json(await colorApi(req, env, s));
+  if (p === '/api/stats' && req.method === 'GET') return json(await statsApi(env, ctx));   // plays y seguidores públicos (Home)
   if (p === '/api/me/soundcloud' && req.method === 'POST') {
     if (s.sync || !s.owner) throw new HttpError(403, 'Only owners can set SoundCloud profiles.');
     const sc = await setSoundcloud(env, s.email, (parse(await req.text()) || {}).url);
@@ -776,6 +778,7 @@ export default {
   // cada 30 min: fotos de SoundCloud del equipo al día
   async scheduled(event, env, ctx) {
     ctx.waitUntil(refreshScPhotos(env));
+    ctx.waitUntil(refreshStats(env).catch(e => console.error('stats', e)));   // plays y seguidores (Home del panel)
     // permiso de Google siempre listo (dura 50 min; se renueva si le quedan menos de 35): crear un contrato no espera por él
     ctx.waitUntil(horizonToken(env, 35 * 60e3).catch(e => console.error('google token', e.message)).then(() => checkDriveFiles(env)).catch(e => console.error('drive check', e)));
     ctx.waitUntil(runChainActions(env, 12).catch(e => console.error('chain actions', e)));   // reposts/likes de la cadena que ya toquen (pocos por vuelta: orgánico y dentro del límite)

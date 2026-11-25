@@ -413,18 +413,6 @@
     loginView(message);
   }
 
-  document.documentElement.classList.add('dock', 'dock-l');   // menú: Dock a la izquierda
-  // Dock: los iconos crecen al acercar el ratón (como el Dock del Mac)
-  document.addEventListener('mousemove', e => {
-    if (!document.documentElement.classList.contains('dock')) return;
-    const nav = e.target.closest?.('.top .tabs'), tabs = $$('.top .tabs .tab'), vert = document.documentElement.classList.contains('dock-l');
-    for (const t of tabs) {
-      let k = 1;
-      if (nav) { const r = t.getBoundingClientRect(), d = vert ? Math.abs(e.clientY - (r.top + r.height / 2)) : Math.abs(e.clientX - (r.left + r.width / 2)); k = 1 + .55 * Math.max(0, 1 - d / 130); }
-      t.style.setProperty('--k', k.toFixed(3));
-    }
-  });
-  document.addEventListener('mouseleave', () => $$('.top .tabs .tab').forEach(t => t.style.setProperty('--k', 1)));
   // tema claro / oscuro (prueba): se guarda en este navegador
   try { if (localStorage.getItem('hz_theme') === 'light') document.documentElement.classList.add('light'); } catch { /* nada */ }
   const themeLabel = () => document.documentElement.classList.contains('light') ? 'Dark mode' : 'Light mode';

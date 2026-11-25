@@ -1626,3 +1626,27 @@ a.hm-sc:hover { background: rgba(255,255,255,.03); }
 .hm-head { margin-bottom: 16px; }
 .hm { gap: 12px; }
 .hm-att.n1 .hm-card { justify-content: center; }
+
+/* ---------- Botones e interruptores (todo el panel): misma altura, píldora, cristal ---------- */
+.btn { min-height: 38px; padding: 0 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,.1); background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.025)); color: #ededed; font: 600 13px/1 'Barlow', system-ui, sans-serif; letter-spacing: .02em; box-shadow: inset 0 1px 0 rgba(255,255,255,.06), 0 1px 2px rgba(0,0,0,.4); transition: background .2s, border-color .2s, color .2s, box-shadow .2s, transform .15s; }
+.btn:hover { background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.05)); border-color: rgba(255,255,255,.22); color: #fff; transform: translateY(-1px); }
+.btn:active { transform: translateY(0); }
+.btn.ghost { background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.025)); border-color: rgba(255,255,255,.1); color: #ededed; }
+.btn.ghost:hover { background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.05)); border-color: rgba(255,255,255,.22); }
+.btn.primary { background: linear-gradient(180deg, #fff, #dedede); color: #0a0a0a; border-color: transparent; box-shadow: inset 0 -1px 0 rgba(0,0,0,.12), 0 6px 18px -8px rgba(255,255,255,.55); }
+.btn.primary:hover { background: #fff; border-color: transparent; box-shadow: 0 8px 26px -8px rgba(255,255,255,.75); }
+.btn.danger { background: linear-gradient(180deg, rgba(255,90,95,.14), rgba(255,90,95,.06)); border-color: rgba(255,90,95,.35); color: #ff7b80; }
+.btn.danger:hover { background: rgba(255,90,95,.2); border-color: rgba(255,90,95,.6); color: #ffd6d8; }
+.btn.sm { min-height: 32px; padding: 0 14px; border-radius: 999px; font-size: 12.5px; }
+.btn.big { min-height: 46px; padding: 0 26px; border-radius: 999px; }
+.btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* interruptor abierto / cerrado: píldora de la misma altura que los botones pequeños */
+.pub-sw { height: 32px; min-width: 104px; gap: 9px; padding: 0 14px 0 6px; border-radius: 999px; border: 1px solid rgba(255,255,255,.1); background: rgba(255,255,255,.03); color: #6f737b; font: 700 10.5px/1 'Barlow', sans-serif; letter-spacing: .18em; transition: background .2s, border-color .2s, color .2s; }
+.pub-sw .pub-knob { width: 32px; height: 20px; border-radius: 999px; background: rgba(255,255,255,.12); }
+.pub-sw .pub-knob::after { top: 3px; left: 3px; width: 14px; height: 14px; background: #8a8e96; box-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.pub-sw.on { color: #d9ffe6; border-color: rgba(34,197,94,.45); background: rgba(34,197,94,.1); }
+.pub-sw.on .pub-knob { background: #22c55e; box-shadow: 0 0 12px rgba(34,197,94,.5); }
+.pub-sw.on .pub-knob::after { transform: translateX(12px); background: #fff; }
+.pub-sw:hover { border-color: rgba(255,255,255,.28); color: #fff; }
+.pub-sw.on:hover { border-color: rgba(34,197,94,.75); }
+.demos-sw { gap: 12px; }

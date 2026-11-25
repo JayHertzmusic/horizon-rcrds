@@ -185,6 +185,9 @@
     const n = parseInt(c.slice(1), 16);
     document.documentElement.style.setProperty('--accent', c);
     document.documentElement.style.setProperty('--accent-rgb', `${n >> 16 & 255}, ${n >> 8 & 255}, ${n & 255}`);
+    // el menú lleva el color del último release (como la web)
+    const rc = String(repo?.releases?.[0]?.color || '').trim(), m = /^#([0-9a-f]{6})$/i.exec(rc);
+    if (m) { const k = parseInt(m[1], 16); document.documentElement.style.setProperty('--nav', rc); document.documentElement.style.setProperty('--nav-rgb', `${k >> 16 & 255}, ${k >> 8 & 255}, ${k & 255}`); }
   }
 
   /* Imagen que no carga: se marca (el panel sigue funcionando) */
@@ -387,8 +390,24 @@
     loginView(message);
   }
 
+  // menú: grupos e iconos
+  const NAV_GROUPS = [['Music', ['releases', 'radio', 'playlists', 'player']], ['Artists', ['mail', 'forms', 'contracts']], ['Label', ['calendar', 'chain']], ['Admin', ['team', 'log']]];
+  const NAV_ICONS = {
+    releases: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/>',
+    radio: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>',
+    playlists: '<path d="M4 6h11M4 11h11M4 16h7"/><circle cx="17.5" cy="17" r="2.5"/><path d="M20 17V7l-3 .8"/>',
+    player: '<circle cx="12" cy="12" r="9"/><path d="M10 8.5v7l5.5-3.5z"/>',
+    mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 6.5 8.5 6.5 8.5-6.5"/>',
+    forms: '<rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>',
+    contracts: '<path d="M14 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5z"/><path d="M14 3.5v5h5"/><path d="M8.5 16.5c1.2-1.6 2.2-1.6 2.6 0 .4 1.4 1.4 1.4 2.4 0"/>',
+    calendar: '<rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+    chain: '<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8.5 10.5V7.5a3.5 3.5 0 0 1 7 0v3"/><path d="M12 14.5v2.5"/>',
+    team: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.8" cy="9.3" r="2.5"/><path d="M15.8 14.6c2.3.1 4 1.7 4.6 4.6"/>',
+    log: '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5v4h4"/><path d="M12 7.5V12l3 2"/>',
+  };
+  const navIcon = id => `<svg class="tab-i" viewBox="0 0 24 24" aria-hidden="true">${NAV_ICONS[id] || '<circle cx="12" cy="12" r="3"/>'}</svg>`;
   function shell(inner) {
-    const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${label}${id === 'forms' ? (() => { const n = badgeCount(); return `<span class="nbadge" id="forms-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}${id === 'contracts' ? (() => { if (!ctPolled) { ctPolled = true; setTimeout(checkContracts, 0); } const n = ctBadgeCount(); return `<span class="nbadge" id="ct-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}</button>`;
+    const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${navIcon(id)}<span class="tab-l">${label}</span>${id === 'forms' ? (() => { const n = badgeCount(); return `<span class="nbadge" id="forms-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}${id === 'contracts' ? (() => { if (!ctPolled) { ctPolled = true; setTimeout(checkContracts, 0); } const n = ctBadgeCount(); return `<span class="nbadge" id="ct-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}</button>`;
     const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', chain: 'Gates' };
     const initials = (u.name || u.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
     return `
@@ -398,7 +417,14 @@
           <span class="word">HORIZON<small>RCRDS</small></span>
         </a>
         <nav class="tabs" aria-label="Sections">
-          ${(() => { const vs = ORDER().filter(canTab); if (canMail()) { const i = vs.indexOf('forms'); vs.splice(i < 0 ? vs.length : i, 0, 'mail'); } return vs.map(v => tab(v, v === 'mail' ? 'Mail' : names[v])).join(''); })()}${MODE === 'admin' && u.owner && !preview ? tab('chain', 'Gates') + tab('team', 'Team') + tab('log', 'History') : ''}
+          ${(() => {
+            const vs = ORDER().filter(canTab); if (canMail()) { const i = vs.indexOf('forms'); vs.splice(i < 0 ? vs.length : i, 0, 'mail'); }
+            if (MODE === 'admin' && u.owner && !preview) vs.push('chain', 'team', 'log');
+            const label = v => v === 'mail' ? 'Mail' : v === 'team' ? 'Team' : v === 'log' ? 'History' : names[v];
+            const left = [...vs];
+            const out = NAV_GROUPS.map(([g, ids]) => { const mine = left.filter(v => ids.includes(v)); mine.forEach(v => left.splice(left.indexOf(v), 1)); return mine.length ? `<p class="tab-g">${g}</p>${mine.map(v => tab(v, label(v))).join('')}` : ''; }).join('');
+            return out + left.map(v => tab(v, label(v))).join('');
+          })()}
         </nav>
         <div class="top-end">
           <span class="who" title="${esc(u.email)}">

@@ -1445,3 +1445,26 @@ html, body, * { scrollbar-width: none; }
 /* Roles: Calendar «Mixtapes only» */
 .role-form .perm-sub { display: flex; margin: -2px 0 8px 34px; font-size: 13px; }
 .role-form .perm-sub[hidden] { display: none; }
+
+/* ---------- Menú: iconos y grupos ---------- */
+.tab { display: flex; align-items: center; gap: 12px; }
+.tab-i { flex: none; width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; opacity: .75; transition: opacity .2s, color .2s, filter .2s; }
+.tab:hover .tab-i, .tab.is-on .tab-i { opacity: 1; }
+.tab-l { flex: 1; }
+.tab .nbadge { margin-left: auto; }
+.tab-g { display: none; }
+@media (min-width: 901px) {
+  .top { gap: 22px; }
+  .tabs { overflow-y: auto; min-height: 0; scrollbar-width: none; }
+  .tab-g { display: block; margin: 16px 0 6px; padding: 0 14px; font-size: 10px; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; color: #4b4f57; }
+  .tab-g:first-child { margin-top: 0; }
+  .tab { padding: 10px 14px; letter-spacing: .16em; }
+  /* neón, como la web: luz del color arriba del menú, iconos de color y el activo brilla */
+  .top { background: radial-gradient(140% 45% at 0% 0%, rgba(var(--nav-rgb, 255, 255, 255), .28), transparent 70%), radial-gradient(110% 35% at 100% 100%, rgba(var(--nav-rgb, 255, 255, 255), .16), transparent 70%), #080808; border-right-color: rgba(var(--nav-rgb, 255, 255, 255), .25); }
+  .tab { border-left: 2px solid transparent; border-radius: 0 8px 8px 0; }
+  .tab-i { color: var(--nav, #fff); opacity: .55; }
+  .tab-g { color: rgba(var(--nav-rgb, 255, 255, 255), .7); }
+  .tab.is-on { border-left-color: var(--nav, #fff); background: linear-gradient(90deg, rgba(var(--nav-rgb, 255, 255, 255), .3), rgba(var(--nav-rgb, 255, 255, 255), 0)); color: #fff; box-shadow: -6px 0 16px -6px rgba(var(--nav-rgb, 255, 255, 255), .9); }
+  .tab.is-on .tab-i { opacity: 1; filter: drop-shadow(0 0 6px rgba(var(--nav-rgb, 255, 255, 255), .9)); }
+  .tab.is-on .tab-l { text-shadow: 0 0 14px rgba(var(--nav-rgb, 255, 255, 255), .7); }
+}

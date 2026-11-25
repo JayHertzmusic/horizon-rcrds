@@ -185,6 +185,9 @@
     const n = parseInt(c.slice(1), 16);
     document.documentElement.style.setProperty('--accent', c);
     document.documentElement.style.setProperty('--accent-rgb', `${n >> 16 & 255}, ${n >> 8 & 255}, ${n & 255}`);
+    // el menú lleva el color del último release (como la web)
+    const rc = String(repo?.releases?.[0]?.color || '').trim(), m = /^#([0-9a-f]{6})$/i.exec(rc);
+    if (m) { const k = parseInt(m[1], 16); document.documentElement.style.setProperty('--nav', rc); document.documentElement.style.setProperty('--nav-rgb', `${k >> 16 & 255}, ${k >> 8 & 255}, ${k & 255}`); }
   }
 
   /* Imagen que no carga: se marca (el panel sigue funcionando) */
@@ -402,13 +405,9 @@
     team: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5"/><circle cx="16.8" cy="9.3" r="2.5"/><path d="M15.8 14.6c2.3.1 4 1.7 4.6 4.6"/>',
     log: '<path d="M3.5 12a8.5 8.5 0 1 0 2.6-6.1"/><path d="M3.5 4.5v4h4"/><path d="M12 7.5V12l3 2"/>',
   };
-  // cada sección con su color; la luz del menú toma el de la sección abierta
-  const NAV_COLORS = { releases: '#a855f7', radio: '#3b82f6', playlists: '#22c55e', player: '#ef4444', mail: '#f59e0b', forms: '#ec4899', contracts: '#14b8a6', calendar: '#f97316', chain: '#eab308', team: '#06b6d4', log: '#94a3b8' };
-  const navRgb = h => { const k = parseInt(h.slice(1), 16); return `${k >> 16 & 255}, ${k >> 8 & 255}, ${k & 255}`; };
-  const navStyle = (id, on) => { const h = NAV_COLORS[id] || '#ffffff'; if (on) { document.documentElement.style.setProperty('--nav', h); document.documentElement.style.setProperty('--nav-rgb', navRgb(h)); } return ` style="--nav:${h};--nav-rgb:${navRgb(h)}"`; };
   const navIcon = id => `<svg class="tab-i" viewBox="0 0 24 24" aria-hidden="true">${NAV_ICONS[id] || '<circle cx="12" cy="12" r="3"/>'}</svg>`;
   function shell(inner) {
-    const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}"${navStyle(id, view === id || (editing && editing.view === id))}>${navIcon(id)}<span class="tab-l">${label}</span>${id === 'forms' ? (() => { const n = badgeCount(); return `<span class="nbadge" id="forms-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}${id === 'contracts' ? (() => { if (!ctPolled) { ctPolled = true; setTimeout(checkContracts, 0); } const n = ctBadgeCount(); return `<span class="nbadge" id="ct-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}</button>`;
+    const tab = (id, label) => `<button type="button" class="tab${view === id || (editing && editing.view === id) ? ' is-on' : ''}" data-view="${id}">${navIcon(id)}<span class="tab-l">${label}</span>${id === 'forms' ? (() => { const n = badgeCount(); return `<span class="nbadge" id="forms-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}${id === 'contracts' ? (() => { if (!ctPolled) { ctPolled = true; setTimeout(checkContracts, 0); } const n = ctBadgeCount(); return `<span class="nbadge" id="ct-badge" ${n ? '' : 'hidden'}><span class="nb-n${n === 1 ? ' one' : ''}">${n > 99 ? '99+' : n}</span></span>`; })() : ''}</button>`;
     const u = auth.user, names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', chain: 'Gates' };
     const initials = (u.name || u.email).split(/[\s@.]+/).filter(Boolean).slice(0, 2).map(x => x[0].toUpperCase()).join('');
     return `

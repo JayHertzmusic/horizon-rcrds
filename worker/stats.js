@@ -1,5 +1,5 @@
-/* Números públicos de HORIZON RCRDS para el Home del panel: YouTube (suscriptores, visitas, vídeos) y SoundCloud
-   (seguidores, reproducciones de sus tracks). Se miran solos cada 30 min (cron) y se guardan en panel_settings;
+/* Números públicos de HORIZON RCRDS para el Home del panel: YouTube (suscriptores, visitas, vídeos), SoundCloud
+   (seguidores, reproducciones de sus tracks) y Spotify (saves de sus playlists). Se miran solos cada 30 min (cron) y se guardan en panel_settings;
    si una fuente falla, se queda el último número bueno. Todo es información pública (sin claves de pago). */
 import { scLabelStats } from './chain.js';
 
@@ -23,23 +23,40 @@ async function youtube() {
   return { subs, views, videos, url: 'https://www.youtube.com/@HORIZONRCRDS' };
 }
 
+// Spotify: los «saves» (seguidores) de cada playlist de Horizon, sumados (la página pública de cada playlist los muestra)
+async function spotify(env) {
+  const row = await env.DB.prepare("SELECT json FROM site_data WHERE name = 'playlists'").first();
+  const ids = [...new Set((JSON.parse(row?.json || '[]') || []).map(p => (String(p.link || '').match(/open\.spotify\.com\/playlist\/([A-Za-z0-9]+)/) || [])[1]).filter(Boolean))];
+  if (!ids.length) throw new Error('Spotify: no playlists');
+  const got = await Promise.all(ids.map(async id => {
+    const r = await fetch(`https://open.spotify.com/playlist/${id}`, { headers: { 'Accept-Language': 'en' } });
+    if (!r.ok) return null;
+    const m = (await r.text()).match(/([\d.,]+[KM]?) saves?\b/i);
+    return m ? num(m[1]) : null;
+  }));
+  const ok = got.filter(n => n != null);
+  if (!ok.length) throw new Error('Spotify: no numbers');
+  return { saves: ok.reduce((a, n) => a + n, 0), playlists: ids.length, url: 'https://open.spotify.com/user/315n3grwllchjxzjrsem7uqv5bse' };
+}
+
 async function load(env) {
   const row = await env.DB.prepare('SELECT value FROM panel_settings WHERE key = ?').bind(KEY).first().catch(() => null);
   try { return JSON.parse(row?.value || 'null'); } catch { return null; }
 }
 export async function refreshStats(env) {
   const old = (await load(env)) || {};
-  const [yt, sc] = await Promise.allSettled([youtube(), scLabelStats(env, SC_PROFILE)]);
+  const [yt, sc, sp] = await Promise.allSettled([youtube(), scLabelStats(env, SC_PROFILE), spotify(env)]);
+  if (sp.status === 'rejected') console.error('stats spotify', sp.reason?.message);
   if (yt.status === 'rejected') console.error('stats youtube', yt.reason?.message);
   if (sc.status === 'rejected') console.error('stats soundcloud', sc.reason?.message);
-  const v = { at: Date.now(), yt: yt.value || old.yt || null, sc: sc.value || old.sc || null };
+  const v = { at: Date.now(), yt: yt.value || old.yt || null, sc: sc.value || old.sc || null, sp: sp.value || old.sp || null };
   await env.DB.prepare("INSERT INTO panel_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(KEY, JSON.stringify(v)).run();
   return v;
 }
 // el panel lo pide al abrir Home; si son de hace más de 30 min (o no hay), se ponen al día
 export async function statsApi(env, ctx) {
   const v = await load(env);
-  if (!v || !v.yt || !v.sc) return refreshStats(env);
+  if (!v || !v.yt || !v.sc || !v.sp) return refreshStats(env);
   if (Date.now() - v.at > 30 * 60e3) ctx.waitUntil(refreshStats(env).catch(e => console.error('stats', e)));
   return v;
 }

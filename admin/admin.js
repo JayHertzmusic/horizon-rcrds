@@ -715,6 +715,8 @@
   const SOCIAL_ICO = {
     sc: '<path d="M2 15.5v-3M5 16.5v-6M8 16.5v-8M11 16.5V7.5c4.5-1.8 8 .6 8.6 4.4A2.6 2.6 0 0 1 19.5 17H11"/>',
     yt: '<rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="m10 9 5 3-5 3z"/>',
+    sp: '<circle cx="12" cy="12" r="9.5"/><path d="M7 9.5c3.5-1 7.3-.6 10 1M7.6 12.6c2.9-.8 5.9-.4 8.2.9M8.3 15.5c2.2-.5 4.4-.2 6.2.8"/>',
+    all: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   };
   function homeView() {
     const u = preview?.who ? { ...auth.user, ...preview.who } : auth.user, h = new Date().getHours();
@@ -725,8 +727,20 @@
     if (can('calendar') && !calData && !calLoading && !calErr) setTimeout(loadCalendar, 0);
     if (can('contracts') && !preview && !ctData && !ctLoading && !ctErr) setTimeout(loadContracts, 0);
     const card = (v, html, cls = '') => `<button type="button" class="hm-card ${cls}" data-view="${v}">${html}</button>`;
-    const soc = (k, n, l, url) => `<a class="hm-soc ${k}" href="${esc(url)}" target="_blank" rel="noopener"><svg class="tab-i" viewBox="0 0 24 24" aria-hidden="true">${SOCIAL_ICO[k]}</svg><span class="hm-n">${fmtN(n)}</span><span class="hm-l">${l}</span></a>`;
-    const social = stats ? [stats.sc && soc('sc', stats.sc.plays, 'SoundCloud plays', stats.sc.url), stats.sc && soc('sc', stats.sc.followers, 'SoundCloud followers', stats.sc.url), stats.yt && soc('yt', stats.yt.views, 'YouTube views', stats.yt.url), stats.yt && soc('yt', stats.yt.subs, 'YouTube subscribers', stats.yt.url)].filter(Boolean).join('') : '';
+    const ico = k => `<svg class="tab-i" viewBox="0 0 24 24" aria-hidden="true">${SOCIAL_ICO[k]}</svg>`;
+    const line = (n, l) => `<span class="hm-sn"><b>${fmtN(n)}</b><small>${l}</small></span>`;
+    const col = (k, name, url, rows) => `<${url ? `a href="${esc(url)}" target="_blank" rel="noopener"` : 'div'} class="hm-sc ${k}"><span class="hm-sh">${ico(k)}${name}</span>${rows.join('')}</${url ? 'a' : 'div'}>`;
+    const social = stats ? (() => {
+      const { sc, yt, sp } = stats, sum = (...x) => x.some(v => v != null) ? x.reduce((t, v) => t + (v || 0), 0) : null;
+      const ago = Math.max(0, Math.round((Date.now() - stats.at) / 60e3));
+      return `<div class="hm-h"><p>HORIZON RCRDS in numbers</p><span class="hm-upd">Updated ${ago < 1 ? 'just now' : ago + ' min ago'}</span></div>
+        <div class="hm-sg">
+          ${col('all', 'Total', '', [line(sum(sc?.plays, yt?.views), 'Plays & views'), line(sum(sc?.followers, yt?.subs, sp?.saves), 'Followers')])}
+          ${sc ? col('sc', 'SoundCloud', sc.url, [line(sc.plays, 'Plays'), line(sc.followers, 'Followers')]) : ''}
+          ${yt ? col('yt', 'YouTube', yt.url, [line(yt.views, 'Views'), line(yt.subs, 'Subscribers')]) : ''}
+          ${sp ? col('sp', 'Spotify', sp.url, [line(sp.saves, 'Playlist saves'), line(sp.playlists, 'Playlists')]) : ''}
+        </div>`;
+    })() : '';
     // el último release, en grande y con su color
     const r = can('releases') ? repo.releases[0] : null;
     const rc = /^#[0-9a-f]{6}$/i.test(r?.color || '') ? r.color : '#ffffff', rk = parseInt(rc.slice(1), 16);
@@ -774,7 +788,7 @@
       <div class="hm">
         <div class="hm-col">
           ${hero}
-          <section class="hm-social" aria-label="HORIZON RCRDS in numbers">${social || '<p class="hm-empty">Loading numbers…</p>'}</section>
+          <section class="hm-box hm-social" aria-label="HORIZON RCRDS in numbers">${social || '<p class="hm-empty">Loading numbers…</p>'}</section>
           ${next}
         </div>
         <div class="hm-col">

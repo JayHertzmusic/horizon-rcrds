@@ -1688,3 +1688,5 @@ html.light .hm-cover img { filter: none; }
   .top .tab .tab-i { transform: scale(var(--k)); transition: transform .18s cubic-bezier(.2,.8,.2,1), opacity .2s, color .2s, filter .2s; }
 }
 @media (prefers-reduced-motion: reduce) { .top .tab, .top .tab .tab-i { transform: none !important; } }
+.hm-head h1.hm-hi { font-size: clamp(40px, 5vw, 58px); }
+.hm-hi .hm-me { font-size: 1em; }

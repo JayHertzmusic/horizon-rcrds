@@ -356,7 +356,8 @@
   const ORDER = () => (auth?.sections || []).map(x => x.id).concat(['releases', 'radio', 'playlists', 'player', 'forms', 'contracts', 'calendar']).filter((v, i, a) => a.indexOf(v) === i);
   const canTab = v => v === 'forms' ? showForms() : can(v);
   // (alguien con solo Mail entra directo a Mail)
-  const firstView = () => ORDER().find(canTab) || (showForms() ? 'forms' : MODE === 'admin' && auth?.user?.owner && !preview ? 'team' : canMail() ? 'mail' : 'none');
+  const hasHome = () => VIEWS.some(v => can(v));
+  const firstView = () => (hasHome() ? 'home' : '') || ORDER().find(canTab) || (showForms() ? 'forms' : MODE === 'admin' && auth?.user?.owner && !preview ? 'team' : canMail() ? 'mail' : 'none');
   const emptyRepo = () => ({ head: '', treeSha: '', files: new Map(), truncated: false, releases: [], mixtapes: [], playlists: [], ignore: [] });
   function useSession(res) {
     auth = { token: res.token || auth?.token, user: res.user, sections: res.sections };
@@ -393,6 +394,7 @@
   // menú: grupos e iconos
   const NAV_GROUPS = [['Music', ['releases', 'radio', 'playlists', 'player']], ['Artists', ['mail', 'forms', 'contracts']], ['Label', ['calendar', 'chain']], ['Admin', ['team', 'log']]];
   const NAV_ICONS = {
+    home: '<path d="M4 11 12 4l8 7"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/>',
     releases: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/>',
     radio: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>',
     playlists: '<path d="M4 6h11M4 11h11M4 16h7"/><circle cx="17.5" cy="17" r="2.5"/><path d="M20 17V7l-3 .8"/>',
@@ -423,7 +425,7 @@
             const label = v => v === 'mail' ? 'Mail' : v === 'team' ? 'Team' : v === 'log' ? 'History' : names[v];
             const left = [...vs];
             const out = NAV_GROUPS.map(([g, ids]) => { const mine = left.filter(v => ids.includes(v)); mine.forEach(v => left.splice(left.indexOf(v), 1)); return mine.length ? `<p class="tab-g">${g}</p>${mine.map(v => tab(v, label(v))).join('')}` : ''; }).join('');
-            return out + left.map(v => tab(v, label(v))).join('');
+            return (hasHome() ? tab('home', 'Home') : '') + out + left.map(v => tab(v, label(v))).join('');
           })()}
         </nav>
         <div class="top-end">
@@ -698,6 +700,66 @@
         ${i === 0 ? '<span class="feat">Cover</span>' : '<span></span>'}
         ${can('releases', 'edit') ? `<button type="button" class="btn ghost sm" data-act="edit-release" data-key="${esc(keyOf(r))}">Edit</button>` : '<span></span>'}
       </li>`).join('');
+  }
+  /* ---------------- Home: lo importante de un vistazo ---------------- */
+  function homeView() {
+    const u = auth.user, h = new Date().getHours();
+    const hi = h < 6 ? 'Good night' : h < 13 ? 'Good morning' : h < 20 ? 'Good afternoon' : 'Good evening';
+    const who = (u.name || u.email.split('@')[0]).split(/\s+/)[0];
+    const today = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+    if (can('calendar') && !calData && !calLoading && !calErr) setTimeout(loadCalendar, 0);
+    if (can('contracts') && !preview && !ctData && !ctLoading && !ctErr) setTimeout(loadContracts, 0);
+    const card = (v, html, cls = '') => `<button type="button" class="hm-card ${cls}" data-view="${v}">${html}</button>`;
+    // el último release, en grande y con su color
+    const r = can('releases') ? repo.releases[0] : null;
+    const rc = /^#[0-9a-f]{6}$/i.test(r?.color || '') ? r.color : '#ffffff', rk = parseInt(rc.slice(1), 16);
+    const hero = r ? `
+      <section class="hm-hero" style="--rc:${rc};--rc-rgb:${rk >> 16 & 255}, ${rk >> 8 & 255}, ${rk & 255}">
+        <div class="hm-cover">${r.image ? `<img src="${esc(assetSrc(r.image))}" alt="">` : ''}</div>
+        <div class="hm-info">
+          <p class="hm-k">Latest release · ${esc(r.catalog || '')}</p>
+          <h2>${esc(r.title)}</h2>
+          <p class="hm-a">${esc(r.artist)}</p>
+          <div class="hm-links">
+            ${r.spotify_link ? `<a href="${esc(r.spotify_link)}" target="_blank" rel="noopener">Spotify</a>` : ''}
+            ${r.youtube_link ? `<a href="${esc(r.youtube_link)}" target="_blank" rel="noopener">YouTube</a>` : ''}
+            ${r.soundcloud_link ? `<a href="${esc(r.soundcloud_link)}" target="_blank" rel="noopener">SoundCloud</a>` : ''}
+            <button type="button" class="hm-go" data-view="releases">All releases →</button>
+          </div>
+        </div>
+      </section>` : '';
+    // lo que pide atención
+    const att = [];
+    if (showForms()) { const n = badgeCount(); att.push(card('forms', `${navIcon('forms')}<span class="hm-n">${n}</span><span class="hm-l">${n === 1 ? 'New response' : 'New responses'}</span>`, n ? 'hot' : '')); }
+    if (can('contracts') && !preview) {
+      const fresh = ctBadgeCount(), wait = ctData ? ctData.contracts.filter(c => !isTpl(c) && c.status === 'sent').length : null;
+      att.push(card('contracts', `${navIcon('contracts')}<span class="hm-n">${fresh || (wait ?? '·')}</span><span class="hm-l">${fresh ? (fresh === 1 ? 'New signature' : 'New signatures') : 'Awaiting signature'}</span>`, fresh ? 'hot' : ''));
+    }
+    if (canMail()) { const n = mail.info?.unread; att.push(card('mail', `${navIcon('mail')}<span class="hm-n">${n ?? '·'}</span><span class="hm-l">Unread emails</span>`, n ? 'hot' : '')); }
+    // próximas fechas
+    let next = '';
+    if (can('calendar')) {
+      const t = todayIso(), items = calData ? (calMixOnly() ? calData.items.filter(x => x.kind === 'mixtape') : calData.items).filter(x => x.date >= t).slice(0, 4) : null;
+      next = `
+        <section class="hm-box hm-next">
+          <div class="hm-h"><p>Coming up</p><button type="button" class="hm-go" data-view="calendar">Calendar →</button></div>
+          ${!items ? `<p class="hm-empty">${calErr ? esc(calErr) : 'Loading…'}</p>` : !items.length ? '<p class="hm-empty">Nothing scheduled.</p>' : `<ul>${items.map(x => { const b = calBits(x.date), n = calDaysLeft(x.date); return `
+            <li class="${n <= 7 ? 'soon' : ''}"><span class="hm-d"><b>${b.day}</b><small>${b.mon}</small></span>
+              <span class="hm-t"><small>${CAL_KIND[x.kind] || esc(x.kind)}</small><b>${x.artist ? esc(x.artist) + ' - ' : ''}${esc(x.title)}</b></span>
+              <span class="hm-left">${calLeftTxt(n)}</span></li>`; }).join('')}</ul>`}
+        </section>`;
+    }
+    // el catálogo
+    const stats = [['releases', 'Releases', repo.releases.length], ['radio', 'Mixtapes', repo.mixtapes.length], ['playlists', 'Playlists', repo.playlists.length]].filter(([v]) => can(v))
+      .map(([v, l, n]) => card(v, `${navIcon(v)}<span class="hm-n">${n}</span><span class="hm-l">${l}</span>`, 'stat')).join('');
+    return `
+      <div class="head hm-head"><div><p class="eyebrow">${esc(today)}</p><h1>${hi.toUpperCase()}, ${esc(who.toUpperCase())}</h1></div></div>
+      <div class="hm">
+        ${hero}
+        ${att.length ? `<section class="hm-att">${att.join('')}</section>` : ''}
+        ${next}
+        ${stats ? `<section class="hm-stats">${stats}</section>` : ''}
+      </div>`;
   }
   function releasesView() {
     return `
@@ -1377,7 +1439,8 @@
     accent();
     if (view === 'forms' && !showForms()) view = firstView();
     if (view === 'mail' && !canMail()) view = firstView();
-    if (view !== 'mail' && view !== 'team' && view !== 'log' && view !== 'chain' && view !== 'none' && view !== 'forms' && view !== 'contracts' && !can(view)) { view = firstView(); editing = null; }
+    if (view === 'home' && !hasHome()) view = firstView();
+    if (view !== 'home' && view !== 'mail' && view !== 'team' && view !== 'log' && view !== 'chain' && view !== 'none' && view !== 'forms' && view !== 'contracts' && !can(view)) { view = firstView(); editing = null; }
     if (view === 'contracts' && !can('contracts')) view = firstView();
     if (view === 'calendar' && !can('calendar')) view = firstView();
     if ((view === 'team' || view === 'log' || view === 'chain') && (preview || !(MODE === 'admin' && auth.user.owner))) view = firstView();
@@ -1392,6 +1455,7 @@
     else if (view === 'forms') inner = formsPage();
     else if (view === 'contracts') inner = contractsPage();
     else if (view === 'calendar') inner = calendarPage();
+    else if (view === 'home') inner = homeView();
     else if (editing?.view === 'releases') inner = releaseEditor();
     else if (editing?.view === 'playlists') inner = playlistEditor();
     else if (editing?.view === 'radio') inner = mixtapeEditor();
@@ -1402,7 +1466,7 @@
     app.innerHTML = shell(inner);
     if (view === 'mail') { sizeMail(); fitMail(); fillFrames(); }
     chatStart();
-    const names = { releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', team: 'Team', log: 'History', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', chain: 'Gates', mail: 'Mail', none: 'Team' };
+    const names = { home: 'Home', releases: 'Releases', radio: 'Mixtapes', playlists: 'Playlists', player: 'Player', team: 'Team', log: 'History', forms: 'Forms', contracts: 'Contracts', calendar: 'Calendar', chain: 'Gates', mail: 'Mail', none: 'Team' };
     document.title = `${unseen.total && !preview ? `(${unseen.total > 99 ? '99+' : unseen.total}) ` : ''}${editing ? (editing.orig?.title || 'New') + ' · ' : ''}${names[view] || ''} — Panel HORIZON RCRDS`;
   }
   function busyOn(scope, btn, label) {
@@ -2545,7 +2609,7 @@
     try { ctData = await api('GET', '/api/contracts'); ctErr = ''; paintBadge(); autoDrive(); }
     catch (e) { ctErr = e.message; if (e.status === 401) { ctLoading = false; logout(e.message); return; } }
     ctLoading = false;
-    if (view === 'contracts') render();
+    if (view === 'contracts' || view === 'home') render();
   }
   async function authFetch(path, opts = {}) {
     const r = await fetch(path, { ...opts, headers: { ...(opts.headers || {}), Authorization: `Bearer ${auth.token}` }, cache: 'no-store' });
@@ -3615,7 +3679,7 @@
     try { calData = await api('GET', '/api/calendar'); calErr = ''; }
     catch (e) { calErr = e.message; if (e.status === 401) { calLoading = false; logout(e.message); return; } }
     calLoading = false;
-    if (view === 'calendar') render();
+    if (view === 'calendar' || view === 'home') render();
   }
   // mientras miras Calendar, cada 30 s se pone al día (fechas que llegan de Discord, cambios de otros); sin parpadeo
   async function checkCalendar() {

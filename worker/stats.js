@@ -56,7 +56,8 @@ export async function refreshStats(env) {
 // el panel lo pide al abrir Home; si son de hace más de 30 min (o no hay), se ponen al día
 export async function statsApi(env, ctx) {
   const v = await load(env);
-  if (!v || !v.yt || !v.sc || !v.sp) return refreshStats(env);
+  if (!v) return refreshStats(env);
+  if ((!v.yt || !v.sc || !v.sp) && Date.now() - v.at > 10 * 60e3) return refreshStats(env);
   if (Date.now() - v.at > 30 * 60e3) ctx.waitUntil(refreshStats(env).catch(e => console.error('stats', e)));
   return v;
 }

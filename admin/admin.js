@@ -449,7 +449,8 @@
   const themeLabel = () => document.documentElement.classList.contains('light') ? 'Dark mode' : 'Light mode';
   function toggleTheme(btn) {
     const root = document.documentElement, to = !root.classList.contains('light');
-    const apply = () => { root.classList.toggle('light', to); $$('.theme-tg span').forEach(x => { x.textContent = to ? 'Dark mode' : 'Light mode'; }); try { localStorage.setItem('hz_theme', to ? 'light' : 'dark'); } catch { /* nada */ } };
+    const apply = () => { root.classList.toggle('light', to); $$('.theme-tg span').forEach(x => { x.textContent = to ? 'Dark mode' : 'Light mode'; }); try { localStorage.setItem('hz_theme', to ? 'light' : 'dark'); } catch { /* nada */ }
+      if (view === 'mail' && mail.open && mail.thread) { $$('iframe[data-mframe]').forEach(f => { delete f.dataset.done; }); fillFrames(); } };
     if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) { apply(); return; }
     const r = btn.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
     const end = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
@@ -4781,7 +4782,8 @@
     parts.push(acts);
     if (box !== 'trash' && box !== 'spam') parts.push(sub('move', 'Move to', (box !== 'inbox' ? it('move', mico('inbox'), 'Inbox', 'INBOX') : '') + labs.map(l => it('move', dot(l), l.name, l.id)).join(''))
       + sub('label', 'Label as', labs.map(l => it('label', dot(l), l.name, l.id)).join('')));
-    if (!many && addr) parts.push(it('from', mico('search'), `Find emails from ${who}`));
+    const toBox = box === 'sent' || box === 'drafts';
+    if (!many && addr) parts.push(it('from', mico('search'), `Find emails ${toBox ? 'to' : 'from'} ${who}`));
     const m = document.createElement('div');
     m.id = 'm-ctx'; m.className = 'mx-menu'; m.setAttribute('role', 'menu');
     m.innerHTML = parts.filter(Boolean).join('<hr>');
@@ -4804,7 +4806,7 @@
         return;
       }
       if (act === 'star') { $(`.mrow[data-mth="${CSS.escape(id)}"] [data-mstar]`)?.click(); return; }
-      if (act === 'from') { mail.q = 'from:' + addr; mail.off = 0; mail.list = null; mail.open = null; mail.thread = null; mail.sel = new Set(); mailRender(); loadMail(); return; }
+      if (act === 'from') { mail.q = (toBox ? 'to:' : 'from:') + addr; mail.off = 0; mail.list = null; mail.open = null; mail.thread = null; mail.sel = new Set(); mailRender(); loadMail(); return; }
       if (act === 'trash' && ids.length > 1 && !await confirmBox(`Move ${ids.length} emails to the Gmail trash? (They can be restored for 30 days.)`, 'Move to trash')) return;
       mailBulk(ids, act, b.dataset.l);
     });

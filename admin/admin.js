@@ -809,7 +809,7 @@
     const social = stats ? (() => {
       const { sc, yt, sp } = stats, sum = (...x) => x.some(v => v != null) ? x.reduce((t, v) => t + (v || 0), 0) : null;
       const ago = Math.max(0, Math.round((Date.now() - stats.at) / 60e3));
-      return `<div class="hm-h"><p>HORIZON RCRDS in numbers</p><span class="hm-upd">Updated ${ago < 1 ? 'just now' : ago + ' min ago'}</span></div>
+      return `<div class="hm-h"><p>HORIZON RCRDS in numbers</p><span class="hm-upd">Updated ${ago < 1 ? 'just now' : ago < 60 ? ago + ' min ago' : ago < 1440 ? Math.round(ago / 60) + ' h ago' : Math.round(ago / 1440) + ' d ago'}</span></div>
         <div class="hm-sg">
           ${col('all', 'Total', '', [line(sum(sc?.plays, yt?.views), 'Plays & views'), line(sum(sc?.followers, yt?.subs, sp?.saves), 'Followers')])}
           ${sc ? col('sc', 'SoundCloud', sc.url, [line(sc.plays, 'Plays'), line(sc.followers, 'Followers')]) : ''}
@@ -3906,7 +3906,7 @@
     const mins = Math.max(0, Math.round((Date.now() - d.at) / 60000));
     // líneas de #horizon-calendar que no se entienden (sin fecha clara): se enseñan para corregirlas en Discord
     const sk = (d.skipped || []).length ? `<div class="cal-skip" role="alert"><b>Not understood in #horizon-calendar</b> — write them like <code>16.04.27 - Artist - Title</code>:<ul>${d.skipped.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '';
-    return `<p class="info cal-sync">Synced with Discord #horizon-calendar ${mins < 1 ? 'just now' : mins === 1 ? '1 minute ago' : mins + ' minutes ago'} · edit the dates there and they change here.</p>${sk}`;
+    return `<p class="info cal-sync">Synced with Discord #horizon-calendar ${mins < 1 ? 'just now' : mins < 60 ? (mins === 1 ? '1 minute ago' : mins + ' minutes ago') : mins < 1440 ? (Math.round(mins / 60) === 1 ? '1 hour ago' : Math.round(mins / 60) + ' hours ago') : (Math.round(mins / 1440) === 1 ? '1 day ago' : Math.round(mins / 1440) + ' days ago')} · edit the dates there and they change here.</p>${sk}`;
   }
   function calForm() {
     const mixOnly = calMixOnly();

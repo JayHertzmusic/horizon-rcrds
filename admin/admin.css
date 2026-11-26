@@ -1350,7 +1350,8 @@ html, body, * { scrollbar-width: none; }
   .m-search { flex: 1; }
   .mrow { grid-template-columns: 36px 26px minmax(0, 1fr) auto; height: auto; padding: 8px 14px 8px 10px; gap: 2px 6px; }
   .mrow .m-subj { grid-column: 3 / -1; grid-row: 2; padding-left: 4px; }
-  .mrow .m-clip { display: none; }
+  .mrow .m-clip, .mrow .m-rowseen { display: none; }
+  .m-tool .m-tl { flex-wrap: wrap; }
 }
 
 /* ventana de redactar flotante (como Gmail): abajo a la derecha, no tapa la bandeja ni se cierra al hacer clic fuera */

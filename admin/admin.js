@@ -4065,7 +4065,7 @@
     clearTimeout(infoT);
     infoT = setTimeout(() => {
       infoAt = Date.now();
-      api('GET', '/api/mail/info?fresh=1' + mq()).then(i => { mail.info = i; if (view === 'mail') { const n = $('.m-nav'); if (n) { n.outerHTML = mailNav(); sizeMail(); } } }).catch(() => {});
+      api('GET', '/api/mail/info?fresh=1' + mq()).then(i => { mail.info = i; if (view === 'mail') { const n = $('.m-nav'); if (n) { n.outerHTML = mailNav(); sizeMail(); } } else if (view === 'home' && !editing && !$('#sheet')?.open) render(); }).catch(() => {});
     }, Math.max(1500, 10000 - (Date.now() - infoAt)));
   };
   const mailWho = s => { const m = String(s || '').match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>/); return m ? (m[1].trim() || m[2]) : String(s || '').trim(); };
@@ -4364,11 +4364,11 @@
     doc.querySelectorAll('article').forEach(a => { if (/^\s*(原始邮件|Original)/i.test(a.textContent)) qs.push(a); });
     const qqTail = [...doc.querySelectorAll('div, p')].find(d => qqLine.test(d.textContent.replace(/\u00a0/g, ' ')) && d.textContent.length < 80);
     if (qqTail) qs.push(qqTail);
-    const WROTE = /(wrote|escribió|写道)\s*:?\s*$/i;
+    const WROTE = /(wrote|escribió|写道)\s*[:：]?\s*$/i;
     doc.querySelectorAll('blockquote').forEach(b => {
       const p = b.parentElement;
       // <div>On … wrote:<br><blockquote>…</blockquote></div> → todo el div
-      if (p && p !== doc.body && /^\s*(On|El|在)\b/.test(p.textContent) && p.textContent.length - b.textContent.length < 300 && WROTE.test(p.textContent.slice(0, p.textContent.length - b.textContent.length).trim())) { qs.push(p); return; }
+      if (p && p !== doc.body && /^\s*(?:(?:On|El)\b|在)/.test(p.textContent) && p.textContent.length - b.textContent.length < 300 && WROTE.test(p.textContent.slice(0, p.textContent.length - b.textContent.length).trim())) { qs.push(p); return; }
       // texto «On … wrote:» suelto justo antes del blockquote
       let n = b.previousSibling, att = null;
       while (n && (n.nodeName === 'BR' || !n.textContent.trim())) n = n.previousSibling;
@@ -4427,7 +4427,7 @@
       // queda que lo has visto (los demás ven tu foto en ese correo)
       api('POST', `/api/mail/thread/${id}/seen${mq('?')}`).then(r => { if (row) row.seen_by = r.seen_by || []; if (mail.thread?.id === id) { mail.thread.seen_by = r.seen_by || []; $$('.m-seenline').forEach(el => { el.outerHTML = mailSeenLine(mail.thread, el.classList.contains('m-seenend')); }); } }).catch(() => {});
       t.seen_by = row?.seen_by || [];
-      if (row?.unread) { row.unread = false; if (mail.info?.unread && mail.box === 'inbox') { mail.info.unread--; if (mail.info.counts) mail.info.counts.inbox = mail.info.unread; } }
+      if (row?.unread) { row.unread = false; if (mail.info?.unread && mail.box === 'inbox') { mail.info.unread--; if (mail.info.counts) { mail.info.counts.inbox = mail.info.unread; if (mail.cat === 'primary' && mail.info.counts.primary > 0) mail.info.counts.primary--; } } }
     } catch (e) {
       if (mail.open !== id) return;
       // Gmail ocupado un momento: se sigue cargando y se reintenta solo
@@ -4776,7 +4776,7 @@
     let acts = box === 'trash' ? it('restore', mico('restore'), 'Restore')
       : box === 'spam' ? it('notspam', mico('notspam'), 'Not spam') + it('trash', mico('trash'), 'Delete')
       : (box === 'inbox' || box.startsWith('L:') ? it('archive', mico('archive'), 'Archive') : '') + it('trash', mico('trash'), 'Delete') + it('spam', mico('spam'), 'Report spam');
-    acts += ids.some(x => mail.list.find(r => r.id === x)?.unread) ? it('read', mico('read'), many ? 'Mark as read' : 'Mark as read') : it('unread', mico('unread'), 'Mark as unread');
+    acts += ids.some(x => mail.list.find(r => r.id === x)?.unread) ? it('read', mico('read'), 'Mark as read') : it('unread', mico('unread'), 'Mark as unread');
     if (!many) acts += it('star', mico('starred'), t.starred ? 'Remove star' : 'Add star');
     parts.push(acts);
     if (box !== 'trash' && box !== 'spam') parts.push(sub('move', 'Move to', (box !== 'inbox' ? it('move', mico('inbox'), 'Inbox', 'INBOX') : '') + labs.map(l => it('move', dot(l), l.name, l.id)).join(''))

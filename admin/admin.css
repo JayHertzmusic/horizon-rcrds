@@ -1763,7 +1763,7 @@ html.light .theme-tg .tg-moon { opacity: 0; transform: rotate(90deg) scale(.4); 
 .mrow.ctx { background: rgba(255,255,255,.06); }
 
 /* Mail: quién del team ha visto / contestado cada correo */
-.m-who { display: flex; justify-content: flex-end; }
+.m-rowseen { display: flex; justify-content: flex-end; }
 .m-seen { display: inline-flex; align-items: center; padding-left: 6px; }
 .m-seen .sb-one { position: relative; display: inline-flex; margin-left: -6px; border-radius: 50%; box-shadow: 0 0 0 2px #0b0b0b; }
 .m-seen .av, .m-seen img.av { width: 20px; height: 20px; font-size: 9px; }

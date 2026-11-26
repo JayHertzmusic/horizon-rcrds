@@ -4107,7 +4107,7 @@
           <span class="m-from">${t.draft && mail.box !== 'sent' ? '<em>Draft</em> ' : ''}${esc(mailWho(t.from) || (t.draft ? '(no recipient)' : '(no sender)'))}${t.count > 1 ? ` <i>${t.count}</i>` : ''}</span>
           <span class="m-subj">${(t.labels || []).map(lab).filter(Boolean).slice(0, 3).map(l => `<span class="m-ltag" style="--c:${esc(l.color || '#8b8f98')}">${esc(l.name)}</span>`).join('')}<b>${esc(t.subject || '(no subject)')}</b><span> — ${esc(t.snippet.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&'))}</span></span>
           <span class="m-clip" aria-label="${t.files ? 'Has attachments' : ''}">${t.files ? '⎘' : ''}</span>
-          <span class="m-who">${mail.box === 'sent' || mail.box === 'drafts' ? '' : mailSeenAvs(t, t.at)}</span>
+          <span class="m-rowseen">${mail.box === 'sent' || mail.box === 'drafts' ? '' : mailSeenAvs(t, t.at)}</span>
           <span class="m-date">${esc(mailDate(t.at))}</span>
         </li>`).join('');
     const nSel = mail.sel.size;

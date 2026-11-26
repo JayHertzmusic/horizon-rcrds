@@ -1782,3 +1782,11 @@ html.light .theme-tg .tg-moon { opacity: 0; transform: rotate(90deg) scale(.4); 
   .ct-tabs::-webkit-scrollbar { display: none; }
   .ct-tabs button { flex: none; white-space: nowrap; padding: 10px 12px; }
 }
+/* móvil: Forms. La regla general de las filas pone el nombre en un área «meta» que esta lista no tiene: la fila se descolocaba
+   (nombre cortado en «DEM…» y el botón View encima del interruptor). Nombre e interruptor arriba; botones debajo. */
+@media (max-width: 640px) {
+  .row.fm { row-gap: 8px; }
+  .row.fm .meta { grid-area: auto; grid-column: 1; grid-row: 1; align-self: center; }
+  .row.fm .fm-state { grid-column: 2; grid-row: 1; }
+  .row.fm .fm-btns { grid-column: 1 / -1; grid-row: 2; justify-self: end; }
+}

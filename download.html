@@ -68,7 +68,8 @@
   const socials = '<p class="follow-lbl">Follow HORIZON RCRDS</p><div class="socials">' + SOCIALS.map(([n, u, s]) => `<a href="${u}" target="_blank" rel="noopener" aria-label="${n}">${s}</a>`).join('') + '</div>';
 
   async function load() {
-    if (!id) { root.innerHTML = brand + '<p class="msg">This download link is not valid.</p>'; return; }
+    // sin release (p. ej. la conexión con SoundCloud caducó): el motivo que mandó el servidor, si lo hay
+    if (!id) { root.innerHTML = brand + '<p class="msg">' + esc(params.get('error') ? params.get('error') :'This download link is not valid.') + '</p>'; return; }
     let d;
     try {
       const r = await fetch('/api/public/download/' + encodeURIComponent(id), { cache: 'no-store' });

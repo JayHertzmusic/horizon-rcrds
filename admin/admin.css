@@ -1790,3 +1790,12 @@ html.light .theme-tg .tg-moon { opacity: 0; transform: rotate(90deg) scale(.4); 
   .row.fm .fm-state { grid-column: 2; grid-row: 1; }
   .row.fm .fm-btns { grid-column: 1 / -1; grid-row: 2; justify-self: end; }
 }
+/* móvil: mismo fallo en Team, Calendar (sin fecha) y Contracts: reglas posteriores o el área «meta» general descolocaban la fila */
+@media (max-width: 640px) {
+  .row.tm { grid-template-columns: 40px minmax(0, 1fr) auto; }
+  .row.tm .role-tag { justify-self: start; }
+  .row.ct { grid-template-areas: none; }
+  .row.ct .meta { grid-area: auto; }
+  .row.cal-todo { grid-template-areas: none; grid-template-columns: minmax(0, 1fr) auto; row-gap: 8px; }
+  .row.cal-todo .meta { grid-area: auto; grid-column: 1 / -1; }
+}

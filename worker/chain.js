@@ -333,8 +333,9 @@ export async function scOauth(req, env, url) {
     const code = url.searchParams.get('code'), state = url.searchParams.get('state');
     // ok = token de descarga (solo se da al conectar de verdad); si no, mensaje de error. Nunca se puede descargar con ?done=1 a mano.
     const back = (msg, ok, rid) => Response.redirect(`${origin}/download${rid ? '/' + encodeURIComponent(rid) : ''}?${ok ? 'dl=' + ok : 'error=' + encodeURIComponent(msg)}`, 302);
-    if (url.searchParams.get('error')) return back('You cancelled the SoundCloud connection.', false, '');
     const st = state && /^[\w-]{10,100}$/.test(state) ? await tokGet(env, `scstate/${state}`) : null;
+    // cancelado: vuelve a la página de descarga de ese release (antes volvía sin release: «This download link is not valid»)
+    if (url.searchParams.get('error')) return back('You cancelled the SoundCloud connection.', false, st?.rid || '');
     if (!code || !st) return back('The link expired. Please try again.', false, '');
     await tokDel(env, `scstate/${state}`).catch(() => {});
     try {
@@ -410,7 +411,9 @@ export async function chainPublic(req, env, url) {
     const f = await env.FILES.get(gate.file, { type: 'arrayBuffer' });
     if (!f) throw new ChainError(404, 'File not found.');
     const name = (gate.file_name || `${rid}.mp3`).replace(/[\\/:*?"<>|]+/g, '');
-    return new Response(f, { headers: { 'Content-Type': 'audio/mpeg', 'Content-Disposition': `attachment; filename="${name}"`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
+    // (un nombre con «’», acentos o chino rompía la cabecera: error 500. Va en ASCII + el nombre de verdad en UTF-8)
+    const ascii = name.normalize('NFD').replace(/[^\x20-\x7e]/g, '').replace(/"/g, '').trim() || `${rid}.mp3`;
+    return new Response(f, { headers: { 'Content-Type': 'audio/mpeg', 'Content-Disposition': `attachment; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(name)}`, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } });
   }
   throw new ChainError(404, 'Not found.');
 }

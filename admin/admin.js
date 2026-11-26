@@ -4340,7 +4340,22 @@
     doc.querySelectorAll('article').forEach(a => { if (/^\s*(原始邮件|Original)/i.test(a.textContent)) qs.push(a); });
     const qqTail = [...doc.querySelectorAll('div, p')].find(d => qqLine.test(d.textContent.replace(/\u00a0/g, ' ')) && d.textContent.length < 80);
     if (qqTail) qs.push(qqTail);
-    qs = qs.filter(q => !qs.some(o => o !== q && o.contains(q)));
+    const WROTE = /(wrote|escribió|写道)\s*:?\s*$/i;
+    doc.querySelectorAll('blockquote').forEach(b => {
+      const p = b.parentElement;
+      // <div>On … wrote:<br><blockquote>…</blockquote></div> → todo el div
+      if (p && p !== doc.body && /^\s*(On|El|在)\b/.test(p.textContent) && p.textContent.length - b.textContent.length < 300 && WROTE.test(p.textContent.slice(0, p.textContent.length - b.textContent.length).trim())) { qs.push(p); return; }
+      // texto «On … wrote:» suelto justo antes del blockquote
+      let n = b.previousSibling, att = null;
+      while (n && (n.nodeName === 'BR' || !n.textContent.trim())) n = n.previousSibling;
+      if (n && n.textContent.length < 300 && WROTE.test(n.textContent.trim())) {
+        if (n.nodeType === 3) { const sp = doc.createElement('span'); n.before(sp); sp.appendChild(n); att = sp; } else att = n;
+        qs.push(att);
+      }
+      if (att || b.matches('[type="cite"]')) qs.push(b);
+    });
+    qs = [...new Set(qs)].filter(q => !qs.some(o => o !== q && o.contains(q)));
+    qs.sort((a, b) => a.compareDocumentPosition(b) & 4 ? -1 : 1);
     // Outlook: lo de debajo de «From: … Sent: …» también es citado
     const hidden = [];
     for (const q of qs) {
@@ -4543,7 +4558,7 @@
       if (last) {
         const p = last.parsed || walkParts(last.payload), orig = p.html || textHtml(p.text || ''), when = new Date(last.at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
         if (c.kind === 'forward') { html += `<br><div>---------- Forwarded message ---------<br>From: ${esc(hd('from'))}<br>Date: ${esc(when)}<br>Subject: ${esc(hd('subject'))}<br>To: ${esc(hd('to'))}<br><br>${orig}</div>`; text += `\n\n---------- Forwarded message ---------\nFrom: ${hd('from')}\nDate: ${when}\nSubject: ${hd('subject')}\n\n${p.text || ''}`; }
-        else { html += `<br><div>On ${esc(when)}, ${esc(hd('from'))} wrote:<br><blockquote style="margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex">${orig}</blockquote></div>`; text += `\n\nOn ${when}, ${hd('from')} wrote:\n` + (p.text || '').split('\n').map(l => '> ' + l).join('\n'); }
+        else { html += `<br><div class="gmail_quote">On ${esc(when)}, ${esc(hd('from'))} wrote:<br><blockquote style="margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex">${orig}</blockquote></div>`; text += `\n\nOn ${when}, ${hd('from')} wrote:\n` + (p.text || '').split('\n').map(l => '> ' + l).join('\n'); }
       }
       const B = 'hzm' + Math.random().toString(36).slice(2), A = 'hza' + Math.random().toString(36).slice(2), L = [];
       L.push(`From: ${encWord(info.name || 'HORIZON RCRDS')} <${info.from}>`, `To: ${encAddrs(v('to'))}`);

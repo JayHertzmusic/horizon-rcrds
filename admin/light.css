@@ -329,6 +329,8 @@ html.light .mx-menu button:hover svg { color: #000000; }
 html.light .mx-sub:hover > button svg { color: #000000; }
 html.light .mx-menu hr { border-top: 1px solid rgba(0, 0, 0, 0.08); }
 html.light .mrow.ctx { background: rgba(0, 0, 0, 0.06); }
+html.light .m-seen .sb-one { box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.18); }
+html.light .m-seen .sb-one.rep::after { border: 2px solid #f4f4f4; }
 
 html.light .hm-me { -webkit-background-clip: text; background-clip: text; color: transparent; }
 html.light .pub-sw.on .pub-knob { background: #22c55e; }

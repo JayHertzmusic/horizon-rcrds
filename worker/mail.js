@@ -118,6 +118,49 @@ async function templates(env) {
   try { const v = JSON.parse(row?.value || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
 }
 
+// quién del team ha abierto cada correo (at = la última vez) y quién lo ha contestado desde el panel (replied)
+let seenReady = false;
+async function seenTable(DB) {
+  if (seenReady) return;
+  await DB.prepare('CREATE TABLE IF NOT EXISTS mail_seen (thread_id TEXT NOT NULL, email TEXT NOT NULL, at INTEGER NOT NULL, replied INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (thread_id, email))').run();
+  seenReady = true;
+}
+async function seenMap(DB, ids) {
+  if (!ids.length) return {};
+  await seenTable(DB);
+  const rows = (await DB.prepare(`SELECT x.thread_id AS tid, x.email, x.at, x.replied,
+      COALESCE(m.label, (SELECT ps.name FROM panel_sessions ps WHERE ps.email = x.email AND length(ps.name) > 0 ORDER BY ps.created_at DESC LIMIT 1), m.name) AS name,
+      COALESCE(CASE WHEN p.avatar IS NOT NULL THEN '/api/public/avatar/' || p.avatar END, m.picture, (SELECT ps.picture FROM panel_sessions ps WHERE ps.email = x.email AND length(ps.picture) > 0 ORDER BY ps.created_at DESC LIMIT 1)) AS picture,
+      COALESCE(p.color, m.color) AS color
+    FROM mail_seen x LEFT JOIN panel_members m ON m.email = x.email LEFT JOIN panel_profiles p ON p.email = x.email
+    WHERE x.thread_id IN (SELECT value FROM json_each(?)) ORDER BY x.at`).bind(JSON.stringify(ids)).all()).results;
+  const out = {};
+  for (const r of rows) (out[r.tid] = out[r.tid] || []).push({ email: r.email, name: r.name || r.email.split('@')[0], picture: r.picture || '', color: r.color || '', at: r.at, replied: r.replied || 0 });
+  return out;
+}
+async function markSeen(DB, tid, email, replied) {
+  if (!email || !ID.test(tid)) return;
+  await seenTable(DB);
+  const t = Date.now();
+  await DB.prepare(`INSERT INTO mail_seen (thread_id, email, at, replied) VALUES (?, ?, ?, ?) ON CONFLICT(thread_id, email) DO UPDATE SET at = excluded.at${replied ? ', replied = excluded.replied' : ''}`).bind(tid, email, t, replied ? t : 0).run();
+}
+
+// correos nuevos (aviso en directo): los últimos sin leer de Primary. Una pregunta barata (historyId) y, solo si cambió, la lista
+let newCache = null;
+async function newMail(env) {
+  if (newCache && newCache.at > Date.now() - 20e3) return newCache.v;
+  const prof = await gmail(env, '/profile');
+  if (newCache && newCache.h === prof.historyId) { newCache.at = Date.now(); return newCache.v; }
+  const j = await gmail(env, '/threads?maxResults=5&labelIds=INBOX&labelIds=CATEGORY_PERSONAL&labelIds=UNREAD');
+  const got = await gmailBatch(env, (j.threads || []).map(t => `/threads/${t.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`));
+  const v = { threads: got.filter(Boolean).map(t => {
+    const ms = t.messages || [], last = ms[ms.length - 1] || {}, other = [...ms].reverse().find(x => !(x.labelIds || []).includes('SENT')) || last;
+    return { id: t.id, k: t.id + '.' + (last.id || ''), from: hdr(other, 'from'), subject: hdr(ms[0] || {}, 'subject'), at: Number(last.internalDate) || 0, mine: (last.labelIds || []).includes('SENT') };
+  }) };
+  newCache = { at: Date.now(), h: prof.historyId, v };
+  return v;
+}
+
 export async function mailApi(req, env, s, url, audit) {
   if (s.sync || !(s.owner || s.mail)) throw new MailError(403, 'You have no access to Mail. Ask an owner.');
   const p = url.pathname, m = req.method, peek = url.searchParams.get('peek') === '1';   // peek: «Test» (no marca como leído)
@@ -125,6 +168,7 @@ export async function mailApi(req, env, s, url, audit) {
     const [who, f] = await Promise.all([senders(env), folders(env, url.searchParams.get('fresh') === '1')]);
     return { me: who.me, from: who.from, contact: who.contact, name: who.name, signature: who.signature, unread: f.counts.inbox, counts: f.counts, labels: f.labels };
   }
+  if (p === '/api/mail/new' && m === 'GET') return newMail(env);
   if (p === '/api/mail/threads' && m === 'GET') {
     const boxId = String(url.searchParams.get('box') || 'inbox');
     const box = BOXES[boxId] || (/^L:[\w-]+$/.test(boxId) ? { labels: [boxId.slice(2)] } : BOXES.inbox);
@@ -150,7 +194,8 @@ export async function mailApi(req, env, s, url, audit) {
     };
     // en orden; los que el panel ya tiene van solo con su clave
     const threads = list.map(t => known.has(key(t)) ? { id: t.id, k: key(t), same: 1 } : got[t.id] ? row(got[t.id], key(t)) : null).filter(Boolean);
-    return { threads, next: j.nextPageToken || '', total: j.resultSizeEstimate || 0, unread: lab ? lab.threadsUnread || 0 : null };
+    const seen = await seenMap(env.DB, list.map(t => t.id)).catch(() => ({}));
+    return { threads, seen, next: j.nextPageToken || '', total: j.resultSizeEstimate || 0, unread: lab ? lab.threadsUnread || 0 : null };
   }
   let mt = p.match(/^\/api\/mail\/thread\/([\w-]{6,40})$/);
   if (mt && m === 'GET') {
@@ -160,6 +205,8 @@ export async function mailApi(req, env, s, url, audit) {
   }
   // una acción sobre uno o varios correos: archivar, papelera, restaurar, spam, leído, estrella, mover a una etiqueta…
   mt = p.match(/^\/api\/mail\/thread\/([\w-]{6,40})\/(\w+)$/);
+  // abierto en el panel: queda quién lo ha visto (en «Test» no)
+  if (mt && m === 'POST' && mt[2] === 'seen') { if (!peek) await markSeen(env.DB, mt[1], s.email, false); return { seen_by: (await seenMap(env.DB, [mt[1]]))[mt[1]] || [] }; }
   if ((mt && m === 'POST') || (p === '/api/mail/bulk' && m === 'POST')) {
     const b = mt ? { ids: [mt[1]], act: mt[2] } : await req.json().catch(() => ({}));
     const ids = (Array.isArray(b.ids) ? b.ids : []).map(String).filter(x => ID.test(x)).slice(0, 40), act = String(b.act || '');
@@ -233,6 +280,7 @@ export async function mailApi(req, env, s, url, audit) {
     const b = 'hz' + crypto.randomUUID().replace(/-/g, '');
     const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(thread ? { threadId: thread } : {})}\r\n--${b}\r\nContent-Type: message/rfc822\r\n\r\n${raw}\r\n--${b}--`;
     const r = await gmail(env, 'https://gmail.googleapis.com/upload/gmail/v1/users/me/messages/send?uploadType=multipart', { method: 'POST', headers: { 'Content-Type': `multipart/related; boundary=${b}` }, body }, true, false);   // (sin reintento: nunca dos envíos)
+    if (thread) await markSeen(env.DB, thread, s.email, true).catch(() => {});
     await audit(`Sent an email${thread ? ' (reply)' : ''} to ${decodeWord(get('To')).slice(0, 120)}: ${decodeWord(get('Subject')).slice(0, 120)}`);
     return { ok: true, id: r.id, threadId: r.threadId };
   }

@@ -129,8 +129,9 @@
     forms: '<rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 8h6M9 12h6M9 16h3"/>',
     demo: '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
     sign: '<path d="M3 17c2-3 4-3 5 0s3 3 5 0M14.5 5.5l4 4L10 18H6v-4z"/>',
+    mail: '<rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4 6.5 8 6 8-6"/>',
   };
-  function liveNotify({ kind = 'forms', title, sub = '', color = '#22c55e', go: to = '' }) {
+  function liveNotify({ kind = 'forms', title, sub = '', color = '#22c55e', go: to = '', then = null }) {
     let box = $('#hz-live');
     if (!box) { box = document.createElement('div'); box.id = 'hz-live'; box.setAttribute('role', 'status'); box.setAttribute('aria-live', 'polite'); document.body.append(box); }
     const el = document.createElement('div');
@@ -138,7 +139,7 @@
     el.innerHTML = `<button type="button" class="lv-card"><span class="lv-ico"><svg viewBox="0 0 24 24" aria-hidden="true">${LIVE_ICO[kind] || LIVE_ICO.forms}</svg></span>
       <span class="lv-txt"><b>${esc(title)}</b>${sub ? `<small>${esc(sub)}</small>` : ''}</span><span class="lv-t">now</span></button>`;
     const out = () => { if (el.classList.contains('out')) return; el.classList.add('out'); setTimeout(() => el.remove(), 450); };
-    el.querySelector('button').addEventListener('click', async () => { out(); if (to && to !== view && await leaveOk()) { filter = ''; go(to); } });
+    el.querySelector('button').addEventListener('click', async () => { out(); if (to && to !== view) { if (!await leaveOk()) return; filter = ''; go(to); } then?.(); });
     box.prepend(el);
     requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('in')));
     [...box.children].slice(4).forEach(x => { x.classList.add('out'); setTimeout(() => x.remove(), 450); });   // como mucho 4 a la vez
@@ -4042,6 +4043,7 @@
       const [info, r] = await Promise.all([mail.info || api('GET', '/api/mail/info' + mq('?')),
         api('GET', `/api/mail/threads?box=${encodeURIComponent(mail.box)}&cat=${mailCats() ? mail.cat : ''}&n=${mailWant(more)}&q=${encodeURIComponent(mail.q)}&page=${encodeURIComponent(more ? mail.next : '')}&known=${encodeURIComponent(knownKeys())}${mq()}`)]);
       const rows = r.threads.map(x => x.same ? mailMeta.get(x.k) : x).filter(Boolean); remember(r.threads);
+      for (const x of rows) x.seen_by = r.seen?.[x.id] || [];
       mail.info = info; if (r.unread != null) { mail.info.unread = r.unread; if (mail.info.counts) mail.info.counts.inbox = r.unread; }
       if (more && mail.list) { const have = new Set(mail.list.map(x => x.id)); mail.list = mail.list.concat(rows.filter(x => !have.has(x.id))); }
       else { const keep = mail.list && had; mail.list = rows; if (!keep) { mail.off = 0; mail.sel = new Set(); } else { const ids = new Set(rows.map(x => x.id)); mail.sel = new Set([...mail.sel].filter(id => ids.has(id))); if (mail.off >= rows.length) mail.off = 0; } }
@@ -4105,6 +4107,7 @@
           <span class="m-from">${t.draft && mail.box !== 'sent' ? '<em>Draft</em> ' : ''}${esc(mailWho(t.from) || (t.draft ? '(no recipient)' : '(no sender)'))}${t.count > 1 ? ` <i>${t.count}</i>` : ''}</span>
           <span class="m-subj">${(t.labels || []).map(lab).filter(Boolean).slice(0, 3).map(l => `<span class="m-ltag" style="--c:${esc(l.color || '#8b8f98')}">${esc(l.name)}</span>`).join('')}<b>${esc(t.subject || '(no subject)')}</b><span> — ${esc(t.snippet.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&'))}</span></span>
           <span class="m-clip" aria-label="${t.files ? 'Has attachments' : ''}">${t.files ? '⎘' : ''}</span>
+          <span class="m-who">${mail.box === 'sent' || mail.box === 'drafts' ? '' : mailSeenAvs(t, t.at)}</span>
           <span class="m-date">${esc(mailDate(t.at))}</span>
         </li>`).join('');
     const nSel = mail.sel.size;
@@ -4177,6 +4180,20 @@
     d.querySelectorAll('*').forEach(el => { for (const a of [...el.attributes]) if (/^on/i.test(a.name) || (/^(href|src|xlink:href|action)$/i.test(a.name) && /^\s*(javascript|vbscript|data:text)/i.test(a.value))) el.removeAttribute(a.name); });
     return d.body.innerHTML;
   }
+  // quién del team ha visto / contestado el correo (solo cuenta si fue después del último mensaje: si llega uno nuevo, se vuelve a mirar)
+  const mailSeenList = (t, last) => (t.seen_by || []).filter(x => x.at >= (last || 0) - 1000 || x.replied >= (last || 0) - 120e3).map(x => ({ ...x, rep: x.replied && x.replied >= (last || 0) - 120e3 }));
+  const seenTip = list => list.map(x => `${x.rep ? 'Replied' : 'Seen'} by ${x.name} · ${fmtDate(x.rep ? x.replied : x.at)}`).join('\n');
+  function mailSeenAvs(t, last) {
+    const list = mailSeenList(t, last); if (!list.length) return '';
+    const shown = list.slice(-3), more = list.length - shown.length;
+    return `<span class="m-seen" title="${esc(seenTip(list))}" aria-label="${esc(seenTip(list))}">${shown.map(x => `<span class="sb-one${x.rep ? ' rep' : ''}">${avatar(x.picture, x.name, x.color)}</span>`).join('')}${more > 0 ? `<span class="sb-more">+${more}</span>` : ''}</span>`;
+  }
+  function mailSeenLine(t) {
+    const last = Math.max(0, ...(t.messages || []).map(m => m.at || 0)), list = mailSeenList(t, last);
+    const reps = list.filter(x => x.rep), seen = list.filter(x => !x.rep);
+    const names = a => a.map(x => esc(x.name)).join(', ');
+    return `<div class="m-seenline" id="m-seen">${list.length ? `${mailSeenAvs(t, last)}<span>${reps.length ? `<b class="rep">Replied by ${names(reps)}</b>` : ''}${reps.length && seen.length ? ' · ' : ''}${seen.length ? `Seen by ${names(seen)}` : ''}</span>` : ''}</div>`;
+  }
   function mailReader() {
     if (mail.threadErr) return `<div class="m-empty"><p class="login-error" role="alert">${esc(mail.threadErr)}</p></div>`;
     const t0 = mail.thread;
@@ -4187,7 +4204,7 @@
     const labs = [...new Set(t.messages.flatMap(m => m.labels))].map(id => (mail.info?.labels || []).find(l => l.id === id)).filter(Boolean);
     const sys = [...new Set(t.messages.flatMap(m => m.labels))].filter(x => ['INBOX', 'SPAM', 'TRASH'].includes(x)).map(x => ({ INBOX: 'Inbox', SPAM: 'Spam', TRASH: 'Trash' })[x]);
     return `
-      <div class="m-rhead"><h2>${esc(hd(first, 'subject') || '(no subject)')}</h2>${sys.map(x => `<span class="m-ltag sys">${x}</span>`).join('')}${labs.map(l => `<span class="m-ltag" style="--c:${esc(l.color || '#8b8f98')}">${esc(l.name)}<button type="button" data-munlabel="${esc(l.id)}" aria-label="Remove label">✕</button></span>`).join('')}</div>
+      <div class="m-rhead"><h2>${esc(hd(first, 'subject') || '(no subject)')}</h2>${sys.map(x => `<span class="m-ltag sys">${x}</span>`).join('')}${labs.map(l => `<span class="m-ltag" style="--c:${esc(l.color || '#8b8f98')}">${esc(l.name)}<button type="button" data-munlabel="${esc(l.id)}" aria-label="Remove label">✕</button></span>`).join('')}</div>${mailSeenLine(t0)}
       <div class="m-msgs${t0.ready ? ' ready' : ''}">${t.messages.map((m, i) => {
         const b = mailParsed(m), mine = m.labels.includes('SENT') || m.labels.includes('DRAFT');
         // todos abiertos (se pueden plegar con un clic en la cabecera, sin recargar nada)
@@ -4406,6 +4423,9 @@
       t.scrollLast = true; mail.thread = t;
       // leído: se marca aparte, sin esperar (en «Test» no)
       if (!preview && t.messages.some(m => m.labels.includes('UNREAD'))) { api('POST', `/api/mail/thread/${id}/read`).catch(() => {}); t.messages.forEach(m => { m.labels = m.labels.filter(x => x !== 'UNREAD'); }); delete mail.pre[id]; }
+      // queda que lo has visto (los demás ven tu foto en ese correo)
+      api('POST', `/api/mail/thread/${id}/seen${mq('?')}`).then(r => { if (row) row.seen_by = r.seen_by || []; if (mail.thread?.id === id) { mail.thread.seen_by = r.seen_by || []; const el = $('#m-seen'); if (el) el.outerHTML = mailSeenLine(mail.thread); } }).catch(() => {});
+      t.seen_by = row?.seen_by || [];
       if (row?.unread) { row.unread = false; if (mail.info?.unread && mail.box === 'inbox') { mail.info.unread--; if (mail.info.counts) mail.info.counts.inbox = mail.info.unread; } }
     } catch (e) {
       if (mail.open !== id) return;
@@ -4721,6 +4741,23 @@
     }
   });
   // ---- menú de clic derecho en la lista de correos (como Gmail); Shift + clic derecho = el del navegador ----
+  // ---- aviso en directo cuando llega un correo nuevo (Primary, sin leer), en cualquier sección; al pulsarlo se abre ----
+  let mailKnown = null;
+  async function checkNewMail() {
+    if (!auth || preview || !canMail() || document.hidden) return;
+    try {
+      const r = await api('GET', '/api/mail/new'), list = (r.threads || []).filter(t => !t.mine);
+      if (!mailKnown) { mailKnown = new Set(list.map(t => t.k)); return; }
+      const fresh = list.filter(t => !mailKnown.has(t.k) && Date.now() - t.at < 30 * 60e3);
+      list.forEach(t => mailKnown.add(t.k));
+      if (!fresh.length) return;
+      for (const t of fresh.slice(0, 3).reverse()) liveNotify({ kind: 'mail', title: `New email · ${mailWho(t.from) || 'Unknown'}`, sub: t.subject || '(no subject)', color: '#ef4444', go: 'mail', then: () => { if (mail.box !== 'inbox') { mail.box = 'inbox'; mail.list = null; loadMail(); } openThread(t.id); } });
+      if (view === 'mail' && mail.list && !mail.open && !mail.off && !mail.sel.size && !mail.loading) loadMail();
+      refreshMailInfo();
+    } catch { /* sin aviso */ }
+  }
+  setInterval(checkNewMail, 30e3); setTimeout(checkNewMail, 4000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkNewMail(); });
   const ctxClose = () => { $('#m-ctx')?.remove(); $$('.mrow.ctx').forEach(r => r.classList.remove('ctx')); };
   document.addEventListener('contextmenu', e => {
     const row = view === 'mail' && !e.shiftKey && e.target.closest?.('.mrow[data-mth]');

@@ -3995,6 +3995,12 @@
     promotions: '<path d="M12.5 3.5h7.5v7.5l-9 9-7.5-7.5z"/><path d="M16.3 7.3v.1"/>',
     social: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9.5" r="2.4"/><path d="M15.8 14.6a4.6 4.6 0 0 1 4.7 4.9"/>',
     updates: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5"/><path d="M12 7.6v.2"/>',
+    reply: '<path d="M9.5 7.5 4.5 12l5 4.5"/><path d="M4.8 12h9.2a5.5 5.5 0 0 1 5.5 5.5v1"/>',
+    replyall: '<path d="M8 7.5 3.5 12 8 16.5"/><path d="M12.5 7.5 8 12l4.5 4.5"/><path d="M8.3 12h6.2a5 5 0 0 1 5 5v1.5"/>',
+    forward: '<path d="m14.5 7.5 5 4.5-5 4.5"/><path d="M19.2 12H10a5.5 5.5 0 0 0-5.5 5.5v1"/>',
+    search: '<circle cx="11" cy="11" r="6.5"/><path d="m16 16 4 4"/>',
+    back: '<path d="M14.5 6 8.5 12l6 6"/>',
+    move: '<path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2.2h7a2 2 0 0 1 2 2v7.8a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/><path d="M10 13.5h5.5M13.3 11.2l2.3 2.3-2.3 2.3"/>',
     template: '<rect x="4" y="3.5" width="16" height="17" rx="2"/><path d="M8 8h8M8 12h8M8 16h5"/>',
   };
   const mico = k => `<svg viewBox="0 0 24 24" aria-hidden="true">${MAIL_ICO[k] || MAIL_ICO.label}</svg>`;
@@ -4082,11 +4088,11 @@
   function mailBulkBtns(cls = '') {
     const b = (act, label) => `<button type="button" class="ic m-act${cls}" data-mbulk="${act}" title="${label}" aria-label="${label}">${mico(act)}</button>`;
     const labs = mail.info?.labels || [];
-    const move = `<select class="m-move" data-mmove aria-label="Move to"><option value="">Move to…</option>${mail.box !== 'inbox' ? '<option value="INBOX">Inbox</option>' : ''}${labs.map(l => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')}</select>`;
-    const label = labs.length ? `<select class="m-move" data-mlabel aria-label="Label as"><option value="">Label…</option>${labs.map(l => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')}</select>` : '';
+    const move = `<span class="m-sel">${mico('move')}<select class="m-move" data-mmove aria-label="Move to"><option value="">Move to</option>${mail.box !== 'inbox' ? '<option value="INBOX">Inbox</option>' : ''}${labs.map(l => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')}</select></span>`;
+    const label = labs.length ? `<span class="m-sel">${mico('label')}<select class="m-move" data-mlabel aria-label="Label as"><option value="">Label</option>${labs.map(l => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('')}</select></span>` : '';
     if (mail.box === 'trash') return b('restore', 'Restore') + b('read', 'Mark as read') + b('unread', 'Mark as unread');
     if (mail.box === 'spam') return b('notspam', 'Not spam') + b('trash', 'Delete');
-    return (mail.box === 'inbox' || mail.box.startsWith('L:') ? b('archive', 'Archive') : '') + b('spam', 'Report spam') + b('trash', 'Delete') + b('read', 'Mark as read') + b('unread', 'Mark as unread') + move + label;
+    return (mail.box === 'inbox' || mail.box.startsWith('L:') ? b('archive', 'Archive') : '') + b('spam', 'Report spam') + b('trash', 'Delete') + b('read', 'Mark as read') + b('unread', 'Mark as unread') + '<i class="m-div" aria-hidden="true"></i>' + move + label;
   }
   function mailPage() {
     const info = mail.info;
@@ -4104,7 +4110,7 @@
     const nSel = mail.sel.size;
     const cats = mailCats() ? `<div class="m-cats" role="tablist">${MAIL_CATS.map(([id, l]) => `<button type="button" role="tab" class="${mail.cat === id ? 'on' : ''}" data-mcat="${id}" aria-selected="${mail.cat === id}">${mico(id)}<span>${l}</span></button>`).join('')}</div>` : '';
     const inner = mail.open ? `
-        <div class="m-tool"><span class="m-tl"><button type="button" class="ic m-act" data-mail="close" title="Back to ${esc(boxLabel(mail.box))}" aria-label="Back">←</button>${mail.thread ? mailBulkBtns(' one') : ''}</span>${mailActions()}</div>
+        <div class="m-tool"><span class="m-tl"><button type="button" class="m-back" data-mail="close" title="Back to ${esc(boxLabel(mail.box))}" aria-label="Back to ${esc(boxLabel(mail.box))}">${mico('back')}<span>${esc(boxLabel(mail.box))}</span></button>${mail.thread ? '<i class="m-div" aria-hidden="true"></i>' + mailBulkBtns(' one') : ''}</span>${mailActions()}</div>
         <section class="m-read" id="m-read" aria-live="polite" data-tid="${esc(mail.thread?.id || '')}">${mailReader()}</section>` : `
         <div class="m-tool"><span class="m-tl"><label class="m-ck all" title="Select all"><input type="checkbox" data-mselall aria-label="Select all"><span></span></label>
           ${nSel ? `<span class="m-nsel">${nSel} selected</span>${mailBulkBtns()}` : `<button type="button" class="ic m-act" data-mail="refresh" title="Refresh" aria-label="Refresh">${mico('refresh')}</button>`}</span>
@@ -4714,6 +4720,60 @@
       } catch (er) { toast(er.message); }
     }
   });
+  // ---- menú de clic derecho en la lista de correos (como Gmail); Shift + clic derecho = el del navegador ----
+  const ctxClose = () => { $('#m-ctx')?.remove(); $$('.mrow.ctx').forEach(r => r.classList.remove('ctx')); };
+  document.addEventListener('contextmenu', e => {
+    const row = view === 'mail' && !e.shiftKey && e.target.closest?.('.mrow[data-mth]');
+    ctxClose();
+    if (!row) return;
+    const id = row.dataset.mth, t = mail.list?.find(x => x.id === id); if (!t) return;
+    e.preventDefault();
+    const ids = mail.sel.has(id) && mail.sel.size > 1 ? [...mail.sel] : [id], many = ids.length > 1, box = mail.box;
+    const labs = mail.info?.labels || [], who = mailWho(t.from), addr = mailAddr(t.from);
+    const it = (act, icon, label, l = '') => `<button type="button" role="menuitem" data-mctx="${act}"${l ? ` data-l="${esc(l)}"` : ''}>${icon}<span>${esc(label)}</span></button>`;
+    const sub = (icon, label, items) => items ? `<div class="mx-sub" role="none"><button type="button" role="menuitem" aria-haspopup="menu">${mico(icon)}<span>${label}</span><i aria-hidden="true">›</i></button><div class="mx-menu mx-side" role="menu">${items}</div></div>` : '';
+    const dot = l => `<i class="m-ldot" style="--c:${esc(l.color || '#8b8f98')}"></i>`;
+    const parts = [];
+    if (!many && box !== 'drafts') parts.push(it('reply', mico('reply'), 'Reply') + it('replyall', mico('replyall'), 'Reply all') + it('forward', mico('forward'), 'Forward'));
+    let acts = box === 'trash' ? it('restore', mico('restore'), 'Restore')
+      : box === 'spam' ? it('notspam', mico('notspam'), 'Not spam') + it('trash', mico('trash'), 'Delete')
+      : (box === 'inbox' || box.startsWith('L:') ? it('archive', mico('archive'), 'Archive') : '') + it('trash', mico('trash'), 'Delete') + it('spam', mico('spam'), 'Report spam');
+    acts += ids.some(x => mail.list.find(r => r.id === x)?.unread) ? it('read', mico('read'), many ? 'Mark as read' : 'Mark as read') : it('unread', mico('unread'), 'Mark as unread');
+    if (!many) acts += it('star', mico('starred'), t.starred ? 'Remove star' : 'Add star');
+    parts.push(acts);
+    if (box !== 'trash' && box !== 'spam') parts.push(sub('move', 'Move to', (box !== 'inbox' ? it('move', mico('inbox'), 'Inbox', 'INBOX') : '') + labs.map(l => it('move', dot(l), l.name, l.id)).join(''))
+      + sub('label', 'Label as', labs.map(l => it('label', dot(l), l.name, l.id)).join('')));
+    if (!many && addr) parts.push(it('from', mico('search'), `Find emails from ${who}`));
+    const m = document.createElement('div');
+    m.id = 'm-ctx'; m.className = 'mx-menu'; m.setAttribute('role', 'menu');
+    m.innerHTML = parts.filter(Boolean).join('<hr>');
+    document.body.appendChild(m); row.classList.add('ctx');
+    const w = m.offsetWidth, h = m.offsetHeight;
+    m.style.left = Math.max(8, Math.min(e.clientX, innerWidth - w - 8)) + 'px';
+    m.style.top = Math.max(8, e.clientY + h > innerHeight - 8 ? innerHeight - h - 8 : e.clientY) + 'px';
+    if (e.clientX + w * 2 > innerWidth) m.classList.add('mx-left');
+    // submenú: que no se salga por abajo
+    m.addEventListener('mouseover', ev => { const sd = ev.target.closest('.mx-sub')?.querySelector('.mx-side'); if (!sd || sd.dataset.ok) return; sd.dataset.ok = '1'; const r = sd.getBoundingClientRect(); if (r.bottom > innerHeight - 8) sd.style.top = (innerHeight - 8 - r.bottom - 6) + 'px'; });
+    m.addEventListener('click', async ev => {
+      const b = ev.target.closest('[data-mctx]'); if (!b) return;
+      const act = b.dataset.mctx; ctxClose();
+      if (act === 'reply' || act === 'replyall' || act === 'forward') {
+        if (mailTest()) return;
+        if ($('#m-composer') && !await askCloseComposer()) return;
+        if (!mail.info) { try { mail.info = await api('GET', '/api/mail/info' + mq('?')); } catch (er) { toast(er.message); return; } }
+        if (mail.open !== id || !mail.thread) await openThread(id);
+        if (mail.thread?.id === id) composeSheet(act);
+        return;
+      }
+      if (act === 'star') { $(`.mrow[data-mth="${CSS.escape(id)}"] [data-mstar]`)?.click(); return; }
+      if (act === 'from') { mail.q = 'from:' + addr; mail.off = 0; mail.list = null; mail.open = null; mail.thread = null; mail.sel = new Set(); mailRender(); loadMail(); return; }
+      if (act === 'trash' && ids.length > 1 && !await confirmBox(`Move ${ids.length} emails to the Gmail trash? (They can be restored for 30 days.)`, 'Move to trash')) return;
+      mailBulk(ids, act, b.dataset.l);
+    });
+  });
+  document.addEventListener('mousedown', e => { if (!e.target.closest?.('#m-ctx')) ctxClose(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') ctxClose(); });
+  addEventListener('resize', ctxClose); addEventListener('wheel', e => { if (!e.target.closest?.('#m-ctx')) ctxClose(); }, { passive: true });
   document.addEventListener('change', e => {
     if (view === 'mail' && e.target.matches?.('[data-mmove], [data-mlabel]')) {
       const label = e.target.value, act = e.target.matches('[data-mmove]') ? 'move' : 'label'; e.target.value = '';

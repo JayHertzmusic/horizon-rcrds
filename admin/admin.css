@@ -1776,3 +1776,9 @@ html.light .theme-tg .tg-moon { opacity: 0; transform: rotate(90deg) scale(.4); 
 .m-seenline .av, .m-seenline img.av { width: 22px; height: 22px; }
 .m-seenline b.rep { font-weight: 600; color: #4ade80; }
 .m-seenline.m-seenend { margin: 2px 0 6px; }
+/* móvil: las pestañas (Contracts, Gates…) no caben: se deslizan dentro de su fila en vez de ensanchar la página */
+@media (max-width: 760px) {
+  .ct-tabs { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+  .ct-tabs::-webkit-scrollbar { display: none; }
+  .ct-tabs button { flex: none; white-space: nowrap; padding: 10px 12px; }
+}

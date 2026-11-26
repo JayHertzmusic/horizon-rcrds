@@ -1799,3 +1799,5 @@ html.light .theme-tg .tg-moon { opacity: 0; transform: rotate(90deg) scale(.4); 
   .row.cal-todo { grid-template-areas: none; grid-template-columns: minmax(0, 1fr) auto; row-gap: 8px; }
   .row.cal-todo .meta { grid-area: auto; grid-column: 1 / -1; }
 }
+/* Home en pantallas pequeñas: una sola columna (una regla posterior le devolvía la columna de 300px y todo quedaba en 33px) */
+@media (max-width: 900px) { .hm { grid-template-columns: minmax(0, 1fr); } }

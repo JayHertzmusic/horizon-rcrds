@@ -1774,3 +1774,4 @@ html.light .theme-tg .tg-moon { opacity: 0; transform: rotate(90deg) scale(.4); 
 .m-seenline .m-seen { padding-left: 6px; }
 .m-seenline .av, .m-seenline img.av { width: 22px; height: 22px; }
 .m-seenline b.rep { font-weight: 600; color: #4ade80; }
+.m-seenline.m-seenend { margin: 2px 0 6px; }

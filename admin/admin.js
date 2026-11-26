@@ -4188,11 +4188,11 @@
     const shown = list.slice(-3), more = list.length - shown.length;
     return `<span class="m-seen" title="${esc(seenTip(list))}" aria-label="${esc(seenTip(list))}">${shown.map(x => `<span class="sb-one${x.rep ? ' rep' : ''}">${avatar(x.picture, x.name, x.color)}</span>`).join('')}${more > 0 ? `<span class="sb-more">+${more}</span>` : ''}</span>`;
   }
-  function mailSeenLine(t) {
+  function mailSeenLine(t, end) {
     const last = Math.max(0, ...(t.messages || []).map(m => m.at || 0)), list = mailSeenList(t, last);
     const reps = list.filter(x => x.rep), seen = list.filter(x => !x.rep);
     const names = a => a.map(x => esc(x.name)).join(', ');
-    return `<div class="m-seenline" id="m-seen">${list.length ? `${mailSeenAvs(t, last)}<span>${reps.length ? `<b class="rep">Replied by ${names(reps)}</b>` : ''}${reps.length && seen.length ? ' · ' : ''}${seen.length ? `Seen by ${names(seen)}` : ''}</span>` : ''}</div>`;
+    return `<div class="m-seenline${end ? ' m-seenend' : ''}">${list.length ? `${mailSeenAvs(t, last)}<span>${reps.length ? `<b class="rep">Replied by ${names(reps)}</b>` : ''}${reps.length && seen.length ? ' · ' : ''}${seen.length ? `Seen by ${names(seen)}` : ''}</span>` : ''}</div>`;
   }
   function mailReader() {
     if (mail.threadErr) return `<div class="m-empty"><p class="login-error" role="alert">${esc(mail.threadErr)}</p></div>`;
@@ -4218,6 +4218,7 @@
           <div class="m-files" data-mfiles="${i}">${files}</div>
         </article>`;
       }).join('')}</div>
+      ${mailSeenLine(t0, true)}
       <div class="m-reply"><button type="button" class="m-rbtn" data-mail="reply">↩ Reply</button><button type="button" class="m-rbtn" data-mail="replyall">↩↩ Reply all</button><button type="button" class="m-rbtn" data-mail="forward">↪ Forward</button></div>`;
   }
   // una foto que ya se ve dentro del correo no va en la lista de adjuntos (va en «N images»)
@@ -4424,7 +4425,7 @@
       // leído: se marca aparte, sin esperar (en «Test» no)
       if (!preview && t.messages.some(m => m.labels.includes('UNREAD'))) { api('POST', `/api/mail/thread/${id}/read`).catch(() => {}); t.messages.forEach(m => { m.labels = m.labels.filter(x => x !== 'UNREAD'); }); delete mail.pre[id]; }
       // queda que lo has visto (los demás ven tu foto en ese correo)
-      api('POST', `/api/mail/thread/${id}/seen${mq('?')}`).then(r => { if (row) row.seen_by = r.seen_by || []; if (mail.thread?.id === id) { mail.thread.seen_by = r.seen_by || []; const el = $('#m-seen'); if (el) el.outerHTML = mailSeenLine(mail.thread); } }).catch(() => {});
+      api('POST', `/api/mail/thread/${id}/seen${mq('?')}`).then(r => { if (row) row.seen_by = r.seen_by || []; if (mail.thread?.id === id) { mail.thread.seen_by = r.seen_by || []; $$('.m-seenline').forEach(el => { el.outerHTML = mailSeenLine(mail.thread, el.classList.contains('m-seenend')); }); } }).catch(() => {});
       t.seen_by = row?.seen_by || [];
       if (row?.unread) { row.unread = false; if (mail.info?.unread && mail.box === 'inbox') { mail.info.unread--; if (mail.info.counts) mail.info.counts.inbox = mail.info.unread; } }
     } catch (e) {

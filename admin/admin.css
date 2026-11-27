@@ -1831,4 +1831,6 @@ html.light .theme-tg .tg-moon { opacity: 0; transform: rotate(90deg) scale(.4); 
 .cal-hero.has-cover:hover .cal-vinyl i { animation-play-state: running; }
 .cal-hero.has-cover > :not(.cal-hero-bg):not(.cal-hero-cov):not(.cal-vinyl) { margin-right: 250px; }
 @media (prefers-reduced-motion: reduce) { .cal-live i { animation: none; } .cal-hero.has-cover > .cal-hero-cov, .cal-hero.has-cover > .cal-vinyl { transition: none; } }
-@media (max-width: 560px) { .cal-hero.has-cover > .cal-hero-cov, .cal-hero.has-cover > .cal-vinyl { display: none; } .cal-hero.has-cover > :not(.cal-hero-bg):not(.cal-hero-cov):not(.cal-vinyl) { margin-right: 0; } }
+/* tarjeta estrecha (móvil, o dos tarjetas en pantallas medianas): sin portada, que si no tapa TODAY y el título */
+.cal-hero.has-cover { container-type: inline-size; }
+@container (max-width: 459px) { .cal-hero.has-cover > .cal-hero-cov, .cal-hero.has-cover > .cal-vinyl { display: none; } .cal-hero.has-cover > :not(.cal-hero-bg):not(.cal-hero-cov):not(.cal-vinyl) { margin-right: 0; } }

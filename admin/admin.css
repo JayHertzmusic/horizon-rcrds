@@ -1808,3 +1808,18 @@ html.light .theme-tg .tg-moon { opacity: 0; transform: rotate(90deg) scale(.4); 
   70%, 100% { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .18), inset 0 1px 0 rgba(255, 255, 255, .35), 0 0 0 7px rgba(255, 59, 71, 0), 0 4px 14px -2px rgba(255, 40, 60, .65); }
 }
 @media (prefers-reduced-motion: reduce) { .nbadge, .chat-badge { animation: none; } }
+/* Calendar, el día que sale: «OUT NOW», TODAY grande con brillo del color del release, reflejo y (si hay) su portada */
+.cal-live { display: inline-flex; align-items: center; gap: 7px; margin-left: 10px; padding: 4px 10px; border-radius: 999px; background: rgba(54, 241, 155, .12); border: 1px solid rgba(54, 241, 155, .45); color: #36f19b; font: 700 10.5px/1 'Barlow', sans-serif; letter-spacing: .18em; vertical-align: middle; }
+.cal-live i { width: 7px; height: 7px; border-radius: 50%; background: #36f19b; box-shadow: 0 0 8px #36f19b; animation: cal-live 1.4s ease-in-out infinite; }
+@keyframes cal-live { 50% { opacity: .3; } }
+.cal-hero.is-live { --c: #a855f7; position: relative; overflow: hidden; isolation: isolate; border-color: color-mix(in srgb, var(--c) 70%, #fff); background: radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--c) 32%, transparent), transparent 55%), radial-gradient(80% 120% at 100% 100%, rgba(168, 85, 247, .22), transparent 60%), #0b0b0b; box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 40%, transparent), 0 20px 60px -20px var(--c); }
+.cal-hero.is-live::before { content: ''; position: absolute; top: 0; bottom: 0; left: -50%; width: 40%; background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .09), transparent); animation: cal-shine 3.5s ease-in-out infinite; z-index: 3; pointer-events: none; }
+@keyframes cal-shine { to { left: 120%; } }
+.cal-hero.is-live > * { position: relative; z-index: 2; }
+.cal-hero.is-live .cal-count b { font-size: 84px; background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--c) 55%, #fff)); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 18px color-mix(in srgb, var(--c) 60%, transparent)); }
+.cal-hero.has-cover > .cal-hero-bg { position: absolute; inset: -30px; z-index: 0; background-size: cover; background-position: center; filter: blur(38px) saturate(1.4); opacity: .45; }
+.cal-hero.has-cover::after { content: ''; position: absolute; inset: 0; z-index: 1; background: linear-gradient(90deg, #0b0b0b 25%, rgba(11, 11, 11, .55) 60%, rgba(11, 11, 11, .1)); }
+.cal-hero.has-cover > .cal-hero-cov { position: absolute; right: 20px; top: 50%; height: calc(100% - 36px); aspect-ratio: 1; object-fit: cover; border-radius: 8px; transform: translateY(-50%) rotate(2deg); box-shadow: 0 14px 40px rgba(0, 0, 0, .6); }
+.cal-hero.has-cover > :not(.cal-hero-bg):not(.cal-hero-cov) { margin-right: calc(var(--cov, 150px) + 16px); }
+@media (prefers-reduced-motion: reduce) { .cal-live i, .cal-hero.is-live::before { animation: none; } }
+@media (max-width: 560px) { .cal-hero.has-cover > .cal-hero-cov { display: none; } .cal-hero.has-cover > :not(.cal-hero-bg):not(.cal-hero-cov) { margin-right: 0; } }

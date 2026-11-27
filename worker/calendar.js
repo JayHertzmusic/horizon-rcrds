@@ -12,6 +12,8 @@ const KINDS = ['release', 'mixtape', 'other'];
 export const CALENDAR_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS calendar (id TEXT PRIMARY KEY, date TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'release', artist TEXT, title TEXT NOT NULL, cat TEXT, note TEXT, programmed INTEGER NOT NULL DEFAULT 0, contract_id TEXT, created_by TEXT, created_at INTEGER, updated_at INTEGER)`,
   `CREATE INDEX IF NOT EXISTS calendar_date ON calendar (date)`,
+  // pre-saves que publica el bot de Discord (/announce presave): su portada sale en la tarjeta del día de release
+  `CREATE TABLE IF NOT EXISTS presaves (id TEXT PRIMARY KEY, artist TEXT, title TEXT NOT NULL, link TEXT, image TEXT, at INTEGER NOT NULL)`,
 ];
 
 // lo que ya teníais en Discord (#horizon-calendar), se pone una vez
@@ -71,6 +73,7 @@ export async function calendarApi(req, env, s, url, can, audit) {
     const first = a => norm(String(a || '').split(/\s*(?:,|&|\band\b|\bx\b|\bfeat\b\.?|\bft\b\.?)\s*/i)[0]);
     const has = c => items.some(i => i.kind === 'release' && ((c.release_cat && i.cat && norm(i.cat) === norm(c.release_cat))
       || (c.release_name && norm(i.title) === norm(c.release_name) && (!i.artist || !c.artist || first(i.artist) === first(c.artist)))));
+    await withCovers(DB, items, first);
     return { items, unscheduled: signed.filter(c => !has(c)), discord: dc, canEdit: can('edit') && !s.sync };
   }
   if (p === '/api/calendar' && m === 'POST') {
@@ -254,4 +257,51 @@ async function fillCats(env) {
     if (cat && /\d/.test(cat)) ops.push(DB.prepare('UPDATE calendar SET cat = ? WHERE id = ?').bind(cat, r.id));
   }
   if (ops.length) await DB.batch(ops);
+}
+
+// portada del pre-save (bot de Discord) para cada release del calendario: mismo título y mismo artista principal
+async function withCovers(DB, items, first) {
+  const ps = (await DB.prepare("SELECT id, artist, title FROM presaves WHERE image IS NOT NULL ORDER BY at DESC LIMIT 100").all().catch(() => ({ results: [] }))).results;
+  for (const i of items) {
+    if (i.kind !== 'release') continue;
+    const p = ps.find(x => norm(x.title) === norm(i.title) && (!x.artist || !i.artist || first(x.artist) === first(i.artist) || norm(i.artist).includes(norm(x.artist)) || norm(x.artist).includes(norm(i.artist))));
+    if (p) i.cover = `/api/calendar/cover/${p.id}`;
+  }
+}
+export async function calendarCover(env, id) {
+  const f = /^ps_[a-z0-9-]{6,40}$/.test(id) ? await env.FILES.getWithMetadata('presave/' + id, { type: 'arrayBuffer' }) : null;
+  if (!f?.value) return new Response('Not found.', { status: 404 });
+  return new Response(f.value, { headers: { 'Content-Type': f.metadata?.type || 'image/jpeg', 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox" } });
+}
+/* Pre-save publicado por el bot (/announce presave → Publicar): se guarda la portada del enlace (too.fm, ffm.to…).
+   Solo desde el bot (enlace interno entre Workers, como #horizon-calendar). */
+export async function presaveHook(req, env) {
+  if ((req.headers.get('cf-connecting-ip') && env.DEV_LOGIN !== '1') || req.headers.get('x-horizon-bot') !== '1') throw new CalendarError(404, 'Not found.');
+  const b = parse(await req.text()) || {};
+  const title = clean(b.title, 160), artist = clean(b.artist, 160).replace(/^@/, ''), link = clean(b.link, 300);
+  if (!title || !/^https:\/\/[^\s"'<>]+$/i.test(link)) throw new CalendarError(400, 'Missing title or link.');
+  let image = '';
+  try {
+    const page = await fetch(link, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; HorizonSite/1.0)' }, signal: AbortSignal.timeout(15000) });
+    const og = (await page.text()).match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i)?.[1]?.replace(/&amp;/g, '&') || '';
+    if (/^https:\/\//i.test(og)) image = og;
+  } catch (e) { console.error('presave page', e.message); }
+  const id = 'ps_' + crypto.randomUUID().slice(0, 13);
+  let saved = null;
+  if (image) {
+    try {
+      const r = await fetch(image, { signal: AbortSignal.timeout(15000) });
+      const type = (r.headers.get('content-type') || '').split(';')[0];
+      const data = r.ok && /^image\/(jpeg|png|webp|gif)$/.test(type) ? await r.arrayBuffer() : null;
+      if (data && data.byteLength < 8e6) { await env.FILES.put('presave/' + id, data, { metadata: { type, at: Date.now() } }); saved = image; }
+    } catch (e) { console.error('presave image', e.message); }
+  }
+  // el mismo pre-save otra vez (se edita y se vuelve a publicar): vale el último
+  const old = (await env.DB.prepare('SELECT id, artist, title FROM presaves').all()).results.filter(x => norm(x.title) === norm(title) && norm(x.artist) === norm(artist));
+  await env.DB.batch([
+    ...old.map(x => env.DB.prepare('DELETE FROM presaves WHERE id = ?').bind(x.id)),
+    env.DB.prepare('INSERT INTO presaves (id, artist, title, link, image, at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, artist, title, link, saved, Date.now()),
+  ]);
+  for (const x of old) await env.FILES.delete('presave/' + x.id).catch(() => {});
+  return { ok: true, id, cover: !!saved };
 }

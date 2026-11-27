@@ -10,7 +10,7 @@ import { FORM_SCHEMA, FORM_LINK_COLUMNS, FormError, formsApi, publicFormsApi, fo
 import { CONTRACT_SCHEMA, CONTRACT_COLUMNS, SIGNER_COLUMNS, ContractError, contractsApi, signApi, checkDriveFiles } from './contracts.js';
 import { EmailMessage } from 'cloudflare:email';
 import { loginCodeMail } from './contract-mail.js';
-import { CALENDAR_SCHEMA, CalendarError, calendarApi, discordCalendarHook } from './calendar.js';
+import { CALENDAR_SCHEMA, CalendarError, calendarApi, discordCalendarHook, presaveHook, calendarCover } from './calendar.js';
 import { CHAIN_SCHEMA, ChainError, chainApi, scOauth, chainPublic, runChainActions } from './chain.js';
 import { horizonToken } from './gdocs.js';
 import { MailError, mailApi } from './mail.js';
@@ -757,6 +757,9 @@ async function api(req, env, p, ctx) {
     if (ctx?.waitUntil) { ctx.waitUntil(job); return json({ ok: true, queued: true }); }
     return json(await job);
   }
+  // portada de un pre-save (la misma que ya es pública en too.fm): sin sesión, porque el <img> del panel no lleva la sesión
+  if (p.startsWith('/api/calendar/cover/') && req.method === 'GET') return calendarCover(env, p.slice(20));
+  if (p === '/api/hooks/discord-presave' && req.method === 'POST') return json(await presaveHook(req, env));   // pre-save publicado por el bot → portada en Calendar
   if (p.startsWith('/api/public/')) return json(await publicFormsApi(req, env, url));   // formularios públicos (sin sesión)
   const s = await session(req, env);
   if (p === '/api/auth/me' && req.method === 'GET') return json({ user: { ...userOut(s), formsCount: await formsCount(env, s) }, sections: await sections(env) });

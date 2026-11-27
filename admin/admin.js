@@ -3850,6 +3850,12 @@
   const calDaysLeft = d => { const t = new Date(); t.setHours(12, 0, 0, 0); return Math.round((new Date(d + 'T12:00:00') - t) / 864e5); };
   const calLeftTxt = n => n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : n > 1 ? `${n} days` : n === -1 ? 'Yesterday' : `${-n} days ago`;
   const calBits = d => { const x = new Date(d + 'T12:00:00'); return { day: x.getDate(), mon: x.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase(), wd: x.toLocaleDateString('en-GB', { weekday: 'short' }).toUpperCase(), yr: x.getFullYear() }; };
+  // portada del pre-save (aún sin color en Releases): el color sale de la propia portada, como al subir un release
+  document.addEventListener('load', e => {
+    const img = e.target;
+    if (!(img instanceof HTMLImageElement) || !img.matches('.cal-hero-cov[data-pick]')) return;
+    try { img.closest('.cal-hero')?.style.setProperty('--c', pickColor(img)); } catch {}
+  }, true);
   function calendarPage() {
     if (!calData) {
       if (!calErr) setTimeout(loadCalendar, 0);
@@ -3873,9 +3879,20 @@
     // lo próximo, en grande arriba
     // el próximo de cada tipo… y todos los que salen ese mismo día (dos releases el mismo día salen los dos)
     const nextOf = k => { const f = next.find(x => x.kind === k); return f ? next.filter(x => x.kind === k && x.date === f.date) : []; };
-    const hero = list => { if (!list.length) return ''; const x = list[0], n = calDaysLeft(x.date), b = calBits(x.date), many = list.length > 1; return `
-        <div class="cal-hero${n === 0 ? ' is-today' : ''}${many ? ' is-many' : ''}">
-          <p class="mini">Next ${x.kind === 'mixtape' ? 'mixtape' : 'release'}${many ? `s · ${list.length} the same day` : ''}</p>
+    // el día que sale: portada (la del release en Releases o, si aún no está, la del pre-save del bot) y su color
+    const heroCover = x => {
+      if (x.kind !== 'release') return {};
+      const t = s => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+      const r = (repo?.releases || []).find(r => (x.cat && normCat(catOf(r)) === normCat(x.cat)) || (t(r.title) === t(x.title) && (!x.artist || t(r.artist) === t(x.artist))));
+      if (r?.image) return { src: assetSrc(r.image), color: /^#[0-9a-f]{6}$/i.test(r.color || '') ? r.color : '' };
+      return x.cover ? { src: x.cover, color: '' } : {};
+    };
+    const hero = list => { if (!list.length) return ''; const x = list[0], n = calDaysLeft(x.date), b = calBits(x.date), many = list.length > 1;
+      const cv = n === 0 && !many ? heroCover(x) : {};
+      return `
+        <div class="cal-hero${n === 0 ? ' is-today is-live' : ''}${cv.src ? ' has-cover' : ''}${many ? ' is-many' : ''}"${cv.color ? ` style="--c:${esc(cv.color)}"` : ''}>
+          ${cv.src ? `<div class="cal-hero-bg" style="background-image:url('${esc(cv.src)}')"></div><img class="cal-hero-cov" src="${esc(cv.src)}" alt=""${cv.color ? '' : ' data-pick'}>` : ''}
+          <p class="mini">Next ${x.kind === 'mixtape' ? 'mixtape' : 'release'}${many ? `s · ${list.length} the same day` : ''}${n === 0 ? '<span class="cal-live"><i></i>OUT NOW</span>' : ''}</p>
           <div class="cal-count"><b>${n <= 0 ? 'TODAY' : n}</b>${n > 0 ? `<small>${n === 1 ? 'day' : 'days'}</small>` : ''}</div>
           ${list.map(y => `<p class="cal-hero-t">${y.cat && many ? `<span class="cal-cat">${esc(y.cat)}</span> ` : ''}${y.artist ? esc(y.artist) + ' - ' : ''}${esc(y.title)}</p>`).join('')}
           <p class="cal-hero-s">${x.cat && !many ? `<span class="cal-cat">${esc(x.cat)}</span>` : ''}${b.wd} ${b.day} ${b.mon} ${b.yr}</p>

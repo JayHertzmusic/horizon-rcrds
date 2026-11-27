@@ -271,11 +271,14 @@ export async function mailApi(req, env, s, url, audit) {
     const raw = await req.text();
     if (raw.length > 18e6) throw new MailError(413, 'Too big: attachments can be up to 12 MB in total.');
     const end = raw.search(/\r?\n\r?\n/), head = raw.slice(0, end < 0 ? 20000 : Math.min(end, 20000));
-    const get = n => (head.match(new RegExp(`^${n}:\\s*((?:.*)(?:\\r?\\n[ \\t].*)*)`, 'im')) || [])[1]?.replace(/\r?\n[ \t]/g, ' ').trim() || '';
+    // ([ \t]*: con \s* una cabecera vacía se comía la línea siguiente y el historial ponía «Date: …» como asunto)
+    const get = n => (head.match(new RegExp(`^${n}:[ \\t]*((?:.*)(?:\\r?\\n[ \\t].*)*)`, 'im')) || [])[1]?.replace(/\r?\n[ \t]/g, ' ').trim() || '';
     const who = await senders(env);
     const from = (get('From').match(/<([^>]+)>/) || [, get('From')])[1].trim().toLowerCase();
     if (!who.from || from !== who.from.toLowerCase()) throw new MailError(400, 'The sender is not valid.');
     if (!get('To') && !get('Cc') && !get('Bcc')) throw new MailError(400, 'Add who it goes to.');
+    // sin asunto, el servidor que envía como contact@ (Resend) lo devuelve: «550 Missing subject field»
+    if (!get('Subject')) throw new MailError(400, 'Add a subject: emails without one are bounced and never arrive.');
     const thread = String(url.searchParams.get('thread') || '').replace(/[^\w-]/g, '').slice(0, 40);
     const b = 'hz' + crypto.randomUUID().replace(/-/g, '');
     const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(thread ? { threadId: thread } : {})}\r\n--${b}\r\nContent-Type: message/rfc822\r\n\r\n${raw}\r\n--${b}--`;

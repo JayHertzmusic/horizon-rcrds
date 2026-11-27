@@ -4575,6 +4575,8 @@
     const bad = [...splitAddrs(v('to')), ...splitAddrs(v('cc'))].map(x => mailAddr(x)).filter(Boolean).find(a => !/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(a));
     if (!v('to')) { box.textContent = 'Add who it goes to.'; box.hidden = false; form.elements.to.focus(); return; }
     if (bad) { box.textContent = `“${bad}” is not a valid email.`; box.hidden = false; return; }
+    // sin asunto, el servidor que envía como contact@ lo devuelve («550 Missing subject»): Gmail lo daba por enviado y no llegaba
+    if (!v('subject')) { box.textContent = 'Add a subject: emails without one are bounced and never arrive.'; box.hidden = false; form.elements.subject.focus(); return; }
     const total = c.files.reduce((a, f) => a + (f.size || 0), 0);
     if (total > 12 * 1048576) { box.textContent = 'Attachments can be up to 12 MB in total.'; box.hidden = false; return; }
     const btn = form.querySelector('[type=submit]'); busyOn(form, btn, 'Sending…');

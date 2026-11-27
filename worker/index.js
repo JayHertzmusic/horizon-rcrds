@@ -322,6 +322,43 @@ async function readData(env) {
   const ver = await env.DB.prepare(`SELECT v FROM site_meta WHERE k = 'version'`).first();
   return { version: ver?.v || 0, ...out };
 }
+/* Spotify de los últimos releases sin él (cada 30 min, sin esperar a la sincronización de GitHub, que se retrasa horas):
+   el enlace de Spotify se lee del smart link (too.fm / ffm.to) y se añade detrás de stream_link. Nunca reemplaza. */
+async function spotifyFromSmartLink(url) {
+  try {
+    if (!/^https:\/\/(too\.fm|ffm\.to)\//i.test(url || '')) return '';
+    const res = await fetch(url, { headers: { 'user-agent': 'Mozilla/5.0 (compatible; HorizonSiteSync/1.0)' }, signal: AbortSignal.timeout(15000) });
+    if (!res.ok) return '';
+    const block = (await res.text()).match(/service:"spotify"[\s\S]{0,3000}?cta:\{[^}]*?url:"([^"]+)"/);
+    const cd = block?.[1].match(/[?&]cd=([A-Za-z0-9_\-]+)/);
+    if (!cd) return '';
+    const b64 = cd[1].replace(/-/g, '+').replace(/_/g, '/');
+    const dest = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64 + '='.repeat((4 - b64.length % 4) % 4)), c => c.charCodeAt(0)))).destUrl || '';
+    return dest.match(/^https:\/\/open\.spotify\.com\/(intl-[a-z-]+\/)?(track|album)\/[A-Za-z0-9]+/)?.[0] || '';
+  } catch { return ''; }
+}
+async function fillSpotify(env) {
+  const old = await readData(env);
+  const found = {};
+  for (const r of old.releases.slice(0, 6)) if (!r.spotify_link && r.stream_link) { const sp = await spotifyFromSmartLink(r.stream_link); if (sp) found[r.id] = sp; }
+  if (!Object.keys(found).length) return;
+  const rel = old.releases.map(r => {
+    if (!found[r.id] || r.spotify_link) return r;
+    const o = {};
+    for (const [k, v] of Object.entries(r)) { o[k] = v; if (k === 'stream_link') o.spotify_link = found[r.id]; }
+    return o;
+  });
+  const names = old.releases.filter(r => found[r.id]).map(r => `${r.catalog || r.title} — ${r.title}`).join(', ');
+  const t = now(), version = old.version + 1;
+  // solo si nadie ha publicado mientras tanto (la versión no ha cambiado); si no, se reintenta en 30 min
+  const ok = await env.DB.prepare(`UPDATE site_meta SET v = ? WHERE k = 'version' AND v = ?`).bind(version, old.version).run();
+  if (!ok.meta?.changes) return;
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO site_data (name, json, version, updated_at, updated_by) VALUES (?, ?, ?, ?, ?) ON CONFLICT(name) DO UPDATE SET json = excluded.json, version = excluded.version, updated_at = excluded.updated_at, updated_by = excluded.updated_by').bind('releases', JSON.stringify(rel, null, 2) + '\n', version, t, 'sync'),
+    env.DB.prepare('INSERT INTO site_history (name, json, at, by_email, message) VALUES (?, ?, ?, ?, ?)').bind('releases', JSON.stringify(old.releases), t, 'sync', `Add Spotify link to ${names}`),
+  ]);
+  console.log('spotify link for', names);
+}
 // Todos los archivos de assets/: los de la web publicada + los subidos (KV), sin los borrados
 async function fileList(env) {
   const files = {};
@@ -781,6 +818,7 @@ export default {
     ctx.waitUntil(refreshStats(env).catch(e => console.error('stats', e)));   // plays y seguidores (Home del panel)
     // permiso de Google siempre listo (dura 50 min; se renueva si le quedan menos de 35): crear un contrato no espera por él
     ctx.waitUntil(horizonToken(env, 35 * 60e3).catch(e => console.error('google token', e.message)).then(() => checkDriveFiles(env)).catch(e => console.error('drive check', e)));
+    ctx.waitUntil(fillSpotify(env).catch(e => console.error('spotify fill', e)));
     ctx.waitUntil(runChainActions(env, 12).catch(e => console.error('chain actions', e)));   // reposts/likes de la cadena que ya toquen (pocos por vuelta: orgánico y dentro del límite)
   },
   async fetch(req, env, ctx) {

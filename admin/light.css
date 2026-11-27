@@ -334,6 +334,15 @@ html.light .cal-hero.is-live { border-color: color-mix(in srgb, var(--c) 70%, #0
 html.light .cal-hero.is-live .cal-count b { background: linear-gradient(180deg, #000000, color-mix(in srgb, var(--c) 55%, #000000)); }
 html.light .cal-hero.has-cover::after { background: linear-gradient(90deg, #f4f4f4 25%, rgba(244, 244, 244, 0.55) 60%, rgba(244, 244, 244, 0.1)); }
 html.light .cal-hero.has-cover > .cal-hero-cov { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.014), 0 18px 50px -12px var(--c), 0 10px 30px rgba(0, 0, 0, 0.18); }
+html.light .ts-tabs { background: rgba(0, 0, 0, 0.03); }
+html.light .ts-tabs button:hover { color: #000000; }
+html.light .ts-tabs button.is-on { background: #000000; color: #ffffff; }
+html.light .ts-tile { border: 1px solid rgba(0, 0, 0, 0.07); background: linear-gradient(180deg, rgba(0, 0, 0, 0.035), rgba(0, 0, 0, 0.012)); }
+html.light a.ts-tile:hover { border-color: rgba(0, 0, 0, 0.18); }
+html.light .ts-tile b { color: #000000; }
+html.light .ts-card { border: 1px solid rgba(0, 0, 0, 0.07); background: linear-gradient(180deg, rgba(0, 0, 0, 0.035), rgba(0, 0, 0, 0.012)); }
+html.light .ts-list li { border-top: 1px solid rgba(0, 0, 0, 0.06); }
+html.light .ts-re:hover { color: #000000; }
 
 html.light .hm-me { -webkit-background-clip: text; background-clip: text; color: transparent; }
 html.light .pub-sw.on .pub-knob { background: #22c55e; }

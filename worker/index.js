@@ -15,6 +15,7 @@ import { CHAIN_SCHEMA, ChainError, chainApi, scOauth, chainPublic, runChainActio
 import { horizonToken } from './gdocs.js';
 import { MailError, mailApi } from './mail.js';
 import { refreshStats, statsApi } from './stats.js';
+import { TRACKS_SCHEMA, TracksError, tracksApi, refreshTracks } from './tracks.js';
 
 // Secciones del panel y lo que se puede hacer en cada una. Una sección nueva (p. ej. eventos) se añade aquí.
 const SECTIONS = [
@@ -92,6 +93,7 @@ const BASE_SCHEMA = [
     ...CONTRACT_SCHEMA,
     ...CALENDAR_SCHEMA,
     ...CHAIN_SCHEMA,
+    ...TRACKS_SCHEMA,
 ];
 // columnas añadidas después: [ALTER, lo que hay que hacer solo la vez que se añade]
 const ALTERS = [
@@ -803,6 +805,7 @@ async function api(req, env, p, ctx) {
     const r = await contractsApi(req, env, s, url, act => can(s, 'contracts', act), action => audit(env, s, action), ctx);
     return r instanceof Response ? r : json(r);
   }
+  if (p.startsWith('/api/tracks/')) return json(await tracksApi(req, env, s, url, act => can(s, 'releases', act), ctx));   // estadísticas de cada release
   if (p === '/api/calendar' || p.startsWith('/api/calendar/')) return json(await calendarApi(req, env, s, url, act => can(s, 'calendar', act), action => audit(env, s, action)));
   if (p === '/api/forms' || p.startsWith('/api/forms/')) {
     const r = await formsApi(req, env, s, url, action => audit(env, s, action));
@@ -817,6 +820,8 @@ async function api(req, env, p, ctx) {
 export default {
   // cada 30 min: fotos de SoundCloud del equipo al día
   async scheduled(event, env, ctx) {
+    // segundo cron (15 y 45): solo estadísticas de los releases (cada cron tiene su propio límite de peticiones)
+    if (event.cron === '15,45 * * * *') { ctx.waitUntil(refreshTracks(env).catch(e => console.error('tracks', e))); return; }
     ctx.waitUntil(refreshScPhotos(env));
     ctx.waitUntil(refreshStats(env).catch(e => console.error('stats', e)));   // plays y seguidores (Home del panel)
     // permiso de Google siempre listo (dura 50 min; se renueva si le quedan menos de 35): crear un contrato no espera por él
@@ -845,7 +850,7 @@ export default {
       }
       return env.ASSETS.fetch(req);
     } catch (e) {
-      if (e instanceof HttpError || e instanceof FormError || e instanceof ContractError || e instanceof CalendarError || e instanceof ChainError || e instanceof MailError) return fail(e.status, e.message);
+      if (e instanceof HttpError || e instanceof FormError || e instanceof ContractError || e instanceof CalendarError || e instanceof ChainError || e instanceof MailError || e instanceof TracksError) return fail(e.status, e.message);
       console.error(e);
       return fail(500, 'Server error. Please try again.');
     }

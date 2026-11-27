@@ -784,6 +784,8 @@
     yt: '<rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="m10 9 5 3-5 3z"/>',
     sp: '<circle cx="12" cy="12" r="9.5"/><path d="M7 9.5c3.5-1 7.3-.6 10 1M7.6 12.6c2.9-.8 5.9-.4 8.2.9M8.3 15.5c2.2-.5 4.4-.2 6.2.8"/>',
     all: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+    dj: '<circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3"/>',
+    dz: '<path d="M3 18h3M8 18h3M13 18h3M18 18h3M8 14h3M13 14h3M18 14h3M13 10h3M18 10h3M18 6h3"/>',
   };
   // «New responses» y los últimos demos: owners y quien tenga el formulario de demos o el release form
   const DEMO_FORMS = ['f_demosubmissi', 'f_releaseform'];
@@ -890,14 +892,107 @@
       ${excludedHtml('release')}`;
   }
 
+  /* ---------------- Stats de cada release (pestaña «Stats» del editor) ---------------- */
+  const trackStats = {}, trackLoading = {}, trackErr = {};
+  async function loadTrack(id, fresh) {
+    trackLoading[id] = true; trackErr[id] = '';
+    try {
+      const d = await api('GET', `/api/tracks/${encodeURIComponent(id)}${fresh ? '?fresh=1' : ''}`);
+      trackStats[id] = d;
+      // se estaba poniendo al día por detrás: se vuelve a pedir en un momento
+      if (d.refreshing) setTimeout(() => { if (editing?.orig?.id === id) loadTrack(id); }, 9000);
+    } catch (e) { trackErr[id] = e.message; }
+    finally { trackLoading[id] = false; }
+    const b = $('#ts-body'), r = editing?.orig;
+    if (b && r?.id === id) b.innerHTML = tsBody(r);
+  }
+  function tsChart(h) {
+    const pts = (h || []).filter(x => x.sc_plays != null || x.yt_views != null);
+    if (pts.length < 2) return '<p class="ts-empty">The graph fills in day by day: it shows how plays grow from the first day the numbers were read.</p>';
+    const W = 600, H = 150, P = 6, line = (k, cls) => {
+      const v = pts.map(x => x[k]), ok = v.filter(n => n != null);
+      if (ok.length < 2) return '';
+      const lo = Math.min(...ok), hi = Math.max(...ok), sp = hi - lo || 1;
+      const d = v.map((n, i) => n == null ? null : `${(P + i * (W - 2 * P) / (pts.length - 1)).toFixed(1)},${(H - P - (n - lo) / sp * (H - 2 * P)).toFixed(1)}`).filter(Boolean);
+      return `<polyline class="${cls}" points="${d.join(' ')}"/>`;
+    };
+    const f = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    return `<svg class="ts-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${line('sc_plays', 'l-sc')}${line('yt_views', 'l-yt')}</svg>
+      <div class="ts-axis"><span>${f(pts[0].day)}</span><span class="ts-leg"><i class="l-sc"></i>SoundCloud plays <i class="l-yt"></i>YouTube views</span><span>${f(pts[pts.length - 1].day)}</span></div>`;
+  }
+  function tsBody(r) {
+    const d = trackStats[r.id];
+    if (!d) return trackErr[r.id] ? `<p class="login-error" role="alert">${esc(trackErr[r.id])}</p>` : '<p class="info">Reading the numbers from SoundCloud, YouTube, Spotify, Deezer and 1001Tracklists… (the first time takes a few seconds)</p>';
+    const s = d.stats || {}, sc = s.sc, yt = s.yt, dj = s.dj, dz = s.dz;
+    const ico = k => SOCIAL_ICO[k] ? `<svg class="tab-i" viewBox="0 0 24 24" aria-hidden="true">${SOCIAL_ICO[k]}</svg>` : '';
+    const tile = (k, n, l, url) => `<${url ? `a href="${esc(url)}" target="_blank" rel="noopener"` : 'div'} class="ts-tile ${k}">${ico(k)}<b>${fmtN(n)}</b><small>${l}</small></${url ? 'a' : 'div'}>`;
+    const ext = (url, html) => url ? `<a href="${esc(url)}" target="_blank" rel="noopener">${html}</a>` : html;
+    const ago = Math.max(0, Math.round((Date.now() - (s.at || 0)) / 60e3));
+    const pl = d.playlists || [];
+    const owner = isOwnerNow();
+    return `
+      <div class="ts-kpis">
+        ${tile('sc', sc?.plays, 'Plays', sc?.url)}${tile('sc', sc?.likes, 'Likes', sc?.url)}${tile('sc', sc?.reposts, 'Reposts', sc?.url)}${tile('sc', sc?.comments, 'Comments', sc?.url)}
+        ${tile('yt', yt?.views, 'Views', yt?.url)}${tile('yt', yt?.likes, 'Likes', yt?.url)}
+        ${tile('dj', dj?.plays, 'DJ sets', dj?.url)}${tile('dz', dz?.rank, 'Deezer rank', dz?.url)}
+      </div>
+      <div class="ts-grid">
+        <div class="ts-card ts-chart"><p class="ts-h">Growth</p>${tsChart(d.history)}</div>
+        <div class="ts-card"><p class="ts-h">Spotify playlists <span>${pl.length}</span></p>
+          <ul class="ts-list">${pl.length ? pl.map(p => `<li>${ext(p.url, `<b>${esc(p.name)}</b><small>${esc(p.owner)}${p.followers != null ? ' · ' + fmtN(p.followers) + ' saves' : ''}</small>`)}<span class="ts-pos">#${p.position}</span></li>`).join('') : `<li class="ts-none">Not in any of the ${d.watched} playlists we watch${d.watchedChecked < d.watched ? ` (${d.watchedChecked} checked so far)` : ''}.</li>`}</ul>
+          ${owner ? '<form class="ts-watch" novalidate><input name="link" type="url" placeholder="Watch another playlist: open.spotify.com/playlist/…" autocomplete="off" spellcheck="false" aria-label="Spotify playlist link"><button type="submit" class="btn ghost sm">Watch</button></form>' : ''}
+        </div>
+        <div class="ts-card"><p class="ts-h">Reposted on SoundCloud by <span>${(sc?.reposters || []).length}</span></p>
+          <ul class="ts-list">${(sc?.reposters || []).length ? sc.reposters.map(u => `<li>${ext(u.url, `${u.avatar ? `<img src="${esc(u.avatar)}" alt="" loading="lazy">` : ''}<b>${esc(u.name)}</b>`)}<span class="ts-pos">${fmtN(u.followers)} followers</span></li>`).join('') : '<li class="ts-none">No reposts yet.</li>'}</ul>
+        </div>
+        <div class="ts-card"><p class="ts-h">DJ support &amp; other uploads</p>
+          <ul class="ts-list">
+            <li>${ext(dj?.url, `<b>${dj?.plays ? `Played in ${fmtN(dj.plays)} DJ set${dj.plays === 1 ? '' : 's'}` : 'No DJ sets found yet'}</b><small>1001Tracklists${dj?.url ? ' · open to see which DJs' : ''}</small>`)}</li>
+            ${(dj?.others || []).map(o => `<li>${ext(o.url, `<b>${esc(o.name)}</b><small>1001Tracklists${o.label ? ' · ' + esc(o.label) : ''}</small>`)}<span class="ts-pos">${fmtN(o.plays)} sets</span></li>`).join('')}
+            ${(s.ytOthers || []).map(v => `<li>${ext(v.url, `<b>${esc(v.title)}</b><small>YouTube · ${esc(v.channel)}</small>`)}<span class="ts-pos">${fmtN(v.views)} views</span></li>`).join('')}
+          </ul>
+        </div>
+      </div>
+      <p class="ts-foot">Updated ${ago < 1 ? 'just now' : ago < 60 ? ago + ' min ago' : ago < 1440 ? Math.round(ago / 60) + ' h ago' : Math.round(ago / 1440) + ' d ago'}${d.refreshing ? ' · updating…' : ''}${(s.failed || []).length ? ` · couldn’t read now: ${esc(s.failed.join(', '))} (showing the last numbers)` : ''} · <button type="button" class="ts-re" data-ts-re>Update now</button></p>`;
+  }
+  document.addEventListener('click', e => {
+    const b = e.target.closest('[data-ts]'), re = e.target.closest('[data-ts-re]');
+    if ((!b && !re) || !editing || editing.view !== 'releases' || !editing.orig?.id) return;
+    const id = editing.orig.id;
+    if (re) { if (!trackLoading[id]) { re.disabled = true; re.textContent = 'Updating…'; loadTrack(id, true); } return; }
+    editing.tab = b.dataset.ts;
+    const stats = editing.tab === 'stats', ts = $('#ts'), ed = $('#ed');
+    if (ts) ts.hidden = !stats;
+    if (ed) ed.hidden = stats;
+    $$('[data-ts]').forEach(x => x.classList.toggle('is-on', x.dataset.ts === editing.tab));
+    if (stats && !trackStats[id] && !trackLoading[id]) loadTrack(id);
+  });
+  document.addEventListener('submit', async e => {
+    const f = e.target.closest('.ts-watch');
+    if (!f) return;
+    e.preventDefault();
+    const btn = f.querySelector('button'), link = f.elements.link.value.trim();
+    if (!link) return;
+    btn.disabled = true; btn.textContent = 'Adding…';
+    try { await api('POST', '/api/tracks/watch', { link }); toast('Playlist added: it is checked for every release now'); if (editing?.orig?.id) await loadTrack(editing.orig.id); }
+    catch (err) { toast(err.message); btn.disabled = false; btn.textContent = 'Watch'; }
+  });
   function releaseEditor() {
     const r = editing.orig || {}, isNew = !editing.key, n = repo.releases.length;
     const cover = editing.cover?.url || (r.image ? assetSrc(r.image) : '');
     const color = hex6(editing.color ?? r.color) || '#ffffff';
-    return `
-      <form id="ed" class="editor" novalidate>
+    const stats = !isNew && editing.tab === 'stats';
+    const tabs = isNew ? '' : `<div class="ts-tabs" role="tablist"><button type="button" role="tab" data-ts="edit"${stats ? '' : ' class="is-on"'}>Edit</button><button type="button" role="tab" data-ts="stats"${stats ? ' class="is-on"' : ''}>Stats</button></div>`;
+    if (stats && !trackStats[r.id] && !trackLoading[r.id]) setTimeout(() => loadTrack(r.id), 0);
+    return `${isNew ? '' : `
+      <section class="editor ts" id="ts"${stats ? '' : ' hidden'}>
         <button type="button" class="back" data-act="back">← Releases</button>
-        <h1>${isNew ? 'NEW RELEASE' : esc(r.title || 'Untitled')}</h1>
+        <div class="ts-head"><h1>${esc(r.title || 'Untitled')}</h1>${tabs}</div>
+        <div id="ts-body">${tsBody(r)}</div>
+      </section>`}
+      <form id="ed" class="editor" novalidate${stats ? ' hidden' : ''}>
+        <button type="button" class="back" data-act="back">← Releases</button>
+        <div class="ts-head"><h1>${isNew ? 'NEW RELEASE' : esc(r.title || 'Untitled')}</h1>${tabs}</div>
         <div class="ed-grid">
           <div class="ed-side">
             ${coverDrop(cover, r.image && !editing.cover ? P('assets/' + r.image) : '', 'Cover')}

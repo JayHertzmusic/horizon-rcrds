@@ -444,3 +444,10 @@ export async function scLabelStats(env, url) {
   }
   return { followers: u.followers_count || 0, plays, likes, tracks: u.track_count || n, url: String(u.permalink_url || url).split('?')[0] };
 }
+// lectura de la API de SoundCloud con la clave de la app (estadísticas de cada track: panel → release → Stats)
+export async function scApp(env, path) {
+  const tok = await appToken(env);
+  const r = await fetch(path.startsWith('http') ? path : SC_API + path, { headers: { Authorization: `OAuth ${tok}`, Accept: 'application/json' } });
+  if (!r.ok) throw new Error('SoundCloud ' + r.status);
+  return r.json();
+}

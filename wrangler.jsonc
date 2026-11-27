@@ -31,7 +31,7 @@
   },
   "send_email": [{ "name": "MAIL", "destination_address": "contacthorizonids@gmail.com" }],
   // fotos de SoundCloud del equipo: se miran cada 30 minutos
-  "triggers": { "crons": ["*/30 * * * *"] },
+  "triggers": { "crons": ["*/30 * * * *", "15,45 * * * *"] },
   "d1_databases": [{ "binding": "DB", "database_name": "horizon-web", "database_id": "a9514982-6bf4-47ad-8181-cd95caf3df46" }],
   "kv_namespaces": [{ "binding": "FILES", "id": "f2ce183033764564beb769fcb97505bc" }],
   "observability": { "enabled": true }

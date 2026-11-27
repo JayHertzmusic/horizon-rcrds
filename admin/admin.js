@@ -3891,7 +3891,7 @@
       const cv = n === 0 && !many ? heroCover(x) : {};
       return `
         <div class="cal-hero${n === 0 ? ' is-today is-live' : ''}${cv.src ? ' has-cover' : ''}${many ? ' is-many' : ''}"${cv.color ? ` style="--c:${esc(cv.color)}"` : ''}>
-          ${cv.src ? `<div class="cal-hero-bg" style="background-image:url('${esc(cv.src)}')"></div><img class="cal-hero-cov" src="${esc(cv.src)}" alt=""${cv.color ? '' : ' data-pick'}>` : ''}
+          ${cv.src ? `<div class="cal-hero-bg" style="background-image:url('${esc(cv.src)}')"></div><span class="cal-vinyl" style="--lbl:url('${esc(cv.src)}')"><i></i></span><img class="cal-hero-cov" src="${esc(cv.src)}" alt=""${cv.color ? '' : ' data-pick'}>` : ''}
           <p class="mini">Next ${x.kind === 'mixtape' ? 'mixtape' : 'release'}${many ? `s · ${list.length} the same day` : ''}${n === 0 ? '<span class="cal-live"><i></i>OUT NOW</span>' : ''}</p>
           <div class="cal-count"><b>${n <= 0 ? 'TODAY' : n}</b>${n > 0 ? `<small>${n === 1 ? 'day' : 'days'}</small>` : ''}</div>
           ${list.map(y => `<p class="cal-hero-t">${y.cat && many ? `<span class="cal-cat">${esc(y.cat)}</span> ` : ''}${y.artist ? esc(y.artist) + ' - ' : ''}${esc(y.title)}</p>`).join('')}

@@ -44,31 +44,41 @@ async function soundcloud(env, r) {
 async function youtube(r) {
   const id = (String(r.youtube_link || '').match(/(?:v=|youtu\.be\/|shorts\/)([\w-]{11})/) || [])[1];
   if (!id) return null;
-  const h = await (await fetch(`https://www.youtube.com/watch?v=${id}`, { headers: YT_H, signal: timeout() })).text();
-  const views = num((h.match(/"viewCount":"(\d+)"/) || [])[1]);
+  const url = `https://www.youtube.com/watch?v=${id}`;
+  const h = await (await fetch(url, { headers: YT_H, signal: timeout() })).text().catch(() => '');
+  let views = num((h.match(/"viewCount":"(\d+)"/) || [])[1]);
   const along = h.match(/along with ([\d,]+) other/);
   const likes = along ? num(along[1]) + 1 : num((h.match(/"label":"([\d,.]+[KM]?) likes"/) || [])[1]);
+  // desde Cloudflare la página del vídeo a veces no trae los números: las visitas salen igual en el buscador de YouTube
+  for (const q of [`"${id}"`, `${firstArtist(r.artist)} ${r.title}`]) {
+    if (views != null) break;
+    views = (await ytSearch(q).catch(() => [])).find(v => v.videoId === id)?.views ?? null;
+  }
   if (views == null) throw new Error('YouTube: no numbers');
-  return { views, likes, url: `https://www.youtube.com/watch?v=${id}` };
+  return { views, likes, url };
 }
-// otros canales que lo han subido (búsqueda pública de YouTube): título con el track y el artista, que no sean de Horizon
-async function youtubeOthers(r) {
-  const q = `${firstArtist(r.artist)} ${r.title}`;
+async function ytSearch(q) {
   const h = await (await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, { headers: YT_H, signal: timeout() })).text();
   const m = h.match(/id="yt-initial-data"[^>]*>([\s\S]*?)<\/script>/) || h.match(/var ytInitialData = (\{[\s\S]*?\});<\/script>/);
   const j = parse(m?.[1]);
   if (!j) throw new Error('YouTube search: no data');
-  const out = [], own = (String(r.youtube_link || '').match(/(?:v=|youtu\.be\/)([\w-]{11})/) || [])[1];
+  const out = [];
   (function walk(o) {
     if (!o || typeof o !== 'object' || out.length > 40) return;
     if (o.videoRenderer) { out.push(o.videoRenderer); return; }
     for (const k in o) walk(o[k]);
   })(j);
+  return out.map(v => ({ videoId: v.videoId, title: v.title?.runs?.map(x => x.text).join('') || '', channel: v.ownerText?.runs?.[0]?.text || '', views: num(v.viewCountText?.simpleText) }));
+}
+// otros canales que lo han subido (búsqueda pública de YouTube): título con el track y el artista, que no sean de Horizon
+async function youtubeOthers(r) {
+  const q = `${firstArtist(r.artist)} ${r.title}`;
+  const out = await ytSearch(q), own = (String(r.youtube_link || '').match(/(?:v=|youtu\.be\/)([\w-]{11})/) || [])[1];
   // el título del track entero (detrás solo puede venir el final, «(», «[», «-» o «|»): «Pain» no es «Pain In The Ass»
   const words = s => ' ' + String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\p{L}\p{N}()\[\]|\-–—]+/gu, ' ').trim() + ' ';
   const tw = words(r.title).trim(), a = norm(firstArtist(r.artist));
   const hasTitle = v => { const w = words(v), i = w.indexOf(' ' + tw + ' '); return i >= 0 && /^\s*($|[(\[|\-–—])/.test(w.slice(i + tw.length + 2)); };
-  return out.map(v => ({ id: v.videoId, title: v.title?.runs?.map(x => x.text).join('') || '', channel: v.ownerText?.runs?.[0]?.text || '', views: num(v.viewCountText?.simpleText) }))
+  return out.map(v => ({ ...v, id: v.videoId }))
     .filter(v => v.id !== own && !/horizon\s*rcrds/i.test(v.channel) && hasTitle(v.title) && (norm(v.title).includes(a) || norm(v.channel).includes(a)))
     .slice(0, 8).map(v => ({ ...v, url: `https://www.youtube.com/watch?v=${v.id}` }));
 }

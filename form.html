@@ -350,6 +350,34 @@
   html.sent:not(.embed):not(.excl) body { display: flex; flex-direction: column; }
   html.sent:not(.embed):not(.excl) main { flex: 1; display: flex; align-items: center; padding-top: 32px; padding-bottom: 32px; }
   html.sent:not(.embed):not(.excl) #root { width: 100%; }
+  /* Demo Submission con el aspecto de la web: color del último release (--dac), portadas de Horizon de fondo
+     (como la sección Demos de la portada), cajas de cristal oscuro y el botón Send con brillo */
+  html.fit { --dac: #5a95e2; --dac-rgb: 90, 149, 226; }
+  html.fit body { background: #05070b; }
+  html.fit body::before { z-index: 1; background: radial-gradient(60% 50% at 50% 100%, rgba(var(--dac-rgb), .2), transparent 70%), radial-gradient(80% 70% at 50% 45%, rgba(5, 7, 11, .7), rgba(5, 7, 11, .95) 80%); }
+  .dz-mosaic { position: fixed; inset: -20%; z-index: 0; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .8s ease; }
+  .dz-mosaic.on { opacity: 1; }
+  .dz-mosaic > div { display: grid; grid-template-columns: repeat(10, 1fr); gap: 18px; transform: rotate(-10deg) scale(1.1); opacity: .5; }
+  .dz-mosaic img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; }
+  html.fit header.top, html.fit main, html.fit footer.sig { position: relative; z-index: 2; }
+  html.fit .x-close { z-index: 10; }
+  html.fit .eyebrow { display: none; }   /* (el logo de arriba ya dice HORIZON RCRDS) */
+  .dz-kick { display: flex; justify-content: center; align-items: center; gap: 10px; margin: 0 0 12px; font: 700 11px/1 'Barlow', sans-serif; letter-spacing: .32em; text-transform: uppercase; color: rgba(var(--dac-rgb), .95); }
+  .dz-kick i { width: 7px; height: 7px; border-radius: 50%; background: var(--dac); box-shadow: 0 0 12px var(--dac); animation: cl-pulse 2s ease-in-out infinite; }
+  html.fit main h1 .dz-ac { background: linear-gradient(180deg, #fff 0%, var(--dac) 85%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  html.fit .q { border-color: rgba(255, 255, 255, .08); background: linear-gradient(180deg, rgba(14, 20, 32, .78), rgba(8, 11, 18, .82)); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); transition: border-color .2s, box-shadow .2s; }
+  html.fit .q:focus-within { border-color: rgba(var(--dac-rgb), .55); box-shadow: 0 0 0 1px rgba(var(--dac-rgb), .25), 0 18px 40px -20px rgba(var(--dac-rgb), .55); }
+  html.fit .q.bad { border-color: rgba(255, 107, 107, .7); }
+  html.fit .q > label { font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: #dfe7f2; }
+  html.fit .req { color: var(--dac); }
+  html.fit input:focus, html.fit textarea:focus { border-color: var(--dac); }
+  html.fit .x-seg { border-color: rgba(var(--dac-rgb), .25); background: rgba(8, 12, 20, .6); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  html.fit .x-thumb { background: var(--dac); box-shadow: 0 0 18px -2px rgba(var(--dac-rgb), .7); }
+  html.fit .x-seg button.on { color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, .35); }
+  html.fit .send { border: 0; border-radius: 999px; background: linear-gradient(135deg, var(--dac), rgba(var(--dac-rgb), .65)); color: #fff; box-shadow: 0 10px 30px -8px rgba(var(--dac-rgb), .8), inset 0 1px 0 rgba(255, 255, 255, .3); transition: filter .2s, transform .2s; }
+  html.fit .send:hover { background: linear-gradient(135deg, var(--dac), rgba(var(--dac-rgb), .65)); color: #fff; filter: brightness(1.12); transform: translateY(-1px); }
+  html.fit .send::after { content: '→'; margin-left: 10px; letter-spacing: 0; }
+  @media (prefers-reduced-motion: reduce) { .dz-kick i { animation: none; } .dz-mosaic { transition: none; } }
 </style>
 <style>
   /* llegando desde «Send your demo»: se enseña con un fundido cuando el formulario ya está montado */
@@ -548,6 +576,28 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
       goStep(to);
     }
   });
+  // Demo Submission: color del último release, portadas de fondo, «● Open submissions» y la segunda palabra del título en color
+  function demoLook() {
+    const h = document.querySelector('main h1');
+    if (h && !h.querySelector('.dz-ac')) {
+      const w = h.textContent.trim().split(/\s+/);
+      if (w.length > 1) { h.textContent = w[0] + ' '; h.insertAdjacentHTML('beforeend', `<span class="dz-ac">${esc(w.slice(1).join(' '))}</span>`); }
+      if (!document.querySelector('.dz-kick')) h.insertAdjacentHTML('beforebegin', '<p class="dz-kick"><i></i>Open submissions</p>');
+    }
+    fetch('/releases.json').then(r => r.json()).then(d => {
+      const list = (Array.isArray(d) ? d : d.releases || []).filter(r => r && r.image);
+      const c = String(list[0]?.color || '').trim();
+      if (/^#[0-9a-f]{6}$/i.test(c)) {
+        const st = document.documentElement.style;
+        st.setProperty('--dac', c); st.setProperty('--dac-rgb', [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)).join(', '));
+      }
+      if (!list.length || document.querySelector('.dz-mosaic')) return;
+      const imgs = list.slice(0, 40).map(r => `<img src="/assets/${encodeURIComponent(r.image)}" alt="" loading="lazy" decoding="async">`).join('');
+      document.body.insertAdjacentHTML('afterbegin', `<div class="dz-mosaic" aria-hidden="true"><div>${imgs}${imgs}</div></div>`);
+      requestAnimationFrame(() => document.querySelector('.dz-mosaic')?.classList.add('on'));
+    }).catch(() => {});
+    fitScreen();
+  }
   function draw(closed, target = root) {
     if (target === root && EXCL()) return drawExcl();
     document.title = `${form.title || 'Form'} — HORIZON RCRDS`;
@@ -799,6 +849,7 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     if (qa && qe && halves.length === 2 && full.length === 1) {
       qa.dataset.role = 'a1n'; qe.dataset.role = 'a1e'; halves[0].dataset.role = 'trk'; halves[1].dataset.role = 'lnk'; full[0].dataset.role = 'add';
       document.documentElement.classList.add('fit');
+      demoLook();
     }
     // X para salir: vuelve a la sección «Demos» de la portada
     if (!document.querySelector('.x-close')) document.body.insertAdjacentHTML('beforeend', '<a class="x-close" href="/#demos" aria-label="Close" title="Close"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></a>');

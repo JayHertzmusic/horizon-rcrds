@@ -4381,6 +4381,11 @@
     })().catch(() => null) };
     return t.img[key];
   }
+  // vigilantes de tamaño de los correos: al quitar el correo de la pantalla Chrome ya no los avisa (no se pueden apagar desde dentro)
+  // y da un error «ResizeObserver loop» cada fotograma: se apagan aquí en cuanto su recuadro ya no está
+  let frameRos = [];
+  const dropFrameRos = () => { frameRos = frameRos.filter(([fr, ro]) => fr.isConnected || (ro.disconnect(), false)); };
+  new MutationObserver(() => { if (frameRos.length) dropFrameRos(); }).observe(document.getElementById('app') || document.body, { childList: true, subtree: true });
   const PIX = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
   // el cuerpo va en un iframe aislado (sin scripts): el correo no puede tocar el panel.
   // Se pinta UNA vez; las fotos se ponen después en su sitio (sin recargar el recuadro: no parpadea)
@@ -4432,7 +4437,11 @@
           const r = imgs[+im.getAttribute('src').match(/;hz=(\d+);/)[1]]; shown.add(r);
           r.p.then(x => { if (x) { im.src = x.url; im.addEventListener('load', fit, { once: true }); } });
         });
-        load(); fit(); new ResizeObserver(() => { fit(); load(); }).observe(doc.body);
+        // (el vigilante se apaga cuando el correo deja de estar en pantalla: antes seguían vivos, se acumulaban
+        // y se disparaban cientos de veces por segundo en cualquier sección hasta recargar)
+        load(); fit();
+        const ro = new ResizeObserver(() => { if (!fr.isConnected || fr.contentDocument !== doc) { ro.disconnect(); return; } fit(); load(); });
+        ro.observe(doc.body); frameRos.push([fr, ro]); dropFrameRos();
         mailImgBar(t, fr.closest('.m-msg'), [...shown], m);
       } catch { /* nada */ } ready(); };
       fr.onload = setup;

@@ -906,19 +906,21 @@
     const b = $('#ts-body'), r = editing?.orig;
     if (b && r?.id === id) b.innerHTML = tsBody(r);
   }
-  function tsChart(h) {
-    const pts = (h || []).filter(x => x.sc_plays != null || x.yt_views != null);
+  function tsChart(h, released) {
+    let pts = (h || []).filter(x => x.sc_plays != null || x.yt_views != null);
+    // el día que salió tenía 0: así la gráfica arranca desde el lanzamiento y no hay que esperar días
+    if (/^\d{4}-\d{2}-\d{2}$/.test(released || '') && pts.length && released < pts[0].day) pts = [{ day: released, sc_plays: 0, yt_views: 0, start: true }, ...pts];
     if (pts.length < 2) return '<p class="ts-empty">The graph fills in day by day: it shows how plays grow from the first day the numbers were read.</p>';
-    const W = 600, H = 150, P = 6, line = (k, cls) => {
-      const v = pts.map(x => x[k]), ok = v.filter(n => n != null);
-      if (ok.length < 2) return '';
-      const lo = Math.min(...ok), hi = Math.max(...ok), sp = hi - lo || 1;
-      const d = v.map((n, i) => n == null ? null : `${(P + i * (W - 2 * P) / (pts.length - 1)).toFixed(1)},${(H - P - (n - lo) / sp * (H - 2 * P)).toFixed(1)}`).filter(Boolean);
-      return `<polyline class="${cls}" points="${d.join(' ')}"/>`;
+    const W = 600, H = 150, P = 6, t = x => Date.parse(x.day + 'T12:00:00Z'), t0 = t(pts[0]), tn = t(pts[pts.length - 1]) - t0 || 1;
+    const line = (k, cls) => {
+      const v = pts.filter(x => x[k] != null && (!x.start || pts.some(y => !y.start && y[k] != null)));
+      if (v.length < 2) return '';
+      const hi = Math.max(...v.map(x => x[k])) || 1;
+      return `<polyline class="${cls}" points="${v.map(x => `${(P + (t(x) - t0) / tn * (W - 2 * P)).toFixed(1)},${(H - P - x[k] / hi * (H - 2 * P)).toFixed(1)}`).join(' ')}"/>`;
     };
-    const f = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+    const f = d => new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(d.slice(0, 4) !== String(new Date().getFullYear()) ? { year: 'numeric' } : {}) });
     return `<svg class="ts-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">${line('sc_plays', 'l-sc')}${line('yt_views', 'l-yt')}</svg>
-      <div class="ts-axis"><span>${f(pts[0].day)}</span><span class="ts-leg"><i class="l-sc"></i>SoundCloud plays <i class="l-yt"></i>YouTube views</span><span>${f(pts[pts.length - 1].day)}</span></div>`;
+      <div class="ts-axis"><span>${pts[0].start ? 'Release · ' : ''}${f(pts[0].day)}</span><span class="ts-leg"><i class="l-sc"></i>SoundCloud plays <i class="l-yt"></i>YouTube views</span><span>${f(pts[pts.length - 1].day)}</span></div>`;
   }
   function tsBody(r) {
     const d = trackStats[r.id];
@@ -937,7 +939,7 @@
         ${tile('dj', dj?.plays, 'DJ sets', dj?.url)}${tile('dz', dz?.rank, 'Deezer rank', dz?.url)}
       </div>
       <div class="ts-grid">
-        <div class="ts-card ts-chart"><p class="ts-h">Growth</p>${tsChart(d.history)}</div>
+        <div class="ts-card ts-chart"><p class="ts-h">Growth</p>${tsChart(d.history, sc?.released)}</div>
         <div class="ts-card"><p class="ts-h">Spotify playlists <span>${pl.length}</span></p>
           <ul class="ts-list">${pl.length ? pl.map(p => `<li>${ext(p.url, `<b>${esc(p.name)}</b><small>${esc(p.owner)}${p.followers != null ? ' · ' + fmtN(p.followers) + ' saves' : ''}</small>`)}<span class="ts-pos">#${p.position}</span></li>`).join('') : `<li class="ts-none">Not in any of the ${d.watched} playlists we watch${d.watchedChecked < d.watched ? ` (${d.watchedChecked} checked so far)` : ''}.</li>`}</ul>
           ${owner ? '<form class="ts-watch" novalidate><input name="link" type="url" placeholder="Watch another playlist: open.spotify.com/playlist/…" autocomplete="off" spellcheck="false" aria-label="Spotify playlist link"><button type="submit" class="btn ghost sm">Watch</button></form>' : ''}

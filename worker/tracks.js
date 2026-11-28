@@ -39,7 +39,7 @@ async function soundcloud(env, r) {
   const reposters = (rp?.collection || rp || []).filter(u => u && u.permalink_url)
     .map(u => ({ name: u.username || u.permalink, url: String(u.permalink_url).split('?')[0], followers: u.followers_count || 0, avatar: u.avatar_url || '' }))
     .sort((a, b) => b.followers - a.followers).slice(0, 30);
-  return { plays: t.playback_count ?? null, likes: t.favoritings_count ?? t.likes_count ?? null, reposts: t.reposts_count ?? null, comments: t.comment_count ?? null, url: String(t.permalink_url || r.soundcloud_link).split('?')[0], reposters };
+  return { plays: t.playback_count ?? null, likes: t.favoritings_count ?? t.likes_count ?? null, reposts: t.reposts_count ?? null, comments: t.comment_count ?? null, url: String(t.permalink_url || r.soundcloud_link).split('?')[0], released: String(t.display_date || t.created_at || '').slice(0, 10).replace(/\//g, '-') || null, reposters };
 }
 async function youtube(r) {
   const id = (String(r.youtube_link || '').match(/(?:v=|youtu\.be\/|shorts\/)([\w-]{11})/) || [])[1];

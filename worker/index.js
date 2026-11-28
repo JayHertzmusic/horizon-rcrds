@@ -40,6 +40,7 @@ const PROTECTED = { 'release_preview.mp3': 'player', 'logo.png': 'brand', 'favic
 const TYPES = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', mp3: 'audio/mpeg' };
 const MAX_FILE = 25 * 1024 * 1024;
 const SESSION_MS = 14 * 864e5;
+const OWNER_MS = 100 * 365 * 864e5;   // a los owners no se les cierra la sesión (sólo con Sign out)
 const SYNC_WORKFLOW = '.github/workflows/soundcloud-sync.yml';
 
 class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }
@@ -224,7 +225,7 @@ async function startSession(env, g, area) {
   const token = randomToken(), hash = await sha256(token), t = now();
   await env.DB.batch([
     env.DB.prepare('DELETE FROM panel_sessions WHERE expires_at < ?').bind(t),
-    env.DB.prepare('INSERT INTO panel_sessions (hash, email, area, name, picture, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(hash, g.email, area, g.name, g.picture, t, t + SESSION_MS),
+    env.DB.prepare('INSERT INTO panel_sessions (hash, email, area, name, picture, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(hash, g.email, area, g.name, g.picture, t, t + (who.owner ? OWNER_MS : SESSION_MS)),
     env.DB.prepare('UPDATE panel_members SET name = ?, picture = ?, last_login = ? WHERE email = ?').bind(g.name, g.picture, t, g.email),
   ]);
   await audit(env, g, `Signed in to /${area}`);
@@ -236,8 +237,10 @@ async function session(req, env) {
   if (m[1].includes('.')) return verifyGithubSync(m[1], env);
   const hash = await sha256(m[1]);
   const s = await env.DB.prepare('SELECT * FROM panel_sessions WHERE hash = ?').bind(hash).first();
-  if (!s || s.expires_at < now()) throw new HttpError(401, 'Your session expired. Sign in again.');
+  if (!s) throw new HttpError(401, 'Your session expired. Sign in again.');
   const who = await resolve(env, s.email);
+  if (s.expires_at < now() && !who?.owner) throw new HttpError(401, 'Your session expired. Sign in again.');
+  if (who?.owner && s.expires_at < now() + OWNER_MS / 2) await env.DB.prepare('UPDATE panel_sessions SET expires_at = ? WHERE hash = ?').bind(now() + OWNER_MS, hash).run(); else if (who && !who.owner && s.expires_at > now() + SESSION_MS) await env.DB.prepare('UPDATE panel_sessions SET expires_at = ? WHERE hash = ?').bind(now() + SESSION_MS, hash).run();   // ya no es owner: vuelve a los 14 días
   if (!who || (s.area === 'admin' && !who.owner)) {
     await env.DB.prepare('DELETE FROM panel_sessions WHERE hash = ?').bind(hash).run();
     throw new HttpError(401, 'You no longer have access to this panel.');

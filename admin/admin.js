@@ -758,7 +758,7 @@
     const rows = repo.releases.map((r, i) => ({ r, i })).filter(({ r }) => !q || [r.title, r.artist, catOf(r)].join(' ').toLowerCase().includes(q));
     if (!rows.length) return `<li class="empty">Nothing matches “${esc(filter)}”.</li>`;
     return rows.map(({ r, i }) => `
-      <li class="row item">
+      <li class="row item"${can('releases', 'edit') ? ` data-rel-open="${esc(keyOf(r))}" title="See stats"` : ''}>
         <span class="pos">${i + 1}</span>
         ${imgTag(r.image, 'thumb')}
         <span class="meta"><b>${esc(r.title || 'Untitled')}</b><span>${esc(r.artist || '')}</span></span>
@@ -966,6 +966,14 @@
     if (ed) ed.hidden = stats;
     $$('[data-ts]').forEach(x => x.classList.toggle('is-on', x.dataset.ts === editing.tab));
     if (stats && !trackStats[id] && !trackLoading[id]) loadTrack(id);
+  });
+  // pulsar en un release de la lista lo abre directamente en Stats (los enlaces y el botón Edit siguen igual)
+  document.addEventListener('click', e => {
+    const li = e.target.closest('[data-rel-open]');
+    if (!li || e.target.closest('a, button')) return;
+    const index = repo.releases.findIndex(r => keyOf(r) === li.dataset.relOpen);
+    if (index < 0) return;
+    go('releases', { view: 'releases', key: li.dataset.relOpen, orig: repo.releases[index], index, cover: null, px: COVER_PX, tab: 'stats' });
   });
   document.addEventListener('submit', async e => {
     const f = e.target.closest('.ts-watch');

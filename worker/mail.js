@@ -77,6 +77,26 @@ async function gmailBatch(env, paths, retry = true, again = true) {
   return out;
 }
 const hdr = (m, name) => (m.payload?.headers || []).find(h => h.name.toLowerCase() === name)?.value || '';
+// asunto sin «Re:», «Fwd:», «RE:»… (para juntar respuestas que Gmail dejó en otra conversación)
+const baseSubject = s => String(s || '').replace(/^\s*((re|fwd?|rv|aw)\s*(\[\d+\])?\s*:\s*)+/i, '').replace(/\s+/g, ' ').trim().toLowerCase();
+const addrs = v => (String(v || '').match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g) || []).map(x => x.toLowerCase());
+async function related(env, t) {
+  const msgs = t.messages || [];
+  if (!msgs.length) return [];
+  const subj = baseSubject(hdr(msgs[0], 'subject'));
+  if (subj.length < 4) return [];
+  const me = new Set(msgs.filter(x => (x.labelIds || []).includes('SENT')).flatMap(x => addrs(hdr(x, 'from'))));
+  const people = [...new Set(msgs.flatMap(x => (x.labelIds || []).includes('SENT') ? addrs(hdr(x, 'to')) : addrs(hdr(x, 'from'))))].filter(a => !me.has(a)).slice(0, 3);
+  if (!people.length) return [];
+  const q = `subject:"${subj.replace(/"/g, '')}" {${people.map(a => `from:${a} to:${a}`).join(' ')}}`;
+  const j = await gmail(env, `/threads?maxResults=6&q=${encodeURIComponent(q)}`);
+  const ids = (j.threads || []).map(x => x.id).filter(id => id !== t.id).slice(0, 4);
+  if (!ids.length) return [];
+  const got = (await gmailBatch(env, ids.map(id => `/threads/${id}?format=full`))).filter(Boolean);
+  // sólo si de verdad es el mismo asunto y la misma persona
+  return got.filter(o => (o.messages || []).length && baseSubject(hdr(o.messages[0], 'subject')) === subj
+    && (o.messages || []).some(x => [...addrs(hdr(x, 'from')), ...addrs(hdr(x, 'to'))].some(a => people.includes(a))));
+}
 
 // remitente (contact@ si Gmail ya lo tiene verificado como «Enviar como»; si no, el propio Gmail) y su firma de Gmail
 let sendAsCache = null;
@@ -201,6 +221,11 @@ export async function mailApi(req, env, s, url, audit) {
   if (mt && m === 'GET') {
     const t = await gmail(env, `/threads/${mt[1]}?format=full`);
     if (!peek && (t.messages || []).some(x => (x.labelIds || []).includes('UNREAD'))) await post(env, `/threads/${mt[1]}/modify`, { removeLabelIds: ['UNREAD'] }).catch(() => {});
+    // la respuesta a un correo enviado como contact@ a veces llega como otra conversación (el servidor de envío cambia el Message-ID):
+    // se juntan aquí las de la misma persona con el mismo asunto (sin «Re:»/«Fwd:»)
+    const extra = await related(env, t).catch(() => []);
+    for (const o of extra) if (!peek && (o.messages || []).some(x => (x.labelIds || []).includes('UNREAD'))) await post(env, `/threads/${o.id}/modify`, { removeLabelIds: ['UNREAD'] }).catch(() => {});
+    if (extra.length) t.messages = [...(t.messages || []), ...extra.flatMap(o => o.messages || [])].filter((x, i, a) => a.findIndex(y => y.id === x.id) === i).sort((a, b) => Number(a.internalDate) - Number(b.internalDate));
     return { id: t.id, messages: (t.messages || []).map(x => ({ id: x.id, labels: x.labelIds || [], at: Number(x.internalDate) || 0, payload: x.payload })) };
   }
   // una acción sobre uno o varios correos: archivar, papelera, restaurar, spam, leído, estrella, mover a una etiqueta…

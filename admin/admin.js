@@ -4406,7 +4406,9 @@
       const imgs = [];
       html = html.replace(/cid:([^"' )>]+)/g, (x, id) => { const r = threadImg(t, b, id); if (!r) return x; imgs.push(r); return PIX.replace(';base64', `;hz=${imgs.length - 1};base64`); });
       fr.srcdoc = `<!doctype html><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src https: data: blob:; style-src 'unsafe-inline' https:; font-src https: data:"><base target="_blank"><style>html,body{margin:0;background:#fafafa;color:#111}${mailInvert()}body{padding:16px;font:14px/1.5 Arial,sans-serif;overflow-wrap:anywhere}img{max-width:100%;height:auto!important}blockquote{margin:0 0 0 .8ex;border-left:1px solid #ccc;padding-left:1ex;color:#555}#QQMailBigAttach{display:none!important}</style>${html}`;
-      fr.onload = () => { try {
+      // se prepara en cuanto está el texto (DOMContentLoaded), sin esperar a las fotos de internet del correo:
+      // con «load» un newsletter con muchas fotos tardaba 2-5 s en enseñarse
+      const setup = () => { if (fr.dataset.setup === m.id) return; fr.dataset.setup = m.id; try {
         const doc = fr.contentDocument, fit = () => { fr.style.height = Math.min(Math.max(doc.body.scrollHeight, doc.body.offsetHeight) + 4, 30000) + 'px'; };
         // hueco de cada foto con su forma desde el principio (no salta al llegar)
         const ph = [...doc.querySelectorAll('img')].filter(im => /;hz=\d+;/.test(im.getAttribute('src') || ''));
@@ -4431,6 +4433,14 @@
         load(); fit(); new ResizeObserver(() => { fit(); load(); }).observe(doc.body);
         mailImgBar(t, fr.closest('.m-msg'), [...shown], m);
       } catch { /* nada */ } ready(); };
+      fr.onload = setup;
+      const t0 = Date.now(), early = () => {
+        if (fr.dataset.setup === m.id || !fr.isConnected) return;
+        const d = fr.contentDocument;
+        if (d && d.URL === 'about:srcdoc' && d.readyState !== 'loading' && d.body) setup();
+        else if (Date.now() - t0 < 3000) setTimeout(early, 16);
+      };
+      early();
     });
   }
   // barra de adjuntos: «N images» (las fotos de dentro del correo, en un .zip) y «Download all»

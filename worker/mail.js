@@ -230,7 +230,7 @@ export async function mailApi(req, env, s, url, audit) {
     const extra = await related(env, t).catch(() => []);
     await Promise.all([markRead, ...extra.filter(o => !peek && (o.messages || []).some(x => (x.labelIds || []).includes('UNREAD'))).map(o => post(env, `/threads/${o.id}/modify`, { removeLabelIds: ['UNREAD'] }).catch(() => {}))]);
     if (extra.length) t.messages = [...(t.messages || []), ...extra.flatMap(o => o.messages || [])].filter((x, i, a) => a.findIndex(y => y.id === x.id) === i).sort((a, b) => Number(a.internalDate) - Number(b.internalDate));
-    return { id: t.id, messages: (t.messages || []).map(x => ({ id: x.id, labels: x.labelIds || [], at: Number(x.internalDate) || 0, payload: x.payload })) };
+    return { id: t.id, also: extra.map(o => o.id), messages: (t.messages || []).map(x => ({ id: x.id, labels: x.labelIds || [], at: Number(x.internalDate) || 0, payload: x.payload })) };
   }
   // una acción sobre uno o varios correos: archivar, papelera, restaurar, spam, leído, estrella, mover a una etiqueta…
   mt = p.match(/^\/api\/mail\/thread\/([\w-]{6,40})\/(\w+)$/);

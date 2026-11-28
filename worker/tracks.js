@@ -185,6 +185,8 @@ export async function tracksApi(req, env, s, url, can, ctx) {
   const row = await env.DB.prepare('SELECT json, at FROM track_stats WHERE id = ?').bind(id).first();
   let v = row ? { ...parse(row.json), at: row.at } : null, refreshing = false;
   if (!v) { await syncOwnPlaylists(env); v = await collect(env, r); }
+  // «wait=1»: el panel sólo pregunta si ya terminó la puesta al día que pidió antes (no empieza otra encima)
+  else if (url.searchParams.get('wait') === '1') refreshing = Date.now() - v.at > 60e3;
   else if (Date.now() - v.at > STALE || url.searchParams.get('fresh') === '1') { refreshing = true; ctx.waitUntil(collect(env, r).catch(e => console.error('track stats', id, e.message))); }
   // playlists vigiladas que aún no se han mirado nunca: unas pocas ahora (el resto, en el cron)
   for (const pl of (await env.DB.prepare('SELECT id FROM sp_watch WHERE at = 0 LIMIT 3').all()).results) await refreshPlaylist(env, pl.id).catch(() => env.DB.prepare('UPDATE sp_watch SET at = ? WHERE id = ?').bind(Date.now(), pl.id).run());

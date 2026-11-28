@@ -894,13 +894,13 @@
 
   /* ---------------- Stats de cada release (pestaña «Stats» del editor) ---------------- */
   const trackStats = {}, trackLoading = {}, trackErr = {};
-  async function loadTrack(id, fresh) {
+  async function loadTrack(id, fresh, tries = 0) {
     trackLoading[id] = true; trackErr[id] = '';
     try {
-      const d = await api('GET', `/api/tracks/${encodeURIComponent(id)}${fresh ? '?fresh=1' : ''}`);
+      const d = await api('GET', `/api/tracks/${encodeURIComponent(id)}${fresh ? '?fresh=1' : tries ? '?wait=1' : ''}`);
       trackStats[id] = d;
-      // se estaba poniendo al día por detrás: se vuelve a pedir en un momento
-      if (d.refreshing) setTimeout(() => { if (editing?.orig?.id === id) loadTrack(id); }, 9000);
+      // se estaba poniendo al día por detrás: se pregunta en un momento si ya acabó (sin pedir otra puesta al día), hasta 4 veces
+      if (d.refreshing && tries < 4) setTimeout(() => { if (editing?.orig?.id === id) loadTrack(id, false, tries + 1); }, 9000);
     } catch (e) { trackErr[id] = e.message; }
     finally { trackLoading[id] = false; }
     const b = $('#ts-body'), r = editing?.orig;
@@ -2176,7 +2176,9 @@
     } catch { /* sin aviso */ }
     finally { liveBusy = false; }
   }
-  setInterval(checkLive, 15e3);
+  // con la pestaña en segundo plano, una vez por minuto (antes cada 15 s todo el día: consultas de más en el plan gratis); al volver, al momento
+  let liveAt = 0;
+  setInterval(() => { if (document.hidden && Date.now() - liveAt < 60e3) return; liveAt = Date.now(); checkLive(); }, 15e3);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) checkLive(); });
   const showForms = () => can('forms') || (preview ? visibleForms().length > 0 : auth?.user?.formsCount > 0);
   async function loadForms() {
@@ -4556,7 +4558,9 @@
       if (mail.open !== id) return;
       t.scrollLast = true; mail.thread = t;
       // leído: se marca aparte, sin esperar (en «Test» no)
-      if (!preview && t.messages.some(m => m.labels.includes('UNREAD'))) { api('POST', `/api/mail/thread/${id}/read`).catch(() => {}); t.messages.forEach(m => { m.labels = m.labels.filter(x => x !== 'UNREAD'); }); delete mail.pre[id]; }
+      if (!preview && t.messages.some(m => m.labels.includes('UNREAD'))) { // (con las partes que Gmail dejó en otra conversación: así la respuesta separada tampoco se queda sin leer)
+        const all = [id, ...(t.also || [])];
+        api('POST', '/api/mail/bulk', { ids: all, act: 'read' }).catch(() => {}); t.messages.forEach(m => { m.labels = m.labels.filter(x => x !== 'UNREAD'); }); all.forEach(x => { delete mail.pre[x]; const r = mail.list?.find(y => y.id === x); if (r) r.unread = false; }); }
       // queda que lo has visto (los demás ven tu foto en ese correo)
       api('POST', `/api/mail/thread/${id}/seen${mq('?')}`).then(r => { if (row) row.seen_by = r.seen_by || []; if (mail.thread?.id === id) { mail.thread.seen_by = r.seen_by || []; $$('.m-seenline').forEach(el => { el.outerHTML = mailSeenLine(mail.thread, el.classList.contains('m-seenend')); }); } }).catch(() => {});
       t.seen_by = row?.seen_by || [];
@@ -4592,6 +4596,8 @@
   async function mailBulk(ids, act, label) {
     if (!ids.length || busy || mailTest()) return;
     if (act === 'trash' && mail.box === 'trash') return;
+    // lo abierto incluye partes de otra conversación (respuesta separada por Gmail): la acción va también a ellas
+    if (mail.open && ids.includes(mail.open) && mail.thread?.also?.length) ids = [...new Set([...ids, ...mail.thread.also])];
     const api_act = act === 'restore' ? 'untrash' : act;
     try {
       busy = true;

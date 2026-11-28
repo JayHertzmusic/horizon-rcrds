@@ -4562,6 +4562,7 @@
         const all = [id, ...(t.also || [])];
         api('POST', '/api/mail/bulk', { ids: all, act: 'read' }).catch(() => {}); t.messages.forEach(m => { m.labels = m.labels.filter(x => x !== 'UNREAD'); }); all.forEach(x => { delete mail.pre[x]; const r = mail.list?.find(y => y.id === x); if (r) r.unread = false; }); }
       // queda que lo has visto (los demás ven tu foto en ese correo)
+      (t.also || []).forEach(x => api('POST', `/api/mail/thread/${x}/seen${mq('?')}`).then(r => { const o = mail.list?.find(y => y.id === x); if (o) o.seen_by = r.seen_by || []; }).catch(() => {}));   // y la parte separada
       api('POST', `/api/mail/thread/${id}/seen${mq('?')}`).then(r => { if (row) row.seen_by = r.seen_by || []; if (mail.thread?.id === id) { mail.thread.seen_by = r.seen_by || []; $$('.m-seenline').forEach(el => { el.outerHTML = mailSeenLine(mail.thread, el.classList.contains('m-seenend')); }); } }).catch(() => {});
       t.seen_by = row?.seen_by || [];
       if (row?.unread) { row.unread = false; if (mail.info?.unread && mail.box === 'inbox') { mail.info.unread--; if (mail.info.counts) { mail.info.counts.inbox = mail.info.unread; if (mail.cat === 'primary' && mail.info.counts.primary > 0) mail.info.counts.primary--; } } }

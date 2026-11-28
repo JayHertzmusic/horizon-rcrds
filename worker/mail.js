@@ -88,7 +88,10 @@ async function related(env, t) {
   const me = new Set(msgs.filter(x => (x.labelIds || []).includes('SENT')).flatMap(x => addrs(hdr(x, 'from'))));
   const people = [...new Set(msgs.flatMap(x => (x.labelIds || []).includes('SENT') ? addrs(hdr(x, 'to')) : addrs(hdr(x, 'from'))))].filter(a => !me.has(a)).slice(0, 3);
   if (!people.length) return [];
-  const q = `subject:"${subj.replace(/"/g, '')}" {${people.map(a => `from:${a} to:${a}`).join(' ')}}`;
+  // sólo palabras: con signos como «|» dentro de subject:"…" Gmail no encuentra nada
+  const words = subj.replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  if (!words) return [];
+  const q = `subject:(${words}) {${people.map(a => `from:${a} to:${a}`).join(' ')}}`;
   const j = await gmail(env, `/threads?maxResults=6&q=${encodeURIComponent(q)}`);
   const ids = (j.threads || []).map(x => x.id).filter(id => id !== t.id).slice(0, 4);
   if (!ids.length) return [];

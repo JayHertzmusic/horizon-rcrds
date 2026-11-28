@@ -354,11 +354,16 @@
      (como la sección Demos de la portada), cajas de cristal oscuro y el botón Send con brillo */
   html.fit { --dac: #5a95e2; --dac-rgb: 90, 149, 226; }
   html.fit body { background: #05070b; }
-  html.fit body::before { z-index: 1; background: radial-gradient(60% 50% at 50% 100%, rgba(var(--dac-rgb), .2), transparent 70%), radial-gradient(80% 70% at 50% 45%, rgba(5, 7, 11, .7), rgba(5, 7, 11, .95) 80%); }
-  .dz-mosaic { position: fixed; inset: -20%; z-index: 0; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity .8s ease; }
+  html.fit body::before { z-index: 1; background: radial-gradient(60% 50% at 50% 100%, rgba(var(--dac-rgb), .18), transparent 70%), radial-gradient(70% 60% at 50% 45%, rgba(5, 7, 11, .55), rgba(5, 7, 11, .97) 85%), linear-gradient(180deg, rgba(5, 7, 11, .6), transparent 30%, transparent 70%, rgba(5, 7, 11, .8)); }
+  /* portadas de fondo: columnas inclinadas que suben y bajan muy despacio (cada una a su ritmo), desenfocadas y oscuras: de verdad al fondo */
+  .dz-mosaic { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; opacity: 0; transition: opacity 1.6s ease; }
   .dz-mosaic.on { opacity: 1; }
-  .dz-mosaic > div { display: grid; grid-template-columns: repeat(10, 1fr); gap: 18px; transform: rotate(-10deg) scale(1.1); opacity: .5; }
-  .dz-mosaic img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 10px; }
+  .dz-cols { position: absolute; inset: -35% -15%; display: grid; grid-template-columns: repeat(9, 1fr); gap: 22px; transform: rotate(-12deg); opacity: var(--dz-op, .22); filter: blur(var(--dz-blur, 9px)) saturate(.9); }
+  .dz-col { display: flex; flex-direction: column; gap: 22px; animation: dz-up var(--d, 140s) linear infinite; will-change: transform; }
+  .dz-col:nth-child(even) { animation-name: dz-down; }
+  .dz-col img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 12px; }
+  @keyframes dz-up { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+  @keyframes dz-down { from { transform: translateY(-50%); } to { transform: translateY(0); } }
   html.fit header.top, html.fit main, html.fit footer.sig { position: relative; z-index: 2; }
   html.fit .x-close { z-index: 10; }
   html.fit .eyebrow { display: none; }   /* (el logo de arriba ya dice HORIZON RCRDS) */
@@ -377,7 +382,7 @@
   html.fit .send { border: 0; border-radius: 999px; background: linear-gradient(135deg, var(--dac), rgba(var(--dac-rgb), .65)); color: #fff; box-shadow: 0 10px 30px -8px rgba(var(--dac-rgb), .8), inset 0 1px 0 rgba(255, 255, 255, .3); transition: filter .2s, transform .2s; }
   html.fit .send:hover { background: linear-gradient(135deg, var(--dac), rgba(var(--dac-rgb), .65)); color: #fff; filter: brightness(1.12); transform: translateY(-1px); }
   html.fit .send::after { content: '→'; margin-left: 10px; letter-spacing: 0; }
-  @media (prefers-reduced-motion: reduce) { .dz-kick i { animation: none; } .dz-mosaic { transition: none; } }
+  @media (prefers-reduced-motion: reduce) { .dz-kick i, .dz-col { animation: none; } .dz-mosaic { transition: none; } }
 </style>
 <style>
   /* llegando desde «Send your demo»: se enseña con un fundido cuando el formulario ya está montado */
@@ -592,8 +597,10 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
         st.setProperty('--dac', c); st.setProperty('--dac-rgb', [1, 3, 5].map(i => parseInt(c.slice(i, i + 2), 16)).join(', '));
       }
       if (!list.length || document.querySelector('.dz-mosaic')) return;
-      const imgs = list.slice(0, 40).map(r => `<img src="/assets/${encodeURIComponent(r.image)}" alt="" loading="lazy" decoding="async">`).join('');
-      document.body.insertAdjacentHTML('afterbegin', `<div class="dz-mosaic" aria-hidden="true"><div>${imgs}${imgs}</div></div>`);
+      // 9 columnas de 6 portadas (repetidas para que el movimiento no tenga corte), cada una a su velocidad
+      const pics = list.slice(0, 45).map(r => `<img src="/assets/${encodeURIComponent(r.image)}" alt="" decoding="async">`);
+      const cols = Array.from({ length: 9 }, (_, c) => { const set = Array.from({ length: 6 }, (_, k) => pics[(c * 5 + k) % pics.length]).join(''); return `<div class="dz-col" style="--d:${130 + (c * 37) % 70}s">${set}${set}</div>`; }).join('');
+      document.body.insertAdjacentHTML('afterbegin', `<div class="dz-mosaic" aria-hidden="true"><div class="dz-cols">${cols}</div></div>`);
       requestAnimationFrame(() => document.querySelector('.dz-mosaic')?.classList.add('on'));
     }).catch(() => {});
     fitScreen();

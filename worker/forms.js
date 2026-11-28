@@ -399,7 +399,7 @@ export async function formsUnseen(env, s) {
   // Home: los 3 últimos demos (artista, track, hora y si ya lo viste), solo si ve el formulario de demos
   let latest = [];
   if (forms.includes('f_demosubmissi')) {
-    const ls = await DB.prepare(`SELECT r.id, r.at, r.data, ${SEEN_SQL} AS seen FROM form_responses r WHERE r.form_id = 'f_demosubmissi' ORDER BY r.at DESC LIMIT 3`).bind(s.email || '').all().catch(() => ({ results: [] }));
+    const ls = await DB.prepare(`SELECT r.id, r.at, r.data, ${SEEN_SQL} AS seen FROM form_responses r WHERE r.form_id = 'f_demosubmissi' ORDER BY r.id DESC LIMIT 3`).bind(s.email || '').all().catch(() => ({ results: [] }));
     latest = ls.results.map(r => { const d = parse(r.data) || {}; return { id: r.id, at: r.at, artist: String(d.q1 || '').slice(0, 80), track: String(d.q2 || '').slice(0, 80), seen: !!r.seen }; });
   }
   return { total: rows.reduce((a, r) => a + r.n, 0), forms: Object.fromEntries(rows.map(r => [r.form_id, r.n])), access: forms, latest };

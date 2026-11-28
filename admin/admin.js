@@ -4646,12 +4646,11 @@
       <form class="m-compose" id="m-compose" novalidate>
         <div class="m-crow"><span>From</span><b>${esc(info.name || 'HORIZON RCRDS')} <span class="muted">&lt;${esc(info.from || '')}&gt;</span></b></div>
         <label class="m-crow"><span>To</span><input id="mc-to" name="to" value="${esc(to)}" autocomplete="off" spellcheck="false" placeholder="name@email.com"></label>
-        <label class="m-crow"><span>Cc</span><input id="mc-cc" name="cc" value="${esc(cc)}" autocomplete="off" spellcheck="false"></label>
+        ${cc ? `<label class="m-crow"><span>Cc</span><input id="mc-cc" name="cc" value="${esc(cc)}" autocomplete="off" spellcheck="false"></label>` : '<input type="hidden" name="cc" value="">'}
         <label class="m-crow"><span>Subject</span><input id="mc-subj" name="subject" value="${esc(subject)}" maxlength="200" autocomplete="off"></label>
         <div class="m-cbody">
           <div class="m-editor" id="mc-body" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Message">${preset?.html ? cleanHtml(preset.html) : ''}</div>
           ${sig ? `<label class="m-sigsw"><input type="checkbox" id="mc-sig" checked> Signature</label><div class="m-sig" id="mc-sigbox">${sig}</div>` : ''}
-          ${quote ? `<p class="muted sm-txt m-qnote">${kind === 'forward' ? 'The original email is added below your message.' : 'The previous message is quoted below your reply.'}</p>` : ''}
           <div class="m-attach" id="mc-files">${composeFiles()}</div>
         </div>
         <p class="ed-error" role="alert" hidden></p>

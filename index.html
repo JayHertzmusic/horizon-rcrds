@@ -1759,6 +1759,16 @@ function liveWave(el, audio) {
 async function analyseWave(el, src) {
   if (!el || el._peaks || el._analysing || !(window.AudioContext || window.webkitAudioContext)) return;
   el._analysing = true;
+  /* already drawn on an earlier visit (same release): no need to download the whole clip again just for the shape */
+  const memo = 'hz_wave:' + src;
+  try {
+    const m = JSON.parse(localStorage.getItem(memo) || 'null');
+    if (m && Array.isArray(m.p) && m.p.length) {
+      const durEl = el.closest('.hc-player') && el.closest('.hc-player').querySelector('.hc-dur');
+      if (durEl && /—/.test(durEl.textContent) && m.d) durEl.textContent = fmtTime(m.d);
+      el._peaks = m.p; fillWave(el); return;
+    }
+  } catch (e) { /* storage blocked */ }
   try {
     const buf = await (await fetch(src)).arrayBuffer();
     const Ctx = window.OfflineAudioContext || window.webkitOfflineAudioContext;
@@ -1779,6 +1789,11 @@ async function analyseWave(el, src) {
     const low = Math.min(...peaks);
     el._peaks = top > low ? peaks.map(v => Math.pow((v - low) / (top - low), 1.3)) : null;
     fillWave(el);
+    try {
+      /* only the latest release is kept */
+      Object.keys(localStorage).filter(k => k.startsWith('hz_wave:') && k !== memo).forEach(k => localStorage.removeItem(k));
+      if (el._peaks) localStorage.setItem(memo, JSON.stringify({ p: el._peaks.map(v => Math.round(v * 1000) / 1000), d: audio.duration }));
+    } catch (e) { /* storage full or blocked */ }
   } catch (err) {
     console.warn('[HORIZON RCRDS] Waveform not available:', err.message);
   }

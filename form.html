@@ -387,8 +387,8 @@
 <style>
   /* llegando desde «Send your demo»: se enseña con un fundido cuando el formulario ya está montado */
   html.hz-in body { opacity: 0; }
-  html.hz-on body { transition: opacity .45s ease; }
-  html.hz-out body { opacity: 0; transition: opacity .3s ease; }
+  html.hz-on body { transition: opacity .25s ease; }
+  html.hz-out body { opacity: 0; transition: opacity .16s ease; }
   /* el brillo de fondo con el color de la web */
   html.hz-acc body::before { background: radial-gradient(900px 480px at 50% -12%, rgba(var(--glow), .12), transparent 70%), radial-gradient(ellipse 60% 40% at 50% 100%, rgba(var(--glow), .10), transparent 70%); }
 </style>
@@ -417,13 +417,15 @@
     var a = e.target.closest && e.target.closest('a.x-close');
     if (!a || e.button || e.metaKey || e.ctrlKey) return;
     e.preventDefault(); h.classList.add('hz-out');
-    setTimeout(function () { location.href = a.href; }, 300);
+    setTimeout(function () { location.href = a.href; }, 160);
   });
   addEventListener('pageshow', function () { h.classList.remove('hz-out'); });
 })();
 </script>
 <script>/* incrustado en la portada: modo compacto desde el primer instante (sin enseñar la página completa) */
 if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.documentElement.classList.add('embed');</script>
+<!-- la portada se prepara cuando el ratón se acerca a la X (o el dedo la toca): al volver, aparece al instante -->
+<script type="speculationrules">{"prerender":[{"where":{"href_matches":"/"},"eagerness":"moderate"}]}</script>
 </head>
 <body>
 <div class="bar" id="bar" aria-hidden="true"></div>
@@ -598,10 +600,16 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
       }
       if (!list.length || document.querySelector('.dz-mosaic')) return;
       // 9 columnas de 6 portadas (repetidas para que el movimiento no tenga corte), cada una a su velocidad
-      const pics = list.slice(0, 45).map(r => `<img src="/assets/${encodeURIComponent(r.image)}" alt="" decoding="async">`);
+      // (va tan difuminado que bastan 14 portadas repetidas; se piden cuando el formulario ya está, sin quitarle velocidad)
+      const pics = list.slice(0, 14).map(r => `<img src="/assets/${encodeURIComponent(r.image)}" alt="" decoding="async" fetchpriority="low">`);
       const cols = Array.from({ length: 9 }, (_, c) => { const set = Array.from({ length: 6 }, (_, k) => pics[(c * 5 + k) % pics.length]).join(''); return `<div class="dz-col" style="--d:${130 + (c * 37) % 70}s">${set}${set}</div>`; }).join('');
-      document.body.insertAdjacentHTML('afterbegin', `<div class="dz-mosaic" aria-hidden="true"><div class="dz-cols">${cols}</div></div>`);
-      requestAnimationFrame(() => document.querySelector('.dz-mosaic')?.classList.add('on'));
+      const add = () => {
+        if (document.querySelector('.dz-mosaic')) return;
+        document.body.insertAdjacentHTML('afterbegin', `<div class="dz-mosaic" aria-hidden="true"><div class="dz-cols">${cols}</div></div>`);
+        requestAnimationFrame(() => document.querySelector('.dz-mosaic')?.classList.add('on'));
+      };
+      const later = () => (window.requestIdleCallback || setTimeout)(add, { timeout: 600 });
+      if (document.readyState === 'complete') later(); else addEventListener('load', later, { once: true });
     }).catch(() => {});
     fitScreen();
   }

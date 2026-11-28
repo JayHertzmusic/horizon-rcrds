@@ -9,7 +9,7 @@
     html.hz-hash, html.hz-hash-in { scroll-behavior: auto !important; }
     html.hz-hash-in body { transition: opacity .35s ease; }
     /* de «Send your demo» al formulario: la página se funde a negro antes de cambiar */
-    html.hz-leave body { opacity: 0; transition: opacity .32s ease; }
+    html.hz-leave body { opacity: 0; transition: opacity .16s ease; }
   </style>
   <script>
     // el navegador no hace su propio desplazamiento (animado, desde arriba) a la sección: se quita el #… de la
@@ -1065,6 +1065,8 @@
   <script src="./bg-fx.js?v=3" defer></script>
   <script src="./pblur.js?v=1" defer></script>
   <link rel="stylesheet" href="./assets/tailwind.css?v=1"/>
+<!-- el formulario de demos se prepara en cuanto el ratón se acerca al botón (o el dedo lo toca): al pulsar, aparece al instante -->
+<script type="speculationrules">{"prerender":[{"where":{"href_matches":"/forms/*"},"eagerness":"moderate"}]}</script>
 </head>
 <body>
 
@@ -2386,7 +2388,7 @@ document.addEventListener('click', function (e) {
     if (acc) sessionStorage.setItem('hz-acc', acc);
   } catch (x) {}
   document.documentElement.classList.add('hz-leave');
-  setTimeout(function () { location.href = a.href; }, 320);
+  setTimeout(function () { location.href = a.href; }, 160);
 });
 /* volver atrás (caché del navegador): la página no se queda en negro */
 addEventListener('pageshow', function () { document.documentElement.classList.remove('hz-leave'); });

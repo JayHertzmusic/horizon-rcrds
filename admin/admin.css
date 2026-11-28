@@ -1769,6 +1769,7 @@ html.light .theme-tg .tg-moon { opacity: 0; transform: rotate(90deg) scale(.4); 
 .m-seen { display: inline-flex; align-items: center; padding-left: 6px; }
 .m-seen .sb-one { position: relative; display: inline-flex; margin-left: -6px; border-radius: 50%; box-shadow: 0 0 0 2px #0b0b0b; }
 .m-seen .av, .m-seen img.av { width: 20px; height: 20px; font-size: 9px; }
+.m-seen .sb-one.rep { z-index: 1; }   /* quien contestó, por encima de los que solo lo vieron */
 .m-seen .sb-one.rep::after { content: ''; position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; border-radius: 50%; border: 2px solid #0b0b0b; background: #22c55e url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2.5 5.2 4.3 7l3.2-3.6' fill='none' stroke='%23fff' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/100% no-repeat; }
 .m-seen .sb-more { margin-left: 4px; color: var(--muted); font-size: 11px; font-weight: 700; }
 .m-seenline { display: flex; align-items: center; gap: 8px; margin: -6px 0 14px; color: var(--faint); font-size: 12.5px; }

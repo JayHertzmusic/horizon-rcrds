@@ -383,6 +383,31 @@
   html.fit .send:hover { background: linear-gradient(135deg, var(--dac), rgba(var(--dac-rgb), .65)); color: #fff; filter: brightness(1.12); transform: translateY(-1px); }
   html.fit .send::after { content: '→'; margin-left: 10px; letter-spacing: 0; }
   @media (prefers-reduced-motion: reduce) { .dz-kick i, .dz-col { animation: none; } .dz-mosaic { transition: none; } }
+  /* ---------- móvil: pensado para rellenar con el pulgar ---------- */
+  /* (iPhone amplía la pantalla al tocar un campo con letra de menos de 16 px) */
+  @media (max-width: 760px) { input, textarea, select { font-size: 16px !important; } }
+  /* Release Form: la fila de pasos ensanchaba la página entera (798 px en un móvil de 375): había que ampliar y moverse */
+  @media (max-width: 900px) { .xa { grid-template-columns: minmax(0, 1fr); } .xa-side, .xa-main { min-width: 0; } }
+  @media (max-width: 640px) {
+    .xa-side { gap: 12px; padding: 18px 18px 4px; }
+    .xa-side h1 { font-size: 40px; }
+    .x-badge { padding: 5px 11px; }
+    .x-steps { display: none; }
+    html.excl .xa-prog { display: block; margin-top: 2px; }
+    .xa-main { padding: 10px 18px 0; }
+    .xa-head { margin-bottom: 18px; padding-bottom: 14px; }
+    .xa-head h2 { font-size: 34px; }
+    .xa-grid > .q { margin-bottom: 18px !important; }
+    /* abajo: Atrás pequeño y Siguiente grande, a todo lo ancho */
+    .x-nav { grid-template-columns: auto minmax(0, 1fr); gap: 10px; padding: 14px 0 calc(16px + env(safe-area-inset-bottom)); }
+    .x-dots { display: none; }
+    .x-nav [data-back] { padding: 0 18px; }
+    .x-nav [data-back][hidden] { display: none; }
+    .x-nav [data-next], .x-nav .send { grid-column: 2; justify-self: stretch; width: 100%; padding: 0 18px; }
+    .x-nav:has([data-back][hidden]) { grid-template-columns: minmax(0, 1fr); }
+    .x-nav:has([data-back][hidden]) [data-next], .x-nav:has([data-back][hidden]) .send { grid-column: 1; }
+    .x-rv { grid-template-columns: minmax(0, 1fr); }
+  }
 </style>
 <style>
   /* llegando desde «Send your demo»: se enseña con un fundido cuando el formulario ya está montado */
@@ -837,7 +862,8 @@ if (/[?&]embed=1/.test(location.search) && window.parent !== window) document.do
     const main = document.querySelector('main');
     if (!main || !document.documentElement.classList.contains('fit')) return placeClose();
     main.style.zoom = '';
-    if (innerWidth <= 760 || document.documentElement.classList.contains('sent')) return;
+    // (en pantallas táctiles no se encoge nunca: con el móvil girado quedaba diminuto)
+    if (innerWidth <= 760 || matchMedia('(pointer: coarse)').matches || document.documentElement.classList.contains('sent')) return;
     const head = document.querySelector('header.top')?.offsetHeight || 0, foot = document.querySelector('footer.sig')?.offsetHeight || 0;
     const z = Math.min(1, (innerHeight - head - foot) / main.scrollHeight);
     if (z < 1) main.style.zoom = Math.max(.5, z - .012).toFixed(3);
